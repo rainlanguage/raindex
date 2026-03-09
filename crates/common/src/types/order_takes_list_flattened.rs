@@ -82,6 +82,7 @@ mod tests {
             order: SgTradeStructPartialOrder {
                 id: SgBytes("orderPartial001".to_string()),
                 order_hash: SgBytes("orderHash001".to_string()),
+                owner: SgBytes("0xowner001".to_string()),
             },
             input_vault_balance_change: SgTradeVaultBalanceChange {
                 id: SgBytes("inputVBC001".to_string()),

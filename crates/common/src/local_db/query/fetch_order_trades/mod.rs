@@ -9,6 +9,7 @@ const QUERY_TEMPLATE: &str = include_str!("query.sql");
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocalDbOrderTrade {
+    pub chain_id: u32,
     pub trade_kind: String,
     pub orderbook: Address,
     pub order_hash: B256,
