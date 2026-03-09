@@ -147,7 +147,7 @@ impl RaindexClient {
     /// ```
     #[wasm_export(
         js_name = "getTradesForTransaction",
-        return_description = "Trades list result with total count and summary",
+        return_description = "Trades list result with total count and per-pair summary",
         unchecked_return_type = "RaindexTradesListResult",
         preserve_js_class
     )]
@@ -252,12 +252,12 @@ impl RaindexClient {
         }
 
         let total_count = all_trades.len() as u64;
-        let summary = RaindexTradeSummary::from_trades(&all_trades)?;
+        let summary = RaindexPairSummary::from_trades(&all_trades)?;
 
         Ok(RaindexTradesListResult {
             trades: all_trades,
             total_count,
-            summary,
+            summary: Some(summary),
         })
     }
 }
@@ -267,7 +267,7 @@ impl RaindexOrder {
     /// Fetches trade history with optional time filtering
     ///
     /// Retrieves a chronological list of trades executed by an order within
-    /// an optional time range, along with the total count and summary.
+    /// an optional time range, along with the total count and optional per-pair summary.
     ///
     /// ## Examples
     ///
@@ -281,7 +281,7 @@ impl RaindexOrder {
     /// ```
     #[wasm_export(
         js_name = "getTradesList",
-        return_description = "Trades list result with total count and summary",
+        return_description = "Trades list result with total count and optional per-pair summary",
         unchecked_return_type = "RaindexTradesListResult",
         preserve_js_class
     )]
@@ -348,7 +348,11 @@ impl RaindexOrder {
             }
         };
 
-        let summary = RaindexTradeSummary::from_trades(&trades)?;
+        let summary = if page.is_some() {
+            None
+        } else {
+            Some(RaindexPairSummary::from_trades(&trades)?)
+        };
 
         Ok(RaindexTradesListResult {
             trades,
@@ -504,18 +508,34 @@ impl RaindexTrade {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[wasm_bindgen]
-pub struct RaindexTradeSummary {
+pub struct RaindexPairSummary {
+    chain_id: u32,
+    input_token: Address,
+    output_token: Address,
     total_input: Float,
     formatted_total_input: String,
     total_output: Float,
     formatted_total_output: String,
     average_io_ratio: Float,
     formatted_average_io_ratio: String,
+    trade_count: u64,
 }
 
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
-impl RaindexTradeSummary {
+impl RaindexPairSummary {
+    #[wasm_bindgen(getter = chainId)]
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    #[wasm_bindgen(getter = inputToken, unchecked_return_type = "Address")]
+    pub fn input_token(&self) -> String {
+        self.input_token.to_string()
+    }
+    #[wasm_bindgen(getter = outputToken, unchecked_return_type = "Address")]
+    pub fn output_token(&self) -> String {
+        self.output_token.to_string()
+    }
     #[wasm_bindgen(getter = totalInput)]
     pub fn total_input(&self) -> Float {
         self.total_input
@@ -540,10 +560,23 @@ impl RaindexTradeSummary {
     pub fn formatted_average_io_ratio(&self) -> String {
         self.formatted_average_io_ratio.clone()
     }
+    #[wasm_bindgen(getter = tradeCount)]
+    pub fn trade_count(&self) -> u64 {
+        self.trade_count
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
-impl RaindexTradeSummary {
+impl RaindexPairSummary {
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    pub fn input_token(&self) -> Address {
+        self.input_token
+    }
+    pub fn output_token(&self) -> Address {
+        self.output_token
+    }
     pub fn total_input(&self) -> Float {
         self.total_input
     }
@@ -562,37 +595,71 @@ impl RaindexTradeSummary {
     pub fn formatted_average_io_ratio(&self) -> &str {
         &self.formatted_average_io_ratio
     }
+    pub fn trade_count(&self) -> u64 {
+        self.trade_count
+    }
 }
 
-impl RaindexTradeSummary {
-    pub fn from_trades(trades: &[RaindexTrade]) -> Result<Self, RaindexError> {
-        let mut total_input = Float::zero()?;
-        let mut total_output = Float::zero()?;
+impl RaindexPairSummary {
+    pub fn from_trades(trades: &[RaindexTrade]) -> Result<Vec<Self>, RaindexError> {
+        use std::collections::HashMap;
+
+        let mut buckets: HashMap<(u32, Address, Address), Vec<&RaindexTrade>> = HashMap::new();
 
         for trade in trades {
-            total_input = total_input.add(trade.input_vault_balance_change.amount())?;
-            let neg_output = Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
-            total_output = total_output.add(neg_output)?;
+            #[cfg(target_family = "wasm")]
+            let input_token =
+                Address::from_str(&trade.input_vault_balance_change.token().address())?;
+            #[cfg(not(target_family = "wasm"))]
+            let input_token = trade.input_vault_balance_change.token().address();
+
+            #[cfg(target_family = "wasm")]
+            let output_token =
+                Address::from_str(&trade.output_vault_balance_change.token().address())?;
+            #[cfg(not(target_family = "wasm"))]
+            let output_token = trade.output_vault_balance_change.token().address();
+
+            let key = (trade.chain_id, input_token, output_token);
+            buckets.entry(key).or_default().push(trade);
         }
 
-        let formatted_total_input = total_input.format()?;
-        let formatted_total_output = total_output.format()?;
+        let mut summaries = Vec::with_capacity(buckets.len());
 
-        let average_io_ratio = if total_output.eq(Float::zero()?).unwrap_or(true) {
-            Float::zero()?
-        } else {
-            total_input.div(total_output)?
-        };
-        let formatted_average_io_ratio = average_io_ratio.format()?;
+        for ((chain_id, input_token, output_token), bucket) in buckets {
+            let mut total_input = Float::zero()?;
+            let mut total_output = Float::zero()?;
 
-        Ok(RaindexTradeSummary {
-            total_input,
-            formatted_total_input,
-            total_output,
-            formatted_total_output,
-            average_io_ratio,
-            formatted_average_io_ratio,
-        })
+            for trade in &bucket {
+                total_input = total_input.add(trade.input_vault_balance_change.amount())?;
+                let neg_output = Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
+                total_output = total_output.add(neg_output)?;
+            }
+
+            let formatted_total_input = total_input.format()?;
+            let formatted_total_output = total_output.format()?;
+
+            let average_io_ratio = if total_output.eq(Float::zero()?).unwrap_or(true) {
+                Float::zero()?
+            } else {
+                total_input.div(total_output)?
+            };
+            let formatted_average_io_ratio = average_io_ratio.format()?;
+
+            summaries.push(RaindexPairSummary {
+                chain_id,
+                input_token,
+                output_token,
+                total_input,
+                formatted_total_input,
+                total_output,
+                formatted_total_output,
+                average_io_ratio,
+                formatted_average_io_ratio,
+                trade_count: bucket.len() as u64,
+            });
+        }
+
+        Ok(summaries)
     }
 }
 
@@ -602,7 +669,7 @@ impl RaindexTradeSummary {
 pub struct RaindexTradesListResult {
     trades: Vec<RaindexTrade>,
     total_count: u64,
-    summary: RaindexTradeSummary,
+    summary: Option<Vec<RaindexPairSummary>>,
 }
 
 #[cfg(target_family = "wasm")]
@@ -616,8 +683,8 @@ impl RaindexTradesListResult {
     pub fn total_count(&self) -> u64 {
         self.total_count
     }
-    #[wasm_bindgen(getter)]
-    pub fn summary(&self) -> RaindexTradeSummary {
+    #[wasm_bindgen(getter, unchecked_return_type = "RaindexPairSummary[] | undefined")]
+    pub fn summary(&self) -> Option<Vec<RaindexPairSummary>> {
         self.summary.clone()
     }
 }
@@ -630,8 +697,8 @@ impl RaindexTradesListResult {
     pub fn total_count(&self) -> u64 {
         self.total_count
     }
-    pub fn summary(&self) -> &RaindexTradeSummary {
-        &self.summary
+    pub fn summary(&self) -> Option<&[RaindexPairSummary]> {
+        self.summary.as_deref()
     }
 }
 

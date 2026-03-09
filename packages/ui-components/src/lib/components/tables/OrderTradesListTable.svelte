@@ -2,7 +2,6 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { QKEY_ORDER_TRADES_LIST } from '../../queries/keys';
-	import { DEFAULT_PAGE_SIZE } from '../../queries/constants';
 	import { TableBodyCell, TableHeadCell } from 'flowbite-svelte';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
@@ -43,10 +42,11 @@
 		initialPageParam: 0,
 		getNextPageParam: (
 			lastPage: RaindexTradesListResult,
-			_allPages: RaindexTradesListResult[],
+			allPages: RaindexTradesListResult[],
 			lastPageParam: number
 		) => {
-			return lastPage.trades.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
+			const fetchedCount = allPages.reduce((sum, p) => sum + p.trades.length, 0);
+			return fetchedCount < Number(lastPage.totalCount) ? lastPageParam + 1 : undefined;
 		}
 	});
 
