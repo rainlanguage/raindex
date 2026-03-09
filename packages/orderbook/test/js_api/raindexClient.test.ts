@@ -426,7 +426,8 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				},
 				order: {
 					id: BYTES32_VOL_ORDER,
-					orderHash: BYTES32_VOL_ORDER
+					orderHash: BYTES32_VOL_ORDER,
+					owner: '0x0000000000000000000000000000000000000000'
 				},
 				inputVaultBalanceChange: {
 					amount: float50,
@@ -503,7 +504,8 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				},
 				order: {
 					id: order1.id,
-					orderHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+					orderHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+					owner: '0x0000000000000000000000000000000000000000'
 				},
 				inputVaultBalanceChange: {
 					amount: '0x0000000000000000000000000000000000000000000000000000000000000003',
@@ -542,7 +544,8 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 			id: BYTES32_0123,
 			order: {
 				id: BYTES32_0123,
-				orderHash: BYTES32_0123
+				orderHash: BYTES32_0123,
+				owner: '0x0000000000000000000000000000000000000000'
 			},
 			tradeEvent: {
 				sender: '0x0000000000000000000000000000000000000000',
@@ -1034,9 +1037,9 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				assert.equal(result.trades[0].id, mockOrderTradesList[0].id);
 				assert.equal(result.trades[0].orderHash, mockOrderTradesList[0].order.orderHash);
 				assert.equal(result.trades[0].timestamp, BigInt(mockOrderTradesList[0].timestamp));
-				assert.equal(result.trades[0].orderbook, mockOrderTradesList[0].orderbook.id.toLowerCase());
+				assert.equal(result.trades[0].orderbook.toLowerCase(), mockOrderTradesList[0].orderbook.id.toLowerCase());
 				assert.equal(
-					result.trades[0].outputVaultBalanceChange.amount,
+					result.trades[0].outputVaultBalanceChange.amount.asHex(),
 					mockOrderTradesList[0].outputVaultBalanceChange.amount
 				);
 				assert.equal(
@@ -1064,7 +1067,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 					BigInt(mockOrderTradesList[0].outputVaultBalanceChange.vault.token.decimals ?? 0)
 				);
 				assert.equal(
-					result.trades[0].inputVaultBalanceChange.amount,
+					result.trades[0].inputVaultBalanceChange.amount.asHex(),
 					mockOrderTradesList[0].inputVaultBalanceChange.amount
 				);
 				assert.equal(
