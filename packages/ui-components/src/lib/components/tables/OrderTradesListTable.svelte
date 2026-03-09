@@ -7,7 +7,11 @@
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { BugOutline } from 'flowbite-svelte-icons';
-	import type { RaindexOrder, RaindexTrade, RaindexTradesListResult } from '@rainlanguage/orderbook';
+	import type {
+		RaindexOrder,
+		RaindexTrade,
+		RaindexTradesListResult
+	} from '@rainlanguage/orderbook';
 	import TableTimeFilters from '../charts/TableTimeFilters.svelte';
 	import Tooltip from '../Tooltip.svelte';
 
@@ -32,7 +36,7 @@
 			);
 			if (result.error) throw new Error(result.error.readableMsg);
 
-			tradesCount = result.value.totalCount;
+			tradesCount = Number(result.value.totalCount);
 
 			return result.value;
 		},

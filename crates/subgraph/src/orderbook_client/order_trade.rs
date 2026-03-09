@@ -53,11 +53,10 @@ impl OrderbookSubgraphClient {
         let mut page = 1;
 
         loop {
-            let pagination_variables =
-                Self::parse_pagination_args(SgPaginationArgs {
-                    page,
-                    page_size: ALL_PAGES_QUERY_PAGE_SIZE,
-                });
+            let pagination_variables = Self::parse_pagination_args(SgPaginationArgs {
+                page,
+                page_size: ALL_PAGES_QUERY_PAGE_SIZE,
+            });
             let data = self
                 .query::<SgTransactionTradesQuery, SgPaginationWithTxIdQueryVariables>(
                     SgPaginationWithTxIdQueryVariables {

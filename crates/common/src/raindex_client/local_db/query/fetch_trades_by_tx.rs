@@ -25,8 +25,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn wrapper_uses_builder_sql_exactly() {
-        let tx_hash =
-            b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
+        let tx_hash = b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let args = FetchTradesByTxArgs {
             chain_ids: vec![137, 42161],
             orderbook_addresses: vec![],

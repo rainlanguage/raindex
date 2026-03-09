@@ -71,8 +71,7 @@ mod tests {
 
     #[test]
     fn builds_with_chain_ids_and_tx_hash() {
-        let tx_hash =
-            b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
+        let tx_hash = b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let stmt = build_fetch_trades_by_tx_stmt(&FetchTradesByTxArgs {
             chain_ids: vec![137, 1, 137],
             orderbook_addresses: vec![],
@@ -96,8 +95,7 @@ mod tests {
 
     #[test]
     fn builds_with_orderbook_address_filters() {
-        let tx_hash =
-            b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
+        let tx_hash = b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let ob = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
         let stmt = build_fetch_trades_by_tx_stmt(&FetchTradesByTxArgs {
             chain_ids: vec![137],
@@ -112,14 +110,8 @@ mod tests {
         );
         assert_eq!(stmt.params[1], SqlValue::U64(137));
         assert_eq!(stmt.params[2], SqlValue::U64(137));
-        assert_eq!(
-            stmt.params[3],
-            SqlValue::Text(hex::encode_prefixed(ob))
-        );
-        assert_eq!(
-            stmt.params[4],
-            SqlValue::Text(hex::encode_prefixed(ob))
-        );
+        assert_eq!(stmt.params[3], SqlValue::Text(hex::encode_prefixed(ob)));
+        assert_eq!(stmt.params[4], SqlValue::Text(hex::encode_prefixed(ob)));
         assert!(stmt.sql.contains("t.orderbook_address IN (?4)"));
         assert!(stmt.sql.contains("c.orderbook_address IN (?5)"));
         assert!(!stmt.sql.contains(TAKE_ORDERS_ORDERBOOKS_CLAUSE));

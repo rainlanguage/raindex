@@ -1057,7 +1057,10 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				assert.equal(result.trades[0].id, mockOrderTradesList[0].id);
 				assert.equal(result.trades[0].orderHash, mockOrderTradesList[0].order.orderHash);
 				assert.equal(result.trades[0].timestamp, BigInt(mockOrderTradesList[0].timestamp));
-				assert.equal(result.trades[0].orderbook.toLowerCase(), mockOrderTradesList[0].orderbook.id.toLowerCase());
+				assert.equal(
+					result.trades[0].orderbook.toLowerCase(),
+					mockOrderTradesList[0].orderbook.id.toLowerCase()
+				);
 				assert.equal(
 					result.trades[0].outputVaultBalanceChange.amount.asHex(),
 					mockOrderTradesList[0].outputVaultBalanceChange.amount
@@ -1114,7 +1117,10 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 					result.trades[0].inputVaultBalanceChange.token.decimals,
 					BigInt(mockOrderTradesList[0].inputVaultBalanceChange.vault.token.decimals ?? 0)
 				);
-				assert.equal(result.trades[0].transaction.id, mockOrderTradesList[0].tradeEvent.transaction.id);
+				assert.equal(
+					result.trades[0].transaction.id,
+					mockOrderTradesList[0].tradeEvent.transaction.id
+				);
 				assert.equal(
 					result.trades[0].transaction.from,
 					mockOrderTradesList[0].tradeEvent.transaction.from
@@ -1213,8 +1219,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				);
 				assert.equal(result.orderbook, mockTrade.orderbook.id.toLowerCase());
 			});
-
-			});
+		});
 	});
 
 	describe('Add and remove orders', async function () {

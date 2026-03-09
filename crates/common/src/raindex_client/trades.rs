@@ -3,14 +3,14 @@ use super::orders::{OrdersDataSource, SubgraphOrders};
 use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
-use crate::local_db::OrderbookIdentifier;
 use crate::local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs;
+use crate::local_db::OrderbookIdentifier;
+use crate::raindex_client::local_db::query::fetch_trades_by_tx::fetch_trades_by_tx;
 use crate::raindex_client::{
     orders::RaindexOrder,
     transactions::RaindexTransaction,
     vaults::{LocalTradeBalanceInfo, LocalTradeTokenInfo, RaindexVaultBalanceChange},
 };
-use crate::raindex_client::local_db::query::fetch_trades_by_tx::fetch_trades_by_tx;
 use alloy::primitives::{Address, Bytes, B256, U256};
 use rain_math_float::Float;
 use rain_orderbook_subgraph_client::{
@@ -182,7 +182,6 @@ impl RaindexClient {
         self.get_trades_for_transaction(chain_ids, orderbook_addresses, tx_hash)
             .await
     }
-
 }
 impl RaindexClient {
     pub async fn get_trades_for_transaction(
@@ -246,8 +245,7 @@ impl RaindexClient {
                             trade_with_name.subgraph_name.clone(),
                             trade_with_name.trade.id.0.clone(),
                         ))?;
-                    let trade =
-                        RaindexTrade::try_from_sg_trade(chain_id, trade_with_name.trade)?;
+                    let trade = RaindexTrade::try_from_sg_trade(chain_id, trade_with_name.trade)?;
                     all_trades.push(trade);
                 }
             }
@@ -573,8 +571,7 @@ impl RaindexTradeSummary {
 
         for trade in trades {
             total_input = total_input.add(trade.input_vault_balance_change.amount())?;
-            let neg_output =
-                Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
+            let neg_output = Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
             total_output = total_output.add(neg_output)?;
         }
 
@@ -1013,7 +1010,6 @@ mod test_helpers {
                 fixture.output_token.to_string().to_lowercase()
             );
         }
-
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -1524,7 +1520,10 @@ mod test_helpers {
             );
             assert_eq!(
                 trade1.order_hash(),
-                B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000123").unwrap()
+                B256::from_str(
+                    "0x0000000000000000000000000000000000000000000000000000000000000123"
+                )
+                .unwrap()
             );
 
             let trade2 = trades[1].clone();
@@ -1705,9 +1704,11 @@ mod test_helpers {
             );
             assert_eq!(
                 trade.order_hash(),
-                B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000123").unwrap()
+                B256::from_str(
+                    "0x0000000000000000000000000000000000000000000000000000000000000123"
+                )
+                .unwrap()
             );
         }
-
     }
 }
