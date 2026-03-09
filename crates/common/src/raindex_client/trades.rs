@@ -4,14 +4,19 @@ use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
 use crate::local_db::OrderbookIdentifier;
-use crate::raindex_client::QuerySource;
 use crate::raindex_client::{
+    local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs,
     orders::RaindexOrder,
     transactions::RaindexTransaction,
     vaults::{LocalTradeBalanceInfo, LocalTradeTokenInfo, RaindexVaultBalanceChange},
 };
+use crate::raindex_client::local_db::query::fetch_trades_by_tx::fetch_trades_by_tx;
 use alloy::primitives::{Address, Bytes, B256, U256};
-use rain_orderbook_subgraph_client::types::{common::SgTrade, Id};
+use rain_math_float::Float;
+use rain_orderbook_subgraph_client::{
+    types::{common::SgTrade, Id},
+    MultiOrderbookSubgraphClient,
+};
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -21,12 +26,16 @@ use wasm_bindgen_utils::prelude::js_sys::BigInt;
 #[wasm_bindgen]
 pub struct RaindexTrade {
     id: Bytes,
-    order_hash: Bytes,
+    chain_id: u32,
+    orderbook: Address,
+    order_hash: B256,
+    owner: Address,
     transaction: RaindexTransaction,
     input_vault_balance_change: RaindexVaultBalanceChange,
     output_vault_balance_change: RaindexVaultBalanceChange,
     timestamp: U256,
-    orderbook: Address,
+    io_ratio: Float,
+    formatted_io_ratio: String,
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
@@ -35,9 +44,21 @@ impl RaindexTrade {
     pub fn id(&self) -> String {
         self.id.to_string()
     }
+    #[wasm_bindgen(getter = chainId)]
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
+    pub fn orderbook(&self) -> String {
+        self.orderbook.to_string()
+    }
     #[wasm_bindgen(getter = orderHash, unchecked_return_type = "Hex")]
     pub fn order_hash(&self) -> String {
         self.order_hash.to_string()
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
+    pub fn owner(&self) -> String {
+        self.owner.to_string()
     }
     #[wasm_bindgen(getter)]
     pub fn transaction(&self) -> RaindexTransaction {
@@ -56,9 +77,13 @@ impl RaindexTrade {
         BigInt::from_str(&self.timestamp.to_string())
             .map_err(|e| RaindexError::JsError(e.to_string().into()))
     }
-    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
-    pub fn orderbook(&self) -> String {
-        self.orderbook.to_string()
+    #[wasm_bindgen(getter = ioRatio)]
+    pub fn io_ratio(&self) -> Float {
+        self.io_ratio
+    }
+    #[wasm_bindgen(getter = formattedIoRatio)]
+    pub fn formatted_io_ratio(&self) -> String {
+        self.formatted_io_ratio.clone()
     }
 }
 #[cfg(not(target_family = "wasm"))]
@@ -66,8 +91,17 @@ impl RaindexTrade {
     pub fn id(&self) -> Bytes {
         self.id.clone()
     }
-    pub fn order_hash(&self) -> Bytes {
-        self.order_hash.clone()
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    pub fn orderbook(&self) -> Address {
+        self.orderbook
+    }
+    pub fn order_hash(&self) -> B256 {
+        self.order_hash
+    }
+    pub fn owner(&self) -> Address {
+        self.owner
     }
     pub fn transaction(&self) -> RaindexTransaction {
         self.transaction.clone()
@@ -81,8 +115,151 @@ impl RaindexTrade {
     pub fn timestamp(&self) -> U256 {
         self.timestamp
     }
-    pub fn orderbook(&self) -> Address {
-        self.orderbook
+    pub fn io_ratio(&self) -> Float {
+        self.io_ratio
+    }
+    pub fn formatted_io_ratio(&self) -> &str {
+        &self.formatted_io_ratio
+    }
+}
+
+#[wasm_export]
+impl RaindexClient {
+    /// Fetches all trades from a specific transaction
+    ///
+    /// Queries either local DB or subgraph based on the configured data source
+    /// for each chain, using the classify_chains pattern.
+    ///
+    /// ## Examples
+    ///
+    /// ```javascript
+    /// const result = await client.getTradesForTransaction(
+    ///   undefined,
+    ///   undefined,
+    ///   "0xabcdef..."
+    /// );
+    /// if (result.error) {
+    ///   console.error("Error:", result.error.readableMsg);
+    ///   return;
+    /// }
+    /// const { trades, totalCount, summary } = result.value;
+    /// ```
+    #[wasm_export(
+        js_name = "getTradesForTransaction",
+        return_description = "Trades list result with total count and summary",
+        unchecked_return_type = "RaindexTradesListResult",
+        preserve_js_class
+    )]
+    pub async fn get_trades_for_transaction_wasm_binding(
+        &self,
+        #[wasm_export(
+            js_name = "chainIds",
+            param_description = "Optional chain IDs to filter networks (queries all if not specified)"
+        )]
+        chain_ids: Option<ChainIds>,
+        #[wasm_export(
+            js_name = "orderbookAddresses",
+            param_description = "Optional orderbook addresses to filter results"
+        )]
+        orderbook_addresses: Option<Vec<String>>,
+        #[wasm_export(
+            js_name = "txHash",
+            param_description = "Transaction hash",
+            unchecked_param_type = "Hex"
+        )]
+        tx_hash: String,
+    ) -> Result<RaindexTradesListResult, RaindexError> {
+        let tx_hash = B256::from_str(&tx_hash)?;
+        let orderbook_addresses = orderbook_addresses
+            .map(|addresses| {
+                addresses
+                    .into_iter()
+                    .map(|address| Address::from_str(&address))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?;
+        self.get_trades_for_transaction(chain_ids, orderbook_addresses, tx_hash)
+            .await
+    }
+
+}
+impl RaindexClient {
+    pub async fn get_trades_for_transaction(
+        &self,
+        chain_ids: Option<ChainIds>,
+        orderbook_addresses: Option<Vec<Address>>,
+        tx_hash: B256,
+    ) -> Result<RaindexTradesListResult, RaindexError> {
+        let ids = chain_ids.map(|ChainIds(ids)| ids);
+        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+        let orderbook_addresses_for_local_db = orderbook_addresses.clone().unwrap_or_default();
+
+        let mut all_trades = Vec::new();
+
+        if let Some(db) = local_db.filter(|_| !local_ids.is_empty()) {
+            let trades = fetch_trades_by_tx(
+                &db,
+                FetchTradesByTxArgs {
+                    chain_ids: local_ids,
+                    orderbook_addresses: orderbook_addresses_for_local_db,
+                    tx_hash,
+                },
+            )
+            .await?;
+            let raindex_trades: Vec<RaindexTrade> = trades
+                .into_iter()
+                .map(RaindexTrade::try_from_local_db_trade)
+                .collect::<Result<_, _>>()?;
+            all_trades.extend(raindex_trades);
+        }
+
+        if !sg_ids.is_empty() {
+            let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
+            let orderbook_in = orderbook_addresses
+                .as_deref()
+                .filter(|addresses| !addresses.is_empty())
+                .map(|addresses| {
+                    addresses
+                        .iter()
+                        .map(|address| address.to_string().to_lowercase())
+                        .collect::<Vec<_>>()
+                });
+            if !multi_subgraph_args.is_empty() {
+                let name_to_chain_id: std::collections::HashMap<&str, u32> = multi_subgraph_args
+                    .iter()
+                    .flat_map(|(chain_id, args)| {
+                        args.iter().map(|arg| (arg.name.as_str(), *chain_id))
+                    })
+                    .collect();
+                let client = MultiOrderbookSubgraphClient::new(
+                    multi_subgraph_args.values().flatten().cloned().collect(),
+                );
+                let sg_trades = client
+                    .trades_by_transaction(tx_hash.to_string(), orderbook_in)
+                    .await;
+                for trade_with_name in sg_trades {
+                    let chain_id = name_to_chain_id
+                        .get(trade_with_name.subgraph_name.as_str())
+                        .copied()
+                        .ok_or(RaindexError::SubgraphNotFound(
+                            trade_with_name.subgraph_name.clone(),
+                            trade_with_name.trade.id.0.clone(),
+                        ))?;
+                    let trade =
+                        RaindexTrade::try_from_sg_trade(chain_id, trade_with_name.trade)?;
+                    all_trades.push(trade);
+                }
+            }
+        }
+
+        let total_count = all_trades.len() as u64;
+        let summary = RaindexTradeSummary::from_trades(&all_trades)?;
+
+        Ok(RaindexTradesListResult {
+            trades: all_trades,
+            total_count,
+            summary,
+        })
     }
 }
 
@@ -91,7 +268,7 @@ impl RaindexOrder {
     /// Fetches trade history with optional time filtering
     ///
     /// Retrieves a chronological list of trades executed by an order within
-    /// an optional time range.
+    /// an optional time range, along with the total count and summary.
     ///
     /// ## Examples
     ///
@@ -101,13 +278,13 @@ impl RaindexOrder {
     ///   console.error("Cannot fetch trades:", result.error.readableMsg);
     ///   return;
     /// }
-    /// const trades = result.value;
-    /// // Do something with the trades
+    /// const { trades, totalCount, summary } = result.value;
     /// ```
     #[wasm_export(
         js_name = "getTradesList",
-        return_description = "Array of trade records with complete details",
-        unchecked_return_type = "RaindexTrade[]"
+        return_description = "Trades list result with total count and summary",
+        unchecked_return_type = "RaindexTradesListResult",
+        preserve_js_class
     )]
     pub async fn get_trades_list(
         &self,
@@ -126,7 +303,7 @@ impl RaindexOrder {
             param_description = "Optional page number (defaults to 1)"
         )]
         page: Option<u16>,
-    ) -> Result<Vec<RaindexTrade>, RaindexError> {
+    ) -> Result<RaindexTradesListResult, RaindexError> {
         let chain_id = self.chain_id();
         #[cfg(target_family = "wasm")]
         let orderbook = Address::from_str(&self.orderbook())?;
@@ -141,20 +318,44 @@ impl RaindexOrder {
         let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
         let raindex_client = self.get_raindex_client();
 
-        match raindex_client.query_source(chain_id) {
+        let (trades, total_count) = match raindex_client.query_source(chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
-                local_source
+                let trades = local_source
                     .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
-                    .await
+                    .await?;
+                let total_count = if page.is_some() {
+                    local_source
+                        .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
+                        .await?
+                } else {
+                    trades.len() as u64
+                };
+                (trades, total_count)
             }
             QuerySource::Subgraph => {
                 let subgraph_source = SubgraphOrders::new(&raindex_client);
-                subgraph_source
+                let trades = subgraph_source
                     .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
-                    .await
+                    .await?;
+                let total_count = if page.is_some() {
+                    subgraph_source
+                        .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
+                        .await?
+                } else {
+                    trades.len() as u64
+                };
+                (trades, total_count)
             }
-        }
+        };
+
+        let summary = RaindexTradeSummary::from_trades(&trades)?;
+
+        Ok(RaindexTradesListResult {
+            trades,
+            total_count,
+            summary,
+        })
     }
 
     /// Fetches detailed information for a specific trade
@@ -171,7 +372,6 @@ impl RaindexOrder {
     ///   return;
     /// }
     /// const trade = result.value;
-    /// // Do something with the trade
     /// ```
     #[wasm_export(
         js_name = "getTradeDetail",
@@ -190,70 +390,6 @@ impl RaindexOrder {
         let trade_id = Bytes::from_str(&trade_id)?;
         self.get_trade_detail(trade_id).await
     }
-
-    /// Counts total trades for an order within a time range
-    ///
-    /// Efficiently counts the total number of trades executed by an order without
-    /// fetching all trade details.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await order.getTradeCount();
-    /// if (result.error) {
-    ///   console.error("Cannot count trades:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const count = result.value;
-    /// // Do something with the count
-    /// ```
-    #[wasm_export(
-        js_name = "getTradeCount",
-        return_description = "Total trade count as number",
-        unchecked_return_type = "number"
-    )]
-    pub async fn get_trade_count(
-        &self,
-        #[wasm_export(
-            js_name = "startTimestamp",
-            param_description = "Optional start time filter (Unix timestamp in seconds)"
-        )]
-        start_timestamp: Option<u64>,
-        #[wasm_export(
-            js_name = "endTimestamp",
-            param_description = "Optional end time filter (Unix timestamp in seconds)"
-        )]
-        end_timestamp: Option<u64>,
-    ) -> Result<u64, RaindexError> {
-        let chain_id = self.chain_id();
-        #[cfg(target_family = "wasm")]
-        let orderbook = Address::from_str(&self.orderbook())?;
-        #[cfg(not(target_family = "wasm"))]
-        let orderbook = self.orderbook();
-
-        #[cfg(target_family = "wasm")]
-        let order_hash = B256::from_str(&self.order_hash())?;
-        #[cfg(not(target_family = "wasm"))]
-        let order_hash = self.order_hash();
-
-        let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
-        let raindex_client = self.get_raindex_client();
-
-        match raindex_client.query_source(chain_id) {
-            QuerySource::LocalDb(local_db) => {
-                let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
-                local_source
-                    .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
-                    .await
-            }
-            QuerySource::Subgraph => {
-                let subgraph_source = SubgraphOrders::new(&raindex_client);
-                subgraph_source
-                    .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
-                    .await
-            }
-        }
-    }
 }
 impl RaindexOrder {
     pub async fn get_trade_detail(&self, trade_id: Bytes) -> Result<RaindexTrade, RaindexError> {
@@ -269,29 +405,38 @@ impl RaindexOrder {
 
 impl RaindexTrade {
     pub fn try_from_sg_trade(chain_id: u32, trade: SgTrade) -> Result<Self, RaindexError> {
+        let input_vault_balance_change =
+            RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
+                chain_id,
+                trade.input_vault_balance_change,
+            )?;
+        let output_vault_balance_change =
+            RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
+                chain_id,
+                trade.output_vault_balance_change,
+            )?;
+
+        let neg_output = Float::zero()?.sub(output_vault_balance_change.amount())?;
+        let io_ratio = input_vault_balance_change.amount().div(neg_output)?;
+        let formatted_io_ratio = io_ratio.format()?;
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.id.0)?,
-            order_hash: Bytes::from_str(&trade.order.order_hash.0)?,
-            transaction: RaindexTransaction::try_from(trade.trade_event.transaction)?,
-            input_vault_balance_change:
-                RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
-                    chain_id,
-                    trade.input_vault_balance_change,
-                )?,
-            output_vault_balance_change:
-                RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
-                    chain_id,
-                    trade.output_vault_balance_change,
-                )?,
-            timestamp: U256::from_str(&trade.timestamp.0)?,
+            chain_id,
             orderbook: Address::from_str(&trade.orderbook.id.0)?,
+            order_hash: B256::from_str(&trade.order.order_hash.0)?,
+            owner: Address::from_str(&trade.order.owner.0)?,
+            transaction: RaindexTransaction::try_from(trade.trade_event.transaction)?,
+            input_vault_balance_change,
+            output_vault_balance_change,
+            timestamp: U256::from_str(&trade.timestamp.0)?,
+            io_ratio,
+            formatted_io_ratio,
         })
     }
 
-    pub(crate) fn try_from_local_db_trade(
-        chain_id: u32,
-        trade: LocalDbOrderTrade,
-    ) -> Result<Self, RaindexError> {
+    pub(crate) fn try_from_local_db_trade(trade: LocalDbOrderTrade) -> Result<Self, RaindexError> {
+        let chain_id = trade.chain_id;
         let transaction = RaindexTransaction::from_local_parts(
             trade.transaction_hash,
             trade.transaction_sender,
@@ -337,15 +482,158 @@ impl RaindexTrade {
             trade.block_timestamp,
         )?;
 
+        let neg_output = Float::zero()?.sub(output_change.amount())?;
+        let io_ratio = input_change.amount().div(neg_output)?;
+        let formatted_io_ratio = io_ratio.format()?;
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.trade_id)?,
-            order_hash: trade.order_hash.into(),
+            chain_id,
+            orderbook: trade.orderbook,
+            order_hash: trade.order_hash,
+            owner: trade.order_owner,
             transaction,
             input_vault_balance_change: input_change,
             output_vault_balance_change: output_change,
             timestamp: U256::from(trade.block_timestamp),
-            orderbook: trade.orderbook,
+            io_ratio,
+            formatted_io_ratio,
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexTradeSummary {
+    total_input: Float,
+    formatted_total_input: String,
+    total_output: Float,
+    formatted_total_output: String,
+    average_io_ratio: Float,
+    formatted_average_io_ratio: String,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexTradeSummary {
+    #[wasm_bindgen(getter = totalInput)]
+    pub fn total_input(&self) -> Float {
+        self.total_input
+    }
+    #[wasm_bindgen(getter = formattedTotalInput)]
+    pub fn formatted_total_input(&self) -> String {
+        self.formatted_total_input.clone()
+    }
+    #[wasm_bindgen(getter = totalOutput)]
+    pub fn total_output(&self) -> Float {
+        self.total_output
+    }
+    #[wasm_bindgen(getter = formattedTotalOutput)]
+    pub fn formatted_total_output(&self) -> String {
+        self.formatted_total_output.clone()
+    }
+    #[wasm_bindgen(getter = averageIoRatio)]
+    pub fn average_io_ratio(&self) -> Float {
+        self.average_io_ratio
+    }
+    #[wasm_bindgen(getter = formattedAverageIoRatio)]
+    pub fn formatted_average_io_ratio(&self) -> String {
+        self.formatted_average_io_ratio.clone()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexTradeSummary {
+    pub fn total_input(&self) -> Float {
+        self.total_input
+    }
+    pub fn formatted_total_input(&self) -> &str {
+        &self.formatted_total_input
+    }
+    pub fn total_output(&self) -> Float {
+        self.total_output
+    }
+    pub fn formatted_total_output(&self) -> &str {
+        &self.formatted_total_output
+    }
+    pub fn average_io_ratio(&self) -> Float {
+        self.average_io_ratio
+    }
+    pub fn formatted_average_io_ratio(&self) -> &str {
+        &self.formatted_average_io_ratio
+    }
+}
+
+impl RaindexTradeSummary {
+    pub fn from_trades(trades: &[RaindexTrade]) -> Result<Self, RaindexError> {
+        let mut total_input = Float::zero()?;
+        let mut total_output = Float::zero()?;
+
+        for trade in trades {
+            total_input = total_input.add(trade.input_vault_balance_change.amount())?;
+            let neg_output =
+                Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
+            total_output = total_output.add(neg_output)?;
+        }
+
+        let formatted_total_input = total_input.format()?;
+        let formatted_total_output = total_output.format()?;
+
+        let average_io_ratio = if total_output.eq(Float::zero()?).unwrap_or(true) {
+            Float::zero()?
+        } else {
+            total_input.div(total_output)?
+        };
+        let formatted_average_io_ratio = average_io_ratio.format()?;
+
+        Ok(RaindexTradeSummary {
+            total_input,
+            formatted_total_input,
+            total_output,
+            formatted_total_output,
+            average_io_ratio,
+            formatted_average_io_ratio,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexTradesListResult {
+    trades: Vec<RaindexTrade>,
+    total_count: u64,
+    summary: RaindexTradeSummary,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexTradesListResult {
+    #[wasm_bindgen(getter, unchecked_return_type = "RaindexTrade[]")]
+    pub fn trades(&self) -> Vec<RaindexTrade> {
+        self.trades.clone()
+    }
+    #[wasm_bindgen(getter = totalCount)]
+    pub fn total_count(&self) -> u64 {
+        self.total_count
+    }
+    #[wasm_bindgen(getter)]
+    pub fn summary(&self) -> RaindexTradeSummary {
+        self.summary.clone()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexTradesListResult {
+    pub fn trades(&self) -> &[RaindexTrade] {
+        &self.trades
+    }
+    pub fn total_count(&self) -> u64 {
+        self.total_count
+    }
+    pub fn summary(&self) -> &RaindexTradeSummary {
+        &self.summary
     }
 }
 
@@ -481,6 +769,7 @@ mod test_helpers {
             };
 
             let trade = LocalDbOrderTrade {
+                chain_id: CHAIN_ID,
                 trade_kind: "take".into(),
                 orderbook: orderbook_address,
                 order_hash: order_hash.clone(),
@@ -651,8 +940,10 @@ mod test_helpers {
                 .await
                 .unwrap();
 
-            let trades = order.get_trades_list(None, None, None).await.unwrap();
+            let result = order.get_trades_list(None, None, None).await.unwrap();
 
+            assert_eq!(result.total_count(), 1);
+            let trades = result.trades();
             assert_eq!(trades.len(), 1);
 
             let trade = trades.first().unwrap();
@@ -722,41 +1013,6 @@ mod test_helpers {
             );
         }
 
-        #[wasm_bindgen_test]
-        async fn test_get_trade_count_local_db_path() {
-            let fixture = build_local_trade_fixture(
-                b256!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-                3,
-                7,
-            );
-
-            let callback = make_local_db_trades_callback(
-                vec![fixture.order.clone()],
-                vec![fixture.input_vault.clone(), fixture.output_vault.clone()],
-                vec![fixture.trade.clone()],
-                7,
-            );
-            let client = new_test_client_with_db_callback(
-                vec![get_local_db_test_yaml()],
-                callback,
-                vec![42161],
-            );
-
-            let order = client
-                .get_order_by_hash(
-                    &OrderbookIdentifier::new(42161, fixture.orderbook_address),
-                    fixture.order_hash.clone(),
-                )
-                .await
-                .unwrap();
-
-            let count = order
-                .get_trade_count(Some(1_699_999_900), Some(1_700_000_900))
-                .await
-                .unwrap();
-
-            assert_eq!(count, 7);
-        }
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -938,7 +1194,8 @@ mod test_helpers {
               },
               "order": {
                 "id": "0x0123",
-                "orderHash": "0x0123"
+                "orderHash": "0x0123",
+                "owner": "0x0000000000000000000000000000000000000000"
               },
               "inputVaultBalanceChange": {
                 "id": "0x0123",
@@ -1028,7 +1285,8 @@ mod test_helpers {
                 },
                 "order": {
                   "id": "0x0234",
-                  "orderHash": "0x0234"
+                  "orderHash": "0x0234",
+                  "owner": "0x0000000000000000000000000000000000000001"
                 },
                 "inputVaultBalanceChange": {
                   "id": "0x0234",
@@ -1121,7 +1379,9 @@ mod test_helpers {
                 )
                 .await
                 .unwrap();
-            let trades = order.get_trades_list(None, None, None).await.unwrap();
+            let result = order.get_trades_list(None, None, None).await.unwrap();
+            assert_eq!(result.total_count(), 2);
+            let trades = result.trades();
             assert_eq!(trades.len(), 2);
 
             let tx_hash =
@@ -1261,7 +1521,10 @@ mod test_helpers {
                 trade1.orderbook(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
-            assert_eq!(trade1.order_hash(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(
+                trade1.order_hash(),
+                B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000123").unwrap()
+            );
 
             let trade2 = trades[1].clone();
             assert_eq!(trade2.id(), Bytes::from_str("0x0234").unwrap());
@@ -1439,63 +1702,11 @@ mod test_helpers {
                 trade.orderbook(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
-            assert_eq!(trade.order_hash(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(
+                trade.order_hash(),
+                B256::from_str("0x0000000000000000000000000000000000000000000000000000000000000123").unwrap()
+            );
         }
 
-        #[tokio::test]
-        async fn test_get_order_trades_count() {
-            let sg_server = MockServer::start_async().await;
-            sg_server.mock(|when, then| {
-                when.path("/sg")
-                    .body_contains("\"first\":200")
-                    .body_contains("\"skip\":0");
-                then.status(200).json_body_obj(&json!({
-                  "data": {
-                    "trades": get_trades_json()
-                  }
-                }));
-            });
-            sg_server.mock(|when, then| {
-                when.path("/sg")
-                    .body_contains("\"first\":200")
-                    .body_contains("\"skip\":200");
-                then.status(200).json_body_obj(&json!({
-                    "data": { "trades": [] }
-                }));
-            });
-            sg_server.mock(|when, then| {
-                when.path("/sg").body_contains("SgOrderDetailByHashQuery");
-                then.status(200).json_body_obj(&json!({
-                    "data": {
-                        "orders": [get_order1_json()]
-                    }
-                }));
-            });
-
-            let raindex_client = RaindexClient::new(
-                vec![get_test_yaml(
-                    &sg_server.url("/sg"),
-                    "http://localhost:3000",
-                    "http://localhost:3000",
-                    "http://localhost:3000",
-                )],
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-            let order = raindex_client
-                .get_order_by_hash(
-                    &OrderbookIdentifier::new(
-                        1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
-                    ),
-                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
-                )
-                .await
-                .unwrap();
-            let count = order.get_trade_count(None, None).await.unwrap();
-            assert_eq!(count, 2);
-        }
     }
 }
