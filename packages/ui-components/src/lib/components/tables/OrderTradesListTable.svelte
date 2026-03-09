@@ -7,7 +7,7 @@
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { BugOutline } from 'flowbite-svelte-icons';
-	import type { RaindexOrder, RaindexTrade } from '@rainlanguage/orderbook';
+	import type { RaindexOrder, RaindexTrade, RaindexTradesListResult } from '@rainlanguage/orderbook';
 	import TableTimeFilters from '../charts/TableTimeFilters.svelte';
 	import Tooltip from '../Tooltip.svelte';
 
@@ -25,44 +25,33 @@
 		queryFn: async ({ pageParam }: { pageParam: number }) => {
 			tradesCount = undefined;
 
-			const [countResult, tradesResult] = await Promise.all([
-				order.getTradeCount(
-					startTimestamp ? BigInt(startTimestamp) : undefined,
-					endTimestamp ? BigInt(endTimestamp) : undefined
-				),
-				order.getTradesList(
-					startTimestamp ? BigInt(startTimestamp) : undefined,
-					endTimestamp ? BigInt(endTimestamp) : undefined,
-					pageParam + 1
-				)
-			]);
-			if (countResult.error) throw new Error(countResult.error.readableMsg);
-			if (tradesResult.error) throw new Error(tradesResult.error.readableMsg);
+			const result = await order.getTradesList(
+				startTimestamp ? BigInt(startTimestamp) : undefined,
+				endTimestamp ? BigInt(endTimestamp) : undefined,
+				pageParam + 1
+			);
+			if (result.error) throw new Error(result.error.readableMsg);
 
-			const count = countResult.value;
-			const trades = tradesResult.value;
+			tradesCount = result.value.totalCount;
 
-			if (typeof count === 'number') {
-				tradesCount = count;
-			}
-
-			return trades;
+			return result.value;
 		},
 		initialPageParam: 0,
 		getNextPageParam: (
-			lastPage: RaindexTrade[],
-			_allPages: RaindexTrade[][],
+			lastPage: RaindexTradesListResult,
+			_allPages: RaindexTradesListResult[],
 			lastPageParam: number
 		) => {
-			return lastPage.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
+			return lastPage.trades.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
 		}
 	});
 
-	const AppTable = TanstackAppTable<RaindexTrade>;
+	const AppTable = TanstackAppTable<RaindexTrade, RaindexTradesListResult>;
 </script>
 
 <AppTable
 	query={orderTradesQuery}
+	dataSelector={(page) => page.trades}
 	emptyMessage="No trades found"
 	rowHoverable={false}
 	queryKey={order.id}
