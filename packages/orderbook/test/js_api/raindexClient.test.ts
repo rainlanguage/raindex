@@ -1028,78 +1028,80 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 					await raindexClient.getOrderByHash(1, CHAIN_ID_1_ORDERBOOK_ADDRESS, BYTES32_0123)
 				);
 				const result = extractWasmEncodedData(await order.getTradesList());
-				assert.equal(result.length, 1);
-				assert.equal(result[0].id, mockOrderTradesList[0].id);
-				assert.equal(result[0].orderHash, mockOrderTradesList[0].order.orderHash);
-				assert.equal(result[0].timestamp, BigInt(mockOrderTradesList[0].timestamp));
-				assert.equal(result[0].orderbook, mockOrderTradesList[0].orderbook.id.toLowerCase());
+				assert.equal(result.trades.length, 1);
+				assert.equal(result.totalCount, 1);
+				assert.ok(result.summary);
+				assert.equal(result.trades[0].id, mockOrderTradesList[0].id);
+				assert.equal(result.trades[0].orderHash, mockOrderTradesList[0].order.orderHash);
+				assert.equal(result.trades[0].timestamp, BigInt(mockOrderTradesList[0].timestamp));
+				assert.equal(result.trades[0].orderbook, mockOrderTradesList[0].orderbook.id.toLowerCase());
 				assert.equal(
-					result[0].outputVaultBalanceChange.amount,
+					result.trades[0].outputVaultBalanceChange.amount,
 					mockOrderTradesList[0].outputVaultBalanceChange.amount
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.vaultId,
+					result.trades[0].outputVaultBalanceChange.vaultId,
 					BigInt(mockOrderTradesList[0].outputVaultBalanceChange.vault.vaultId)
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.token.id,
+					result.trades[0].outputVaultBalanceChange.token.id,
 					mockOrderTradesList[0].outputVaultBalanceChange.vault.token.id
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.token.address,
+					result.trades[0].outputVaultBalanceChange.token.address,
 					mockOrderTradesList[0].outputVaultBalanceChange.vault.token.address
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.token.name,
+					result.trades[0].outputVaultBalanceChange.token.name,
 					mockOrderTradesList[0].outputVaultBalanceChange.vault.token.name
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.token.symbol,
+					result.trades[0].outputVaultBalanceChange.token.symbol,
 					mockOrderTradesList[0].outputVaultBalanceChange.vault.token.symbol
 				);
 				assert.equal(
-					result[0].outputVaultBalanceChange.token.decimals,
+					result.trades[0].outputVaultBalanceChange.token.decimals,
 					BigInt(mockOrderTradesList[0].outputVaultBalanceChange.vault.token.decimals ?? 0)
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.amount,
+					result.trades[0].inputVaultBalanceChange.amount,
 					mockOrderTradesList[0].inputVaultBalanceChange.amount
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.vaultId,
+					result.trades[0].inputVaultBalanceChange.vaultId,
 					BigInt(mockOrderTradesList[0].inputVaultBalanceChange.vault.vaultId)
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.token.id,
+					result.trades[0].inputVaultBalanceChange.token.id,
 					mockOrderTradesList[0].inputVaultBalanceChange.vault.token.id
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.token.address,
+					result.trades[0].inputVaultBalanceChange.token.address,
 					mockOrderTradesList[0].inputVaultBalanceChange.vault.token.address
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.token.name,
+					result.trades[0].inputVaultBalanceChange.token.name,
 					mockOrderTradesList[0].inputVaultBalanceChange.vault.token.name
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.token.symbol,
+					result.trades[0].inputVaultBalanceChange.token.symbol,
 					mockOrderTradesList[0].inputVaultBalanceChange.vault.token.symbol
 				);
 				assert.equal(
-					result[0].inputVaultBalanceChange.token.decimals,
+					result.trades[0].inputVaultBalanceChange.token.decimals,
 					BigInt(mockOrderTradesList[0].inputVaultBalanceChange.vault.token.decimals ?? 0)
 				);
-				assert.equal(result[0].transaction.id, mockOrderTradesList[0].tradeEvent.transaction.id);
+				assert.equal(result.trades[0].transaction.id, mockOrderTradesList[0].tradeEvent.transaction.id);
 				assert.equal(
-					result[0].transaction.from,
+					result.trades[0].transaction.from,
 					mockOrderTradesList[0].tradeEvent.transaction.from
 				);
 				assert.equal(
-					result[0].transaction.blockNumber,
+					result.trades[0].transaction.blockNumber,
 					BigInt(mockOrderTradesList[0].tradeEvent.transaction.blockNumber)
 				);
 				assert.equal(
-					result[0].transaction.timestamp,
+					result.trades[0].transaction.timestamp,
 					BigInt(mockOrderTradesList[0].tradeEvent.transaction.timestamp)
 				);
 			});
@@ -1189,40 +1191,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				assert.equal(result.orderbook, mockTrade.orderbook.id.toLowerCase());
 			});
 
-			it('should get trade count', async function () {
-				await mockServer
-					.forPost('/sg1')
-					.once()
-					.thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
-				await mockServer
-					.forPost('/sg1')
-					.once()
-					.thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
-				await mockServer.forPost('/sg1').thenReply(
-					200,
-					JSON.stringify({
-						data: {
-							trades: mockOrderTradesList
-						}
-					})
-				);
-				await mockServer.forPost('/sg1').thenReply(
-					200,
-					JSON.stringify({
-						data: {
-							trades: []
-						}
-					})
-				);
-
-				const raindexClient = extractWasmEncodedData(await RaindexClient.new([YAML]));
-				const order = extractWasmEncodedData(
-					await raindexClient.getOrderByHash(1, CHAIN_ID_1_ORDERBOOK_ADDRESS, BYTES32_0123)
-				);
-				const result = extractWasmEncodedData(await order.getTradeCount());
-				assert.equal(result, 1);
 			});
-		});
 	});
 
 	describe('Add and remove orders', async function () {

@@ -60,7 +60,7 @@
 		queryFn: async () => {
 			const data = await order.getTradesList(undefined, undefined, 1);
 			if (data.error) throw new Error(data.error.readableMsg);
-			return data.value;
+			return data.value.trades;
 		}
 	});
 
