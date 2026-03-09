@@ -407,6 +407,16 @@ impl RaindexOrder {
 }
 
 impl RaindexTrade {
+    fn compute_io_ratio(
+        input_amount: Float,
+        output_amount: Float,
+    ) -> Result<(Float, String), RaindexError> {
+        let neg_output = Float::zero()?.sub(output_amount)?;
+        let io_ratio = input_amount.div(neg_output)?;
+        let formatted_io_ratio = io_ratio.format()?;
+        Ok((io_ratio, formatted_io_ratio))
+    }
+
     pub fn try_from_sg_trade(chain_id: u32, trade: SgTrade) -> Result<Self, RaindexError> {
         let input_vault_balance_change =
             RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
@@ -419,9 +429,10 @@ impl RaindexTrade {
                 trade.output_vault_balance_change,
             )?;
 
-        let neg_output = Float::zero()?.sub(output_vault_balance_change.amount())?;
-        let io_ratio = input_vault_balance_change.amount().div(neg_output)?;
-        let formatted_io_ratio = io_ratio.format()?;
+        let (io_ratio, formatted_io_ratio) = Self::compute_io_ratio(
+            input_vault_balance_change.amount(),
+            output_vault_balance_change.amount(),
+        )?;
 
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.id.0)?,
@@ -485,9 +496,8 @@ impl RaindexTrade {
             trade.block_timestamp,
         )?;
 
-        let neg_output = Float::zero()?.sub(output_change.amount())?;
-        let io_ratio = input_change.amount().div(neg_output)?;
-        let formatted_io_ratio = io_ratio.format()?;
+        let (io_ratio, formatted_io_ratio) =
+            Self::compute_io_ratio(input_change.amount(), output_change.amount())?;
 
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.trade_id)?,
@@ -629,9 +639,10 @@ impl RaindexPairSummary {
             let mut total_input = Float::zero()?;
             let mut total_output = Float::zero()?;
 
+            let zero = Float::zero()?;
             for trade in &bucket {
                 total_input = total_input.add(trade.input_vault_balance_change.amount())?;
-                let neg_output = Float::zero()?.sub(trade.output_vault_balance_change.amount())?;
+                let neg_output = zero.sub(trade.output_vault_balance_change.amount())?;
                 total_output = total_output.add(neg_output)?;
             }
 
