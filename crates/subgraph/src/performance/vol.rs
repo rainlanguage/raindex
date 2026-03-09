@@ -232,6 +232,7 @@ mod tests {
             order: SgTradeStructPartialOrder {
                 id: bytes.clone(),
                 order_hash: bytes.clone(),
+                owner: bytes.clone(),
             },
             trade_event: SgTradeEvent {
                 sender: bytes.clone(),
@@ -301,6 +302,7 @@ mod tests {
             order: SgTradeStructPartialOrder {
                 id: bytes.clone(),
                 order_hash: bytes.clone(),
+                owner: bytes.clone(),
             },
             trade_event: SgTradeEvent {
                 sender: bytes.clone(),

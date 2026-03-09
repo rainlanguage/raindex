@@ -239,6 +239,7 @@ mod tests {
             order: SgTradeStructPartialOrder {
                 id: SgBytes("".to_string()),
                 order_hash: SgBytes("".to_string()),
+                owner: SgBytes("".to_string()),
             },
             timestamp: SgBigInt("".to_string()),
             orderbook: SgOrderbook {
