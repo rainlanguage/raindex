@@ -145,7 +145,7 @@ const mockOrder: RaindexOrder = {
 
 const wrapInResult = (trades: RaindexTrade[]) => ({
 	trades,
-	totalCount: trades.length,
+	totalCount: BigInt(trades.length),
 	summary: {}
 });
 

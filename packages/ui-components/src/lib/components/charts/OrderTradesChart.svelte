@@ -58,7 +58,7 @@
 	$: query = createQuery({
 		queryKey: [QKEY_ORDER_TRADES_LIST, order.id],
 		queryFn: async () => {
-			const data = await order.getTradesList(undefined, undefined, 1);
+			const data = await order.getTradesList(undefined, undefined, undefined);
 			if (data.error) throw new Error(data.error.readableMsg);
 			return data.value.trades;
 		}
