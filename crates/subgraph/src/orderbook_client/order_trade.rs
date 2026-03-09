@@ -69,10 +69,11 @@ impl OrderbookSubgraphClient {
                 )
                 .await?;
 
-            if data.trades.is_empty() {
+            let page_len = data.trades.len();
+            all_trades.extend(data.trades);
+            if page_len < ALL_PAGES_QUERY_PAGE_SIZE as usize {
                 break;
             }
-            all_trades.extend(data.trades);
             page += 1;
         }
         Ok(all_trades)
@@ -100,10 +101,11 @@ impl OrderbookSubgraphClient {
                     end_timestamp,
                 )
                 .await?;
-            if page_data.is_empty() {
+            let page_len = page_data.len();
+            all_pages_merged.extend(page_data);
+            if page_len < ALL_PAGES_QUERY_PAGE_SIZE as usize {
                 break;
             }
-            all_pages_merged.extend(page_data);
             page += 1
         }
         Ok(all_pages_merged)
@@ -559,7 +561,7 @@ mod tests {
         sg_server.mock(|when, then| {
             when.method(POST)
                 .path("/")
-                .body_contains(format!("\"orderbook_in\":[\"{}\"]", orderbook));
+                .body_contains(format!("\"orderbookIn\":[\"{}\"]", orderbook));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
 

@@ -51,6 +51,7 @@ query SgOrderTradesListQuery($first: Int, $id: Bytes!, $skip: Int, $timestampGte
     order {
       id
       orderHash
+      owner
     }
     inputVaultBalanceChange {
       id

@@ -4,8 +4,8 @@ use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
 use crate::local_db::OrderbookIdentifier;
+use crate::local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs;
 use crate::raindex_client::{
-    local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs,
     orders::RaindexOrder,
     transactions::RaindexTransaction,
     vaults::{LocalTradeBalanceInfo, LocalTradeTokenInfo, RaindexVaultBalanceChange},
@@ -17,6 +17,7 @@ use rain_orderbook_subgraph_client::{
     types::{common::SgTrade, Id},
     MultiOrderbookSubgraphClient,
 };
+use std::ops::{Add, Div, Sub};
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -1194,7 +1195,7 @@ mod test_helpers {
               },
               "order": {
                 "id": "0x0123",
-                "orderHash": "0x0123",
+                "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
                 "owner": "0x0000000000000000000000000000000000000000"
               },
               "inputVaultBalanceChange": {
@@ -1285,7 +1286,7 @@ mod test_helpers {
                 },
                 "order": {
                   "id": "0x0234",
-                  "orderHash": "0x0234",
+                  "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000234",
                   "owner": "0x0000000000000000000000000000000000000001"
                 },
                 "inputVaultBalanceChange": {
