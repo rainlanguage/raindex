@@ -192,7 +192,7 @@ impl OrdersDataSource for LocalDbOrders<'_> {
 
         local_trades
             .into_iter()
-            .map(|trade| RaindexTrade::try_from_local_db_trade(ob_id.chain_id, trade))
+            .map(RaindexTrade::try_from_local_db_trade)
             .collect()
     }
 
