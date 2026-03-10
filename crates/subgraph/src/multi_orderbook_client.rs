@@ -175,6 +175,42 @@ impl MultiOrderbookSubgraphClient {
         all_trades
     }
 
+    pub async fn trades_by_owner(
+        &self,
+        owner: String,
+        start_timestamp: Option<u64>,
+        end_timestamp: Option<u64>,
+        orderbook_in: Option<Vec<String>>,
+    ) -> Vec<SgTradeWithSubgraphName> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let owner = owner.clone();
+            let orderbook_in = orderbook_in.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url);
+                let trades = client
+                    .trades_by_owner_all(owner, start_timestamp, end_timestamp, orderbook_in)
+                    .await?;
+                let wrapped_trades: Vec<SgTradeWithSubgraphName> = trades
+                    .into_iter()
+                    .map(|trade| SgTradeWithSubgraphName {
+                        trade,
+                        subgraph_name: subgraph.name.clone(),
+                    })
+                    .collect();
+                Ok::<_, OrderbookSubgraphClientError>(wrapped_trades)
+            }
+        });
+
+        let results = join_all(futures).await;
+
+        results
+            .into_iter()
+            .filter_map(Result::ok)
+            .flatten()
+            .collect()
+    }
+
     pub async fn tokens_list(
         &self,
     ) -> Result<Vec<SgErc20WithSubgraphName>, OrderbookSubgraphClientError> {

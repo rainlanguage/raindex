@@ -78,6 +78,70 @@ impl OrderbookSubgraphClient {
         Ok(all_trades)
     }
 
+    pub async fn trades_by_owner(
+        &self,
+        owner: String,
+        start_timestamp: Option<u64>,
+        end_timestamp: Option<u64>,
+        orderbook_in: Option<Vec<String>>,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        let pagination_variables = Self::parse_pagination_args(pagination_args);
+        let data = self
+            .query::<SgOwnerTradesListQuery, SgOwnerTradesQueryVariables>(
+                SgOwnerTradesQueryVariables {
+                    owner: SgBytes(owner),
+                    first: pagination_variables.first,
+                    skip: pagination_variables.skip,
+                    timestamp_gte: Some(
+                        start_timestamp
+                            .map_or(SgBigInt("0".to_string()), |v| SgBigInt(v.to_string())),
+                    ),
+                    timestamp_lte: Some(
+                        end_timestamp
+                            .map_or(SgBigInt(u64::MAX.to_string()), |v| SgBigInt(v.to_string())),
+                    ),
+                    orderbook_in,
+                },
+            )
+            .await?;
+
+        Ok(data.trades)
+    }
+
+    pub async fn trades_by_owner_all(
+        &self,
+        owner: String,
+        start_timestamp: Option<u64>,
+        end_timestamp: Option<u64>,
+        orderbook_in: Option<Vec<String>>,
+    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        let mut all_trades = vec![];
+        let mut page = 1;
+
+        loop {
+            let page_data = self
+                .trades_by_owner(
+                    owner.clone(),
+                    start_timestamp,
+                    end_timestamp,
+                    orderbook_in.clone(),
+                    SgPaginationArgs {
+                        page,
+                        page_size: ALL_PAGES_QUERY_PAGE_SIZE,
+                    },
+                )
+                .await?;
+            let page_len = page_data.len();
+            all_trades.extend(page_data);
+            if page_len < ALL_PAGES_QUERY_PAGE_SIZE as usize {
+                break;
+            }
+            page += 1;
+        }
+        Ok(all_trades)
+    }
+
     /// Fetch all pages of order_takes_list query
     pub async fn order_trades_list_all(
         &self,
@@ -660,6 +724,148 @@ mod tests {
         });
 
         let result = client.order_trades_list_all(order_id, None, None).await;
+        assert!(matches!(
+            result,
+            Err(OrderbookSubgraphClientError::CynicClientError(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_found() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let owner = "0xowner_abc123".to_string();
+        let expected_trades = vec![default_sg_trade(), default_sg_trade()];
+        let pagination_args = SgPaginationArgs {
+            page: 1,
+            page_size: 10,
+        };
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"trades": expected_trades}}));
+        });
+
+        let result = client
+            .trades_by_owner(owner, None, None, None, pagination_args)
+            .await;
+        assert!(result.is_ok());
+        let trades = result.unwrap();
+        assert_eq!(trades.len(), expected_trades.len());
+        for (actual, expected) in trades.iter().zip(expected_trades.iter()) {
+            assert_sg_trade_eq(actual, expected);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_empty() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let owner = "0xowner_empty".to_string();
+        let pagination_args = SgPaginationArgs {
+            page: 1,
+            page_size: 10,
+        };
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let result = client
+            .trades_by_owner(owner, None, None, None, pagination_args)
+            .await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_with_orderbook_filter() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let owner = "0xowner_filtered".to_string();
+        let orderbook = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string();
+        let pagination_args = SgPaginationArgs {
+            page: 1,
+            page_size: 10,
+        };
+
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"orderbookIn\":[\"{}\"]", orderbook));
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let result = client
+            .trades_by_owner(owner, None, None, Some(vec![orderbook]), pagination_args)
+            .await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_all_multiple_pages() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let owner = "0xowner_multi_page".to_string();
+        let trades_page1: Vec<SgTrade> = (0..ALL_PAGES_QUERY_PAGE_SIZE)
+            .map(|_| default_sg_trade())
+            .collect();
+        let trades_page2: Vec<SgTrade> = (0..50).map(|_| default_sg_trade()).collect();
+
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": trades_page1}}));
+        });
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200)
+                .json_body(json!({"data": {"trades": trades_page2}}));
+        });
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE * 2));
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let result = client.trades_by_owner_all(owner, None, None, None).await;
+        assert!(result.is_ok());
+        let trades = result.unwrap();
+        assert_eq!(
+            trades.len(),
+            ALL_PAGES_QUERY_PAGE_SIZE as usize + trades_page2.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_network_error() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let owner = "0xowner_error".to_string();
+        let pagination_args = SgPaginationArgs {
+            page: 1,
+            page_size: 10,
+        };
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let result = client
+            .trades_by_owner(owner, None, None, None, pagination_args)
+            .await;
         assert!(matches!(
             result,
             Err(OrderbookSubgraphClientError::CynicClientError(_))
