@@ -123,3 +123,274 @@ impl RaindexClient {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_family = "wasm")]
+    mod wasm {
+        use crate::raindex_client::tests::{
+            get_local_db_test_yaml, new_test_client_with_db_callback,
+        };
+        use crate::raindex_client::trades::test_helpers::{
+            build_local_trade_fixture, make_local_db_trades_callback,
+        };
+        use crate::raindex_client::ChainIds;
+        use alloy::primitives::b256;
+        use wasm_bindgen_test::wasm_bindgen_test;
+
+        #[wasm_bindgen_test]
+        async fn test_local_db_path() {
+            let trade_log_index = 1u64;
+            let tx_hash =
+                b256!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            let fixture = build_local_trade_fixture(tx_hash, trade_log_index, 4);
+            let trade_id = fixture.trade.trade_id.clone();
+
+            let callback = make_local_db_trades_callback(
+                vec![fixture.order.clone()],
+                vec![fixture.input_vault.clone(), fixture.output_vault.clone()],
+                vec![fixture.trade.clone()],
+                4,
+            );
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161],
+            );
+
+            let result = client
+                .get_trades_for_transaction(Some(ChainIds(vec![42161])), None, tx_hash)
+                .await
+                .unwrap();
+
+            assert_eq!(result.total_count(), 1);
+            assert!(result.summary().is_some());
+            let trades = result.trades();
+            assert_eq!(trades.len(), 1);
+
+            let trade = trades.first().unwrap();
+            assert_eq!(trade.id(), trade_id);
+            assert_eq!(trade.chain_id(), 42161);
+            assert_eq!(trade.order_hash(), fixture.order_hash.to_string());
+            assert_eq!(
+                trade.orderbook().to_lowercase(),
+                fixture.orderbook_address.to_string().to_lowercase()
+            );
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    mod non_wasm {
+        use crate::raindex_client::tests::get_test_yaml;
+        use crate::raindex_client::{ChainIds, RaindexClient};
+        use alloy::primitives::{b256, Address, Bytes};
+        use httpmock::MockServer;
+        use rain_orderbook_subgraph_client::utils::float::*;
+        use serde_json::json;
+        use std::str::FromStr;
+
+        fn get_trade_json() -> serde_json::Value {
+            json!({
+                "id": "0x0123",
+                "tradeEvent": {
+                    "transaction": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                        "from": "0x0000000000000000000000000000000000000000",
+                        "blockNumber": "100",
+                        "timestamp": "1700000000"
+                    },
+                    "sender": "0xsender1"
+                },
+                "outputVaultBalanceChange": {
+                    "id": "0xovbc1",
+                    "__typename": "TradeVaultBalanceChange",
+                    "amount": NEG2,
+                    "newVaultBalance": F0,
+                    "oldVaultBalance": F2,
+                    "vault": {
+                        "id": "0xvault_out",
+                        "vaultId": "0x01",
+                        "token": {
+                            "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                            "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                            "name": "Staked FLR",
+                            "symbol": "sFLR",
+                            "decimals": "18"
+                        }
+                    },
+                    "timestamp": "1700000000",
+                    "transaction": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                        "from": "0x0000000000000000000000000000000000000000",
+                        "blockNumber": "100",
+                        "timestamp": "1700000000"
+                    },
+                    "orderbook": {
+                        "id": "0x1234567890123456789012345678901234567890"
+                    },
+                    "trade": {
+                        "tradeEvent": {
+                            "__typename": "TakeOrder"
+                        }
+                    }
+                },
+                "order": {
+                    "id": "0x0123",
+                    "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
+                    "owner": "0x0000000000000000000000000000000000000000"
+                },
+                "inputVaultBalanceChange": {
+                    "id": "0xivbc1",
+                    "__typename": "TradeVaultBalanceChange",
+                    "amount": F1,
+                    "newVaultBalance": F1,
+                    "oldVaultBalance": F0,
+                    "vault": {
+                        "id": "0xvault_in",
+                        "vaultId": "0x02",
+                        "token": {
+                            "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                            "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                            "name": "Wrapped Flare",
+                            "symbol": "WFLR",
+                            "decimals": "18"
+                        }
+                    },
+                    "timestamp": "1700000000",
+                    "transaction": {
+                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                        "from": "0x0000000000000000000000000000000000000000",
+                        "blockNumber": "100",
+                        "timestamp": "1700000000"
+                    },
+                    "orderbook": {
+                        "id": "0x1234567890123456789012345678901234567890"
+                    },
+                    "trade": {
+                        "tradeEvent": {
+                            "__typename": "TakeOrder"
+                        }
+                    }
+                },
+                "timestamp": "1700000000",
+                "orderbook": {
+                    "id": "0x1234567890123456789012345678901234567890"
+                }
+            })
+        }
+
+        #[tokio::test]
+        async fn test_returns_trades() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg").body_contains("SgTransactionTradesQuery");
+                then.status(200).json_body_obj(&json!({
+                    "data": { "trades": [get_trade_json()] }
+                }));
+            });
+
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg"),
+                    &sg_server.url("/sg"),
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let tx_hash =
+                b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
+            let result = client
+                .get_trades_for_transaction(Some(ChainIds(vec![1])), None, tx_hash)
+                .await
+                .unwrap();
+
+            assert_eq!(result.total_count(), 1);
+            assert!(result.summary().is_some());
+            let trades = result.trades();
+            assert_eq!(trades.len(), 1);
+            assert_eq!(trades[0].id(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(trades[0].chain_id(), 1);
+            assert_eq!(
+                trades[0].orderbook(),
+                Address::from_str("0x1234567890123456789012345678901234567890").unwrap()
+            );
+        }
+
+        #[tokio::test]
+        async fn test_empty_result() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg").body_contains("SgTransactionTradesQuery");
+                then.status(200).json_body_obj(&json!({
+                    "data": { "trades": [] }
+                }));
+            });
+
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg"),
+                    &sg_server.url("/sg"),
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let tx_hash =
+                b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
+            let result = client
+                .get_trades_for_transaction(Some(ChainIds(vec![1])), None, tx_hash)
+                .await
+                .unwrap();
+
+            assert_eq!(result.total_count(), 0);
+            assert!(result.trades().is_empty());
+            assert!(result.summary().is_some());
+        }
+
+        #[tokio::test]
+        async fn test_with_chain_filter() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg").body_contains("SgTransactionTradesQuery");
+                then.status(200).json_body_obj(&json!({
+                    "data": { "trades": [get_trade_json()] }
+                }));
+            });
+
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg"),
+                    &sg_server.url("/sg"),
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let tx_hash =
+                b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
+            let result = client
+                .get_trades_for_transaction(Some(ChainIds(vec![137])), None, tx_hash)
+                .await
+                .unwrap();
+
+            assert!(result.total_count() > 0);
+            let trades = result.trades();
+            for trade in trades {
+                assert_eq!(trade.chain_id(), 137);
+            }
+        }
+    }
+}

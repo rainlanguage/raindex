@@ -583,278 +583,284 @@ impl RaindexTradesListResult {
 
 #[cfg(test)]
 mod test_helpers {
+    use super::*;
+
     #[cfg(target_family = "wasm")]
-    use super::*;
-    #[cfg(not(target_family = "wasm"))]
-    use super::*;
+    use crate::local_db::query::{
+        fetch_order_trades::LocalDbOrderTrade, fetch_orders::LocalDbOrder,
+        fetch_vaults::LocalDbVault,
+    };
+    #[cfg(target_family = "wasm")]
+    use alloy::primitives::{address, b256, bytes, Address, Bytes, B256, U256};
+    #[cfg(target_family = "wasm")]
+    use js_sys::Array;
+    #[cfg(target_family = "wasm")]
+    use serde_json::{self, json};
+    #[cfg(target_family = "wasm")]
+    use std::collections::HashMap;
+    #[cfg(target_family = "wasm")]
+    use std::str::FromStr;
+    #[cfg(target_family = "wasm")]
+    use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+    #[cfg(target_family = "wasm")]
+    use wasm_bindgen_utils::prelude::WasmEncodedResult;
+
+    #[cfg(target_family = "wasm")]
+    #[derive(Clone)]
+    pub(super) struct LocalTradeFixture {
+        pub(super) order: LocalDbOrder,
+        pub(super) input_vault: LocalDbVault,
+        pub(super) output_vault: LocalDbVault,
+        pub(super) trade: LocalDbOrderTrade,
+        pub(super) orderbook_address: Address,
+        pub(super) order_hash: B256,
+        pub(super) input_token: Address,
+        pub(super) output_token: Address,
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(super) fn build_local_trade_fixture(
+        tx_hash: B256,
+        trade_log_index: u64,
+        trade_count: u64,
+    ) -> LocalTradeFixture {
+        const CHAIN_ID: u32 = 42161;
+        let orderbook_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
+        let order_hash =
+            b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
+        let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let input_vault_id = U256::from_str("0x01").unwrap();
+        let output_vault_id = U256::from_str("0x02").unwrap();
+        let input_token = address!("0x00000000000000000000000000000000000000aa");
+        let output_token = address!("0x00000000000000000000000000000000000000bb");
+        const INPUT_DELTA_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000001";
+        const INPUT_RUNNING_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000003";
+        const OUTPUT_DELTA_HEX: &str =
+            "0x00000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffe";
+        const OUTPUT_RUNNING_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+        let tx_hash_hex = format!("{tx_hash:#x}");
+        let trade_id = format!(
+            "0x{}{:016x}",
+            tx_hash_hex.trim_start_matches("0x"),
+            trade_log_index
+        )
+        .to_lowercase();
+
+        let order_bytes =
+            bytes!("0x00000000000000000000000000000000000000000000000000000000000000ff");
+        let transaction_hash = tx_hash;
+        let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        let input_vault = LocalDbVault {
+            chain_id: 42161,
+            vault_id: input_vault_id,
+            token: input_token,
+            owner,
+            orderbook_address,
+            token_name: "Token A".to_string(),
+            token_symbol: "TKNA".to_string(),
+            token_decimals: 18,
+            balance: INPUT_RUNNING_HEX.to_string(),
+            input_orders: Some(format!("0x01:{}:0", order_hash)),
+            output_orders: None,
+        };
+
+        let output_vault = LocalDbVault {
+            chain_id: 42161,
+            vault_id: output_vault_id,
+            token: output_token,
+            owner,
+            orderbook_address,
+            token_name: "Token B".to_string(),
+            token_symbol: "TKNB".to_string(),
+            token_decimals: 6,
+            balance: OUTPUT_RUNNING_HEX.to_string(),
+            input_orders: None,
+            output_orders: Some(format!("0x01:{}:0", order_hash)),
+        };
+
+        let order_inputs_payload = serde_json::to_string(&vec![json!({
+            "ioIndex": 0,
+            "vault": input_vault.clone()
+        })])
+        .unwrap();
+
+        let order_outputs_payload = serde_json::to_string(&vec![json!({
+            "ioIndex": 0,
+            "vault": output_vault.clone()
+        })])
+        .unwrap();
+
+        let order = LocalDbOrder {
+            chain_id: CHAIN_ID,
+            order_hash: order_hash.clone(),
+            owner,
+            block_timestamp: 1_700_000_010,
+            block_number: 123_456,
+            orderbook_address,
+            order_bytes: order_bytes.clone(),
+            transaction_hash,
+            inputs: Some(order_inputs_payload),
+            outputs: Some(order_outputs_payload),
+            trade_count,
+            active: true,
+            meta: Some(Bytes::from_str("0x1234").unwrap()),
+        };
+
+        let trade = LocalDbOrderTrade {
+            chain_id: CHAIN_ID,
+            trade_kind: "take".into(),
+            orderbook: orderbook_address,
+            order_hash: order_hash.clone(),
+            order_owner: owner,
+            order_nonce: "0".into(),
+            transaction_hash,
+            log_index: trade_log_index,
+            block_number: 123_460,
+            block_timestamp: 1_700_000_000,
+            transaction_sender,
+            input_vault_id,
+            input_token,
+            input_token_name: Some("Token A".into()),
+            input_token_symbol: Some("TKNA".into()),
+            input_token_decimals: Some(18),
+            input_delta: INPUT_DELTA_HEX.into(),
+            input_running_balance: Some(INPUT_RUNNING_HEX.into()),
+            output_vault_id,
+            output_token,
+            output_token_name: Some("Token B".into()),
+            output_token_symbol: Some("TKNB".into()),
+            output_token_decimals: Some(6),
+            output_delta: OUTPUT_DELTA_HEX.into(),
+            output_running_balance: Some(OUTPUT_RUNNING_HEX.into()),
+            trade_id,
+        };
+
+        LocalTradeFixture {
+            order,
+            input_vault,
+            output_vault,
+            trade,
+            orderbook_address,
+            order_hash,
+            input_token,
+            output_token,
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(super) fn make_local_db_trades_callback(
+        orders: Vec<LocalDbOrder>,
+        vaults: Vec<LocalDbVault>,
+        trades: Vec<LocalDbOrderTrade>,
+        trade_count: u64,
+    ) -> js_sys::Function {
+        let orders_json = serde_json::to_string(&orders).unwrap();
+        let orders_result = WasmEncodedResult::Success::<String> {
+            value: orders_json,
+            error: None,
+        };
+        let orders_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&orders_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let trades_json = serde_json::to_string(&trades).unwrap();
+        let trades_result = WasmEncodedResult::Success::<String> {
+            value: trades_json,
+            error: None,
+        };
+        let trades_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trades_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let trade_count_rows =
+            serde_json::to_string(&vec![json!({ "trade_count": trade_count })]).unwrap();
+        let trade_count_result = WasmEncodedResult::Success::<String> {
+            value: trade_count_rows,
+            error: None,
+        };
+        let trade_count_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trade_count_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let empty_result = WasmEncodedResult::Success::<String> {
+            value: "[]".to_string(),
+            error: None,
+        };
+        let empty_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&empty_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let mut vault_payloads = HashMap::new();
+        for vault in vaults.into_iter() {
+            let lookup = format!("{:#x}", vault.vault_id).to_ascii_lowercase();
+            let json = serde_json::to_string(&vec![vault]).unwrap();
+            let result = WasmEncodedResult::Success::<String> {
+                value: json,
+                error: None,
+            };
+            let payload = js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+            vault_payloads.insert(lookup, payload);
+        }
+
+        let callback = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
+            if sql.contains("FROM order_events")
+                && (sql.contains("json_group_array") || sql.contains("GROUP_CONCAT("))
+                && (sql.contains("ios.io_type = 'input'")
+                    || sql.contains("lower(ios.io_type) = 'input'"))
+            {
+                return js_sys::JSON::parse(&orders_payload).unwrap();
+            }
+
+            if sql.contains("SELECT COUNT(*) AS trade_count") {
+                return js_sys::JSON::parse(&trade_count_payload).unwrap();
+            }
+
+            if sql.contains(" AS trade_kind") {
+                return js_sys::JSON::parse(&trades_payload).unwrap();
+            }
+
+            if sql.contains("?3 AS vault_id") {
+                if !params.is_undefined() && !params.is_null() {
+                    let params_array = Array::from(&params);
+                    if let Some(vault_id_val) = params_array.get(2).as_string() {
+                        let vault_id = vault_id_val.to_ascii_lowercase();
+                        if let Some(payload) = vault_payloads.get(&vault_id) {
+                            return js_sys::JSON::parse(payload).unwrap();
+                        }
+                    }
+                }
+            }
+
+            js_sys::JSON::parse(&empty_payload).unwrap()
+        }) as Box<dyn FnMut(String, JsValue) -> JsValue>);
+
+        callback.into_js_value().dyn_into().unwrap()
+    }
 
     #[cfg(target_family = "wasm")]
     mod wasm_tests {
         use super::*;
-        use crate::local_db::query::{
-            fetch_order_trades::LocalDbOrderTrade, fetch_orders::LocalDbOrder,
-            fetch_vaults::LocalDbVault,
-        };
         use crate::raindex_client::tests::{
             get_local_db_test_yaml, new_test_client_with_db_callback,
         };
-        use alloy::primitives::{address, b256, bytes, Address, Bytes, B256, U256};
-        use js_sys::Array;
         use rain_orderbook_subgraph_client::utils::float::{F1, F2, F3, NEG2};
-        use serde_json::{self, json};
-        use std::collections::HashMap;
-        use std::str::FromStr;
-        use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
         use wasm_bindgen_test::wasm_bindgen_test;
-        use wasm_bindgen_utils::prelude::WasmEncodedResult;
-
-        #[derive(Clone)]
-        struct LocalTradeFixture {
-            order: LocalDbOrder,
-            input_vault: LocalDbVault,
-            output_vault: LocalDbVault,
-            trade: LocalDbOrderTrade,
-            orderbook_address: Address,
-            order_hash: B256,
-            input_token: Address,
-            output_token: Address,
-        }
-
-        fn build_local_trade_fixture(
-            tx_hash: B256,
-            trade_log_index: u64,
-            trade_count: u64,
-        ) -> LocalTradeFixture {
-            const CHAIN_ID: u32 = 42161;
-            let orderbook_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
-            let order_hash =
-                b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
-            let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-            let input_vault_id = U256::from_str("0x01").unwrap();
-            let output_vault_id = U256::from_str("0x02").unwrap();
-            let input_token = address!("0x00000000000000000000000000000000000000aa");
-            let output_token = address!("0x00000000000000000000000000000000000000bb");
-            const INPUT_DELTA_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000001";
-            const INPUT_RUNNING_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000003";
-            const OUTPUT_DELTA_HEX: &str =
-                "0x00000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffe";
-            const OUTPUT_RUNNING_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000001";
-
-            let tx_hash_hex = format!("{tx_hash:#x}");
-            let trade_id = format!(
-                "0x{}{:016x}",
-                tx_hash_hex.trim_start_matches("0x"),
-                trade_log_index
-            )
-            .to_lowercase();
-
-            let order_bytes =
-                bytes!("0x00000000000000000000000000000000000000000000000000000000000000ff");
-            let transaction_hash = tx_hash;
-            let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-
-            let input_vault = LocalDbVault {
-                chain_id: 42161,
-                vault_id: input_vault_id,
-                token: input_token,
-                owner,
-                orderbook_address,
-                token_name: "Token A".to_string(),
-                token_symbol: "TKNA".to_string(),
-                token_decimals: 18,
-                balance: INPUT_RUNNING_HEX.to_string(),
-                input_orders: Some(format!("0x01:{}:0", order_hash)),
-                output_orders: None,
-            };
-
-            let output_vault = LocalDbVault {
-                chain_id: 42161,
-                vault_id: output_vault_id,
-                token: output_token,
-                owner,
-                orderbook_address,
-                token_name: "Token B".to_string(),
-                token_symbol: "TKNB".to_string(),
-                token_decimals: 6,
-                balance: OUTPUT_RUNNING_HEX.to_string(),
-                input_orders: None,
-                output_orders: Some(format!("0x01:{}:0", order_hash)),
-            };
-
-            let order_inputs_payload = serde_json::to_string(&vec![json!({
-                "ioIndex": 0,
-                "vault": input_vault.clone()
-            })])
-            .unwrap();
-
-            let order_outputs_payload = serde_json::to_string(&vec![json!({
-                "ioIndex": 0,
-                "vault": output_vault.clone()
-            })])
-            .unwrap();
-
-            let order = LocalDbOrder {
-                chain_id: CHAIN_ID,
-                order_hash: order_hash.clone(),
-                owner,
-                block_timestamp: 1_700_000_010,
-                block_number: 123_456,
-                orderbook_address,
-                order_bytes: order_bytes.clone(),
-                transaction_hash,
-                inputs: Some(order_inputs_payload),
-                outputs: Some(order_outputs_payload),
-                trade_count,
-                active: true,
-                meta: Some(Bytes::from_str("0x1234").unwrap()),
-            };
-
-            let trade = LocalDbOrderTrade {
-                chain_id: CHAIN_ID,
-                trade_kind: "take".into(),
-                orderbook: orderbook_address,
-                order_hash: order_hash.clone(),
-                order_owner: owner,
-                order_nonce: "0".into(),
-                transaction_hash,
-                log_index: trade_log_index,
-                block_number: 123_460,
-                block_timestamp: 1_700_000_000,
-                transaction_sender,
-                input_vault_id,
-                input_token,
-                input_token_name: Some("Token A".into()),
-                input_token_symbol: Some("TKNA".into()),
-                input_token_decimals: Some(18),
-                input_delta: INPUT_DELTA_HEX.into(),
-                input_running_balance: Some(INPUT_RUNNING_HEX.into()),
-                output_vault_id,
-                output_token,
-                output_token_name: Some("Token B".into()),
-                output_token_symbol: Some("TKNB".into()),
-                output_token_decimals: Some(6),
-                output_delta: OUTPUT_DELTA_HEX.into(),
-                output_running_balance: Some(OUTPUT_RUNNING_HEX.into()),
-                trade_id,
-            };
-
-            LocalTradeFixture {
-                order,
-                input_vault,
-                output_vault,
-                trade,
-                orderbook_address,
-                order_hash,
-                input_token,
-                output_token,
-            }
-        }
-
-        fn make_local_db_trades_callback(
-            orders: Vec<LocalDbOrder>,
-            vaults: Vec<LocalDbVault>,
-            trades: Vec<LocalDbOrderTrade>,
-            trade_count: u64,
-        ) -> js_sys::Function {
-            let orders_json = serde_json::to_string(&orders).unwrap();
-            let orders_result = WasmEncodedResult::Success::<String> {
-                value: orders_json,
-                error: None,
-            };
-            let orders_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&orders_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let trades_json = serde_json::to_string(&trades).unwrap();
-            let trades_result = WasmEncodedResult::Success::<String> {
-                value: trades_json,
-                error: None,
-            };
-            let trades_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trades_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let trade_count_rows =
-                serde_json::to_string(&vec![json!({ "trade_count": trade_count })]).unwrap();
-            let trade_count_result = WasmEncodedResult::Success::<String> {
-                value: trade_count_rows,
-                error: None,
-            };
-            let trade_count_payload = js_sys::JSON::stringify(
-                &serde_wasm_bindgen::to_value(&trade_count_result).unwrap(),
-            )
-            .unwrap()
-            .as_string()
-            .unwrap();
-
-            let empty_result = WasmEncodedResult::Success::<String> {
-                value: "[]".to_string(),
-                error: None,
-            };
-            let empty_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&empty_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let mut vault_payloads = HashMap::new();
-            for vault in vaults.into_iter() {
-                let lookup = format!("{:#x}", vault.vault_id).to_ascii_lowercase();
-                let json = serde_json::to_string(&vec![vault]).unwrap();
-                let result = WasmEncodedResult::Success::<String> {
-                    value: json,
-                    error: None,
-                };
-                let payload =
-                    js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&result).unwrap())
-                        .unwrap()
-                        .as_string()
-                        .unwrap();
-                vault_payloads.insert(lookup, payload);
-            }
-
-            let callback = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
-                if sql.contains("FROM order_events")
-                    && (sql.contains("json_group_array") || sql.contains("GROUP_CONCAT("))
-                    && (sql.contains("ios.io_type = 'input'")
-                        || sql.contains("lower(ios.io_type) = 'input'"))
-                {
-                    return js_sys::JSON::parse(&orders_payload).unwrap();
-                }
-
-                if sql.contains("SELECT COUNT(*) AS trade_count") {
-                    return js_sys::JSON::parse(&trade_count_payload).unwrap();
-                }
-
-                if sql.contains(" AS trade_kind") {
-                    return js_sys::JSON::parse(&trades_payload).unwrap();
-                }
-
-                if sql.contains("?3 AS vault_id") {
-                    if !params.is_undefined() && !params.is_null() {
-                        let params_array = Array::from(&params);
-                        if let Some(vault_id_val) = params_array.get(2).as_string() {
-                            let vault_id = vault_id_val.to_ascii_lowercase();
-                            if let Some(payload) = vault_payloads.get(&vault_id) {
-                                return js_sys::JSON::parse(payload).unwrap();
-                            }
-                        }
-                    }
-                }
-
-                js_sys::JSON::parse(&empty_payload).unwrap()
-            })
-                as Box<dyn FnMut(String, JsValue) -> JsValue>);
-
-            callback.into_js_value().dyn_into().unwrap()
-        }
 
         #[wasm_bindgen_test]
         async fn test_get_trades_list_local_db_path() {
