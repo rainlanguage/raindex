@@ -1,6 +1,4 @@
-use crate::local_db::query::fetch_owner_trades_common::{
-    bind_common_owner_trade_filters, TAKE_ORDERS_CHAIN_IDS_CLAUSE,
-};
+use crate::local_db::query::fetch_owner_trades_common::bind_common_owner_trade_filters;
 use crate::local_db::query::{SqlBuildError, SqlStatement, SqlValue};
 use crate::raindex_client::TimeFilter;
 use alloy::primitives::Address;
@@ -79,7 +77,9 @@ pub fn extract_trade_count(rows: &[LocalDbTradeCountRow]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_db::query::fetch_owner_trades_common::{END_TS_CLAUSE, START_TS_CLAUSE};
+    use crate::local_db::query::fetch_owner_trades_common::{
+        END_TS_CLAUSE, START_TS_CLAUSE, TAKE_ORDERS_CHAIN_IDS_CLAUSE,
+    };
     use alloy::primitives::address;
 
     #[test]

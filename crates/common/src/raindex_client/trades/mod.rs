@@ -859,7 +859,6 @@ mod test_helpers {
     }
 
     #[cfg(not(target_family = "wasm"))]
-<<<<<<< HEAD
     mod native_tests {
         use super::*;
         use rain_orderbook_subgraph_client::utils::float::F1;
@@ -872,7 +871,9 @@ mod test_helpers {
             assert!(ratio.eq(Float::zero().unwrap()).unwrap());
             assert_eq!(formatted_ratio, "0");
         }
-=======
+    }
+
+    #[cfg(not(target_family = "wasm"))]
     pub(super) fn get_sg_trade_json(owner: &str) -> serde_json::Value {
         use rain_orderbook_subgraph_client::utils::float::*;
         serde_json::json!({
@@ -962,7 +963,6 @@ mod test_helpers {
                 "id": "0x1234567890123456789012345678901234567890"
             }
         })
->>>>>>> 1e57fd471 (refactor: deduplicate trade test fixtures and remove unnecessary clones)
     }
 
     #[cfg(target_family = "wasm")]

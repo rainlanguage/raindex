@@ -39,6 +39,7 @@ use rain_orderbook_subgraph_client::{
     SgPaginationArgs,
 };
 use std::str::FromStr;
+use wasm_bindgen_utils::impl_wasm_traits;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
 
