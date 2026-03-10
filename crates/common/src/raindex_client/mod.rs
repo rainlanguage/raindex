@@ -40,9 +40,8 @@ pub(crate) type ClientRef = std::rc::Rc<RaindexClient>;
 pub(crate) type ClientRef = std::sync::Arc<RaindexClient>;
 
 use thiserror::Error;
-use tsify::Tsify;
 use url::Url;
-use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
+use wasm_bindgen_utils::{prelude::*, wasm_export};
 
 pub mod add_orders;
 pub mod local_db;
@@ -54,28 +53,11 @@ pub mod remove_orders;
 pub mod take_orders;
 pub mod trades;
 pub mod transactions;
+pub mod types;
 pub mod vaults;
 pub mod vaults_list;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
-pub struct ChainIds(#[tsify(type = "number[]")] pub Vec<u32>);
-impl_wasm_traits!(ChainIds);
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct TimeFilter {
-    pub start: Option<u64>,
-    pub end: Option<u64>,
-}
-impl_wasm_traits!(TimeFilter);
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Tsify)]
-#[serde(rename_all = "camelCase")]
-pub struct PaginationParams {
-    pub page: Option<u16>,
-    pub page_size: Option<u16>,
-}
-impl_wasm_traits!(PaginationParams);
+pub use types::*;
 
 /// RaindexClient provides a simplified interface for querying orderbook data across
 /// multiple networks with automatic configuration management.

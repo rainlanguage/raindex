@@ -37,17 +37,17 @@ impl RaindexClient {
         )]
         owner: String,
         #[wasm_export(
-            js_name = "timeFilter",
-            param_description = "Optional time filter with start/end Unix timestamps in seconds",
-            unchecked_param_type = "TimeFilter"
-        )]
-        time_filter: Option<TimeFilter>,
-        #[wasm_export(
             js_name = "pagination",
             param_description = "Optional pagination with page number and page size",
             unchecked_param_type = "PaginationParams"
         )]
         pagination: Option<PaginationParams>,
+        #[wasm_export(
+            js_name = "timeFilter",
+            param_description = "Optional time filter with start/end Unix timestamps in seconds",
+            unchecked_param_type = "TimeFilter"
+        )]
+        time_filter: Option<TimeFilter>,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let owner = Address::from_str(&owner)?;
         let orderbook_addresses = orderbook_addresses
@@ -62,8 +62,8 @@ impl RaindexClient {
             chain_ids,
             orderbook_addresses,
             owner,
-            time_filter.unwrap_or_default(),
             pagination.unwrap_or_default(),
+            time_filter.unwrap_or_default(),
         )
         .await
     }
@@ -74,8 +74,8 @@ impl RaindexClient {
         chain_ids: Option<ChainIds>,
         orderbook_addresses: Option<Vec<Address>>,
         owner: Address,
-        time_filter: TimeFilter,
         pagination: PaginationParams,
+        time_filter: TimeFilter,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
@@ -251,11 +251,11 @@ mod tests {
                     Some(ChainIds(vec![42161])),
                     None,
                     owner,
-                    Default::default(),
                     PaginationParams {
                         page: Some(1),
                         page_size: None,
                     },
+                    Default::default(),
                 )
                 .await
                 .unwrap();
@@ -388,11 +388,11 @@ mod tests {
                     Some(ChainIds(vec![1])),
                     None,
                     owner,
-                    Default::default(),
                     PaginationParams {
                         page: Some(1),
                         page_size: None,
                     },
+                    Default::default(),
                 )
                 .await
                 .unwrap();
