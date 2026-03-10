@@ -61,6 +61,22 @@ pub mod vaults_list;
 pub struct ChainIds(#[tsify(type = "number[]")] pub Vec<u32>);
 impl_wasm_traits!(ChainIds);
 
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeFilter {
+    pub start: Option<u64>,
+    pub end: Option<u64>,
+}
+impl_wasm_traits!(TimeFilter);
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct PaginationParams {
+    pub page: Option<u16>,
+    pub page_size: Option<u16>,
+}
+impl_wasm_traits!(PaginationParams);
+
 /// RaindexClient provides a simplified interface for querying orderbook data across
 /// multiple networks with automatic configuration management.
 ///
