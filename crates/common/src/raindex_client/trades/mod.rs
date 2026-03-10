@@ -859,6 +859,7 @@ mod test_helpers {
     }
 
     #[cfg(not(target_family = "wasm"))]
+<<<<<<< HEAD
     mod native_tests {
         use super::*;
         use rain_orderbook_subgraph_client::utils::float::F1;
@@ -871,6 +872,97 @@ mod test_helpers {
             assert!(ratio.eq(Float::zero().unwrap()).unwrap());
             assert_eq!(formatted_ratio, "0");
         }
+=======
+    pub(super) fn get_sg_trade_json(owner: &str) -> serde_json::Value {
+        use rain_orderbook_subgraph_client::utils::float::*;
+        serde_json::json!({
+            "id": "0x0123",
+            "tradeEvent": {
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "sender": "0xsender1"
+            },
+            "outputVaultBalanceChange": {
+                "id": "0xovbc1",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": NEG2,
+                "newVaultBalance": F0,
+                "oldVaultBalance": F2,
+                "vault": {
+                    "id": "0xvault_out",
+                    "vaultId": "0x01",
+                    "token": {
+                        "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                        "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                        "name": "Staked FLR",
+                        "symbol": "sFLR",
+                        "decimals": "18"
+                    }
+                },
+                "timestamp": "1700000000",
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "orderbook": {
+                    "id": "0x1234567890123456789012345678901234567890"
+                },
+                "trade": {
+                    "tradeEvent": {
+                        "__typename": "TakeOrder"
+                    }
+                }
+            },
+            "order": {
+                "id": "0x0123",
+                "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
+                "owner": owner
+            },
+            "inputVaultBalanceChange": {
+                "id": "0xivbc1",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": F1,
+                "newVaultBalance": F1,
+                "oldVaultBalance": F0,
+                "vault": {
+                    "id": "0xvault_in",
+                    "vaultId": "0x02",
+                    "token": {
+                        "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                        "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                        "name": "Wrapped Flare",
+                        "symbol": "WFLR",
+                        "decimals": "18"
+                    }
+                },
+                "timestamp": "1700000000",
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "orderbook": {
+                    "id": "0x1234567890123456789012345678901234567890"
+                },
+                "trade": {
+                    "tradeEvent": {
+                        "__typename": "TakeOrder"
+                    }
+                }
+            },
+            "timestamp": "1700000000",
+            "orderbook": {
+                "id": "0x1234567890123456789012345678901234567890"
+            }
+        })
+>>>>>>> 1e57fd471 (refactor: deduplicate trade test fixtures and remove unnecessary clones)
     }
 
     #[cfg(target_family = "wasm")]

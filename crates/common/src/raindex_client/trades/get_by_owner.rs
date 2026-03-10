@@ -204,9 +204,9 @@ mod tests {
             let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
             let callback = make_local_db_trades_callback(
-                vec![fixture.order.clone()],
-                vec![fixture.input_vault.clone(), fixture.output_vault.clone()],
-                vec![fixture.trade.clone()],
+                vec![fixture.order],
+                vec![fixture.input_vault, fixture.output_vault],
+                vec![fixture.trade],
                 4,
             );
             let client = new_test_client_with_db_callback(
@@ -235,9 +235,9 @@ mod tests {
             let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
             let callback = make_local_db_trades_callback(
-                vec![fixture.order.clone()],
-                vec![fixture.input_vault.clone(), fixture.output_vault.clone()],
-                vec![fixture.trade.clone()],
+                vec![fixture.order],
+                vec![fixture.input_vault, fixture.output_vault],
+                vec![fixture.trade],
                 4,
             );
             let client = new_test_client_with_db_callback(
@@ -267,102 +267,12 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
         use crate::raindex_client::tests::get_test_yaml;
+        use crate::raindex_client::trades::test_helpers::get_sg_trade_json;
         use crate::raindex_client::{ChainIds, RaindexClient};
         use alloy::primitives::{address, Bytes};
         use httpmock::MockServer;
-        use rain_orderbook_subgraph_client::utils::float::*;
         use serde_json::json;
         use std::str::FromStr;
-
-        fn get_trade_json() -> serde_json::Value {
-            json!({
-                "id": "0x0123",
-                "tradeEvent": {
-                    "transaction": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
-                        "from": "0x0000000000000000000000000000000000000000",
-                        "blockNumber": "100",
-                        "timestamp": "1700000000"
-                    },
-                    "sender": "0xsender1"
-                },
-                "outputVaultBalanceChange": {
-                    "id": "0xovbc1",
-                    "__typename": "TradeVaultBalanceChange",
-                    "amount": NEG2,
-                    "newVaultBalance": F0,
-                    "oldVaultBalance": F2,
-                    "vault": {
-                        "id": "0xvault_out",
-                        "vaultId": "0x01",
-                        "token": {
-                            "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
-                            "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
-                            "name": "Staked FLR",
-                            "symbol": "sFLR",
-                            "decimals": "18"
-                        }
-                    },
-                    "timestamp": "1700000000",
-                    "transaction": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
-                        "from": "0x0000000000000000000000000000000000000000",
-                        "blockNumber": "100",
-                        "timestamp": "1700000000"
-                    },
-                    "orderbook": {
-                        "id": "0x1234567890123456789012345678901234567890"
-                    },
-                    "trade": {
-                        "tradeEvent": {
-                            "__typename": "TakeOrder"
-                        }
-                    }
-                },
-                "order": {
-                    "id": "0x0123",
-                    "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
-                    "owner": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-                },
-                "inputVaultBalanceChange": {
-                    "id": "0xivbc1",
-                    "__typename": "TradeVaultBalanceChange",
-                    "amount": F1,
-                    "newVaultBalance": F1,
-                    "oldVaultBalance": F0,
-                    "vault": {
-                        "id": "0xvault_in",
-                        "vaultId": "0x02",
-                        "token": {
-                            "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
-                            "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
-                            "name": "Wrapped Flare",
-                            "symbol": "WFLR",
-                            "decimals": "18"
-                        }
-                    },
-                    "timestamp": "1700000000",
-                    "transaction": {
-                        "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
-                        "from": "0x0000000000000000000000000000000000000000",
-                        "blockNumber": "100",
-                        "timestamp": "1700000000"
-                    },
-                    "orderbook": {
-                        "id": "0x1234567890123456789012345678901234567890"
-                    },
-                    "trade": {
-                        "tradeEvent": {
-                            "__typename": "TakeOrder"
-                        }
-                    }
-                },
-                "timestamp": "1700000000",
-                "orderbook": {
-                    "id": "0x1234567890123456789012345678901234567890"
-                }
-            })
-        }
 
         #[tokio::test]
         async fn test_returns_trades() {
@@ -370,7 +280,7 @@ mod tests {
             sg_server.mock(|when, then| {
                 when.path("/sg").body_contains("SgOwnerTradesListQuery");
                 then.status(200).json_body_obj(&json!({
-                    "data": { "trades": [get_trade_json()] }
+                    "data": { "trades": [get_sg_trade_json("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")] }
                 }));
             });
 
@@ -441,7 +351,7 @@ mod tests {
             sg_server.mock(|when, then| {
                 when.path("/sg").body_contains("SgOwnerTradesListQuery");
                 then.status(200).json_body_obj(&json!({
-                    "data": { "trades": [get_trade_json()] }
+                    "data": { "trades": [get_sg_trade_json("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")] }
                 }));
             });
 
