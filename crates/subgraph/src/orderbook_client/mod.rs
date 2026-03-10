@@ -7,7 +7,8 @@ use crate::types::order::{
     SgOrderDetailByHashQueryVariables, SgOrderDetailByIdQuery, SgOrderIdList, SgOrdersListQuery,
 };
 use crate::types::order_trade::{
-    SgOrderTradeDetailQuery, SgOrderTradesListQuery, SgTransactionTradesQuery,
+    SgOrderTradeDetailQuery, SgOrderTradesListQuery, SgOwnerTradesListQuery,
+    SgTransactionTradesQuery,
 };
 use crate::types::remove_order::{
     SgTransactionRemoveOrdersQuery, TransactionRemoveOrdersVariables,
