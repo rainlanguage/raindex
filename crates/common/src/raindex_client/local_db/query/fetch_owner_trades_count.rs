@@ -29,8 +29,7 @@ mod wasm_tests {
             owner,
             chain_ids: vec![137],
             orderbook_addresses: vec![],
-            start_timestamp: None,
-            end_timestamp: None,
+            time_filter: Default::default(),
         };
 
         let expected_stmt = build_fetch_owner_trades_count_stmt(&args).unwrap();

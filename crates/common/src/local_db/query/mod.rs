@@ -14,6 +14,7 @@ pub mod fetch_orders;
 pub(crate) mod fetch_orders_common;
 pub mod fetch_orders_count;
 pub mod fetch_owner_trades;
+pub(crate) mod fetch_owner_trades_common;
 pub mod fetch_owner_trades_count;
 pub mod fetch_store_addresses;
 pub mod fetch_tables;

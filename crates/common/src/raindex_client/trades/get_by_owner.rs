@@ -5,6 +5,7 @@ use crate::local_db::query::fetch_owner_trades_count::{
 };
 use crate::raindex_client::local_db::query::fetch_owner_trades::fetch_owner_trades;
 use crate::raindex_client::local_db::query::fetch_owner_trades_count::fetch_owner_trades_count;
+use crate::raindex_client::{PaginationParams, TimeFilter};
 use alloy::primitives::Address;
 use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
 use std::str::FromStr;
@@ -36,20 +37,17 @@ impl RaindexClient {
         )]
         owner: String,
         #[wasm_export(
-            js_name = "startTimestamp",
-            param_description = "Optional start time filter (Unix timestamp in seconds)"
+            js_name = "timeFilter",
+            param_description = "Optional time filter with start/end Unix timestamps in seconds",
+            unchecked_param_type = "TimeFilter"
         )]
-        start_timestamp: Option<u64>,
+        time_filter: Option<TimeFilter>,
         #[wasm_export(
-            js_name = "endTimestamp",
-            param_description = "Optional end time filter (Unix timestamp in seconds)"
+            js_name = "pagination",
+            param_description = "Optional pagination with page number and page size",
+            unchecked_param_type = "PaginationParams"
         )]
-        end_timestamp: Option<u64>,
-        #[wasm_export(
-            js_name = "page",
-            param_description = "Optional page number (defaults to all results)"
-        )]
-        page: Option<u16>,
+        pagination: Option<PaginationParams>,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let owner = Address::from_str(&owner)?;
         let orderbook_addresses = orderbook_addresses
@@ -64,9 +62,8 @@ impl RaindexClient {
             chain_ids,
             orderbook_addresses,
             owner,
-            start_timestamp,
-            end_timestamp,
-            page,
+            time_filter.unwrap_or_default(),
+            pagination.unwrap_or_default(),
         )
         .await
     }
@@ -77,9 +74,8 @@ impl RaindexClient {
         chain_ids: Option<ChainIds>,
         orderbook_addresses: Option<Vec<Address>>,
         owner: Address,
-        start_timestamp: Option<u64>,
-        end_timestamp: Option<u64>,
-        page: Option<u16>,
+        time_filter: TimeFilter,
+        pagination: PaginationParams,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
@@ -95,9 +91,8 @@ impl RaindexClient {
                     owner,
                     chain_ids: local_ids.clone(),
                     orderbook_addresses: orderbook_addresses_for_local_db.clone(),
-                    start_timestamp,
-                    end_timestamp,
-                    page,
+                    time_filter: time_filter.clone(),
+                    pagination: pagination.clone(),
                 },
             )
             .await?;
@@ -106,15 +101,14 @@ impl RaindexClient {
                 .map(RaindexTrade::try_from_local_db_trade)
                 .collect::<Result<_, _>>()?;
 
-            if page.is_some() {
+            if pagination.page.is_some() {
                 let count_rows = fetch_owner_trades_count(
                     &db,
                     FetchOwnerTradesCountArgs {
                         owner,
                         chain_ids: local_ids,
                         orderbook_addresses: orderbook_addresses_for_local_db,
-                        start_timestamp,
-                        end_timestamp,
+                        time_filter: time_filter.clone(),
                     },
                 )
                 .await?;
@@ -148,8 +142,8 @@ impl RaindexClient {
                 let sg_trades = client
                     .trades_by_owner(
                         owner.to_string().to_lowercase(),
-                        start_timestamp,
-                        end_timestamp,
+                        time_filter.start,
+                        time_filter.end,
                         orderbook_in,
                     )
                     .await;
@@ -168,7 +162,7 @@ impl RaindexClient {
         }
 
         let final_total_count = total_count.unwrap_or(all_trades.len() as u64);
-        let summary = if page.is_some() {
+        let summary = if pagination.page.is_some() {
             None
         } else {
             Some(RaindexPairSummary::from_trades(&all_trades)?)
@@ -192,7 +186,7 @@ mod tests {
         use crate::raindex_client::trades::test_helpers::{
             build_local_trade_fixture, make_local_db_trades_callback,
         };
-        use crate::raindex_client::ChainIds;
+        use crate::raindex_client::{ChainIds, PaginationParams};
         use alloy::primitives::{address, b256};
         use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -216,7 +210,13 @@ mod tests {
             );
 
             let result = client
-                .get_trades_for_owner(Some(ChainIds(vec![42161])), None, owner, None, None, None)
+                .get_trades_for_owner(
+                    Some(ChainIds(vec![42161])),
+                    None,
+                    owner,
+                    Default::default(),
+                    Default::default(),
+                )
                 .await
                 .unwrap();
 
@@ -251,9 +251,11 @@ mod tests {
                     Some(ChainIds(vec![42161])),
                     None,
                     owner,
-                    None,
-                    None,
-                    Some(1),
+                    Default::default(),
+                    PaginationParams {
+                        page: Some(1),
+                        page_size: None,
+                    },
                 )
                 .await
                 .unwrap();
@@ -268,7 +270,7 @@ mod tests {
     mod non_wasm {
         use crate::raindex_client::tests::get_test_yaml;
         use crate::raindex_client::trades::test_helpers::get_sg_trade_json;
-        use crate::raindex_client::{ChainIds, RaindexClient};
+        use crate::raindex_client::{ChainIds, PaginationParams, RaindexClient};
         use alloy::primitives::{address, Bytes};
         use httpmock::MockServer;
         use serde_json::json;
@@ -299,7 +301,13 @@ mod tests {
             .unwrap();
 
             let result = client
-                .get_trades_for_owner(Some(ChainIds(vec![1])), None, owner, None, None, None)
+                .get_trades_for_owner(
+                    Some(ChainIds(vec![1])),
+                    None,
+                    owner,
+                    Default::default(),
+                    Default::default(),
+                )
                 .await
                 .unwrap();
 
@@ -336,7 +344,13 @@ mod tests {
             .unwrap();
 
             let result = client
-                .get_trades_for_owner(Some(ChainIds(vec![1])), None, owner, None, None, None)
+                .get_trades_for_owner(
+                    Some(ChainIds(vec![1])),
+                    None,
+                    owner,
+                    Default::default(),
+                    Default::default(),
+                )
                 .await
                 .unwrap();
 
@@ -370,7 +384,16 @@ mod tests {
             .unwrap();
 
             let result = client
-                .get_trades_for_owner(Some(ChainIds(vec![1])), None, owner, None, None, Some(1))
+                .get_trades_for_owner(
+                    Some(ChainIds(vec![1])),
+                    None,
+                    owner,
+                    Default::default(),
+                    PaginationParams {
+                        page: Some(1),
+                        page_size: None,
+                    },
+                )
                 .await
                 .unwrap();
 
