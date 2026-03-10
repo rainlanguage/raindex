@@ -670,6 +670,14 @@ impl RaindexPairSummary {
             });
         }
 
+        summaries.sort_by(|a, b| {
+            (a.chain_id, a.input_token, a.output_token).cmp(&(
+                b.chain_id,
+                b.input_token,
+                b.output_token,
+            ))
+        });
+
         Ok(summaries)
     }
 }
