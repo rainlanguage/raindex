@@ -894,16 +894,21 @@ mod tests {
         let server1 = MockServer::start_async().await;
         let sg1_url = Url::parse(&server1.url("")).unwrap();
         let sg1_name = "subgraph_alpha";
+        let tx_id = "0xtx_abc";
 
         let trade1 = default_sg_trade();
         server1.mock(|when, then| {
-            when.method(POST).path("/").body_contains("\"skip\":0");
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains("\"skip\":0");
             then.status(200)
                 .json_body(json!({"data": {"trades": [trade1]}}));
         });
         server1.mock(|when, then| {
             when.method(POST)
                 .path("/")
+                .body_contains(tx_id)
                 .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
@@ -914,7 +919,49 @@ mod tests {
         }]);
 
         let trades = client
-            .trades_by_transaction("0xtx_abc".to_string(), None)
+            .trades_by_transaction(tx_id.to_string(), None)
+            .await;
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].trade.id, trade1.id);
+        assert_eq!(trades[0].subgraph_name, sg1_name);
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_transaction_with_orderbook_filter() {
+        use crate::orderbook_client::ALL_PAGES_QUERY_PAGE_SIZE;
+
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let sg1_name = "subgraph_ob_filter";
+        let tx_id = "0xtx_ob_filter";
+        let orderbook_addr = "0x1234567890abcdef1234567890abcdef12345678";
+
+        let trade1 = default_sg_trade();
+        server1.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains(orderbook_addr)
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade1]}}));
+        });
+        server1.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains(orderbook_addr)
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg1_url,
+            name: sg1_name.to_string(),
+        }]);
+
+        let trades = client
+            .trades_by_transaction(tx_id.to_string(), Some(vec![orderbook_addr.to_string()]))
             .await;
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].trade.id, trade1.id);
@@ -932,29 +979,38 @@ mod tests {
         let server2 = MockServer::start_async().await;
         let sg2_url = Url::parse(&server2.url("")).unwrap();
         let sg2_name = "sg_two";
+        let tx_id = "0xtx_multi";
 
         let trade_s1 = default_sg_trade();
         let trade_s2 = default_sg_trade();
 
         server1.mock(|when, then| {
-            when.method(POST).path("/").body_contains("\"skip\":0");
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains("\"skip\":0");
             then.status(200)
                 .json_body(json!({"data": {"trades": [trade_s1]}}));
         });
         server1.mock(|when, then| {
             when.method(POST)
                 .path("/")
+                .body_contains(tx_id)
                 .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
         server2.mock(|when, then| {
-            when.method(POST).path("/").body_contains("\"skip\":0");
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains("\"skip\":0");
             then.status(200)
                 .json_body(json!({"data": {"trades": [trade_s2]}}));
         });
         server2.mock(|when, then| {
             when.method(POST)
                 .path("/")
+                .body_contains(tx_id)
                 .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
@@ -971,7 +1027,7 @@ mod tests {
         ]);
 
         let trades = client
-            .trades_by_transaction("0xtx_multi".to_string(), None)
+            .trades_by_transaction(tx_id.to_string(), None)
             .await;
         assert_eq!(trades.len(), 2);
 
@@ -992,21 +1048,26 @@ mod tests {
         let server2 = MockServer::start_async().await;
         let sg2_url = Url::parse(&server2.url("")).unwrap();
         let sg2_name = "sg_two_error";
+        let tx_id = "0xtx_partial";
 
         let trade_s1 = default_sg_trade();
         server1.mock(|when, then| {
-            when.method(POST).path("/").body_contains("\"skip\":0");
+            when.method(POST)
+                .path("/")
+                .body_contains(tx_id)
+                .body_contains("\"skip\":0");
             then.status(200)
                 .json_body(json!({"data": {"trades": [trade_s1]}}));
         });
         server1.mock(|when, then| {
             when.method(POST)
                 .path("/")
+                .body_contains(tx_id)
                 .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
         server2.mock(|when, then| {
-            when.method(POST).path("/");
+            when.method(POST).path("/").body_contains(tx_id);
             then.status(500);
         });
 
@@ -1021,7 +1082,7 @@ mod tests {
             },
         ]);
         let trades = client
-            .trades_by_transaction("0xtx_partial".to_string(), None)
+            .trades_by_transaction(tx_id.to_string(), None)
             .await;
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].trade.id, trade_s1.id);
@@ -1037,13 +1098,14 @@ mod tests {
         let server2 = MockServer::start_async().await;
         let sg2_url = Url::parse(&server2.url("")).unwrap();
         let sg2_name = "sg_two_err";
+        let tx_id = "0xtx_all_err";
 
         server1.mock(|when, then| {
-            when.method(POST).path("/");
+            when.method(POST).path("/").body_contains(tx_id);
             then.status(500);
         });
         server2.mock(|when, then| {
-            when.method(POST).path("/");
+            when.method(POST).path("/").body_contains(tx_id);
             then.status(500);
         });
 
@@ -1058,7 +1120,7 @@ mod tests {
             },
         ]);
         let trades = client
-            .trades_by_transaction("0xtx_all_err".to_string(), None)
+            .trades_by_transaction(tx_id.to_string(), None)
             .await;
         assert!(trades.is_empty());
     }
