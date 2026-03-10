@@ -71,6 +71,12 @@ pub fn build_fetch_owner_trades_stmt(
         orderbooks_iter(),
     )?;
 
+    if let (Some(start), Some(end)) = (args.start_timestamp, args.end_timestamp) {
+        if start > end {
+            return Err(SqlBuildError::new("start_timestamp > end_timestamp"));
+        }
+    }
+
     let start_param = if let Some(v) = args.start_timestamp {
         let i = i64::try_from(v).map_err(|e| {
             SqlBuildError::new(format!(
@@ -208,6 +214,20 @@ mod tests {
         let last_two = &stmt.params[stmt.params.len() - 2..];
         assert_eq!(last_two[0], SqlValue::U64(PAGE_SIZE as u64));
         assert_eq!(last_two[1], SqlValue::U64(PAGE_SIZE as u64));
+    }
+
+    #[test]
+    fn rejects_inverted_timestamp_window() {
+        let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let result = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
+            owner,
+            chain_ids: vec![],
+            orderbook_addresses: vec![],
+            start_timestamp: Some(2000),
+            end_timestamp: Some(1000),
+            page: None,
+        });
+        assert!(result.is_err());
     }
 
     #[test]
