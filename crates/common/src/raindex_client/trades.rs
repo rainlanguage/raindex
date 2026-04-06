@@ -236,7 +236,7 @@ impl RaindexClient {
                 );
                 let sg_trades = client
                     .trades_by_transaction(tx_hash.to_string(), orderbook_in)
-                    .await;
+                    .await?;
                 for trade_with_name in sg_trades {
                     let chain_id = name_to_chain_id
                         .get(trade_with_name.subgraph_name.as_str())
@@ -411,6 +411,11 @@ impl RaindexTrade {
         input_amount: Float,
         output_amount: Float,
     ) -> Result<(Float, String), RaindexError> {
+        if output_amount.eq(Float::zero()?)? {
+            let zero = Float::zero()?;
+            return Ok((zero, zero.format()?));
+        }
+
         let neg_output = Float::zero()?.sub(output_amount)?;
         let io_ratio = input_amount.div(neg_output)?;
         let formatted_io_ratio = io_ratio.format()?;
@@ -649,7 +654,7 @@ impl RaindexPairSummary {
             let formatted_total_input = total_input.format()?;
             let formatted_total_output = total_output.format()?;
 
-            let average_io_ratio = if total_output.eq(Float::zero()?).unwrap_or(true) {
+            let average_io_ratio = if total_output.eq(Float::zero()?)? {
                 Float::zero()?
             } else {
                 total_input.div(total_output)?
@@ -727,6 +732,21 @@ mod test_helpers {
     use super::*;
     #[cfg(not(target_family = "wasm"))]
     use super::*;
+
+    #[cfg(not(target_family = "wasm"))]
+    mod native_tests {
+        use super::*;
+        use rain_orderbook_subgraph_client::utils::float::F1;
+
+        #[test]
+        fn compute_io_ratio_returns_zero_for_zero_output() {
+            let (ratio, formatted_ratio) =
+                RaindexTrade::compute_io_ratio(F1, Float::zero().unwrap()).unwrap();
+
+            assert!(ratio.eq(Float::zero().unwrap()).unwrap());
+            assert_eq!(formatted_ratio, "0");
+        }
+    }
 
     #[cfg(target_family = "wasm")]
     mod wasm_tests {

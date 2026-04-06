@@ -145,34 +145,60 @@ impl MultiOrderbookSubgraphClient {
         &self,
         tx_id: String,
         orderbook_in: Option<Vec<String>>,
-    ) -> Vec<SgTradeWithSubgraphName> {
+    ) -> Result<Vec<SgTradeWithSubgraphName>, OrderbookSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
+            let subgraph_name = subgraph.name.clone();
             let tx_id = tx_id.clone();
             let orderbook_in = orderbook_in.clone();
             async move {
-                let client = self.get_orderbook_subgraph_client(url);
-                let trades = client.trades_by_transaction(tx_id, orderbook_in).await?;
-                let wrapped_trades: Vec<SgTradeWithSubgraphName> = trades
-                    .into_iter()
-                    .map(|trade| SgTradeWithSubgraphName {
-                        trade,
-                        subgraph_name: subgraph.name.clone(),
-                    })
-                    .collect();
-                Ok::<_, OrderbookSubgraphClientError>(wrapped_trades)
+                let client = self.get_orderbook_subgraph_client(url.clone());
+                let result =
+                    client
+                        .trades_by_transaction(tx_id, orderbook_in)
+                        .await
+                        .map(|trades| {
+                            trades
+                                .into_iter()
+                                .map(|trade| SgTradeWithSubgraphName {
+                                    trade,
+                                    subgraph_name: subgraph_name.clone(),
+                                })
+                                .collect::<Vec<_>>()
+                        });
+                (subgraph_name, url, result)
             }
         });
 
         let results = join_all(futures).await;
 
-        let all_trades: Vec<SgTradeWithSubgraphName> = results
-            .into_iter()
-            .filter_map(Result::ok)
-            .flatten()
-            .collect();
+        let mut all_trades = Vec::new();
+        let mut last_error = None;
+        let mut any_success = false;
+        for (subgraph_name, url, result) in results {
+            match result {
+                Ok(items) => {
+                    any_success = true;
+                    all_trades.extend(items);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subgraph = %subgraph_name,
+                        url = %url,
+                        error = %e,
+                        "failed to fetch transaction trades from subgraph"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+        if !any_success {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
 
-        all_trades
+        Ok(all_trades)
     }
 
     pub async fn tokens_list(
@@ -884,7 +910,8 @@ mod tests {
         let client = MultiOrderbookSubgraphClient::new(vec![]);
         let result = client
             .trades_by_transaction("0xtx123".to_string(), None)
-            .await;
+            .await
+            .unwrap();
         assert!(result.is_empty());
     }
 
@@ -921,7 +948,8 @@ mod tests {
 
         let trades = client
             .trades_by_transaction(tx_id.to_string(), None)
-            .await;
+            .await
+            .unwrap();
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].trade.id, trade1.id);
         assert_eq!(trades[0].subgraph_name, sg1_name);
@@ -963,7 +991,8 @@ mod tests {
 
         let trades = client
             .trades_by_transaction(tx_id.to_string(), Some(vec![orderbook_addr.to_string()]))
-            .await;
+            .await
+            .unwrap();
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].trade.id, trade1.id);
         assert_eq!(trades[0].subgraph_name, sg1_name);
@@ -1029,7 +1058,8 @@ mod tests {
 
         let trades = client
             .trades_by_transaction(tx_id.to_string(), None)
-            .await;
+            .await
+            .unwrap();
         assert_eq!(trades.len(), 2);
 
         let names: std::collections::HashSet<_> =
@@ -1084,7 +1114,8 @@ mod tests {
         ]);
         let trades = client
             .trades_by_transaction(tx_id.to_string(), None)
-            .await;
+            .await
+            .unwrap();
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].trade.id, trade_s1.id);
         assert_eq!(trades[0].subgraph_name, sg1_name);
@@ -1120,10 +1151,8 @@ mod tests {
                 name: sg2_name.to_string(),
             },
         ]);
-        let trades = client
-            .trades_by_transaction(tx_id.to_string(), None)
-            .await;
-        assert!(trades.is_empty());
+        let result = client.trades_by_transaction(tx_id.to_string(), None).await;
+        assert!(result.is_err());
     }
 
     fn sample_sg_erc20(id_suffix: &str) -> SgErc20 {

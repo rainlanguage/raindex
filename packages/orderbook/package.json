@@ -37,6 +37,7 @@
         "rm-temp": "rimraf ./temp",
         "test": "npm run check && vitest run --dir test",
         "format": "prettier --write test",
+        "format-check": "prettier --list-different test",
         "check": "tsc ./dist/**/*.{ts,js} --noEmit --allowJs --lib es2020,dom",
         "docs": "typedoc",
         "docs:clean": "rimraf ./docs"

@@ -75,6 +75,13 @@ impl OrderbookSubgraphClient {
             }
             page += 1;
         }
+        all_trades.sort_by(|a, b| {
+            let a_timestamp = a.timestamp.0.parse::<u64>().unwrap_or(0);
+            let b_timestamp = b.timestamp.0.parse::<u64>().unwrap_or(0);
+            b_timestamp
+                .cmp(&a_timestamp)
+                .then_with(|| a.id.0.cmp(&b.id.0))
+        });
         Ok(all_trades)
     }
 
@@ -215,6 +222,13 @@ mod tests {
             timestamp: SgBigInt("1600000200".to_string()),
             orderbook: default_sg_orderbook(),
         }
+    }
+
+    fn sg_trade_with_id_timestamp(id: &str, timestamp: &str) -> SgTrade {
+        let mut trade = default_sg_trade();
+        trade.id = SgBytes(id.to_string());
+        trade.timestamp = SgBigInt(timestamp.to_string());
+        trade
     }
 
     fn assert_sg_trade_eq(actual: &SgTrade, expected: &SgTrade) {
@@ -532,6 +546,37 @@ mod tests {
         for (actual, expected) in trades.iter().zip(expected_trades.iter()) {
             assert_sg_trade_eq(actual, expected);
         }
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_transaction_sorts_by_timestamp_then_id() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let tx_id = "0xtx_sorted".to_string();
+        let older = sg_trade_with_id_timestamp("0xtrade_c", "100");
+        let same_timestamp_second = sg_trade_with_id_timestamp("0xtrade_b", "200");
+        let same_timestamp_first = sg_trade_with_id_timestamp("0xtrade_a", "200");
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(json!({
+                "data": {
+                    "trades": [
+                        older,
+                        same_timestamp_second,
+                        same_timestamp_first
+                    ]
+                }
+            }));
+        });
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let trades = client.trades_by_transaction(tx_id, None).await.unwrap();
+        let ids: Vec<_> = trades.into_iter().map(|trade| trade.id.0).collect();
+        assert_eq!(ids, vec!["0xtrade_a", "0xtrade_b", "0xtrade_c"]);
     }
 
     #[tokio::test]
