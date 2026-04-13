@@ -9,6 +9,13 @@ use rain_orderbook_common::raindex_order_builder::RaindexOrderBuilder;
 use rain_orderbook_js_api::registry::DotrainRegistry;
 use std::io::Write;
 
+fn heading(text: &str) {
+    let style = Style::new().bold().underlined();
+    eprintln!();
+    eprintln!("{}", style.apply_to(text));
+    eprintln!();
+}
+
 fn bold(text: &str) -> String {
     Style::new().bold().apply_to(text).to_string()
 }
@@ -17,20 +24,26 @@ fn dim(text: &str) -> String {
     Style::new().dim().apply_to(text).to_string()
 }
 
+fn separator() {
+    eprintln!("{}", dim("────────────────────────────────────────────────────────────"));
+}
+
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
-    eprintln!();
-    eprintln!("  Fetching strategies from {}", dim(registry_url));
+    heading("Raindex Strategy Builder");
+    eprintln!("  Registry: {}", dim(registry_url));
+    eprintln!("  Fetching strategies...");
 
     let registry = DotrainRegistry::new(registry_url.to_string())
         .await
         .map_err(|err| anyhow::anyhow!("{}", err.to_readable_msg()))?;
 
-    // 1. Owner address first — needed for balance display later
+    // 1. Owner address first
+    eprintln!();
     let owner: String = Input::new()
         .with_prompt("Owner address (0x...)")
         .interact_text()?;
 
-    // 2. Pick strategy (descriptions in items, wraps naturally)
+    // 2. Pick strategy
     let (strategy_key, dotrain) = pick_strategy(&registry)?;
     let settings = registry_settings(&registry);
 
@@ -74,7 +87,8 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
             )
         })?;
 
-    eprintln!();
+    heading("Deployment Summary");
+
     eprintln!("  {}: {strategy_key}", bold("Strategy"));
     eprintln!("  {}: {owner}", bold("Owner"));
     eprintln!("  {}: {}", bold("Chain ID"), args.chain_id);
@@ -100,7 +114,8 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
     if args.emit_meta_call.is_some() {
         eprintln!("    Emit metadata");
     }
-    eprintln!();
+
+    separator();
 
     let mut lines = Vec::new();
 
@@ -124,12 +139,10 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
         ));
     }
 
+    // Short items — won't wrap
     let output_choice = Select::new()
         .with_prompt("Output")
-        .items(&[
-            "Print to stdout (address:calldata lines)",
-            "Save to file",
-        ])
+        .items(&["Print to stdout (address:calldata lines)", "Save to file"])
         .default(0)
         .interact()?;
 
@@ -151,10 +164,7 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
                 writeln!(file, "{line}")?;
             }
 
-            eprintln!(
-                "  Wrote {} transactions to {path}",
-                lines.len(),
-            );
+            eprintln!("  Wrote {} transactions to {path}", lines.len());
             eprintln!();
             eprintln!("  Deploy with:");
             eprintln!("    cat {path} | stox submit");
@@ -175,19 +185,27 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         anyhow::bail!("no valid strategies found in registry");
     }
 
+    // Print full descriptions as a reference table ABOVE the Select.
+    // Select items are short (just the key) so they won't wrap.
+    // dialoguer will only redraw the short items, not the table.
+    heading("Strategies");
+
     let keys: Vec<&String> = details.valid.keys().collect();
-    let display: Vec<String> = keys
-        .iter()
-        .map(|key| {
-            let info = &details.valid[*key];
-            let desc = info
-                .short_description
-                .as_deref()
-                .unwrap_or(&info.description);
-            format!("{}  {}  {}", bold(key), dim("—"), desc)
-        })
-        .collect();
-    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
+    for key in &keys {
+        let info = &details.valid[*key];
+        let desc = info
+            .short_description
+            .as_deref()
+            .unwrap_or(&info.description);
+        eprintln!("  {}  {}", bold(key), dim("—"));
+        eprintln!("  {desc}");
+        eprintln!();
+    }
+
+    separator();
+
+    // Short single-line items — dialoguer counts lines correctly
+    let items: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
 
     let idx = Select::new()
         .with_prompt("Strategy")
@@ -203,7 +221,6 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         .ok_or_else(|| anyhow::anyhow!("strategy '{key}' not found"))?
         .clone();
 
-    // Show full details after selection
     let info = &details.valid[&key];
     eprintln!("  {}", bold(&info.name));
     eprintln!("  {}", info.description);
@@ -227,6 +244,7 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
 
     if deployments.len() == 1 {
         let (key, info) = deployments.into_iter().next().unwrap();
+        eprintln!();
         eprintln!(
             "  Deployment: {} {} {}",
             bold(&info.name),
@@ -236,19 +254,30 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
         return Ok(key);
     }
 
+    heading("Deployments");
+
     let keys: Vec<&String> = deployments.keys().collect();
-    let display: Vec<String> = keys
+    for key in &keys {
+        let info = &deployments[*key];
+        let desc = info
+            .short_description
+            .as_deref()
+            .unwrap_or(&info.description);
+        eprintln!("  {} ({})  {}", bold(&info.name), key, dim("—"));
+        eprintln!("  {desc}");
+        eprintln!();
+    }
+
+    separator();
+
+    let names: Vec<String> = keys
         .iter()
         .map(|key| {
             let info = &deployments[*key];
-            let desc = info
-                .short_description
-                .as_deref()
-                .unwrap_or(&info.description);
-            format!("{}  {}  {}", bold(&info.name), dim("—"), desc)
+            format!("{} ({})", info.name, key)
         })
         .collect();
-    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
+    let items: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
 
     let idx = Select::new()
         .with_prompt("Deployment")
@@ -267,14 +296,13 @@ async fn select_tokens(
     builder: &mut RaindexOrderBuilder,
     tokens: &[OrderBuilderSelectTokensCfg],
 ) -> Result<()> {
-    eprintln!();
-    eprintln!("  {}", bold("Token selection"));
+    heading("Token Selection");
 
     for token_cfg in tokens {
         let prompt_label = token_cfg.name.as_deref().unwrap_or(&token_cfg.key);
 
         if let Some(desc) = &token_cfg.description {
-            eprintln!("    {}", desc);
+            eprintln!("  {}", desc);
         }
 
         let available = builder.get_all_tokens(None).await.unwrap_or_default();
@@ -284,29 +312,42 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
-            let display: Vec<String> = available
-                .iter()
-                .map(|t| {
-                    format!(
-                        "{}  ({})   {}",
-                        bold(&t.symbol),
-                        t.name,
-                        dim(&format!("{}", t.address))
-                    )
-                })
-                .collect();
+            // Print token table above, short items in Select
+            for token in &available {
+                eprintln!(
+                    "    {}  ({})  {}",
+                    bold(&token.symbol),
+                    token.name,
+                    dim(&format!("{}", token.address))
+                );
+            }
+            eprintln!();
 
-            let mut items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
-            items.push("Enter address manually");
+            separator();
+
+            // Short items — just symbol
+            let mut items: Vec<String> = available
+                .iter()
+                .map(|t| t.symbol.clone())
+                .collect();
+            items.push("Enter address manually".to_string());
+            let item_refs: Vec<&str> = items.iter().map(|s| s.as_str()).collect();
 
             let idx = Select::new()
                 .with_prompt(prompt_label)
-                .items(&items)
+                .items(&item_refs)
                 .default(0)
                 .interact()?;
 
             if idx < available.len() {
-                format!("{}", available[idx].address)
+                let token = &available[idx];
+                eprintln!(
+                    "  Selected: {} ({}) {}",
+                    bold(&token.symbol),
+                    token.name,
+                    dim(&format!("{}", token.address))
+                );
+                format!("{}", token.address)
             } else {
                 Input::new()
                     .with_prompt(format!("{prompt_label} address"))
@@ -338,8 +379,7 @@ fn fill_fields(builder: &mut RaindexOrderBuilder) -> Result<()> {
         return Ok(());
     }
 
-    eprintln!();
-    eprintln!("  {}", bold("Fields"));
+    heading("Configuration");
 
     for field in &missing {
         fill_single_field(builder, field)?;
@@ -353,13 +393,14 @@ fn fill_single_field(
     field: &OrderBuilderFieldDefinitionCfg,
 ) -> Result<()> {
     if let Some(desc) = &field.description {
-        eprintln!("    {}", desc);
+        eprintln!("  {}", desc);
     }
 
     let value = match &field.presets {
         Some(presets) if !presets.is_empty() => {
             let show_custom = field.show_custom_field.unwrap_or(true);
 
+            // Short preset items — won't wrap
             let mut display: Vec<String> = presets
                 .iter()
                 .map(|p| {
@@ -411,20 +452,17 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
         return Ok(());
     }
 
-    eprintln!();
-    eprintln!("  {}", bold("Deposits"));
+    heading("Deposits");
 
     for deposit_cfg in &deployment.deposits {
-        // Resolve token symbol for display
         let token_display = match builder.get_token_info(deposit_cfg.token_key.clone()).await {
             Ok(info) => {
-                // Show balance if available
                 if let Ok(bal) = builder
                     .get_account_balance(format!("{}", info.address), owner.to_string())
                     .await
                 {
                     eprintln!(
-                        "    {} ({})  Balance: {}",
+                        "  {} ({})  Balance: {}",
                         bold(&info.symbol),
                         info.name,
                         bal.formatted_balance()
@@ -440,12 +478,11 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
             .unwrap_or_default();
 
         let amount = if presets.is_empty() {
-            let input: String = Input::new()
+            Input::new()
                 .with_prompt(format!("Deposit {token_display} (blank to skip)"))
                 .default(String::new())
                 .show_default(false)
-                .interact_text()?;
-            input
+                .interact_text()?
         } else {
             let mut display: Vec<String> = presets
                 .iter()
