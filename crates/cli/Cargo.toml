@@ -33,7 +33,9 @@ url.workspace = true
 serde_json = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
 flate2 = "1.0.34"
+reqwest = { workspace = true }
 rusqlite = { version = "0.31", features = ["functions"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
