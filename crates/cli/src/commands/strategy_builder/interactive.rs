@@ -31,19 +31,19 @@ fn separator() {
     );
 }
 
-/// Wrap text to fit within `width` columns, returning lines joined with `\n`.
-/// Wraps on word boundaries where possible.
-fn wrap_text(text: &str, width: usize) -> String {
+/// Wrap plain text to fit within `width` visible columns.
+/// Returns a Vec of lines. Wraps on word boundaries.
+fn wrap_text(text: &str, width: usize) -> Vec<String> {
     if width == 0 || text.is_empty() {
-        return text.to_string();
+        return vec![text.to_string()];
     }
 
     let mut lines = Vec::new();
     let mut current_line = String::new();
-    let mut current_width = 0;
+    let mut current_width: usize = 0;
 
     for word in text.split_whitespace() {
-        let word_len = console::measure_text_width(word);
+        let word_len = word.len(); // plain text, no ANSI
 
         if current_width == 0 {
             current_line = word.to_string();
@@ -54,8 +54,8 @@ fn wrap_text(text: &str, width: usize) -> String {
             current_width += 1 + word_len;
         } else {
             lines.push(current_line);
-            current_line = format!("    {word}");
-            current_width = 4 + word_len;
+            current_line = word.to_string();
+            current_width = word_len;
         }
     }
 
@@ -63,22 +63,51 @@ fn wrap_text(text: &str, width: usize) -> String {
         lines.push(current_line);
     }
 
-    lines.join("\n")
+    lines
 }
 
 /// Format a select item with name and description, wrapped to terminal width.
 /// Each item becomes a multi-line string with explicit `\n` so dialoguer
 /// tracks the height correctly (no terminal-wrap miscounting).
+///
+/// dialoguer adds a 2-char prefix (`❯ ` or `  `) to the FIRST line only.
+/// Continuation lines (after our `\n`) start at column 0, so we indent them
+/// to align with the first line's content.
 fn format_select_item(name: &str, description: &str) -> String {
-    let width = (Term::stderr().size().1 as usize).saturating_sub(4); // leave room for ❯ prefix
-    let name_line = format!("{}", Style::new().bold().apply_to(name));
-    let desc_wrapped = wrap_text(description, width.saturating_sub(2));
-    let desc_indented = desc_wrapped
-        .lines()
-        .map(|line| format!("  {}", Style::new().dim().apply_to(line)))
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!("{name_line}\n{desc_indented}")
+    let term_width = Term::stderr().size().1 as usize;
+    // First line: dialoguer adds "❯ " (2 visible chars)
+    let first_line_width = term_width.saturating_sub(2);
+    // Continuation lines: we add "  " indent ourselves
+    let cont_indent = "    ";
+    let cont_width = term_width.saturating_sub(cont_indent.len());
+
+    // Wrap the name if it's too long (plain text, style applied after)
+    let name_lines = wrap_text(name, first_line_width);
+    let mut result = String::new();
+
+    // First name line gets bold
+    result.push_str(&format!("{}", Style::new().bold().apply_to(&name_lines[0])));
+    for extra_name_line in &name_lines[1..] {
+        result.push('\n');
+        result.push_str(cont_indent);
+        result.push_str(&format!(
+            "{}",
+            Style::new().bold().apply_to(extra_name_line)
+        ));
+    }
+
+    // Description lines — wrapped, indented, dimmed
+    let desc_lines = wrap_text(description, cont_width);
+    for desc_line in &desc_lines {
+        result.push('\n');
+        result.push_str(&format!(
+            "{}{}",
+            cont_indent,
+            Style::new().dim().apply_to(desc_line)
+        ));
+    }
+
+    result
 }
 
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
