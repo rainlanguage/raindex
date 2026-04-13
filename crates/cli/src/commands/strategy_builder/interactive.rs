@@ -1,7 +1,8 @@
+use super::select::{self, SelectItem};
 use alloy::primitives::hex;
 use anyhow::{Context, Result};
 use console::{Style, Term};
-use dialoguer::{Input, Select};
+use dialoguer::Input;
 use rain_orderbook_app_settings::order_builder::{
     OrderBuilderFieldDefinitionCfg, OrderBuilderSelectTokensCfg,
 };
@@ -29,86 +30,6 @@ fn separator() {
         "{}",
         dim("────────────────────────────────────────────────────────────")
     );
-}
-
-/// Wrap plain text to fit within `width` visible columns.
-/// Returns a Vec of lines. Wraps on word boundaries.
-fn wrap_text(text: &str, width: usize) -> Vec<String> {
-    if width == 0 || text.is_empty() {
-        return vec![text.to_string()];
-    }
-
-    let mut lines = Vec::new();
-    let mut current_line = String::new();
-    let mut current_width: usize = 0;
-
-    for word in text.split_whitespace() {
-        let word_len = word.len(); // plain text, no ANSI
-
-        if current_width == 0 {
-            current_line = word.to_string();
-            current_width = word_len;
-        } else if current_width + 1 + word_len <= width {
-            current_line.push(' ');
-            current_line.push_str(word);
-            current_width += 1 + word_len;
-        } else {
-            lines.push(current_line);
-            current_line = word.to_string();
-            current_width = word_len;
-        }
-    }
-
-    if !current_line.is_empty() {
-        lines.push(current_line);
-    }
-
-    lines
-}
-
-/// Format a select item with name and description, wrapped to terminal width.
-/// Each item becomes a multi-line string with explicit `\n` so dialoguer
-/// tracks the height correctly (no terminal-wrap miscounting).
-///
-/// dialoguer adds a 2-char prefix (`❯ ` or `  `) to the FIRST line only.
-/// Continuation lines (after our `\n`) start at column 0, so we indent them
-/// to align with the first line's content.
-fn format_select_item(name: &str, description: &str) -> String {
-    // Leave 1-column margin to prevent edge-of-terminal phantom wrap
-    let term_width = (Term::stderr().size().1 as usize).saturating_sub(1);
-    // First line: dialoguer adds "❯ " (2 visible chars)
-    let first_line_width = term_width.saturating_sub(2);
-    // Continuation lines: we add "    " indent ourselves
-    let cont_indent = "    ";
-    let cont_width = term_width.saturating_sub(cont_indent.len());
-
-    // Wrap the name if it's too long (plain text, style applied after)
-    let name_lines = wrap_text(name, first_line_width);
-    let mut result = String::new();
-
-    // First name line gets bold
-    result.push_str(&format!("{}", Style::new().bold().apply_to(&name_lines[0])));
-    for extra_name_line in &name_lines[1..] {
-        result.push('\n');
-        result.push_str(cont_indent);
-        result.push_str(&format!(
-            "{}",
-            Style::new().bold().apply_to(extra_name_line)
-        ));
-    }
-
-    // Description lines — wrapped, indented, dimmed
-    let desc_lines = wrap_text(description, cont_width);
-    for desc_line in &desc_lines {
-        result.push('\n');
-        result.push_str(&format!(
-            "{}{}",
-            cont_indent,
-            Style::new().dim().apply_to(desc_line)
-        ));
-    }
-
-    result
 }
 
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
@@ -222,11 +143,17 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
         ));
     }
 
-    let output_choice = Select::new()
-        .with_prompt("Output")
-        .items(&["Print to stdout (address:calldata lines)", "Save to file"])
-        .default(0)
-        .interact()?;
+    let output_items = vec![
+        SelectItem {
+            key: "Print to stdout".to_string(),
+            description: "address:calldata lines".to_string(),
+        },
+        SelectItem {
+            key: "Save to file".to_string(),
+            description: String::new(),
+        },
+    ];
+    let output_choice = select::select("Output", &output_items)?;
 
     match output_choice {
         0 => {
@@ -267,27 +194,23 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         anyhow::bail!("no valid strategies found in registry");
     }
 
-    heading("Strategy");
-
     let keys: Vec<&String> = details.valid.keys().collect();
-    let display: Vec<String> = keys
+    let select_items: Vec<SelectItem> = keys
         .iter()
         .map(|key| {
             let info = &details.valid[*key];
-            let desc = info
-                .short_description
-                .as_deref()
-                .unwrap_or(&info.description);
-            format_select_item(key, desc)
+            SelectItem {
+                key: key.to_string(),
+                description: info
+                    .short_description
+                    .as_deref()
+                    .unwrap_or(&info.description)
+                    .to_string(),
+            }
         })
         .collect();
-    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
-    let idx = Select::new()
-        .with_prompt("Select a strategy")
-        .items(&items)
-        .default(0)
-        .interact()?;
+    let idx = select::select("Strategy", &select_items)?;
 
     let key = keys[idx].clone();
     let dotrain = registry
@@ -324,28 +247,23 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
         return Ok(key);
     }
 
-    heading("Deployment");
-
     let keys: Vec<&String> = deployments.keys().collect();
-    let display: Vec<String> = keys
+    let select_items: Vec<SelectItem> = keys
         .iter()
         .map(|key| {
             let info = &deployments[*key];
-            let desc = info
-                .short_description
-                .as_deref()
-                .unwrap_or(&info.description);
-            format_select_item(&format!("{} ({})", info.name, key), desc)
+            SelectItem {
+                key: format!("{} ({})", info.name, key),
+                description: info
+                    .short_description
+                    .as_deref()
+                    .unwrap_or(&info.description)
+                    .to_string(),
+            }
         })
         .collect();
-    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
-    let idx = Select::new()
-        .with_prompt("Select a deployment")
-        .items(&items)
-        .default(0)
-        .interact()?;
-
+    let idx = select::select("Deployment", &select_items)?;
     let key = keys[idx].clone();
     Ok(key)
 }
@@ -370,27 +288,27 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
-            // Each token is a single short line — symbol + address fits
-            let mut display: Vec<String> = available
+            let mut select_items: Vec<SelectItem> = available
                 .iter()
-                .map(|t| {
-                    format!(
-                        "{}  ({})  {}",
-                        Style::new().bold().apply_to(&t.symbol),
-                        t.name,
-                        dim(&format!("{}", t.address))
-                    )
+                .map(|t| SelectItem {
+                    key: format!("{} ({})", t.symbol, t.name),
+                    description: format!("{}", t.address),
                 })
                 .collect();
-            display.push("Enter address manually".to_string());
-            let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
+            select_items.push(SelectItem {
+                key: "Enter address manually".to_string(),
+                description: String::new(),
+            });
 
-            let idx = Select::new()
-                .with_prompt(prompt_label)
-                .items(&items)
-                .default(0)
-                .max_length(12)
-                .interact()?;
+            let title = format!(
+                "{prompt_label}{}",
+                token_cfg
+                    .description
+                    .as_ref()
+                    .map(|d| format!(" — {d}"))
+                    .unwrap_or_default()
+            );
+            let idx = select::select(&title, &select_items)?;
 
             if idx < available.len() {
                 format!("{}", available[idx].address)
@@ -446,25 +364,25 @@ fn fill_single_field(
         Some(presets) if !presets.is_empty() => {
             let show_custom = field.show_custom_field.unwrap_or(true);
 
-            let mut display: Vec<String> = presets
+            let mut select_items: Vec<SelectItem> = presets
                 .iter()
                 .map(|p| {
                     let label = p.name.as_deref().unwrap_or(&p.value);
-                    format!("{label} = {}", p.value)
+                    SelectItem {
+                        key: label.to_string(),
+                        description: format!("= {}", p.value),
+                    }
                 })
                 .collect();
 
             if show_custom {
-                display.push("Custom value".to_string());
+                select_items.push(SelectItem {
+                    key: "Custom value".to_string(),
+                    description: String::new(),
+                });
             }
 
-            let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
-
-            let idx = Select::new()
-                .with_prompt(&field.name)
-                .items(&items)
-                .default(0)
-                .interact()?;
+            let idx = select::select(&field.name, &select_items)?;
 
             if idx < presets.len() {
                 presets[idx].value.clone()
@@ -529,20 +447,23 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
                 .show_default(false)
                 .interact_text()?
         } else {
-            let mut display: Vec<String> = presets
+            let mut select_items: Vec<SelectItem> = presets
                 .iter()
-                .map(|p| format!("{p} {token_display}"))
+                .map(|p| SelectItem {
+                    key: format!("{p} {token_display}"),
+                    description: String::new(),
+                })
                 .collect();
-            display.push("Custom amount".to_string());
-            display.push("Skip".to_string());
+            select_items.push(SelectItem {
+                key: "Custom amount".to_string(),
+                description: String::new(),
+            });
+            select_items.push(SelectItem {
+                key: "Skip".to_string(),
+                description: String::new(),
+            });
 
-            let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
-
-            let idx = Select::new()
-                .with_prompt(format!("Deposit {token_display}"))
-                .items(&items)
-                .default(0)
-                .interact()?;
+            let idx = select::select(&format!("Deposit {token_display}"), &select_items)?;
 
             if idx < presets.len() {
                 presets[idx].clone()

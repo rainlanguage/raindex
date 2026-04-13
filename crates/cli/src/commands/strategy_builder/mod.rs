@@ -1,4 +1,5 @@
 mod interactive;
+mod select;
 
 use crate::execute::Execute;
 use alloy::primitives::hex;
