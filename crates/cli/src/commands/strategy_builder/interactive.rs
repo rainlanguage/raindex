@@ -1,6 +1,6 @@
 use alloy::primitives::hex;
 use anyhow::{Context, Result};
-use console::Style;
+use console::{Style, Term};
 use dialoguer::{Input, Select};
 use rain_orderbook_app_settings::order_builder::{
     OrderBuilderFieldDefinitionCfg, OrderBuilderSelectTokensCfg,
@@ -25,7 +25,60 @@ fn dim(text: &str) -> String {
 }
 
 fn separator() {
-    eprintln!("{}", dim("────────────────────────────────────────────────────────────"));
+    eprintln!(
+        "{}",
+        dim("────────────────────────────────────────────────────────────")
+    );
+}
+
+/// Wrap text to fit within `width` columns, returning lines joined with `\n`.
+/// Wraps on word boundaries where possible.
+fn wrap_text(text: &str, width: usize) -> String {
+    if width == 0 || text.is_empty() {
+        return text.to_string();
+    }
+
+    let mut lines = Vec::new();
+    let mut current_line = String::new();
+    let mut current_width = 0;
+
+    for word in text.split_whitespace() {
+        let word_len = console::measure_text_width(word);
+
+        if current_width == 0 {
+            current_line = word.to_string();
+            current_width = word_len;
+        } else if current_width + 1 + word_len <= width {
+            current_line.push(' ');
+            current_line.push_str(word);
+            current_width += 1 + word_len;
+        } else {
+            lines.push(current_line);
+            current_line = format!("    {word}");
+            current_width = 4 + word_len;
+        }
+    }
+
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+
+    lines.join("\n")
+}
+
+/// Format a select item with name and description, wrapped to terminal width.
+/// Each item becomes a multi-line string with explicit `\n` so dialoguer
+/// tracks the height correctly (no terminal-wrap miscounting).
+fn format_select_item(name: &str, description: &str) -> String {
+    let width = (Term::stderr().size().1 as usize).saturating_sub(4); // leave room for ❯ prefix
+    let name_line = format!("{}", Style::new().bold().apply_to(name));
+    let desc_wrapped = wrap_text(description, width.saturating_sub(2));
+    let desc_indented = desc_wrapped
+        .lines()
+        .map(|line| format!("  {}", Style::new().dim().apply_to(line)))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("{name_line}\n{desc_indented}")
 }
 
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
@@ -139,7 +192,6 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
         ));
     }
 
-    // Short items — won't wrap
     let output_choice = Select::new()
         .with_prompt("Output")
         .items(&["Print to stdout (address:calldata lines)", "Save to file"])
@@ -185,30 +237,24 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         anyhow::bail!("no valid strategies found in registry");
     }
 
-    // Print full descriptions as a reference table ABOVE the Select.
-    // Select items are short (just the key) so they won't wrap.
-    // dialoguer will only redraw the short items, not the table.
-    heading("Strategies");
+    heading("Strategy");
 
     let keys: Vec<&String> = details.valid.keys().collect();
-    for key in &keys {
-        let info = &details.valid[*key];
-        let desc = info
-            .short_description
-            .as_deref()
-            .unwrap_or(&info.description);
-        eprintln!("  {}  {}", bold(key), dim("—"));
-        eprintln!("  {desc}");
-        eprintln!();
-    }
-
-    separator();
-
-    // Short single-line items — dialoguer counts lines correctly
-    let items: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
+    let display: Vec<String> = keys
+        .iter()
+        .map(|key| {
+            let info = &details.valid[*key];
+            let desc = info
+                .short_description
+                .as_deref()
+                .unwrap_or(&info.description);
+            format_select_item(key, desc)
+        })
+        .collect();
+    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
     let idx = Select::new()
-        .with_prompt("Strategy")
+        .with_prompt("Select a strategy")
         .items(&items)
         .default(0)
         .interact()?;
@@ -220,10 +266,6 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         .get(&key)
         .ok_or_else(|| anyhow::anyhow!("strategy '{key}' not found"))?
         .clone();
-
-    let info = &details.valid[&key];
-    eprintln!("  {}", bold(&info.name));
-    eprintln!("  {}", info.description);
 
     Ok((key, dotrain))
 }
@@ -244,51 +286,37 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
 
     if deployments.len() == 1 {
         let (key, info) = deployments.into_iter().next().unwrap();
-        eprintln!();
         eprintln!(
-            "  Deployment: {} {} {}",
+            "  Deployment: {} — {}",
             bold(&info.name),
-            dim("—"),
             info.description
         );
         return Ok(key);
     }
 
-    heading("Deployments");
+    heading("Deployment");
 
     let keys: Vec<&String> = deployments.keys().collect();
-    for key in &keys {
-        let info = &deployments[*key];
-        let desc = info
-            .short_description
-            .as_deref()
-            .unwrap_or(&info.description);
-        eprintln!("  {} ({})  {}", bold(&info.name), key, dim("—"));
-        eprintln!("  {desc}");
-        eprintln!();
-    }
-
-    separator();
-
-    let names: Vec<String> = keys
+    let display: Vec<String> = keys
         .iter()
         .map(|key| {
             let info = &deployments[*key];
-            format!("{} ({})", info.name, key)
+            let desc = info
+                .short_description
+                .as_deref()
+                .unwrap_or(&info.description);
+            format_select_item(&format!("{} ({})", info.name, key), desc)
         })
         .collect();
-    let items: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
     let idx = Select::new()
-        .with_prompt("Deployment")
+        .with_prompt("Select a deployment")
         .items(&items)
         .default(0)
         .interact()?;
 
     let key = keys[idx].clone();
-    let info = &deployments[&key];
-    eprintln!("  {}", info.description);
-
     Ok(key)
 }
 
@@ -312,42 +340,30 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
-            // Print token table above, short items in Select
-            for token in &available {
-                eprintln!(
-                    "    {}  ({})  {}",
-                    bold(&token.symbol),
-                    token.name,
-                    dim(&format!("{}", token.address))
-                );
-            }
-            eprintln!();
-
-            separator();
-
-            // Short items — just symbol
-            let mut items: Vec<String> = available
+            // Each token is a single short line — symbol + address fits
+            let mut display: Vec<String> = available
                 .iter()
-                .map(|t| t.symbol.clone())
+                .map(|t| {
+                    format!(
+                        "{}  ({})  {}",
+                        Style::new().bold().apply_to(&t.symbol),
+                        t.name,
+                        dim(&format!("{}", t.address))
+                    )
+                })
                 .collect();
-            items.push("Enter address manually".to_string());
-            let item_refs: Vec<&str> = items.iter().map(|s| s.as_str()).collect();
+            display.push("Enter address manually".to_string());
+            let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
             let idx = Select::new()
                 .with_prompt(prompt_label)
-                .items(&item_refs)
+                .items(&items)
                 .default(0)
+                .max_length(12)
                 .interact()?;
 
             if idx < available.len() {
-                let token = &available[idx];
-                eprintln!(
-                    "  Selected: {} ({}) {}",
-                    bold(&token.symbol),
-                    token.name,
-                    dim(&format!("{}", token.address))
-                );
-                format!("{}", token.address)
+                format!("{}", available[idx].address)
             } else {
                 Input::new()
                     .with_prompt(format!("{prompt_label} address"))
@@ -400,7 +416,6 @@ fn fill_single_field(
         Some(presets) if !presets.is_empty() => {
             let show_custom = field.show_custom_field.unwrap_or(true);
 
-            // Short preset items — won't wrap
             let mut display: Vec<String> = presets
                 .iter()
                 .map(|p| {
