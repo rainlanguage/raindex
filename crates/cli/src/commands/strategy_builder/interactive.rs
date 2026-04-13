@@ -130,6 +130,7 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
             "Save to file",
         ])
         .default(0)
+        .max_length(10)
         .interact()?;
 
     let mut lines = Vec::new();
@@ -218,6 +219,7 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         .with_prompt("Select a strategy")
         .items(&display)
         .default(0)
+        .max_length(10)
         .interact()?;
 
     let key = keys[idx].clone();
@@ -281,6 +283,7 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
         .with_prompt("Select a deployment")
         .items(&display)
         .default(0)
+        .max_length(10)
         .interact()?;
 
     let key = keys[idx].clone();
@@ -331,6 +334,7 @@ async fn select_tokens(
                 .with_prompt(prompt_label)
                 .items(&items)
                 .default(0)
+                .max_length(10)
                 .interact()?;
 
             if idx < available.len() {
@@ -407,6 +411,7 @@ fn fill_single_field(
                 .with_prompt(&field.name)
                 .items(&display)
                 .default(0)
+                .max_length(10)
                 .interact()?;
 
             if idx < presets.len() {
@@ -497,6 +502,7 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
                 .with_prompt(format!("Deposit {token_display}"))
                 .items(&display)
                 .default(0)
+                .max_length(10)
                 .interact()?;
 
             if idx < presets.len() {
