@@ -28,6 +28,20 @@ fn separator() {
     eprintln!("{}", dim("────────────────────────────────────────"));
 }
 
+fn term_width() -> usize {
+    console::Term::stderr().size().1 as usize
+}
+
+fn truncate(text: &str, max: usize) -> String {
+    if text.len() <= max {
+        text.to_string()
+    } else if max > 3 {
+        format!("{}...", &text[..max - 3])
+    } else {
+        text[..max].to_string()
+    }
+}
+
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
     heading("Raindex Strategy Builder");
 
@@ -203,6 +217,7 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
     heading("Strategy");
 
     let keys: Vec<&String> = details.valid.keys().collect();
+    let width = term_width().saturating_sub(6); // account for prompt/cursor prefix
     let display: Vec<String> = keys
         .iter()
         .map(|key| {
@@ -211,7 +226,9 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
                 .short_description
                 .as_deref()
                 .unwrap_or(&info.description);
-            format!("{}  {}", Style::new().bold().apply_to(key), dim(desc))
+            let key_part = format!("{}", Style::new().bold().apply_to(key));
+            let max_desc = width.saturating_sub(key.len() + 3);
+            format!("{key_part}  {}", dim(&truncate(desc, max_desc)))
         })
         .collect();
 
@@ -267,6 +284,7 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
     }
 
     let keys: Vec<&String> = deployments.keys().collect();
+    let width = term_width().saturating_sub(6);
     let display: Vec<String> = keys
         .iter()
         .map(|key| {
@@ -275,7 +293,9 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
                 .short_description
                 .as_deref()
                 .unwrap_or(&info.description);
-            format!("{}  {}", Style::new().bold().apply_to(&info.name), dim(desc))
+            let name_part = format!("{}", Style::new().bold().apply_to(&info.name));
+            let max_desc = width.saturating_sub(info.name.len() + 3);
+            format!("{name_part}  {}", dim(&truncate(desc, max_desc)))
         })
         .collect();
 
@@ -315,15 +335,15 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
+            let width = term_width().saturating_sub(6);
             let display: Vec<String> = available
                 .iter()
                 .map(|t| {
-                    format!(
-                        "{} {}  {}",
-                        Style::new().bold().apply_to(&t.symbol),
-                        dim(&format!("({})", t.name)),
-                        dim(&format!("{}", t.address))
-                    )
+                    let prefix = format!("{} ", Style::new().bold().apply_to(&t.symbol));
+                    let addr = format!("{}", t.address);
+                    let max_name = width.saturating_sub(t.symbol.len() + addr.len() + 5);
+                    let name_part = truncate(&t.name, max_name);
+                    format!("{prefix}{}  {}", dim(&name_part), dim(&addr))
                 })
                 .collect();
 
