@@ -6933,6 +6933,7 @@ dependencies = [
  "chrono",
  "clap",
  "comfy-table",
+ "console",
  "csv",
  "dialoguer",
  "flate2",
