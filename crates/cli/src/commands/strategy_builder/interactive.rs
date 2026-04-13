@@ -74,10 +74,11 @@ fn wrap_text(text: &str, width: usize) -> Vec<String> {
 /// Continuation lines (after our `\n`) start at column 0, so we indent them
 /// to align with the first line's content.
 fn format_select_item(name: &str, description: &str) -> String {
-    let term_width = Term::stderr().size().1 as usize;
+    // Leave 1-column margin to prevent edge-of-terminal phantom wrap
+    let term_width = (Term::stderr().size().1 as usize).saturating_sub(1);
     // First line: dialoguer adds "❯ " (2 visible chars)
     let first_line_width = term_width.saturating_sub(2);
-    // Continuation lines: we add "  " indent ourselves
+    // Continuation lines: we add "    " indent ourselves
     let cont_indent = "    ";
     let cont_width = term_width.saturating_sub(cont_indent.len());
 
@@ -113,7 +114,6 @@ fn format_select_item(name: &str, description: &str) -> String {
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
     let _ = Term::stderr().clear_screen();
     heading("Raindex Strategy Builder");
-    eprintln!("  Registry: {}", dim(registry_url));
     eprintln!("  Fetching strategies...");
 
     let registry = DotrainRegistry::new(registry_url.to_string())
