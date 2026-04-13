@@ -1,23 +1,34 @@
-//! A Select widget that uses crossterm's alternate screen buffer.
-//! This avoids dialoguer's cursor-math issues with multi-line items.
+//! A Select widget rendered directly to a writer.
+//! The caller manages the alternate screen lifecycle.
 
 use anyhow::Result;
 use crossterm::{
     cursor,
     event::{self, Event, KeyCode, KeyEvent},
     execute,
-    terminal::{self, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{self, ClearType},
 };
-use std::io::{stderr, Write};
+use std::io::Write;
 
 pub struct SelectItem {
     pub key: String,
     pub description: String,
 }
 
-/// Show a scrollable select list in the alternate screen.
-/// Returns the index of the selected item.
-pub fn select(title: &str, items: &[SelectItem]) -> Result<usize> {
+/// Header lines to display above the select list.
+/// These show prior selections / progress.
+pub struct SelectContext<'a> {
+    pub header_lines: &'a [String],
+}
+
+/// Run a select list on the given writer.
+/// The caller is responsible for alternate screen and raw mode.
+pub fn select(
+    w: &mut impl Write,
+    title: &str,
+    items: &[SelectItem],
+    ctx: &SelectContext,
+) -> Result<usize> {
     if items.is_empty() {
         anyhow::bail!("no items to select from");
     }
@@ -25,28 +36,11 @@ pub fn select(title: &str, items: &[SelectItem]) -> Result<usize> {
         return Ok(0);
     }
 
-    let mut stderr = stderr();
-    terminal::enable_raw_mode()?;
-    execute!(stderr, EnterAlternateScreen, cursor::Hide)?;
-
-    let result = run_select_loop(&mut stderr, title, items);
-
-    execute!(stderr, LeaveAlternateScreen, cursor::Show)?;
-    terminal::disable_raw_mode()?;
-
-    result
-}
-
-fn run_select_loop(
-    w: &mut impl Write,
-    title: &str,
-    items: &[SelectItem],
-) -> Result<usize> {
     let mut selected: usize = 0;
     let mut scroll_offset: usize = 0;
 
     loop {
-        render(w, title, items, selected, scroll_offset)?;
+        render(w, title, items, selected, scroll_offset, ctx)?;
 
         if let Event::Key(KeyEvent { code, .. }) = event::read()? {
             match code {
@@ -61,9 +55,9 @@ fn run_select_loop(
                 KeyCode::Down | KeyCode::Char('j') => {
                     if selected + 1 < items.len() {
                         selected += 1;
-                        // Adjust scroll so selected item stays visible
                         let (_, rows) = terminal::size()?;
-                        let visible_rows = visible_item_rows(rows as usize);
+                        let header_rows = ctx.header_lines.len() + 4; // header + title + gaps
+                        let visible_rows = (rows as usize).saturating_sub(header_rows + 2);
                         let items_visible =
                             count_items_fitting(items, scroll_offset, visible_rows);
                         if selected >= scroll_offset + items_visible {
@@ -81,13 +75,6 @@ fn run_select_loop(
     }
 }
 
-fn visible_item_rows(term_rows: usize) -> usize {
-    // Reserve: 2 for title + blank, 2 for bottom hint + margin
-    term_rows.saturating_sub(4)
-}
-
-/// Count how many items fit in `max_rows` starting from `offset`,
-/// accounting for each item's rendered height.
 fn count_items_fitting(items: &[SelectItem], offset: usize, max_rows: usize) -> usize {
     let (cols, _) = terminal::size().unwrap_or((80, 24));
     let cols = cols as usize;
@@ -103,16 +90,15 @@ fn count_items_fitting(items: &[SelectItem], offset: usize, max_rows: usize) -> 
         count += 1;
     }
 
-    count.max(1) // always show at least one
+    count.max(1)
 }
 
 fn item_height(item: &SelectItem, term_cols: usize) -> usize {
-    let usable = term_cols.saturating_sub(4); // indent
+    let usable = term_cols.saturating_sub(7); // "  ❯ " prefix + margin
     let name_lines = 1;
     let desc_lines = if item.description.is_empty() {
         0
     } else {
-        // word-wrap description
         let mut lines = 1usize;
         let mut col = 0usize;
         for word in item.description.split_whitespace() {
@@ -128,7 +114,7 @@ fn item_height(item: &SelectItem, term_cols: usize) -> usize {
         }
         lines
     };
-    name_lines + desc_lines + 1 // +1 for blank line between items
+    name_lines + desc_lines + 1 // +1 blank line between items
 }
 
 fn render(
@@ -137,6 +123,7 @@ fn render(
     items: &[SelectItem],
     selected: usize,
     scroll_offset: usize,
+    ctx: &SelectContext,
 ) -> Result<()> {
     let (cols, rows) = terminal::size()?;
     let cols = cols as usize;
@@ -144,10 +131,19 @@ fn render(
 
     execute!(w, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
 
-    // Title
-    write!(w, "\x1b[1;4m{title}\x1b[0m\r\n\r\n")?;
+    // Header: show prior selections
+    if !ctx.header_lines.is_empty() {
+        for line in ctx.header_lines {
+            write!(w, "  {line}\r\n")?;
+        }
+        write!(w, "\r\n")?;
+    }
 
-    let max_rows = visible_item_rows(rows);
+    // Title
+    write!(w, "  \x1b[1;4m{title}\x1b[0m\r\n\r\n")?;
+
+    let header_rows = ctx.header_lines.len() + 4;
+    let max_rows = rows.saturating_sub(header_rows + 2);
     let mut rows_used = 0;
 
     for (idx, item) in items.iter().enumerate().skip(scroll_offset) {
@@ -163,7 +159,7 @@ fn render(
         write!(w, "  {prefix}{name_style}{}\x1b[0m\r\n", item.key)?;
 
         if !item.description.is_empty() {
-            let usable = cols.saturating_sub(6);
+            let usable = cols.saturating_sub(7);
             let mut col = 0usize;
             write!(w, "      \x1b[2m")?;
             for word in item.description.split_whitespace() {
@@ -182,13 +178,14 @@ fn render(
             write!(w, "\x1b[0m\r\n")?;
         }
 
-        write!(w, "\r\n")?; // blank line between items
+        write!(w, "\r\n")?;
         rows_used += h;
     }
 
     // Scroll indicators
+    let first_item_row = header_rows;
     if scroll_offset > 0 {
-        execute!(w, cursor::MoveTo(cols as u16 - 3, 2))?;
+        execute!(w, cursor::MoveTo(cols as u16 - 3, first_item_row as u16))?;
         write!(w, " ▲")?;
     }
     if scroll_offset + count_items_fitting(items, scroll_offset, max_rows) < items.len() {

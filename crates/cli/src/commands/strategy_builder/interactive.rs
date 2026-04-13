@@ -1,21 +1,15 @@
-use super::select::{self, SelectItem};
+use super::select::{self, SelectContext, SelectItem};
 use alloy::primitives::hex;
 use anyhow::{Context, Result};
-use console::{Style, Term};
+use console::Style;
+use crossterm::{cursor, execute, terminal};
 use dialoguer::Input;
 use rain_orderbook_app_settings::order_builder::{
     OrderBuilderFieldDefinitionCfg, OrderBuilderSelectTokensCfg,
 };
 use rain_orderbook_common::raindex_order_builder::RaindexOrderBuilder;
 use rain_orderbook_js_api::registry::DotrainRegistry;
-use std::io::Write;
-
-fn heading(text: &str) {
-    let style = Style::new().bold().underlined();
-    eprintln!();
-    eprintln!("{}", style.apply_to(text));
-    eprintln!();
-}
+use std::io::{stderr, Write};
 
 fn bold(text: &str) -> String {
     Style::new().bold().apply_to(text).to_string()
@@ -25,49 +19,73 @@ fn dim(text: &str) -> String {
     Style::new().dim().apply_to(text).to_string()
 }
 
-fn separator() {
-    eprintln!(
-        "{}",
-        dim("────────────────────────────────────────────────────────────")
-    );
-}
-
+/// Enter alternate screen, run the wizard, leave alternate screen.
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
-    let _ = Term::stderr().clear_screen();
-    heading("Raindex Strategy Builder");
-    eprintln!("  Fetching strategies...");
+    eprintln!("  Fetching strategies from {}...", dim(registry_url));
 
     let registry = DotrainRegistry::new(registry_url.to_string())
         .await
         .map_err(|err| anyhow::anyhow!("{}", err.to_readable_msg()))?;
 
-    // 1. Owner address first
-    eprintln!();
+    // Collect progress lines to show as context on each screen
+    let mut progress: Vec<String> = Vec::new();
+
+    // Enter alternate screen for the whole wizard
+    let mut w = stderr();
+    terminal::enable_raw_mode()?;
+    execute!(w, terminal::EnterAlternateScreen, cursor::Hide)?;
+
+    let result = run_wizard(&mut w, &registry, &mut progress).await;
+
+    // Leave alternate screen
+    execute!(w, terminal::LeaveAlternateScreen, cursor::Show)?;
+    terminal::disable_raw_mode()?;
+
+    // After leaving alt screen, print the result to the real terminal
+    match result {
+        Ok(output) => {
+            // Print summary to stderr
+            eprintln!();
+            for line in &progress {
+                eprintln!("  {line}");
+            }
+            eprintln!();
+
+            // Print calldata to stdout
+            for line in &output {
+                println!("{line}");
+            }
+            Ok(())
+        }
+        Err(err) => Err(err),
+    }
+}
+
+async fn run_wizard(
+    w: &mut impl Write,
+    registry: &DotrainRegistry,
+    progress: &mut Vec<String>,
+) -> Result<Vec<String>> {
+    // 1. Owner — need to briefly leave raw mode for Input
+    leave_raw_for_input(w)?;
     let owner: String = Input::new()
         .with_prompt("Owner address (0x...)")
         .interact_text()?;
+    enter_raw_for_select(w)?;
+    progress.push(format!("{}: {owner}", bold("Owner")));
 
-    // 2. Pick strategy
-    let (strategy_key, dotrain) = pick_strategy(&registry)?;
-    let settings = registry_settings(&registry);
+    // 2. Strategy
+    let (strategy_key, dotrain) = pick_strategy(w, registry, progress)?;
+    progress.push(format!("{}: {strategy_key}", bold("Strategy")));
 
-    // Print progress so far
-    let _ = Term::stderr().clear_screen();
-    heading("Raindex Strategy Builder");
-    eprintln!("  {}: {owner}", bold("Owner"));
-    eprintln!("  {}: {strategy_key}", bold("Strategy"));
+    let settings = registry_settings(registry);
 
-    // 3. Pick deployment
-    let deployment_key = pick_deployment(&dotrain, &settings)?;
+    // 3. Deployment
+    let deployment_key = pick_deployment(w, &dotrain, &settings, progress)?;
+    progress.push(format!("{}: {deployment_key}", bold("Deployment")));
 
-    // Reprint progress
-    let _ = Term::stderr().clear_screen();
-    heading("Raindex Strategy Builder");
-    eprintln!("  {}: {owner}", bold("Owner"));
-    eprintln!("  {}: {strategy_key}", bold("Strategy"));
-    eprintln!("  {}: {deployment_key}", bold("Deployment"));
-    eprintln!();
-    eprintln!("  Initializing builder...");
+    // Show "initializing" in alt screen
+    render_progress(w, progress, Some("Initializing builder..."))?;
 
     let mut builder =
         RaindexOrderBuilder::new_with_deployment(dotrain, settings.clone(), deployment_key)
@@ -79,19 +97,18 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
     // 4. Token selection
     if let Ok(tokens) = builder.get_select_tokens() {
         if !tokens.is_empty() {
-            select_tokens(&mut builder, &tokens).await?;
+            select_tokens(w, &mut builder, &tokens, progress).await?;
         }
     }
 
     // 5. Fields
-    fill_fields(&mut builder)?;
+    fill_fields(w, &mut builder, progress)?;
 
     // 6. Deposits
-    fill_deposits(&mut builder, &owner).await?;
+    fill_deposits(w, &mut builder, &owner, progress).await?;
 
     // 7. Generate calldata
-    eprintln!();
-    eprintln!("  Generating calldata...");
+    render_progress(w, progress, Some("Generating calldata..."))?;
 
     let args = builder
         .get_deployment_transaction_args(owner.clone())
@@ -103,58 +120,41 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
             )
         })?;
 
-    heading("Deployment Summary");
+    progress.push(format!("{}: {}", bold("Chain"), args.chain_id));
+    progress.push(format!("{}: {}", bold("Orderbook"), args.orderbook_address));
 
-    eprintln!("  {}: {strategy_key}", bold("Strategy"));
-    eprintln!("  {}: {owner}", bold("Owner"));
-    eprintln!("  {}: {}", bold("Chain ID"), args.chain_id);
-    eprintln!("  {}: {}", bold("Orderbook"), args.orderbook_address);
-
-    let tx_count = args.approvals.len() + 1 + args.emit_meta_call.as_ref().map_or(0, |_| 1);
-    eprintln!("  {}: {tx_count}", bold("Transactions"));
-    eprintln!();
-
+    let mut calldata_lines = Vec::new();
     for approval in &args.approvals {
-        eprintln!(
-            "    Approve {} {} {} bytes",
-            Style::new().cyan().apply_to(&approval.symbol),
-            dim("—"),
-            approval.calldata.len()
-        );
-    }
-    eprintln!(
-        "    Deploy order {} {} bytes",
-        dim("—"),
-        args.deployment_calldata.len()
-    );
-    if args.emit_meta_call.is_some() {
-        eprintln!("    Emit metadata");
-    }
-
-    separator();
-
-    let mut lines = Vec::new();
-
-    for approval in &args.approvals {
-        lines.push(format!(
+        calldata_lines.push(format!(
             "{}:0x{}",
             approval.token,
             hex::encode(&approval.calldata)
         ));
+        progress.push(format!(
+            "  Approve {} — {} bytes",
+            Style::new().cyan().apply_to(&approval.symbol),
+            approval.calldata.len()
+        ));
     }
-    lines.push(format!(
+    calldata_lines.push(format!(
         "{}:0x{}",
         args.orderbook_address,
         hex::encode(&args.deployment_calldata)
     ));
+    progress.push(format!(
+        "  Deploy order — {} bytes",
+        args.deployment_calldata.len()
+    ));
     if let Some(meta_call) = &args.emit_meta_call {
-        lines.push(format!(
+        calldata_lines.push(format!(
             "{}:0x{}",
             meta_call.to,
             hex::encode(&meta_call.calldata)
         ));
+        progress.push("  Emit metadata".to_string());
     }
 
+    // 8. Output choice
     let output_items = vec![
         SelectItem {
             key: "Print to stdout".to_string(),
@@ -165,39 +165,69 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
             description: String::new(),
         },
     ];
-    let output_choice = select::select("Output", &output_items)?;
+    let ctx = SelectContext {
+        header_lines: progress,
+    };
+    let output_choice = select::select(w, "Output", &output_items, &ctx)?;
 
     match output_choice {
-        0 => {
-            for line in &lines {
-                println!("{line}");
-            }
-        }
         1 => {
+            // Save to file — need Input prompt
+            leave_raw_for_input(w)?;
             let path: String = Input::new()
                 .with_prompt("Output file path")
                 .default("deploy.calldata".to_string())
                 .interact_text()?;
+            enter_raw_for_select(w)?;
 
             let mut file =
                 std::fs::File::create(&path).with_context(|| format!("creating {path}"))?;
-            for line in &lines {
+            for line in &calldata_lines {
                 writeln!(file, "{line}")?;
             }
+            progress.push(format!("  Wrote to {path}"));
 
-            eprintln!("  Wrote {} transactions to {path}", lines.len());
-            eprintln!();
-            eprintln!("  Deploy with:");
-            eprintln!("    cat {path} | stox submit");
+            // Return empty — file was written instead
+            Ok(Vec::new())
         }
-        _ => unreachable!(),
+        _ => Ok(calldata_lines),
     }
+}
 
-    eprintln!();
+fn render_progress(w: &mut impl Write, progress: &[String], status: Option<&str>) -> Result<()> {
+    execute!(
+        w,
+        cursor::MoveTo(0, 0),
+        terminal::Clear(terminal::ClearType::All)
+    )?;
+    write!(w, "  \x1b[1;4mRaindex Strategy Builder\x1b[0m\r\n\r\n")?;
+    for line in progress {
+        write!(w, "  {line}\r\n")?;
+    }
+    if let Some(msg) = status {
+        write!(w, "\r\n  {msg}\r\n")?;
+    }
+    w.flush()?;
     Ok(())
 }
 
-fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
+fn leave_raw_for_input(w: &mut impl Write) -> Result<()> {
+    execute!(w, terminal::LeaveAlternateScreen, cursor::Show)?;
+    terminal::disable_raw_mode()?;
+    Ok(())
+}
+
+fn enter_raw_for_select(w: &mut impl Write) -> Result<()> {
+    terminal::enable_raw_mode()?;
+    execute!(w, terminal::EnterAlternateScreen, cursor::Hide)?;
+    Ok(())
+}
+
+fn pick_strategy(
+    w: &mut impl Write,
+    registry: &DotrainRegistry,
+    progress: &[String],
+) -> Result<(String, String)> {
     let details = registry
         .get_all_order_details()
         .map_err(|err| anyhow::anyhow!("{}", err.to_readable_msg()))?;
@@ -222,7 +252,10 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         })
         .collect();
 
-    let idx = select::select("Strategy", &select_items)?;
+    let ctx = SelectContext {
+        header_lines: progress,
+    };
+    let idx = select::select(w, "Strategy", &select_items, &ctx)?;
 
     let key = keys[idx].clone();
     let dotrain = registry
@@ -235,7 +268,12 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
     Ok((key, dotrain))
 }
 
-fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<String> {
+fn pick_deployment(
+    w: &mut impl Write,
+    dotrain: &str,
+    settings: &Option<Vec<String>>,
+    progress: &[String],
+) -> Result<String> {
     let deployments =
         RaindexOrderBuilder::get_deployment_details(dotrain.to_string(), settings.clone())
             .map_err(|err| {
@@ -250,12 +288,7 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
     }
 
     if deployments.len() == 1 {
-        let (key, info) = deployments.into_iter().next().unwrap();
-        eprintln!(
-            "  Deployment: {} — {}",
-            bold(&info.name),
-            info.description
-        );
+        let (key, _) = deployments.into_iter().next().unwrap();
         return Ok(key);
     }
 
@@ -275,30 +308,35 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
         })
         .collect();
 
-    let idx = select::select("Deployment", &select_items)?;
+    let ctx = SelectContext {
+        header_lines: progress,
+    };
+    let idx = select::select(w, "Deployment", &select_items, &ctx)?;
     let key = keys[idx].clone();
     Ok(key)
 }
 
 async fn select_tokens(
+    w: &mut impl Write,
     builder: &mut RaindexOrderBuilder,
     tokens: &[OrderBuilderSelectTokensCfg],
+    progress: &mut Vec<String>,
 ) -> Result<()> {
-    heading("Token Selection");
-
     for token_cfg in tokens {
         let prompt_label = token_cfg.name.as_deref().unwrap_or(&token_cfg.key);
-
-        if let Some(desc) = &token_cfg.description {
-            eprintln!("  {}", desc);
-        }
 
         let available = builder.get_all_tokens(None).await.unwrap_or_default();
 
         let address = if available.is_empty() {
-            Input::new()
+            leave_raw_for_input(w)?;
+            if let Some(desc) = &token_cfg.description {
+                eprintln!("  {}", desc);
+            }
+            let addr: String = Input::new()
                 .with_prompt(format!("{prompt_label} (address)"))
-                .interact_text()?
+                .interact_text()?;
+            enter_raw_for_select(w)?;
+            addr
         } else {
             let mut select_items: Vec<SelectItem> = available
                 .iter()
@@ -320,14 +358,28 @@ async fn select_tokens(
                     .map(|d| format!(" — {d}"))
                     .unwrap_or_default()
             );
-            let idx = select::select(&title, &select_items)?;
+            let ctx = SelectContext {
+                header_lines: progress,
+            };
+            let idx = select::select(w, &title, &select_items, &ctx)?;
 
             if idx < available.len() {
-                format!("{}", available[idx].address)
+                let token = &available[idx];
+                progress.push(format!(
+                    "{}: {} ({})",
+                    bold(prompt_label),
+                    token.symbol,
+                    token.address
+                ));
+                format!("{}", token.address)
             } else {
-                Input::new()
+                leave_raw_for_input(w)?;
+                let addr: String = Input::new()
                     .with_prompt(format!("{prompt_label} address"))
-                    .interact_text()?
+                    .interact_text()?;
+                enter_raw_for_select(w)?;
+                progress.push(format!("{}: {addr}", bold(prompt_label)));
+                addr
             }
         };
 
@@ -346,7 +398,11 @@ async fn select_tokens(
     Ok(())
 }
 
-fn fill_fields(builder: &mut RaindexOrderBuilder) -> Result<()> {
+fn fill_fields(
+    w: &mut impl Write,
+    builder: &mut RaindexOrderBuilder,
+    progress: &mut Vec<String>,
+) -> Result<()> {
     let missing = builder
         .get_missing_field_values()
         .map_err(|err| anyhow::anyhow!("failed to get fields: {}", err.to_readable_msg()))?;
@@ -355,23 +411,19 @@ fn fill_fields(builder: &mut RaindexOrderBuilder) -> Result<()> {
         return Ok(());
     }
 
-    heading("Configuration");
-
     for field in &missing {
-        fill_single_field(builder, field)?;
+        fill_single_field(w, builder, field, progress)?;
     }
 
     Ok(())
 }
 
 fn fill_single_field(
+    w: &mut impl Write,
     builder: &mut RaindexOrderBuilder,
     field: &OrderBuilderFieldDefinitionCfg,
+    progress: &mut Vec<String>,
 ) -> Result<()> {
-    if let Some(desc) = &field.description {
-        eprintln!("  {}", desc);
-    }
-
     let value = match &field.presets {
         Some(presets) if !presets.is_empty() => {
             let show_custom = field.show_custom_field.unwrap_or(true);
@@ -394,16 +446,36 @@ fn fill_single_field(
                 });
             }
 
-            let idx = select::select(&field.name, &select_items)?;
+            let title = match &field.description {
+                Some(desc) => format!("{} — {desc}", field.name),
+                None => field.name.clone(),
+            };
+            let ctx = SelectContext {
+                header_lines: progress,
+            };
+            let idx = select::select(w, &title, &select_items, &ctx)?;
 
             if idx < presets.len() {
                 presets[idx].value.clone()
             } else {
-                Input::new().with_prompt(&field.name).interact_text()?
+                leave_raw_for_input(w)?;
+                let v: String = Input::new().with_prompt(&field.name).interact_text()?;
+                enter_raw_for_select(w)?;
+                v
             }
         }
-        _ => Input::new().with_prompt(&field.name).interact_text()?,
+        _ => {
+            leave_raw_for_input(w)?;
+            if let Some(desc) = &field.description {
+                eprintln!("  {}", desc);
+            }
+            let v: String = Input::new().with_prompt(&field.name).interact_text()?;
+            enter_raw_for_select(w)?;
+            v
+        }
     };
+
+    progress.push(format!("{}: {value}", bold(&field.name)));
 
     builder
         .set_field_value(field.binding.clone(), value)
@@ -418,7 +490,12 @@ fn fill_single_field(
     Ok(())
 }
 
-async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result<()> {
+async fn fill_deposits(
+    w: &mut impl Write,
+    builder: &mut RaindexOrderBuilder,
+    owner: &str,
+    progress: &mut Vec<String>,
+) -> Result<()> {
     let deployment = builder
         .get_current_deployment()
         .map_err(|err| anyhow::anyhow!("failed to get deployment: {}", err.to_readable_msg()))?;
@@ -427,8 +504,6 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
         return Ok(());
     }
 
-    heading("Deposits");
-
     for deposit_cfg in &deployment.deposits {
         let token_display = match builder.get_token_info(deposit_cfg.token_key.clone()).await {
             Ok(info) => {
@@ -436,12 +511,16 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
                     .get_account_balance(format!("{}", info.address), owner.to_string())
                     .await
                 {
-                    eprintln!(
-                        "  {} ({})  Balance: {}",
-                        bold(&info.symbol),
-                        info.name,
-                        bal.formatted_balance()
-                    );
+                    render_progress(
+                        w,
+                        progress,
+                        Some(&format!(
+                            "{} ({}) — Balance: {}",
+                            info.symbol,
+                            info.name,
+                            bal.formatted_balance()
+                        )),
+                    )?;
                 }
                 info.symbol.clone()
             }
@@ -453,11 +532,14 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
             .unwrap_or_default();
 
         let amount = if presets.is_empty() {
-            Input::new()
+            leave_raw_for_input(w)?;
+            let a: String = Input::new()
                 .with_prompt(format!("Deposit {token_display} (blank to skip)"))
                 .default(String::new())
                 .show_default(false)
-                .interact_text()?
+                .interact_text()?;
+            enter_raw_for_select(w)?;
+            a
         } else {
             let mut select_items: Vec<SelectItem> = presets
                 .iter()
@@ -475,14 +557,20 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
                 description: String::new(),
             });
 
-            let idx = select::select(&format!("Deposit {token_display}"), &select_items)?;
+            let ctx = SelectContext {
+                header_lines: progress,
+            };
+            let idx = select::select(w, &format!("Deposit {token_display}"), &select_items, &ctx)?;
 
             if idx < presets.len() {
                 presets[idx].clone()
             } else if idx == presets.len() {
-                Input::new()
+                leave_raw_for_input(w)?;
+                let a: String = Input::new()
                     .with_prompt(format!("Amount ({token_display})"))
-                    .interact_text()?
+                    .interact_text()?;
+                enter_raw_for_select(w)?;
+                a
             } else {
                 continue;
             }
@@ -491,6 +579,8 @@ async fn fill_deposits(builder: &mut RaindexOrderBuilder, owner: &str) -> Result
         if amount.is_empty() {
             continue;
         }
+
+        progress.push(format!("{}: {amount} {token_display}", bold("Deposit")));
 
         builder
             .set_deposit(deposit_cfg.token_key.clone(), amount)
