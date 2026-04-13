@@ -111,6 +111,7 @@ fn format_select_item(name: &str, description: &str) -> String {
 }
 
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
+    let _ = Term::stderr().clear_screen();
     heading("Raindex Strategy Builder");
     eprintln!("  Registry: {}", dim(registry_url));
     eprintln!("  Fetching strategies...");
