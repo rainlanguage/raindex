@@ -51,9 +51,21 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
     let (strategy_key, dotrain) = pick_strategy(&registry)?;
     let settings = registry_settings(&registry);
 
+    // Print progress so far
+    let _ = Term::stderr().clear_screen();
+    heading("Raindex Strategy Builder");
+    eprintln!("  {}: {owner}", bold("Owner"));
+    eprintln!("  {}: {strategy_key}", bold("Strategy"));
+
     // 3. Pick deployment
     let deployment_key = pick_deployment(&dotrain, &settings)?;
 
+    // Reprint progress
+    let _ = Term::stderr().clear_screen();
+    heading("Raindex Strategy Builder");
+    eprintln!("  {}: {owner}", bold("Owner"));
+    eprintln!("  {}: {strategy_key}", bold("Strategy"));
+    eprintln!("  {}: {deployment_key}", bold("Deployment"));
     eprintln!();
     eprintln!("  Initializing builder...");
 
