@@ -301,35 +301,82 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
-            // FuzzySelect with just symbol + address — description shown after
-            let display: Vec<String> = available
-                .iter()
-                .map(|t| format!("{} ({})  {}", t.symbol, t.name, t.address))
-                .collect();
-
-            let mut items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
-            items.push("Enter address manually");
-
-            let idx = FuzzySelect::new()
-                .with_prompt(format!("{prompt_label} — type to search"))
-                .items(&items)
-                .default(0)
-                .max_length(12)
-                .interact()?;
-
-            if idx < available.len() {
-                let token = &available[idx];
+            heading(&format!("{prompt_label} — available tokens"));
+            for token in &available {
                 eprintln!(
-                    "  {} {} {}",
-                    label(&token.symbol),
+                    "  {}  {}  {}",
+                    Style::new().bold().apply_to(&token.symbol),
                     dim(&format!("({})", token.name)),
                     dim(&format!("{}", token.address))
                 );
-                format!("{}", token.address)
-            } else {
-                Input::new()
-                    .with_prompt(format!("{prompt_label} (address)"))
-                    .interact_text()?
+            }
+            eprintln!();
+            eprintln!("  {}", dim("Enter a symbol from the list above, or paste an address."));
+
+            loop {
+                let input: String = Input::new()
+                    .with_prompt(prompt_label)
+                    .interact_text()?;
+
+                let input_lower = input.trim().to_lowercase();
+
+                // Match by symbol (case-insensitive)
+                if let Some(token) = available
+                    .iter()
+                    .find(|t| t.symbol.to_lowercase() == input_lower)
+                {
+                    eprintln!(
+                        "  {} {} {}",
+                        label(&token.symbol),
+                        dim(&format!("({})", token.name)),
+                        dim(&format!("{}", token.address))
+                    );
+                    break format!("{}", token.address);
+                }
+
+                // Match by address (starts with 0x)
+                if input.trim().starts_with("0x") && input.trim().len() == 42 {
+                    break input.trim().to_string();
+                }
+
+                // Match by name substring
+                let matches: Vec<_> = available
+                    .iter()
+                    .filter(|t| {
+                        t.name.to_lowercase().contains(&input_lower)
+                            || t.symbol.to_lowercase().contains(&input_lower)
+                    })
+                    .collect();
+
+                if matches.len() == 1 {
+                    let token = matches[0];
+                    eprintln!(
+                        "  {} {} {}",
+                        label(&token.symbol),
+                        dim(&format!("({})", token.name)),
+                        dim(&format!("{}", token.address))
+                    );
+                    break format!("{}", token.address);
+                }
+
+                if matches.len() > 1 {
+                    eprintln!("  Multiple matches:");
+                    for token in &matches {
+                        eprintln!(
+                            "    {}  {}",
+                            Style::new().bold().apply_to(&token.symbol),
+                            dim(&format!("({})", token.name))
+                        );
+                    }
+                    eprintln!("  Be more specific.");
+                    continue;
+                }
+
+                eprintln!(
+                    "  {} No token found for '{}'. Enter a symbol or 0x address.",
+                    Style::new().red().apply_to("!"),
+                    input.trim()
+                );
             }
         };
 
