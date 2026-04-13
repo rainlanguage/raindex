@@ -1488,7 +1488,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
                     page_size: DEFAULT_PAGE_SIZE,
                 },
             )
-            .await;
+            .await?;
 
         let vaults = vaults
             .iter()
@@ -1580,7 +1580,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
             multi_subgraph_args.values().flatten().cloned().collect(),
         );
 
-        let token_list = client.tokens_list().await;
+        let token_list = client.tokens_list().await?;
         token_list
             .iter()
             .map(|v| {

@@ -13,6 +13,8 @@ pub enum CynicClientError {
     Empty,
     #[error("Request Error: {0}")]
     Request(#[from] reqwest::Error),
+    #[error("HTTP {status}: {body}")]
+    HttpError { status: u16, body: String },
 }
 
 pub trait CynicClient {
@@ -29,6 +31,15 @@ pub trait CynicClient {
             .json(&request_body)
             .send()
             .await?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(CynicClientError::HttpError {
+                status: status.as_u16(),
+                body,
+            });
+        }
 
         let response_deserialized: GraphQlResponse<R> =
             response.json::<GraphQlResponse<R>>().await?;
