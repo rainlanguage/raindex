@@ -1,7 +1,7 @@
 use alloy::primitives::hex;
 use anyhow::{Context, Result};
-use console::Style;
-use dialoguer::{FuzzySelect, Input, Select};
+use console::{Style, Term};
+use dialoguer::{Input, Select};
 use rain_orderbook_app_settings::order_builder::{
     OrderBuilderFieldDefinitionCfg, OrderBuilderSelectTokensCfg,
 };
@@ -26,6 +26,12 @@ fn dim(text: &str) -> String {
 
 fn separator() {
     eprintln!("{}", dim("────────────────────────────────────────"));
+}
+
+/// Clear the screen so dialoguer's Select has nothing above to wipe.
+/// Previous output scrolls into terminal scrollback and remains accessible.
+fn clear_for_select() {
+    let _ = Term::stderr().clear_screen();
 }
 
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
@@ -152,7 +158,6 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
         ));
     }
 
-    // Output choice — only 2 items, short labels, no wipe issue
     let output_choice = Select::new()
         .with_prompt("Output")
         .items(&[
@@ -210,13 +215,30 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         anyhow::bail!("no valid strategies found in registry");
     }
 
-    // Show the list FIRST with just the keys — no content above to get wiped
     let keys: Vec<&String> = details.valid.keys().collect();
-    let display: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
+    let display: Vec<String> = keys
+        .iter()
+        .map(|key| {
+            let info = &details.valid[*key];
+            let desc = info
+                .short_description
+                .as_deref()
+                .unwrap_or(&info.description);
+            format!(
+                "{}  {}",
+                Style::new().bold().apply_to(key),
+                dim(desc)
+            )
+        })
+        .collect();
+    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
 
-    let idx = FuzzySelect::new()
+    // Clear screen so Select doesn't wipe prior output
+    clear_for_select();
+
+    let idx = Select::new()
         .with_prompt("Strategy")
-        .items(&display)
+        .items(&items)
         .default(0)
         .interact()?;
 
@@ -228,7 +250,6 @@ fn pick_strategy(registry: &DotrainRegistry) -> Result<(String, String)> {
         .ok_or_else(|| anyhow::anyhow!("strategy '{key}' not found"))?
         .clone();
 
-    // Show description AFTER selection
     let info = &details.valid[&key];
     heading(&info.name);
     eprintln!("  {}", info.description);
@@ -257,27 +278,34 @@ fn pick_deployment(dotrain: &str, settings: &Option<Vec<String>>) -> Result<Stri
         return Ok(key);
     }
 
-    // Show just names in the selector — description shown after
     let keys: Vec<&String> = deployments.keys().collect();
-    let names: Vec<String> = keys
+    let display: Vec<String> = keys
         .iter()
         .map(|key| {
             let info = &deployments[*key];
-            format!("{} ({})", info.name, key)
+            let desc = info
+                .short_description
+                .as_deref()
+                .unwrap_or(&info.description);
+            format!(
+                "{}  {}",
+                Style::new().bold().apply_to(&info.name),
+                dim(desc)
+            )
         })
         .collect();
-    let display: Vec<&str> = names.iter().map(|n| n.as_str()).collect();
+    let items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
+
+    clear_for_select();
 
     let idx = Select::new()
         .with_prompt("Deployment")
-        .items(&display)
+        .items(&items)
         .default(0)
         .interact()?;
 
     let key = keys[idx].clone();
     let info = &deployments[&key];
-
-    // Show description AFTER selection
     heading(&format!("Deployment: {}", info.name));
     eprintln!("  {}", info.description);
 
@@ -301,82 +329,46 @@ async fn select_tokens(
                 .with_prompt(format!("{prompt_label} (address)"))
                 .interact_text()?
         } else {
-            heading(&format!("{prompt_label} — available tokens"));
-            for token in &available {
+            let display: Vec<String> = available
+                .iter()
+                .map(|t| {
+                    format!(
+                        "{}  {}  {}",
+                        Style::new().bold().apply_to(&t.symbol),
+                        dim(&format!("({})", t.name)),
+                        dim(&format!("{}", t.address))
+                    )
+                })
+                .collect();
+
+            let mut items: Vec<&str> = display.iter().map(|s| s.as_str()).collect();
+            items.push("Enter address manually");
+
+            clear_for_select();
+            if let Some(desc) = &token_cfg.description {
+                eprintln!("  {}", dim(desc));
+                eprintln!();
+            }
+
+            let idx = Select::new()
+                .with_prompt(prompt_label)
+                .items(&items)
+                .default(0)
+                .interact()?;
+
+            if idx < available.len() {
+                let token = &available[idx];
                 eprintln!(
-                    "  {}  {}  {}",
-                    Style::new().bold().apply_to(&token.symbol),
+                    "  {} {} {}",
+                    label(&token.symbol),
                     dim(&format!("({})", token.name)),
                     dim(&format!("{}", token.address))
                 );
-            }
-            eprintln!();
-            eprintln!("  {}", dim("Enter a symbol from the list above, or paste an address."));
-
-            loop {
-                let input: String = Input::new()
-                    .with_prompt(prompt_label)
-                    .interact_text()?;
-
-                let input_lower = input.trim().to_lowercase();
-
-                // Match by symbol (case-insensitive)
-                if let Some(token) = available
-                    .iter()
-                    .find(|t| t.symbol.to_lowercase() == input_lower)
-                {
-                    eprintln!(
-                        "  {} {} {}",
-                        label(&token.symbol),
-                        dim(&format!("({})", token.name)),
-                        dim(&format!("{}", token.address))
-                    );
-                    break format!("{}", token.address);
-                }
-
-                // Match by address (starts with 0x)
-                if input.trim().starts_with("0x") && input.trim().len() == 42 {
-                    break input.trim().to_string();
-                }
-
-                // Match by name substring
-                let matches: Vec<_> = available
-                    .iter()
-                    .filter(|t| {
-                        t.name.to_lowercase().contains(&input_lower)
-                            || t.symbol.to_lowercase().contains(&input_lower)
-                    })
-                    .collect();
-
-                if matches.len() == 1 {
-                    let token = matches[0];
-                    eprintln!(
-                        "  {} {} {}",
-                        label(&token.symbol),
-                        dim(&format!("({})", token.name)),
-                        dim(&format!("{}", token.address))
-                    );
-                    break format!("{}", token.address);
-                }
-
-                if matches.len() > 1 {
-                    eprintln!("  Multiple matches:");
-                    for token in &matches {
-                        eprintln!(
-                            "    {}  {}",
-                            Style::new().bold().apply_to(&token.symbol),
-                            dim(&format!("({})", token.name))
-                        );
-                    }
-                    eprintln!("  Be more specific.");
-                    continue;
-                }
-
-                eprintln!(
-                    "  {} No token found for '{}'. Enter a symbol or 0x address.",
-                    Style::new().red().apply_to("!"),
-                    input.trim()
-                );
+                format!("{}", token.address)
+            } else {
+                Input::new()
+                    .with_prompt(format!("{prompt_label} (address)"))
+                    .interact_text()?
             }
         };
 
@@ -417,7 +409,6 @@ fn fill_single_field(
     builder: &mut RaindexOrderBuilder,
     field: &OrderBuilderFieldDefinitionCfg,
 ) -> Result<()> {
-    // Show description before the input (Input doesn't redraw/wipe)
     if let Some(desc) = &field.description {
         eprintln!("  {}", dim(desc));
     }

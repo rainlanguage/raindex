@@ -34,7 +34,7 @@ serde_json = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 console = "0.15"
-dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+dialoguer = "0.11"
 flate2 = "1.0.34"
 reqwest = { workspace = true }
 rusqlite = { version = "0.31", features = ["functions"] }
