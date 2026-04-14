@@ -1,10 +1,10 @@
-//! A Select widget rendered directly to a writer.
+//! Select and Input widgets rendered directly to a writer.
 //! The caller manages the alternate screen lifecycle.
 
 use anyhow::Result;
 use crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEvent},
+    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{self, ClearType},
 };
@@ -15,10 +15,124 @@ pub struct SelectItem {
     pub description: String,
 }
 
+/// Text input rendered in the alt screen.
+/// Shows header lines for context, a prompt, and an editable line.
+pub fn input(
+    w: &mut impl Write,
+    prompt: &str,
+    description: Option<&str>,
+    default: Option<&str>,
+    allow_empty: bool,
+    header_lines: &[String],
+) -> Result<String> {
+    let mut buffer = String::new();
+
+    loop {
+        render_input(w, prompt, description, default, &buffer, header_lines)?;
+
+        if let Event::Key(KeyEvent {
+            code, modifiers, ..
+        }) = event::read()?
+        {
+            match code {
+                KeyCode::Char('c') if modifiers.contains(KeyModifiers::CONTROL) => {
+                    anyhow::bail!("cancelled");
+                }
+                KeyCode::Char(c) => buffer.push(c),
+                KeyCode::Backspace => {
+                    buffer.pop();
+                }
+                KeyCode::Enter => {
+                    if buffer.is_empty() {
+                        if let Some(d) = default {
+                            return Ok(d.to_string());
+                        }
+                        if allow_empty {
+                            return Ok(String::new());
+                        }
+                        // else loop — require non-empty
+                    } else {
+                        return Ok(buffer);
+                    }
+                }
+                KeyCode::Esc => anyhow::bail!("cancelled"),
+                _ => {}
+            }
+        }
+    }
+}
+
+fn render_input(
+    w: &mut impl Write,
+    prompt: &str,
+    description: Option<&str>,
+    default: Option<&str>,
+    buffer: &str,
+    header_lines: &[String],
+) -> Result<()> {
+    let (cols, _) = terminal::size()?;
+    let cols = cols as usize;
+
+    execute!(w, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
+
+    for line in header_lines {
+        write!(w, "  {line}\r\n")?;
+    }
+    if !header_lines.is_empty() {
+        write!(w, "\r\n")?;
+    }
+
+    write!(w, "  \x1b[1;4m{prompt}\x1b[0m\r\n\r\n")?;
+
+    if let Some(desc) = description {
+        // Simple word wrap for description
+        let usable = cols.saturating_sub(4);
+        let mut col = 0usize;
+        write!(w, "  \x1b[2m")?;
+        for word in desc.split_whitespace() {
+            let wlen = word.len();
+            if col == 0 {
+                write!(w, "{word}")?;
+                col = wlen;
+            } else if col + 1 + wlen <= usable {
+                write!(w, " {word}")?;
+                col += 1 + wlen;
+            } else {
+                write!(w, "\x1b[0m\r\n  \x1b[2m{word}")?;
+                col = wlen;
+            }
+        }
+        write!(w, "\x1b[0m\r\n\r\n")?;
+    }
+
+    // The editable line
+    write!(w, "  > \x1b[36m{buffer}\x1b[0m")?;
+    if buffer.is_empty() {
+        if let Some(d) = default {
+            write!(w, "\x1b[2m{d}\x1b[0m")?;
+        }
+    }
+    write!(w, "\x1b[?25h")?; // show cursor
+
+    w.flush()?;
+    Ok(())
+}
+
 /// Header lines to display above the select list.
 /// These show prior selections / progress.
 pub struct SelectContext<'a> {
     pub header_lines: &'a [String],
+    pub description: Option<&'a str>,
+}
+
+impl<'a> SelectContext<'a> {
+    pub fn new(header_lines: &'a [String]) -> Self {
+        Self { header_lines, description: None }
+    }
+    pub fn with_description(mut self, desc: &'a str) -> Self {
+        self.description = Some(desc);
+        self
+    }
 }
 
 /// Run a select list on the given writer.
@@ -139,10 +253,39 @@ fn render(
         write!(w, "\r\n")?;
     }
 
-    // Title
-    write!(w, "  \x1b[1;4m{title}\x1b[0m\r\n\r\n")?;
+    // Title (bold + underlined)
+    write!(w, "  \x1b[1;4m{title}\x1b[0m\r\n")?;
 
-    let header_rows = ctx.header_lines.len() + 4;
+    // Description under title (dim, word-wrapped), no underline
+    let mut desc_lines = 0;
+    if let Some(desc) = ctx.description {
+        let usable = cols.saturating_sub(4);
+        let mut col = 0usize;
+        write!(w, "  \x1b[2m")?;
+        for word in desc.split_whitespace() {
+            let wlen = word.len();
+            if col == 0 {
+                write!(w, "{word}")?;
+                col = wlen;
+            } else if col + 1 + wlen <= usable {
+                write!(w, " {word}")?;
+                col += 1 + wlen;
+            } else {
+                write!(w, "\x1b[0m\r\n  \x1b[2m{word}")?;
+                col = wlen;
+                desc_lines += 1;
+            }
+        }
+        write!(w, "\x1b[0m\r\n")?;
+        desc_lines += 1;
+    }
+    write!(w, "\r\n")?;
+
+    let header_rows = ctx.header_lines.len()
+        + if ctx.header_lines.is_empty() { 0 } else { 1 }
+        + 1 // title
+        + desc_lines
+        + 1; // blank before items
     let max_rows = rows.saturating_sub(header_rows + 2);
     let mut rows_used = 0;
 
@@ -183,9 +326,8 @@ fn render(
     }
 
     // Scroll indicators
-    let first_item_row = header_rows;
     if scroll_offset > 0 {
-        execute!(w, cursor::MoveTo(cols as u16 - 3, first_item_row as u16))?;
+        execute!(w, cursor::MoveTo(cols as u16 - 3, header_rows as u16))?;
         write!(w, " ▲")?;
     }
     if scroll_offset + count_items_fitting(items, scroll_offset, max_rows) < items.len() {

@@ -3,7 +3,6 @@ use alloy::primitives::hex;
 use anyhow::{Context, Result};
 use console::Style;
 use crossterm::{cursor, execute, terminal};
-use dialoguer::Input;
 use rain_orderbook_app_settings::order_builder::{
     OrderBuilderFieldDefinitionCfg, OrderBuilderSelectTokensCfg,
 };
@@ -19,7 +18,7 @@ fn dim(text: &str) -> String {
     Style::new().dim().apply_to(text).to_string()
 }
 
-/// Enter alternate screen, run the wizard, leave alternate screen.
+/// Enter alternate screen once, run the entire wizard there, leave at the end.
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
     eprintln!("  Fetching strategies from {}...", dim(registry_url));
 
@@ -27,31 +26,24 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
         .await
         .map_err(|err| anyhow::anyhow!("{}", err.to_readable_msg()))?;
 
-    // Collect progress lines to show as context on each screen
-    let mut progress: Vec<String> = Vec::new();
-
-    // Enter alternate screen for the whole wizard
     let mut w = stderr();
     terminal::enable_raw_mode()?;
     execute!(w, terminal::EnterAlternateScreen, cursor::Hide)?;
 
+    let mut progress: Vec<String> = Vec::new();
     let result = run_wizard(&mut w, &registry, &mut progress).await;
 
-    // Leave alternate screen
     execute!(w, terminal::LeaveAlternateScreen, cursor::Show)?;
     terminal::disable_raw_mode()?;
 
-    // After leaving alt screen, print the result to the real terminal
     match result {
         Ok(output) => {
-            // Print summary to stderr
             eprintln!();
             for line in &progress {
                 eprintln!("  {line}");
             }
             eprintln!();
 
-            // Print calldata to stdout
             for line in &output {
                 println!("{line}");
             }
@@ -66,12 +58,15 @@ async fn run_wizard(
     registry: &DotrainRegistry,
     progress: &mut Vec<String>,
 ) -> Result<Vec<String>> {
-    // 1. Owner — need to briefly leave raw mode for Input
-    leave_raw_for_input(w)?;
-    let owner: String = Input::new()
-        .with_prompt("Owner address (0x...)")
-        .interact_text()?;
-    enter_raw_for_select(w)?;
+    // 1. Owner
+    let owner = select::input(
+        w,
+        "Owner address",
+        Some("The wallet that will own this order and sign the deploy transactions."),
+        None,
+        false,
+        progress,
+    )?;
     progress.push(format!("{}: {owner}", bold("Owner")));
 
     // 2. Strategy
@@ -84,7 +79,6 @@ async fn run_wizard(
     let deployment_key = pick_deployment(w, &dotrain, &settings, progress)?;
     progress.push(format!("{}: {deployment_key}", bold("Deployment")));
 
-    // Show "initializing" in alt screen
     render_progress(w, progress, Some("Initializing builder..."))?;
 
     let mut builder =
@@ -165,20 +159,19 @@ async fn run_wizard(
             description: String::new(),
         },
     ];
-    let ctx = SelectContext {
-        header_lines: progress,
-    };
+    let ctx = SelectContext::new(progress);
     let output_choice = select::select(w, "Output", &output_items, &ctx)?;
 
     match output_choice {
         1 => {
-            // Save to file — need Input prompt
-            leave_raw_for_input(w)?;
-            let path: String = Input::new()
-                .with_prompt("Output file path")
-                .default("deploy.calldata".to_string())
-                .interact_text()?;
-            enter_raw_for_select(w)?;
+            let path = select::input(
+                w,
+                "Output file path",
+                None,
+                Some("deploy.calldata"),
+                false,
+                progress,
+            )?;
 
             let mut file =
                 std::fs::File::create(&path).with_context(|| format!("creating {path}"))?;
@@ -186,8 +179,6 @@ async fn run_wizard(
                 writeln!(file, "{line}")?;
             }
             progress.push(format!("  Wrote to {path}"));
-
-            // Return empty — file was written instead
             Ok(Vec::new())
         }
         _ => Ok(calldata_lines),
@@ -200,7 +191,6 @@ fn render_progress(w: &mut impl Write, progress: &[String], status: Option<&str>
         cursor::MoveTo(0, 0),
         terminal::Clear(terminal::ClearType::All)
     )?;
-    write!(w, "  \x1b[1;4mRaindex Strategy Builder\x1b[0m\r\n\r\n")?;
     for line in progress {
         write!(w, "  {line}\r\n")?;
     }
@@ -208,18 +198,6 @@ fn render_progress(w: &mut impl Write, progress: &[String], status: Option<&str>
         write!(w, "\r\n  {msg}\r\n")?;
     }
     w.flush()?;
-    Ok(())
-}
-
-fn leave_raw_for_input(w: &mut impl Write) -> Result<()> {
-    execute!(w, terminal::LeaveAlternateScreen, cursor::Show)?;
-    terminal::disable_raw_mode()?;
-    Ok(())
-}
-
-fn enter_raw_for_select(w: &mut impl Write) -> Result<()> {
-    terminal::enable_raw_mode()?;
-    execute!(w, terminal::EnterAlternateScreen, cursor::Hide)?;
     Ok(())
 }
 
@@ -252,9 +230,7 @@ fn pick_strategy(
         })
         .collect();
 
-    let ctx = SelectContext {
-        header_lines: progress,
-    };
+    let ctx = SelectContext::new(progress);
     let idx = select::select(w, "Strategy", &select_items, &ctx)?;
 
     let key = keys[idx].clone();
@@ -308,9 +284,7 @@ fn pick_deployment(
         })
         .collect();
 
-    let ctx = SelectContext {
-        header_lines: progress,
-    };
+    let ctx = SelectContext::new(progress);
     let idx = select::select(w, "Deployment", &select_items, &ctx)?;
     let key = keys[idx].clone();
     Ok(key)
@@ -328,15 +302,14 @@ async fn select_tokens(
         let available = builder.get_all_tokens(None).await.unwrap_or_default();
 
         let address = if available.is_empty() {
-            leave_raw_for_input(w)?;
-            if let Some(desc) = &token_cfg.description {
-                eprintln!("  {}", desc);
-            }
-            let addr: String = Input::new()
-                .with_prompt(format!("{prompt_label} (address)"))
-                .interact_text()?;
-            enter_raw_for_select(w)?;
-            addr
+            select::input(
+                w,
+                &format!("{prompt_label} (address)"),
+                token_cfg.description.as_deref(),
+                None,
+                false,
+                progress,
+            )?
         } else {
             let mut select_items: Vec<SelectItem> = available
                 .iter()
@@ -350,18 +323,11 @@ async fn select_tokens(
                 description: String::new(),
             });
 
-            let title = format!(
-                "{prompt_label}{}",
-                token_cfg
-                    .description
-                    .as_ref()
-                    .map(|d| format!(" — {d}"))
-                    .unwrap_or_default()
-            );
-            let ctx = SelectContext {
-                header_lines: progress,
-            };
-            let idx = select::select(w, &title, &select_items, &ctx)?;
+            let mut ctx = SelectContext::new(progress);
+            if let Some(desc) = &token_cfg.description {
+                ctx = ctx.with_description(desc);
+            }
+            let idx = select::select(w, prompt_label, &select_items, &ctx)?;
 
             if idx < available.len() {
                 let token = &available[idx];
@@ -373,11 +339,14 @@ async fn select_tokens(
                 ));
                 format!("{}", token.address)
             } else {
-                leave_raw_for_input(w)?;
-                let addr: String = Input::new()
-                    .with_prompt(format!("{prompt_label} address"))
-                    .interact_text()?;
-                enter_raw_for_select(w)?;
+                let addr = select::input(
+                    w,
+                    &format!("{prompt_label} address"),
+                    None,
+                    None,
+                    false,
+                    progress,
+                )?;
                 progress.push(format!("{}: {addr}", bold(prompt_label)));
                 addr
             }
@@ -446,33 +415,26 @@ fn fill_single_field(
                 });
             }
 
-            let title = match &field.description {
-                Some(desc) => format!("{} — {desc}", field.name),
-                None => field.name.clone(),
-            };
-            let ctx = SelectContext {
-                header_lines: progress,
-            };
-            let idx = select::select(w, &title, &select_items, &ctx)?;
+            let mut ctx = SelectContext::new(progress);
+            if let Some(desc) = &field.description {
+                ctx = ctx.with_description(desc);
+            }
+            let idx = select::select(w, &field.name, &select_items, &ctx)?;
 
             if idx < presets.len() {
                 presets[idx].value.clone()
             } else {
-                leave_raw_for_input(w)?;
-                let v: String = Input::new().with_prompt(&field.name).interact_text()?;
-                enter_raw_for_select(w)?;
-                v
+                select::input(w, &field.name, field.description.as_deref(), None, false, progress)?
             }
         }
-        _ => {
-            leave_raw_for_input(w)?;
-            if let Some(desc) = &field.description {
-                eprintln!("  {}", desc);
-            }
-            let v: String = Input::new().with_prompt(&field.name).interact_text()?;
-            enter_raw_for_select(w)?;
-            v
-        }
+        _ => select::input(
+            w,
+            &field.name,
+            field.description.as_deref(),
+            None,
+            false,
+            progress,
+        )?,
     };
 
     progress.push(format!("{}: {value}", bold(&field.name)));
@@ -505,41 +467,43 @@ async fn fill_deposits(
     }
 
     for deposit_cfg in &deployment.deposits {
-        let token_display = match builder.get_token_info(deposit_cfg.token_key.clone()).await {
+        let (token_display, balance_desc) = match builder
+            .get_token_info(deposit_cfg.token_key.clone())
+            .await
+        {
             Ok(info) => {
-                if let Ok(bal) = builder
+                let balance = builder
                     .get_account_balance(format!("{}", info.address), owner.to_string())
                     .await
-                {
-                    render_progress(
-                        w,
-                        progress,
-                        Some(&format!(
-                            "{} ({}) — Balance: {}",
-                            info.symbol,
-                            info.name,
-                            bal.formatted_balance()
-                        )),
-                    )?;
-                }
-                info.symbol.clone()
+                    .ok()
+                    .map(|b| b.formatted_balance().to_string());
+                let desc = balance
+                    .map(|b| format!("Your balance: {b} {}", info.symbol))
+                    .unwrap_or_default();
+                (info.symbol.clone(), desc)
             }
-            Err(_) => deposit_cfg.token_key.clone(),
+            Err(_) => (deposit_cfg.token_key.clone(), String::new()),
         };
 
         let presets = builder
             .get_deposit_presets(deposit_cfg.token_key.clone())
             .unwrap_or_default();
 
+        let desc_opt = if balance_desc.is_empty() {
+            None
+        } else {
+            Some(balance_desc.as_str())
+        };
+
         let amount = if presets.is_empty() {
-            leave_raw_for_input(w)?;
-            let a: String = Input::new()
-                .with_prompt(format!("Deposit {token_display} (blank to skip)"))
-                .default(String::new())
-                .show_default(false)
-                .interact_text()?;
-            enter_raw_for_select(w)?;
-            a
+            select::input(
+                w,
+                &format!("Deposit amount ({token_display}) — blank to skip"),
+                desc_opt,
+                None,
+                true,
+                progress,
+            )?
         } else {
             let mut select_items: Vec<SelectItem> = presets
                 .iter()
@@ -557,20 +521,24 @@ async fn fill_deposits(
                 description: String::new(),
             });
 
-            let ctx = SelectContext {
-                header_lines: progress,
-            };
-            let idx = select::select(w, &format!("Deposit {token_display}"), &select_items, &ctx)?;
+            let title = format!("Deposit {token_display}");
+            let mut ctx = SelectContext::new(progress);
+            if !balance_desc.is_empty() {
+                ctx = ctx.with_description(&balance_desc);
+            }
+            let idx = select::select(w, &title, &select_items, &ctx)?;
 
             if idx < presets.len() {
                 presets[idx].clone()
             } else if idx == presets.len() {
-                leave_raw_for_input(w)?;
-                let a: String = Input::new()
-                    .with_prompt(format!("Amount ({token_display})"))
-                    .interact_text()?;
-                enter_raw_for_select(w)?;
-                a
+                select::input(
+                    w,
+                    &format!("Amount ({token_display})"),
+                    None,
+                    None,
+                    false,
+                    progress,
+                )?
             } else {
                 continue;
             }
