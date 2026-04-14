@@ -424,7 +424,14 @@ fn fill_single_field(
             if idx < presets.len() {
                 presets[idx].value.clone()
             } else {
-                select::input(w, &field.name, field.description.as_deref(), None, false, progress)?
+                select::input(
+                    w,
+                    &field.name,
+                    field.description.as_deref(),
+                    None,
+                    false,
+                    progress,
+                )?
             }
         }
         _ => select::input(
@@ -467,23 +474,21 @@ async fn fill_deposits(
     }
 
     for deposit_cfg in &deployment.deposits {
-        let (token_display, balance_desc) = match builder
-            .get_token_info(deposit_cfg.token_key.clone())
-            .await
-        {
-            Ok(info) => {
-                let balance = builder
-                    .get_account_balance(format!("{}", info.address), owner.to_string())
-                    .await
-                    .ok()
-                    .map(|b| b.formatted_balance().to_string());
-                let desc = balance
-                    .map(|b| format!("Your balance: {b} {}", info.symbol))
-                    .unwrap_or_default();
-                (info.symbol.clone(), desc)
-            }
-            Err(_) => (deposit_cfg.token_key.clone(), String::new()),
-        };
+        let (token_display, balance_desc) =
+            match builder.get_token_info(deposit_cfg.token_key.clone()).await {
+                Ok(info) => {
+                    let balance = builder
+                        .get_account_balance(format!("{}", info.address), owner.to_string())
+                        .await
+                        .ok()
+                        .map(|b| b.formatted_balance().to_string());
+                    let desc = balance
+                        .map(|b| format!("Your balance: {b} {}", info.symbol))
+                        .unwrap_or_default();
+                    (info.symbol.clone(), desc)
+                }
+                Err(_) => (deposit_cfg.token_key.clone(), String::new()),
+            };
 
         let presets = builder
             .get_deposit_presets(deposit_cfg.token_key.clone())
