@@ -175,6 +175,42 @@ impl MultiOrderbookSubgraphClient {
         all_trades
     }
 
+    pub async fn trades_by_owner(
+        &self,
+        owner: String,
+        start_timestamp: Option<u64>,
+        end_timestamp: Option<u64>,
+        orderbook_in: Option<Vec<String>>,
+    ) -> Vec<SgTradeWithSubgraphName> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let owner = owner.clone();
+            let orderbook_in = orderbook_in.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url);
+                let trades = client
+                    .trades_by_owner_all(owner, start_timestamp, end_timestamp, orderbook_in)
+                    .await?;
+                let wrapped_trades: Vec<SgTradeWithSubgraphName> = trades
+                    .into_iter()
+                    .map(|trade| SgTradeWithSubgraphName {
+                        trade,
+                        subgraph_name: subgraph.name.clone(),
+                    })
+                    .collect();
+                Ok::<_, OrderbookSubgraphClientError>(wrapped_trades)
+            }
+        });
+
+        let results = join_all(futures).await;
+
+        results
+            .into_iter()
+            .filter_map(Result::ok)
+            .flatten()
+            .collect()
+    }
+
     pub async fn tokens_list(
         &self,
     ) -> Result<Vec<SgErc20WithSubgraphName>, OrderbookSubgraphClientError> {
@@ -1378,5 +1414,249 @@ mod tests {
             .vaults_list(default_vault_filter_args(), default_pagination_args())
             .await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_no_subgraphs() {
+        let client = MultiOrderbookSubgraphClient::new(vec![]);
+        let result = client
+            .trades_by_owner("0xowner".to_string(), None, None, None)
+            .await;
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_one_subgraph_returns_trades() {
+        let server = MockServer::start_async().await;
+        let sg_url = Url::parse(&server.url("")).unwrap();
+        let sg_name = "sg_owner";
+        let owner = "0xowner_abc";
+
+        let trade1 = default_sg_trade();
+        server.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade1]}}));
+        });
+        server.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg_url,
+            name: sg_name.to_string(),
+        }]);
+
+        let trades = client
+            .trades_by_owner(owner.to_string(), None, None, None)
+            .await;
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].trade.id, trade1.id);
+        assert_eq!(trades[0].subgraph_name, sg_name);
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_multiple_subgraphs_merge() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let sg1_name = "sg_one";
+
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+        let sg2_name = "sg_two";
+
+        let owner = "0xowner_multi";
+        let trade_s1 = default_sg_trade();
+        let trade_s2 = default_sg_trade();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server1.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s2]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: sg1_name.to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: sg2_name.to_string(),
+            },
+        ]);
+
+        let trades = client
+            .trades_by_owner(owner.to_string(), None, None, None)
+            .await;
+        assert_eq!(trades.len(), 2);
+
+        let names: std::collections::HashSet<_> =
+            trades.iter().map(|t| t.subgraph_name.clone()).collect();
+        assert!(names.contains(sg1_name));
+        assert!(names.contains(sg2_name));
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_with_time_filters() {
+        let server = MockServer::start_async().await;
+        let sg_url = Url::parse(&server.url("")).unwrap();
+        let sg_name = "sg_time";
+        let owner = "0xowner_time";
+
+        let trade1 = default_sg_trade();
+        server.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade1]}}));
+        });
+        server.mock(|when, then| {
+            when.method(POST).path("/").body_contains(owner);
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg_url,
+            name: sg_name.to_string(),
+        }]);
+
+        let trades = client
+            .trades_by_owner(owner.to_string(), Some(1000), Some(2000), None)
+            .await;
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].trade.id, trade1.id);
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_with_orderbook_filter() {
+        let server = MockServer::start_async().await;
+        let sg_url = Url::parse(&server.url("")).unwrap();
+        let sg_name = "sg_ob_filter";
+        let owner = "0xowner_ob";
+        let orderbook_addr = "0x1234567890abcdef1234567890abcdef12345678";
+
+        let trade1 = default_sg_trade();
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(owner)
+                .body_contains(orderbook_addr);
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade1]}}));
+        });
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(owner)
+                .body_contains(orderbook_addr);
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg_url,
+            name: sg_name.to_string(),
+        }]);
+
+        let trades = client
+            .trades_by_owner(
+                owner.to_string(),
+                None,
+                None,
+                Some(vec![orderbook_addr.to_string()]),
+            )
+            .await;
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].trade.id, trade1.id);
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_one_subgraph_errors_others_succeed() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let sg1_name = "sg_one_ok";
+
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+        let sg2_name = "sg_two_error";
+
+        let owner = "0xowner_partial";
+        let trade_s1 = default_sg_trade();
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(json!({"data": {"trades": []}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: sg1_name.to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: sg2_name.to_string(),
+            },
+        ]);
+        let trades = client
+            .trades_by_owner(owner.to_string(), None, None, None)
+            .await;
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].trade.id, trade_s1.id);
+        assert_eq!(trades[0].subgraph_name, sg1_name);
+    }
+
+    #[tokio::test]
+    async fn test_trades_by_owner_all_subgraphs_error() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one_err".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+        let trades = client
+            .trades_by_owner("0xowner_all_err".to_string(), None, None, None)
+            .await;
+        assert!(trades.is_empty());
     }
 }
