@@ -1,3 +1,4 @@
+mod describe;
 mod interactive;
 mod select;
 mod tokens;
@@ -26,6 +27,12 @@ pub struct StrategyBuilder {
         help = "List all tokens registered for --strategy + --deployment as markdown"
     )]
     tokens: bool,
+
+    #[arg(
+        long,
+        help = "Describe the registry — list strategies, deployments, fields, tokens, and usage as markdown"
+    )]
+    describe: bool,
 
     #[arg(long, help = "Order/strategy key from the registry")]
     strategy: Option<String>,
@@ -78,6 +85,9 @@ fn parse_key_value_pairs(args: &[String]) -> Result<HashMap<String, String>> {
 
 impl Execute for StrategyBuilder {
     async fn execute(&self) -> Result<()> {
+        if self.describe {
+            return describe::run_describe(&self.registry).await;
+        }
         if self.interactive {
             return interactive::run_interactive(&self.registry).await;
         }
