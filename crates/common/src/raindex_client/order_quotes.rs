@@ -1,9 +1,13 @@
 use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
+use alloy::primitives::Address;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::OrderV4;
-use rain_orderbook_quote::{get_order_quotes, BatchOrderQuotesResponse, OrderQuoteValue, Pair};
+use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use rain_orderbook_quote::{
+    get_order_quotes, BatchOrderQuotesResponse, NoopInjector, OrderQuoteValue, Pair,
+    SignedContextInjector,
+};
 use rain_orderbook_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
 
@@ -17,6 +21,12 @@ pub struct RaindexOrderQuote {
     pub success: bool,
     #[tsify(optional)]
     pub error: Option<String>,
+    /// Composed signed context that was attached to the quote RPC: oracle
+    /// entries first, then any injector-contributed entries. Propagated so
+    /// the candidate builder can reuse the same context the quote saw.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[tsify(optional)]
+    pub signed_context: Vec<SignedContextV1>,
 }
 impl_wasm_traits!(RaindexOrderQuote);
 impl RaindexOrderQuote {
@@ -32,6 +42,7 @@ impl RaindexOrderQuote {
                 .transpose()?,
             success: value.success,
             error: value.error,
+            signed_context: value.signed_context,
         })
     }
 }
@@ -129,6 +140,44 @@ impl RaindexOrder {
             block_number,
             rpcs.iter().map(|s| s.to_string()).collect(),
             chunk_size.map(|v| v as usize),
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await?;
+
+        let mut result_order_quotes = vec![];
+        for order_quote in order_quotes {
+            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
+            result_order_quotes.push(data);
+        }
+        Ok(result_order_quotes)
+    }
+}
+
+impl RaindexOrder {
+    /// Non-wasm variant of [`Self::get_quotes`] that threads a `counterparty`
+    /// address and a caller-supplied [`SignedContextInjector`] through to the
+    /// quote RPC. Used by single-take flows that need to populate signed
+    /// context for gated orders whose `calculate-io` asserts on `signer<0>()`
+    /// or similar. The resulting `RaindexOrderQuote.signed_context` carries
+    /// the composed `[oracle..., injected...]` list that the multicall saw.
+    pub async fn get_quotes_with_injector(
+        &self,
+        block_number: Option<u64>,
+        chunk_size: Option<u32>,
+        counterparty: Address,
+        injector: &dyn SignedContextInjector,
+    ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
+        let rpcs = self.get_rpc_urls()?;
+        let sg_order = self.clone().into_sg_order()?;
+
+        let order_quotes = get_order_quotes(
+            vec![sg_order],
+            block_number,
+            rpcs.iter().map(|s| s.to_string()).collect(),
+            chunk_size.map(|v| v as usize),
+            counterparty,
+            injector,
         )
         .await?;
 
@@ -195,6 +244,30 @@ pub async fn get_order_quotes_batch(
     block_number: Option<u64>,
     chunk_size: Option<u32>,
 ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
+    get_order_quotes_batch_with_injector(
+        orders,
+        block_number,
+        chunk_size,
+        Address::ZERO,
+        &NoopInjector,
+    )
+    .await
+}
+
+/// Batch variant of [`get_order_quotes_batch`] that threads a
+/// `counterparty` address and a caller-supplied [`SignedContextInjector`]
+/// through to the quote RPC. Oracle-fetched contexts come first, followed by
+/// entries produced by the injector; the composed list is attached to each
+/// `QuoteV2.signedContext` before the multicall and is therefore visible to
+/// any `calculate-io` execution run during quoting (e.g. gated orders that
+/// assert on `signer<0>()`).
+pub async fn get_order_quotes_batch_with_injector(
+    orders: &[RaindexOrder],
+    block_number: Option<u64>,
+    chunk_size: Option<u32>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
+) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
     if orders.is_empty() {
         return Ok(vec![]);
     }
@@ -242,6 +315,8 @@ pub async fn get_order_quotes_batch(
         block_number,
         rpcs,
         chunk_size.map(|v| v as usize),
+        counterparty,
+        injector,
     )
     .await?;
 

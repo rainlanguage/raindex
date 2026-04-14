@@ -696,6 +696,10 @@ impl RaindexOrder {
         #[cfg(target_family = "wasm")]
         let sell_token = Address::from_str(&sell_token)?;
 
+        if (output_index as usize) >= self.outputs.len() {
+            return Err(RaindexError::InvalidOutputIndex(output_index));
+        }
+
         let rpc_urls = self.get_rpc_urls()?;
 
         let rpc_client = RpcClient::new_with_urls(rpc_urls.clone())?;
@@ -716,7 +720,6 @@ impl RaindexOrder {
             price_cap: parsed_price_cap,
             taker: taker_addr,
             sell_token,
-            oracle_url: self.oracle_url(),
         };
         let rpc_context = RpcContext {
             rpc_urls: &rpc_urls,
@@ -746,6 +749,86 @@ impl RaindexOrder {
         let amount_float = Float::parse(amount)?;
 
         estimate_take_order(data.max_output, data.ratio, is_buy, amount_float)
+    }
+}
+
+impl RaindexOrder {
+    /// Non-wasm variant of [`Self::get_take_calldata`] that threads a
+    /// caller-supplied [`SignedContextInjector`] through the quote pipeline.
+    ///
+    /// Mirrors the shape of [`RaindexClient::get_take_orders_calldata_with_injector`]:
+    /// any injector-contributed `SignedContextV1` entries are appended after
+    /// any oracle-fetched context on each `QuoteV2` before the quote multicall
+    /// (composition order: `[oracle..., injected...]`). The candidate inherits
+    /// that exact composed list, so `takeOrders4` executes with the same
+    /// signed context the quote saw — required for gated orders whose
+    /// `calculate-io` asserts on `signer<0>()` or similar.
+    ///
+    /// The injector is only needed at the quote stage; once the candidate is
+    /// built with the correct `signed_context`, [`execute_single_take`] is
+    /// sufficient without any injector parameter.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_take_calldata_with_injector(
+        &self,
+        input_index: u32,
+        output_index: u32,
+        taker: String,
+        mode: TakeOrdersMode,
+        amount: String,
+        price_cap: String,
+        injector: &dyn rain_orderbook_quote::SignedContextInjector,
+    ) -> Result<TakeOrdersCalldataResult, RaindexError> {
+        let taker_addr = Address::from_str(&taker)?;
+        let parsed_mode = ParsedTakeOrdersMode::parse(mode, &amount)?;
+        let parsed_price_cap = Float::parse(price_cap)?;
+
+        let zero = Float::zero()?;
+        if parsed_price_cap.lt(zero)? {
+            return Err(RaindexError::NegativePriceCap);
+        }
+
+        let sell_token = self
+            .inputs
+            .get(input_index as usize)
+            .ok_or(RaindexError::InvalidInputIndex(input_index))?
+            .token()
+            .address();
+        #[cfg(target_family = "wasm")]
+        let sell_token = Address::from_str(&sell_token)?;
+
+        if (output_index as usize) >= self.outputs.len() {
+            return Err(RaindexError::InvalidOutputIndex(output_index));
+        }
+
+        let rpc_urls = self.get_rpc_urls()?;
+
+        let rpc_client = RpcClient::new_with_urls(rpc_urls.clone())?;
+        let block_number = rpc_client.get_latest_block_number().await?;
+
+        let fresh_quotes = self
+            .get_quotes_with_injector(Some(block_number), None, taker_addr, injector)
+            .await?;
+
+        let fresh_quote = fresh_quotes
+            .into_iter()
+            .find(|q| q.pair.input_index == input_index && q.pair.output_index == output_index)
+            .ok_or(RaindexError::NoLiquidity)?;
+
+        let candidate =
+            build_candidate_from_quote(self, &fresh_quote)?.ok_or(RaindexError::NoLiquidity)?;
+
+        let execution_params = TakeOrderExecutionParams {
+            mode: parsed_mode,
+            price_cap: parsed_price_cap,
+            taker: taker_addr,
+            sell_token,
+        };
+        let rpc_context = RpcContext {
+            rpc_urls: &rpc_urls,
+            block_number: Some(block_number),
+        };
+
+        execute_single_take(candidate, execution_params, rpc_context).await
     }
 }
 
@@ -3380,6 +3463,7 @@ mod tests {
                 data: Some(make_test_quote_value()),
                 success: true,
                 error: None,
+                signed_context: vec![],
             }
         }
 
@@ -3425,6 +3509,7 @@ mod tests {
             let original_data = quote.data.expect("Original should have data");
             assert!(data.max_output.eq(original_data.max_output).unwrap());
             assert!(data.ratio.eq(original_data.ratio).unwrap());
+            assert!(roundtrip.signed_context.is_empty());
         }
 
         #[wasm_bindgen_test]
@@ -3439,6 +3524,7 @@ mod tests {
                 data: None,
                 success: false,
                 error: Some("Quote simulation failed".to_string()),
+                signed_context: vec![],
             };
 
             let js_value = to_js_value(&quote).expect("Should serialize failed quote to JS");
@@ -3449,6 +3535,7 @@ mod tests {
             assert!(!roundtrip.success);
             assert!(roundtrip.data.is_none());
             assert_eq!(roundtrip.error, Some("Quote simulation failed".to_string()));
+            assert!(roundtrip.signed_context.is_empty());
         }
 
         #[wasm_bindgen_test]
