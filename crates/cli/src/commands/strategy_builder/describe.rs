@@ -201,7 +201,7 @@ async fn describe_strategy(
         writeln!(out, "```")?;
         writeln!(out)?;
 
-        describe_select_tokens(out, &deployment)?;
+        describe_select_tokens(out, &deployment, strategy_key, &deployment_key)?;
         describe_fields(out, &deployment)?;
         describe_deposits(out, &deployment)?;
     }
@@ -245,6 +245,8 @@ fn render_deposit_flags(
 fn describe_select_tokens(
     out: &mut String,
     deployment: &rain_orderbook_app_settings::order_builder::OrderBuilderDeploymentCfg,
+    strategy_key: &str,
+    deployment_key: &str,
 ) -> Result<()> {
     let tokens = match &deployment.select_tokens {
         Some(t) if !t.is_empty() => t,
@@ -263,6 +265,18 @@ fn describe_select_tokens(
             (n, d) => writeln!(out, "- `{}` ({n}) — {d}", token.key)?,
         }
     }
+    writeln!(out)?;
+    writeln!(
+        out,
+        "Get the list of valid token addresses for this deployment with:"
+    )?;
+    writeln!(out)?;
+    writeln!(out, "```")?;
+    writeln!(
+        out,
+        "raindex strategy-builder --tokens \\\n  --registry <url> \\\n  --strategy {strategy_key} \\\n  --deployment {deployment_key}"
+    )?;
+    writeln!(out, "```")?;
     writeln!(out)?;
     Ok(())
 }
