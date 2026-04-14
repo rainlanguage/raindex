@@ -1,5 +1,6 @@
 mod interactive;
 mod select;
+mod tokens;
 
 use crate::execute::Execute;
 use alloy::primitives::hex;
@@ -19,6 +20,12 @@ pub struct StrategyBuilder {
 
     #[arg(short, long, help = "Interactive mode — guided strategy deployment")]
     interactive: bool,
+
+    #[arg(
+        long,
+        help = "List all tokens registered for --strategy + --deployment as markdown"
+    )]
+    tokens: bool,
 
     #[arg(long, help = "Order/strategy key from the registry")]
     strategy: Option<String>,
@@ -69,6 +76,17 @@ impl Execute for StrategyBuilder {
     async fn execute(&self) -> Result<()> {
         if self.interactive {
             return interactive::run_interactive(&self.registry).await;
+        }
+        if self.tokens {
+            let strategy = self
+                .strategy
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("--strategy is required with --tokens"))?;
+            let deployment = self
+                .deployment
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("--deployment is required with --tokens"))?;
+            return tokens::run_tokens(&self.registry, strategy, deployment).await;
         }
 
         let strategy = self
