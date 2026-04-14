@@ -24,6 +24,10 @@ raindex strategy-builder \
   [--set-deposit TOKEN=AMOUNT ...]
 ```
 
+`--owner` must be the address that will sign the transactions (not a contract).
+Each deployment below has an **Example command** with the required flags
+pre-filled for that specific deployment.
+
 ### Output format
 
 The command writes one transaction per line to stdout, each in the form:
@@ -33,17 +37,40 @@ The command writes one transaction per line to stdout, each in the form:
 ```
 
 Multiple lines are possible — they must be signed and broadcast in order.
-Typical output contains:
+Output contains (in order):
 
-1. One ERC20 `approve` transaction per token being deposited (if any).
+1. One ERC20 `approve` transaction per token being deposited. If you pass
+   no `--set-deposit` flags, there are no approvals.
 2. The main order deployment transaction to the orderbook contract.
 3. An optional metadata emission transaction.
 
-Pipe the output into any submitter that signs and broadcasts transactions:
+### Submitting transactions
+
+Option A — pipe into the st0x CLI (handles Turnkey wallet signing):
 
 ```
 raindex strategy-builder ... | stox submit
 ```
+
+Option B — sign and broadcast each line with `cast send` (foundry):
+
+```
+raindex strategy-builder ... | while IFS=: read -r to data; do
+  cast send "$to" "$data" \
+    --private-key "$PRIVATE_KEY" \
+    --rpc-url "$RPC_URL"
+done
+```
+
+Option C — pipe into any other submitter that reads `address:calldata` lines.
+
+### Picking token addresses
+
+Token addresses are chain-specific. Look them up on a block explorer
+(basescan.org, etherscan.io, etc.) or a token list for the target network.
+Each deployment below lists the tokens that must be selected via
+`--select-token KEY=<address>`; the KEY side is a slot name defined by the
+strategy, the `<address>` side is the ERC20 contract address you pick.
 
 "#;
 
