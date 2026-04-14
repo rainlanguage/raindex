@@ -10,13 +10,135 @@ use crossterm::{
 };
 use std::io::Write;
 
+const BOLD_UNDERLINE: &str = "\x1b[1;4m";
+const BOLD: &str = "\x1b[1m";
+const BOLD_CYAN: &str = "\x1b[1;36m";
+const DIM: &str = "\x1b[2m";
+const CYAN: &str = "\x1b[36m";
+const RESET: &str = "\x1b[0m";
+
 pub struct SelectItem {
     pub key: String,
     pub description: String,
 }
 
+/// Context shown above a prompt: prior selections and optional description.
+pub struct SelectContext<'a> {
+    pub header_lines: &'a [String],
+    pub description: Option<&'a str>,
+}
+
+impl<'a> SelectContext<'a> {
+    pub fn new(header_lines: &'a [String]) -> Self {
+        Self {
+            header_lines,
+            description: None,
+        }
+    }
+
+    pub fn with_description(mut self, desc: &'a str) -> Self {
+        self.description = Some(desc);
+        self
+    }
+}
+
+/// Word-wrap `text` to fit within `width` columns. Returns the number of lines.
+fn wrap_lines(text: &str, width: usize) -> Vec<String> {
+    if text.is_empty() || width == 0 {
+        return Vec::new();
+    }
+    let mut lines = Vec::new();
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if current.is_empty() {
+            current = word.to_string();
+        } else if current.len() + 1 + word.len() <= width {
+            current.push(' ');
+            current.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut current));
+            current = word.to_string();
+        }
+    }
+    if !current.is_empty() {
+        lines.push(current);
+    }
+    lines
+}
+
+/// Write wrapped `text` with the given indent and ANSI style wrapper.
+/// Returns number of lines written.
+fn write_wrapped(
+    w: &mut impl Write,
+    text: &str,
+    indent: &str,
+    style: &str,
+    width: usize,
+) -> Result<usize> {
+    let lines = wrap_lines(text, width);
+    for line in &lines {
+        write!(w, "{indent}{style}{line}{RESET}\r\n")?;
+    }
+    Ok(lines.len())
+}
+
+/// Write the header (prior selections) and return the number of rows used.
+fn write_header(w: &mut impl Write, header_lines: &[String]) -> Result<usize> {
+    for line in header_lines {
+        write!(w, "  {line}\r\n")?;
+    }
+    if !header_lines.is_empty() {
+        write!(w, "\r\n")?;
+        Ok(header_lines.len() + 1)
+    } else {
+        Ok(0)
+    }
+}
+
+/// Write bold-underlined title + optional dim description. Returns rows used.
+fn write_title(
+    w: &mut impl Write,
+    title: &str,
+    description: Option<&str>,
+    cols: usize,
+) -> Result<usize> {
+    write!(w, "  {BOLD_UNDERLINE}{title}{RESET}\r\n")?;
+    let mut rows = 1;
+    if let Some(desc) = description {
+        rows += write_wrapped(w, desc, "  ", DIM, cols.saturating_sub(2))?;
+    }
+    write!(w, "\r\n")?;
+    Ok(rows + 1)
+}
+
+/// Height (in rendered terminal rows) of a single select item.
+fn item_height(item: &SelectItem, cols: usize) -> usize {
+    // "  ❯ " prefix (4) + trailing margin (1)
+    let usable = cols.saturating_sub(5);
+    let desc_lines = if item.description.is_empty() {
+        0
+    } else {
+        wrap_lines(&item.description, usable).len()
+    };
+    1 + desc_lines + 1 // name + description + blank separator
+}
+
+/// Count how many items fit starting at `offset`, given `max_rows` available.
+fn count_items_fitting(items: &[SelectItem], offset: usize, max_rows: usize, cols: usize) -> usize {
+    let mut rows = 0;
+    let mut count = 0;
+    for item in items.iter().skip(offset) {
+        let h = item_height(item, cols);
+        if rows + h > max_rows {
+            break;
+        }
+        rows += h;
+        count += 1;
+    }
+    count.max(1)
+}
+
 /// Text input rendered in the alt screen.
-/// Shows header lines for context, a prompt, and an editable line.
 pub fn input(
     w: &mut impl Write,
     prompt: &str,
@@ -26,9 +148,20 @@ pub fn input(
     header_lines: &[String],
 ) -> Result<String> {
     let mut buffer = String::new();
-
     loop {
-        render_input(w, prompt, description, default, &buffer, header_lines)?;
+        let (cols, _) = terminal::size()?;
+        execute!(w, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
+        write_header(w, header_lines)?;
+        write_title(w, prompt, description, cols as usize)?;
+
+        write!(w, "  > {CYAN}{buffer}{RESET}")?;
+        if buffer.is_empty() {
+            if let Some(d) = default {
+                write!(w, "{DIM}{d}{RESET}")?;
+            }
+        }
+        write!(w, "\x1b[?25h")?; // show cursor
+        w.flush()?;
 
         if let Event::Key(KeyEvent {
             code, modifiers, ..
@@ -42,19 +175,12 @@ pub fn input(
                 KeyCode::Backspace => {
                     buffer.pop();
                 }
-                KeyCode::Enter => {
-                    if buffer.is_empty() {
-                        if let Some(d) = default {
-                            return Ok(d.to_string());
-                        }
-                        if allow_empty {
-                            return Ok(String::new());
-                        }
-                        // else loop — require non-empty
-                    } else {
-                        return Ok(buffer);
-                    }
-                }
+                KeyCode::Enter => match (buffer.is_empty(), default, allow_empty) {
+                    (true, Some(d), _) => return Ok(d.to_string()),
+                    (true, None, true) => return Ok(String::new()),
+                    (true, None, false) => {} // keep looping — require input
+                    (false, _, _) => return Ok(buffer),
+                },
                 KeyCode::Esc => anyhow::bail!("cancelled"),
                 _ => {}
             }
@@ -62,81 +188,7 @@ pub fn input(
     }
 }
 
-fn render_input(
-    w: &mut impl Write,
-    prompt: &str,
-    description: Option<&str>,
-    default: Option<&str>,
-    buffer: &str,
-    header_lines: &[String],
-) -> Result<()> {
-    let (cols, _) = terminal::size()?;
-    let cols = cols as usize;
-
-    execute!(w, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
-
-    for line in header_lines {
-        write!(w, "  {line}\r\n")?;
-    }
-    if !header_lines.is_empty() {
-        write!(w, "\r\n")?;
-    }
-
-    write!(w, "  \x1b[1;4m{prompt}\x1b[0m\r\n\r\n")?;
-
-    if let Some(desc) = description {
-        // Simple word wrap for description
-        let usable = cols.saturating_sub(4);
-        let mut col = 0usize;
-        write!(w, "  \x1b[2m")?;
-        for word in desc.split_whitespace() {
-            let wlen = word.len();
-            if col == 0 {
-                write!(w, "{word}")?;
-                col = wlen;
-            } else if col + 1 + wlen <= usable {
-                write!(w, " {word}")?;
-                col += 1 + wlen;
-            } else {
-                write!(w, "\x1b[0m\r\n  \x1b[2m{word}")?;
-                col = wlen;
-            }
-        }
-        write!(w, "\x1b[0m\r\n\r\n")?;
-    }
-
-    // The editable line
-    write!(w, "  > \x1b[36m{buffer}\x1b[0m")?;
-    if buffer.is_empty() {
-        if let Some(d) = default {
-            write!(w, "\x1b[2m{d}\x1b[0m")?;
-        }
-    }
-    write!(w, "\x1b[?25h")?; // show cursor
-
-    w.flush()?;
-    Ok(())
-}
-
-/// Header lines to display above the select list.
-/// These show prior selections / progress.
-pub struct SelectContext<'a> {
-    pub header_lines: &'a [String],
-    pub description: Option<&'a str>,
-}
-
-impl<'a> SelectContext<'a> {
-    pub fn new(header_lines: &'a [String]) -> Self {
-        Self { header_lines, description: None }
-    }
-    pub fn with_description(mut self, desc: &'a str) -> Self {
-        self.description = Some(desc);
-        self
-    }
-}
-
-/// Run a select list on the given writer.
-/// The caller is responsible for alternate screen and raw mode.
+/// Scrollable select list.
 pub fn select(
     w: &mut impl Write,
     title: &str,
@@ -150,195 +202,192 @@ pub fn select(
         return Ok(0);
     }
 
-    let mut selected: usize = 0;
-    let mut scroll_offset: usize = 0;
+    let mut selected = 0usize;
+    let mut scroll = 0usize;
 
     loop {
-        render(w, title, items, selected, scroll_offset, ctx)?;
+        let (cols, rows) = terminal::size()?;
+        let cols = cols as usize;
+        let rows = rows as usize;
+
+        let header_rows = render_select(w, title, items, selected, scroll, ctx)?;
+        let max_rows = rows.saturating_sub(header_rows + 2);
 
         if let Event::Key(KeyEvent { code, .. }) = event::read()? {
             match code {
                 KeyCode::Up | KeyCode::Char('k') => {
                     if selected > 0 {
                         selected -= 1;
-                        if selected < scroll_offset {
-                            scroll_offset = selected;
+                        if selected < scroll {
+                            scroll = selected;
                         }
                     }
                 }
                 KeyCode::Down | KeyCode::Char('j') => {
                     if selected + 1 < items.len() {
                         selected += 1;
-                        let (_, rows) = terminal::size()?;
-                        let header_rows = ctx.header_lines.len() + 4; // header + title + gaps
-                        let visible_rows = (rows as usize).saturating_sub(header_rows + 2);
-                        let items_visible =
-                            count_items_fitting(items, scroll_offset, visible_rows);
-                        if selected >= scroll_offset + items_visible {
-                            scroll_offset += 1;
+                        let fitting = count_items_fitting(items, scroll, max_rows, cols);
+                        if selected >= scroll + fitting {
+                            scroll += 1;
                         }
                     }
                 }
                 KeyCode::Enter => return Ok(selected),
-                KeyCode::Esc | KeyCode::Char('q') => {
-                    anyhow::bail!("selection cancelled");
-                }
+                KeyCode::Esc | KeyCode::Char('q') => anyhow::bail!("cancelled"),
                 _ => {}
             }
         }
     }
 }
 
-fn count_items_fitting(items: &[SelectItem], offset: usize, max_rows: usize) -> usize {
-    let (cols, _) = terminal::size().unwrap_or((80, 24));
-    let cols = cols as usize;
-    let mut rows_used = 0;
-    let mut count = 0;
-
-    for item in items.iter().skip(offset) {
-        let h = item_height(item, cols);
-        if rows_used + h > max_rows {
-            break;
-        }
-        rows_used += h;
-        count += 1;
-    }
-
-    count.max(1)
-}
-
-fn item_height(item: &SelectItem, term_cols: usize) -> usize {
-    let usable = term_cols.saturating_sub(7); // "  ❯ " prefix + margin
-    let name_lines = 1;
-    let desc_lines = if item.description.is_empty() {
-        0
-    } else {
-        let mut lines = 1usize;
-        let mut col = 0usize;
-        for word in item.description.split_whitespace() {
-            let wlen = word.len();
-            if col == 0 {
-                col = wlen;
-            } else if col + 1 + wlen <= usable {
-                col += 1 + wlen;
-            } else {
-                lines += 1;
-                col = wlen;
-            }
-        }
-        lines
-    };
-    name_lines + desc_lines + 1 // +1 blank line between items
-}
-
-fn render(
+/// Render the select list. Returns the number of rows used by the header
+/// (everything above the items) so the caller can compute `max_rows`.
+fn render_select(
     w: &mut impl Write,
     title: &str,
     items: &[SelectItem],
     selected: usize,
-    scroll_offset: usize,
+    scroll: usize,
     ctx: &SelectContext,
-) -> Result<()> {
+) -> Result<usize> {
     let (cols, rows) = terminal::size()?;
     let cols = cols as usize;
     let rows = rows as usize;
-
     execute!(w, cursor::MoveTo(0, 0), terminal::Clear(ClearType::All))?;
 
-    // Header: show prior selections
-    if !ctx.header_lines.is_empty() {
-        for line in ctx.header_lines {
-            write!(w, "  {line}\r\n")?;
-        }
-        write!(w, "\r\n")?;
-    }
+    let header_rows = write_header(w, ctx.header_lines)?;
+    let title_rows = write_title(w, title, ctx.description, cols)?;
+    let total_header = header_rows + title_rows;
+    let max_rows = rows.saturating_sub(total_header + 2);
 
-    // Title (bold + underlined)
-    write!(w, "  \x1b[1;4m{title}\x1b[0m\r\n")?;
-
-    // Description under title (dim, word-wrapped), no underline
-    let mut desc_lines = 0;
-    if let Some(desc) = ctx.description {
-        let usable = cols.saturating_sub(4);
-        let mut col = 0usize;
-        write!(w, "  \x1b[2m")?;
-        for word in desc.split_whitespace() {
-            let wlen = word.len();
-            if col == 0 {
-                write!(w, "{word}")?;
-                col = wlen;
-            } else if col + 1 + wlen <= usable {
-                write!(w, " {word}")?;
-                col += 1 + wlen;
-            } else {
-                write!(w, "\x1b[0m\r\n  \x1b[2m{word}")?;
-                col = wlen;
-                desc_lines += 1;
-            }
-        }
-        write!(w, "\x1b[0m\r\n")?;
-        desc_lines += 1;
-    }
-    write!(w, "\r\n")?;
-
-    let header_rows = ctx.header_lines.len()
-        + if ctx.header_lines.is_empty() { 0 } else { 1 }
-        + 1 // title
-        + desc_lines
-        + 1; // blank before items
-    let max_rows = rows.saturating_sub(header_rows + 2);
     let mut rows_used = 0;
-
-    for (idx, item) in items.iter().enumerate().skip(scroll_offset) {
+    for (idx, item) in items.iter().enumerate().skip(scroll) {
         let h = item_height(item, cols);
         if rows_used + h > max_rows {
             break;
         }
 
         let is_selected = idx == selected;
-        let prefix = if is_selected { "❯ " } else { "  " };
-        let name_style = if is_selected { "\x1b[1;36m" } else { "\x1b[1m" };
-
-        write!(w, "  {prefix}{name_style}{}\x1b[0m\r\n", item.key)?;
-
+        let (prefix, style) = if is_selected {
+            ("❯ ", BOLD_CYAN)
+        } else {
+            ("  ", BOLD)
+        };
+        write!(w, "  {prefix}{style}{}{RESET}\r\n", item.key)?;
         if !item.description.is_empty() {
-            let usable = cols.saturating_sub(7);
-            let mut col = 0usize;
-            write!(w, "      \x1b[2m")?;
-            for word in item.description.split_whitespace() {
-                let wlen = word.len();
-                if col == 0 {
-                    write!(w, "{word}")?;
-                    col = wlen;
-                } else if col + 1 + wlen <= usable {
-                    write!(w, " {word}")?;
-                    col += 1 + wlen;
-                } else {
-                    write!(w, "\x1b[0m\r\n      \x1b[2m{word}")?;
-                    col = wlen;
-                }
-            }
-            write!(w, "\x1b[0m\r\n")?;
+            write_wrapped(w, &item.description, "      ", DIM, cols.saturating_sub(5))?;
         }
-
         write!(w, "\r\n")?;
         rows_used += h;
     }
 
     // Scroll indicators
-    if scroll_offset > 0 {
-        execute!(w, cursor::MoveTo(cols as u16 - 3, header_rows as u16))?;
+    if scroll > 0 {
+        execute!(w, cursor::MoveTo(cols as u16 - 3, total_header as u16))?;
         write!(w, " ▲")?;
     }
-    if scroll_offset + count_items_fitting(items, scroll_offset, max_rows) < items.len() {
+    if scroll + count_items_fitting(items, scroll, max_rows, cols) < items.len() {
         execute!(w, cursor::MoveTo(cols as u16 - 3, rows as u16 - 2))?;
         write!(w, " ▼")?;
     }
 
     // Bottom hint
     execute!(w, cursor::MoveTo(0, rows as u16 - 1))?;
-    write!(w, "  \x1b[2m↑↓ navigate  ⏎ select  esc quit\x1b[0m")?;
+    write!(w, "  {DIM}↑↓ navigate  ⏎ select  esc quit{RESET}")?;
 
     w.flush()?;
-    Ok(())
+    Ok(total_header)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_empty_text_returns_no_lines() {
+        assert!(wrap_lines("", 10).is_empty());
+    }
+
+    #[test]
+    fn wrap_short_text_returns_single_line() {
+        assert_eq!(wrap_lines("hello world", 20), vec!["hello world"]);
+    }
+
+    #[test]
+    fn wrap_long_text_breaks_on_word_boundaries() {
+        let result = wrap_lines("one two three four five", 10);
+        assert_eq!(result, vec!["one two", "three four", "five"]);
+    }
+
+    #[test]
+    fn wrap_very_long_word_goes_on_own_line() {
+        let result = wrap_lines("a supercalifragilistic b", 10);
+        assert_eq!(result, vec!["a", "supercalifragilistic", "b"]);
+    }
+
+    #[test]
+    fn wrap_zero_width_returns_no_lines() {
+        assert!(wrap_lines("hello", 0).is_empty());
+    }
+
+    #[test]
+    fn item_height_with_empty_description() {
+        let item = SelectItem {
+            key: "key".into(),
+            description: String::new(),
+        };
+        // name line + blank separator = 2
+        assert_eq!(item_height(&item, 80), 2);
+    }
+
+    #[test]
+    fn item_height_with_description_wraps() {
+        let item = SelectItem {
+            key: "key".into(),
+            description: "one two three four five six seven eight nine ten".into(),
+        };
+        // usable width = 80 - 5 = 75 — fits on one line
+        assert_eq!(item_height(&item, 80), 3);
+    }
+
+    #[test]
+    fn item_height_with_description_narrow_terminal() {
+        let item = SelectItem {
+            key: "key".into(),
+            description: "one two three four five six seven eight nine ten".into(),
+        };
+        // usable = 20 - 5 = 15 — "one two three" (13), "four five six" (13), etc.
+        let h = item_height(&item, 20);
+        assert!(h > 3, "expected wrapped description, got height {h}");
+    }
+
+    #[test]
+    fn count_items_fitting_respects_max_rows() {
+        let items = vec![
+            SelectItem {
+                key: "a".into(),
+                description: String::new(),
+            },
+            SelectItem {
+                key: "b".into(),
+                description: String::new(),
+            },
+            SelectItem {
+                key: "c".into(),
+                description: String::new(),
+            },
+        ];
+        // Each item = 2 rows; 5 rows max fits 2 items (4 rows), not 3 (6 rows)
+        assert_eq!(count_items_fitting(&items, 0, 5, 80), 2);
+    }
+
+    #[test]
+    fn count_items_fitting_always_returns_at_least_one() {
+        let items = vec![SelectItem {
+            key: "a".into(),
+            description: "very long description that will wrap many times".into(),
+        }];
+        // Even with max_rows = 1, we return 1 to avoid an empty list
+        assert_eq!(count_items_fitting(&items, 0, 1, 80), 1);
+    }
 }
