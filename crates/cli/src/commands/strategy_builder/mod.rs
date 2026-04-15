@@ -1,3 +1,6 @@
+mod interactive;
+mod select;
+
 use crate::execute::Execute;
 use alloy::primitives::hex;
 use anyhow::Result;
@@ -14,14 +17,17 @@ pub struct StrategyBuilder {
     )]
     registry: String,
 
+    #[arg(short, long, help = "Interactive mode — guided strategy deployment")]
+    interactive: bool,
+
     #[arg(long, help = "Order/strategy key from the registry")]
-    strategy: String,
+    strategy: Option<String>,
 
     #[arg(long, help = "Deployment key within the strategy")]
-    deployment: String,
+    deployment: Option<String>,
 
     #[arg(long, help = "Order owner address")]
-    owner: String,
+    owner: Option<String>,
 
     #[arg(
         long = "set-field",
@@ -65,6 +71,23 @@ fn parse_key_value_pairs(args: &[String]) -> Result<HashMap<String, String>> {
 
 impl Execute for StrategyBuilder {
     async fn execute(&self) -> Result<()> {
+        if self.interactive {
+            return interactive::run_interactive(&self.registry).await;
+        }
+
+        let strategy = self
+            .strategy
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("--strategy is required in non-interactive mode"))?;
+        let deployment = self
+            .deployment
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("--deployment is required in non-interactive mode"))?;
+        let owner = self
+            .owner
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("--owner is required in non-interactive mode"))?;
+
         let registry = DotrainRegistry::new(self.registry.clone())
             .await
             .map_err(|err| anyhow::anyhow!("{}", err.to_readable_msg()))?;
@@ -72,14 +95,12 @@ impl Execute for StrategyBuilder {
         let dotrain = registry
             .orders()
             .0
-            .get(&self.strategy)
+            .get(strategy)
             .ok_or_else(|| {
                 let mut available = registry.get_order_keys().unwrap_or_default();
                 available.sort();
                 anyhow::anyhow!(
-                    "strategy '{}' not found in registry. Available: {:?}",
-                    self.strategy,
-                    available
+                    "strategy '{strategy}' not found in registry. Available: {available:?}",
                 )
             })?
             .clone();
@@ -94,7 +115,7 @@ impl Execute for StrategyBuilder {
         };
 
         let mut builder =
-            RaindexOrderBuilder::new_with_deployment(dotrain, settings, self.deployment.clone())
+            RaindexOrderBuilder::new_with_deployment(dotrain, settings, deployment.clone())
                 .await
                 .map_err(|err| {
                     anyhow::anyhow!("failed to create order builder: {}", err.to_readable_msg())
@@ -130,7 +151,7 @@ impl Execute for StrategyBuilder {
         }
 
         let args = builder
-            .get_deployment_transaction_args(self.owner.clone())
+            .get_deployment_transaction_args(owner.clone())
             .await
             .map_err(|err| {
                 anyhow::anyhow!(
