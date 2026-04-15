@@ -360,13 +360,25 @@ impl Context {
             let var_start = start + var_start;
             if let Some(var_end) = result[var_start..].find('}') {
                 let var_end = var_start + var_end + 1;
-                let var = &result[var_start + 2..var_end - 1];
-                let replacement = match self.resolve_path(var) {
+                let inner = &result[var_start + 2..var_end - 1];
+
+                // Split on `||` to extract an optional fallback string literal.
+                // Syntax: ${path}  or  ${path || 'fallback'}  or  ${path || "fallback"}.
+                // The fallback is used when the path resolves to a missing token field
+                // (i.e. select-token not yet selected).
+                let (path, fallback) = parse_path_and_fallback(inner);
+
+                let replacement = match self.resolve_path(path) {
                     Ok(value) => Some(value),
+                    Err(ContextError::PropertyNotFound(property))
+                        if fallback.is_some() && property == "token" =>
+                    {
+                        Some(fallback.unwrap().to_string())
+                    }
                     Err(ContextError::PropertyNotFound(property))
                         if allow_select_tokens
                             && property == "token"
-                            && self.select_token_key_for_path(var).is_some() =>
+                            && self.select_token_key_for_path(path).is_some() =>
                     {
                         None
                     }
@@ -385,6 +397,33 @@ impl Context {
         }
 
         Ok(result)
+    }
+}
+
+/// Split a `${...}` body into `(path, optional fallback literal)`.
+/// Recognised forms:
+///   path
+///   path || 'fallback'
+///   path || "fallback"
+/// Whitespace around `||` and within the literal bounds is trimmed.
+/// If the body doesn't match the fallback form, returns `(body_trimmed, None)`.
+fn parse_path_and_fallback(body: &str) -> (&str, Option<&str>) {
+    let Some(or_pos) = body.find("||") else {
+        return (body.trim(), None);
+    };
+    let (left, right) = body.split_at(or_pos);
+    let path = left.trim();
+    let right = right[2..].trim();
+
+    // Strip matching single or double quotes around the fallback.
+    let stripped = right
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .or_else(|| right.strip_prefix('"').and_then(|s| s.strip_suffix('"')));
+
+    match stripped {
+        Some(literal) => (path, Some(literal)),
+        None => (body.trim(), None), // malformed — treat whole thing as path
     }
 }
 
@@ -554,6 +593,83 @@ mod tests {
             relaxed_err,
             ContextError::PropertyNotFound("vault-id".to_string())
         );
+    }
+
+    #[test]
+    fn test_interpolate_fallback_for_unresolved_token() {
+        // In strict mode with a select-token not yet selected, a fallback literal
+        // should be substituted in place of the token path.
+        let order = setup_select_token_order();
+        let mut context = Context::new();
+        context.add_order(order.clone());
+        context.add_select_tokens(vec!["token1".to_string()]);
+
+        let out = context
+            .interpolate("${order.inputs.0.token.symbol || 'input token'}")
+            .unwrap();
+        assert_eq!(out, "input token");
+
+        // Double quotes also supported.
+        let out = context
+            .interpolate(r#"${order.inputs.0.token.symbol || "input token"}"#)
+            .unwrap();
+        assert_eq!(out, "input token");
+
+        // Whitespace around || is tolerated.
+        let out = context
+            .interpolate("${order.inputs.0.token.symbol||'x'}")
+            .unwrap();
+        assert_eq!(out, "x");
+
+        // Mixed in a surrounding template string (using only inputs.0 since
+        // the select-token fixture only has one input).
+        let out = context
+            .interpolate("${order.inputs.0.token.symbol || 'buy'} at ${order.inputs.0.token.symbol || 'pair'}")
+            .unwrap();
+        assert_eq!(out, "buy at pair");
+    }
+
+    #[test]
+    fn test_interpolate_fallback_not_used_when_resolved() {
+        // If the path resolves, the fallback is ignored.
+        let mut context = Context::new();
+        let order = setup_test_order_with_vault_id();
+        context.add_order(order);
+
+        let out = context
+            .interpolate("${order.inputs.0.token.symbol || 'fallback'}")
+            .unwrap();
+        // The test token has symbol None, so .symbol still returns empty string or errors.
+        // Either way, the fallback only kicks in on PropertyNotFound("token"), not on
+        // a present-but-empty symbol. We just check the fallback isn't blindly applied.
+        assert_ne!(out, "fallback");
+    }
+
+    #[test]
+    fn test_interpolate_fallback_not_applied_to_non_token_errors() {
+        // If the path fails for some reason other than missing token, the fallback
+        // should NOT be applied — the error should propagate.
+        let order = setup_select_token_order();
+        let mut context = Context::new();
+        context.add_order(order);
+        context.add_select_tokens(vec!["token1".to_string()]);
+
+        let err = context
+            .interpolate("${order.inputs.0.vault-id || 'default'}")
+            .unwrap_err();
+        assert_eq!(err, ContextError::PropertyNotFound("vault-id".to_string()));
+    }
+
+    #[test]
+    fn test_interpolate_malformed_fallback_is_treated_as_path() {
+        // ${x || foo} (no quotes) isn't a valid fallback; the body is treated as a
+        // path. It'll fail to resolve since the path is nonsense.
+        let mut context = Context::new();
+        context.add_order(setup_test_order_with_vault_id());
+
+        let err = context.interpolate("${bogus || foo}").unwrap_err();
+        // Just assert it errors rather than silently substituting.
+        assert!(matches!(err, ContextError::InvalidPath(_) | ContextError::PropertyNotFound(_) | ContextError::NoOrder));
     }
 
     #[test]
