@@ -28,16 +28,30 @@ raindex strategy-builder \
 Each deployment below has an **Example command** with the required flags
 pre-filled for that specific deployment.
 
+Field values passed via `--set-field` are in human-readable decimal form — the
+tool handles token-decimal scaling internally. You do not need to multiply by
+`10^decimals`.
+
 ### Output format
 
-The command writes one transaction per line to stdout, each in the form:
+The command writes one transaction per line to stdout. Each transaction is
+preceded by a `#` comment line describing what the transaction does. The lines
+look like:
 
 ```
-<to-address>:<hex-calldata>
+# approve WETH
+0x...:0x095ea7b3...
+# deploy order
+0xe522cB4a...:0xac9650d8...
+# emit strategy metadata
+0x59401C93...:0x37480e2a...
 ```
 
-Multiple lines are possible — they must be signed and broadcast in order.
-Output contains (in order):
+Submitters should skip lines starting with `#` and split the remaining lines on
+the first `:` to get `(to-address, hex-calldata)` pairs.
+
+Multiple non-comment lines are possible — they must be signed and broadcast in
+order. Output contains (in order):
 
 1. One ERC20 `approve` transaction per token being deposited. If you pass
    no `--set-deposit` flags, there are no approvals.
@@ -56,21 +70,41 @@ Option B — sign and broadcast each line with `cast send` (foundry):
 
 ```
 raindex strategy-builder ... | while IFS=: read -r to data; do
+  [[ "$to" == \#* || -z "$to" ]] && continue
   cast send "$to" "$data" \
     --private-key "$PRIVATE_KEY" \
     --rpc-url "$RPC_URL"
 done
 ```
 
-Option C — pipe into any other submitter that reads `address:calldata` lines.
+Option C — pipe into any other submitter that reads `address:calldata` lines
+(skipping `#` comment lines).
 
 ### Picking token addresses
 
-Token addresses are chain-specific. Look them up on a block explorer
-(basescan.org, etherscan.io, etc.) or a token list for the target network.
-Each deployment below lists the tokens that must be selected via
-`--select-token KEY=<address>`; the KEY side is a slot name defined by the
-strategy, the `<address>` side is the ERC20 contract address you pick.
+Token addresses are chain-specific. Each deployment below lists the tokens
+that must be selected via `--select-token KEY=<address>`. To see which token
+addresses the registry has for a given deployment, use `--tokens`:
+
+```
+raindex strategy-builder --tokens \
+  --registry <url> --strategy <key> --deployment <key>
+```
+
+Any ERC20 address is valid for `--select-token`; the registry list is just a
+curated convenience subset.
+
+### Building the CLI from source
+
+If you're running this from a local clone, build once and call the binary
+directly — the `nix develop` shellHook runs `npm install` on every invocation
+which is noisy and slow.
+
+```
+cd rain.orderbook
+nix develop --impure --command cargo build -p rain_orderbook_cli
+./target/debug/rain_orderbook_cli strategy-builder --describe --registry <url>
+```
 
 "#;
 
@@ -292,11 +326,11 @@ fn describe_fields(
     writeln!(out, "**Fields:**")?;
     writeln!(out)?;
     for field in &deployment.fields {
-        write!(out, "- `{}` ({})", field.binding, field.name)?;
-        if let Some(default) = &field.default {
-            write!(out, " _[default: `{default}`]_")?;
-        }
-        writeln!(out)?;
+        let marker = match &field.default {
+            Some(default) => format!(" _(optional, default: `{default}`)_"),
+            None => " _(required)_".to_string(),
+        };
+        writeln!(out, "- `{}` ({}){marker}", field.binding, field.name)?;
         if let Some(desc) = &field.description {
             writeln!(out, "  - {desc}")?;
         }

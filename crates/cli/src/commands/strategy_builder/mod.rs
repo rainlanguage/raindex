@@ -189,9 +189,11 @@ impl Execute for StrategyBuilder {
             })?;
 
         for approval in &args.approvals {
+            println!("# approve {}", approval.symbol);
             println!("{}:0x{}", approval.token, hex::encode(&approval.calldata));
         }
 
+        println!("# deploy {strategy} order");
         println!(
             "{}:0x{}",
             args.orderbook_address,
@@ -199,6 +201,7 @@ impl Execute for StrategyBuilder {
         );
 
         if let Some(meta_call) = &args.emit_meta_call {
+            println!("# emit strategy metadata");
             println!("{}:0x{}", meta_call.to, hex::encode(&meta_call.calldata));
         }
 
