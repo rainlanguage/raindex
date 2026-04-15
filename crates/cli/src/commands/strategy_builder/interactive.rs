@@ -18,6 +18,17 @@ fn dim(text: &str) -> String {
     Style::new().dim().apply_to(text).to_string()
 }
 
+/// RAII guard that restores the terminal to a sane state (cooked mode, main
+/// screen, visible cursor) on drop, even if a panic unwinds through us.
+struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = execute!(stderr(), terminal::LeaveAlternateScreen, cursor::Show);
+        let _ = terminal::disable_raw_mode();
+    }
+}
+
 /// Enter alternate screen once, run the entire wizard there, leave at the end.
 pub async fn run_interactive(registry_url: &str) -> Result<()> {
     eprintln!("  Fetching strategies from {}...", dim(registry_url));
@@ -29,12 +40,10 @@ pub async fn run_interactive(registry_url: &str) -> Result<()> {
     let mut w = stderr();
     terminal::enable_raw_mode()?;
     execute!(w, terminal::EnterAlternateScreen, cursor::Hide)?;
+    let _guard = TerminalGuard;
 
     let mut progress: Vec<String> = Vec::new();
     let result = run_wizard(&mut w, &registry, &mut progress).await;
-
-    execute!(w, terminal::LeaveAlternateScreen, cursor::Show)?;
-    terminal::disable_raw_mode()?;
 
     match result {
         Ok(output) => {
@@ -163,6 +172,7 @@ async fn run_wizard(
     let output_choice = select::select(w, "Output", &output_items, &ctx)?;
 
     match output_choice {
+        0 => Ok(calldata_lines),
         1 => {
             let path = select::input(
                 w,
@@ -181,7 +191,7 @@ async fn run_wizard(
             progress.push(format!("  Wrote to {path}"));
             Ok(Vec::new())
         }
-        _ => Ok(calldata_lines),
+        other => unreachable!("unexpected output_choice index: {other}"),
     }
 }
 

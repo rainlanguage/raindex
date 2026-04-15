@@ -282,17 +282,20 @@ fn render_select(
     }
 
     // Scroll indicators
+    let xpos = cols.saturating_sub(3) as u16;
+    let ypos_bottom = rows.saturating_sub(2) as u16;
+    let ypos_hint = rows.saturating_sub(1) as u16;
     if scroll > 0 {
-        execute!(w, cursor::MoveTo(cols as u16 - 3, total_header as u16))?;
+        execute!(w, cursor::MoveTo(xpos, total_header as u16))?;
         write!(w, " ▲")?;
     }
     if scroll + count_items_fitting(items, scroll, max_rows, cols) < items.len() {
-        execute!(w, cursor::MoveTo(cols as u16 - 3, rows as u16 - 2))?;
+        execute!(w, cursor::MoveTo(xpos, ypos_bottom))?;
         write!(w, " ▼")?;
     }
 
     // Bottom hint
-    execute!(w, cursor::MoveTo(0, rows as u16 - 1))?;
+    execute!(w, cursor::MoveTo(0, ypos_hint))?;
     write!(w, "  {DIM}↑↓ navigate  ⏎ select  esc quit{RESET}")?;
 
     w.flush()?;
