@@ -14,6 +14,7 @@ alloy = { workspace = true }
 rain_orderbook_subgraph_client = { workspace = true }
 rain_orderbook_bindings = { workspace = true }
 rain_orderbook_common = { workspace = true }
+rain_orderbook_js_api = { path = "../js_api" }
 rain_orderbook_app_settings = { workspace = true }
 rain_orderbook_quote = { workspace = true }
 anyhow = { workspace = true }

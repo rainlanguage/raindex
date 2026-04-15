@@ -38,8 +38,8 @@ pub struct Tokens {
     pub keywords: Vec<String>,
     pub version: Version,
     pub tokens: Vec<Token>,
-    #[serde(rename = "logoURI")]
-    pub logo_uri: String,
+    #[serde(rename = "logoURI", default)]
+    pub logo_uri: Option<String>,
 }
 
 impl Token {
