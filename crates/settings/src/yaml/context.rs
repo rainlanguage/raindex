@@ -669,7 +669,12 @@ mod tests {
 
         let err = context.interpolate("${bogus || foo}").unwrap_err();
         // Just assert it errors rather than silently substituting.
-        assert!(matches!(err, ContextError::InvalidPath(_) | ContextError::PropertyNotFound(_) | ContextError::NoOrder));
+        assert!(matches!(
+            err,
+            ContextError::InvalidPath(_)
+                | ContextError::PropertyNotFound(_)
+                | ContextError::NoOrder
+        ));
     }
 
     #[test]
