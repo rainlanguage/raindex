@@ -74,7 +74,8 @@ impl Execute for StrategyBuilder {
             .0
             .get(&self.strategy)
             .ok_or_else(|| {
-                let available = registry.get_order_keys().unwrap_or_default();
+                let mut available = registry.get_order_keys().unwrap_or_default();
+                available.sort();
                 anyhow::anyhow!(
                     "strategy '{}' not found in registry. Available: {:?}",
                     self.strategy,
