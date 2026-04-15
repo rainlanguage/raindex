@@ -462,6 +462,8 @@ pub enum RaindexError {
     QuoteDataMissing,
     #[error("Invalid input index: {0}")]
     InvalidInputIndex(u32),
+    #[error("Invalid output index: {0}")]
+    InvalidOutputIndex(u32),
     #[error("Cannot parse metadata: {0}")]
     ParseMetaError(#[from] rain_metadata::Error),
     #[error("No metaboards configured for any chain")]
@@ -654,6 +656,12 @@ impl RaindexError {
             RaindexError::InvalidInputIndex(index) => {
                 format!(
                     "Invalid input index: {}. The order does not have an input at this index.",
+                    index
+                )
+            }
+            RaindexError::InvalidOutputIndex(index) => {
+                format!(
+                    "Invalid output index: {}. The order does not have an output at this index.",
                     index
                 )
             }

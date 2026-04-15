@@ -31,6 +31,7 @@ reqwest = { workspace = true }
 clap = { workspace = true, features = ["env"] }
 tracing-subscriber = { workspace = true, features = ['env-filter'] }
 wasm-bindgen-utils = { workspace = true }
+async-trait = { workspace = true }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -55,4 +56,3 @@ rain_orderbook_common = { workspace = true }
 wasm-bindgen-test = "0.3"
 rain_orderbook_app_settings = { workspace = true }
 tempfile.workspace = true
-async-trait = "0.1"

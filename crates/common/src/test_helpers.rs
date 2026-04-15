@@ -654,6 +654,7 @@ pub mod quotes {
             block_number: 1,
             data,
             success,
+            signed_context: vec![],
             error: if success {
                 None
             } else {

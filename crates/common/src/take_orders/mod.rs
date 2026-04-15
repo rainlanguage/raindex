@@ -13,6 +13,7 @@ pub use preflight::{
     check_taker_balance_and_allowance, find_failing_order_index, simulate_take_orders,
     AllowanceOnlyResult, BalanceAndAllowanceResult, PreflightError,
 };
+pub use rain_orderbook_quote::injector::{NoopInjector, SignedContextInjector};
 pub use simulation::{
     simulate_buy_over_candidates, simulate_spend_over_candidates, SelectedTakeOrderLeg,
     SimulationResult,
