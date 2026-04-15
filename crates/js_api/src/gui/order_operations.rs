@@ -97,14 +97,14 @@ impl_wasm_traits!(ExternalCall);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct DeploymentTransactionArgs {
-    approvals: Vec<ExtendedApprovalCalldata>,
+    pub approvals: Vec<ExtendedApprovalCalldata>,
     #[tsify(type = "string")]
-    deployment_calldata: Bytes,
+    pub deployment_calldata: Bytes,
     #[tsify(type = "string")]
-    orderbook_address: Address,
-    chain_id: u32,
+    pub orderbook_address: Address,
+    pub chain_id: u32,
     #[tsify(type = "ExternalCall | undefined")]
-    emit_meta_call: Option<ExternalCall>,
+    pub emit_meta_call: Option<ExternalCall>,
 }
 impl_wasm_traits!(DeploymentTransactionArgs);
 
