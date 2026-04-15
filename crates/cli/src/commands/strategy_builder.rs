@@ -51,6 +51,10 @@ fn parse_key_value_pairs(args: &[String]) -> Result<HashMap<String, String>> {
         let (key, value) = arg
             .split_once('=')
             .ok_or_else(|| anyhow::anyhow!("expected KEY=VALUE, got: {arg}"))?;
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("expected non-empty KEY in KEY=VALUE, got: {arg}");
+        }
         if map.contains_key(key) {
             anyhow::bail!("duplicate key: {key}");
         }
@@ -192,6 +196,20 @@ mod tests {
         let args = vec!["key=value=with=equals".to_string()];
         let map = parse_key_value_pairs(&args).unwrap();
         assert_eq!(map.get("key").unwrap(), "value=with=equals");
+    }
+
+    #[test]
+    fn parse_key_value_pairs_empty_key_fails() {
+        let args = vec!["=value".to_string()];
+        let err = parse_key_value_pairs(&args).unwrap_err().to_string();
+        assert!(err.contains("expected non-empty KEY"), "got: {err}");
+    }
+
+    #[test]
+    fn parse_key_value_pairs_whitespace_key_fails() {
+        let args = vec!["  =value".to_string()];
+        let err = parse_key_value_pairs(&args).unwrap_err().to_string();
+        assert!(err.contains("expected non-empty KEY"), "got: {err}");
     }
 
     #[test]
