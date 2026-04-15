@@ -76,10 +76,18 @@ pub async fn get_order_quotes(
         }
     };
 
+    // Responses are assembled in strict iteration order. Pairs whose oracle
+    // fetch failed get a failure response stored immediately; quoted pairs
+    // leave a hole that is filled in after the RPC batch returns. This
+    // preserves per-order positional alignment for callers that re-slice the
+    // flat response vector by per-order pair counts.
+    let mut all_responses: Vec<Option<BatchOrderQuotesResponse>> = Vec::new();
+    // Parallel tracking for the subset of iteration slots that were quoted,
+    // so we can scatter RPC results back into `all_responses`.
     let mut all_pairs: Vec<Pair> = Vec::new();
     let mut all_quote_targets: Vec<QuoteTarget> = Vec::new();
     let mut all_signed_contexts: Vec<Vec<SignedContextV1>> = Vec::new();
-    let mut oracle_errors: Vec<BatchOrderQuotesResponse> = Vec::new();
+    let mut quoted_slot_indices: Vec<usize> = Vec::new();
 
     for order in &orders {
         let order_struct: OrderV4 = order.clone().try_into()?;
@@ -147,6 +155,7 @@ pub async fn get_order_quotes(
                     output_index: output_index as u32,
                 };
 
+                let slot_idx = all_responses.len();
                 match oracle_context {
                     Ok(oracle_ctx) => {
                         // Append injector-contributed contexts after the oracle
@@ -163,6 +172,7 @@ pub async fn get_order_quotes(
                         let composed: Vec<SignedContextV1> =
                             oracle_ctx.into_iter().chain(injected).collect();
 
+                        all_responses.push(None);
                         all_pairs.push(pair);
                         all_signed_contexts.push(composed.clone());
                         all_quote_targets.push(QuoteTarget {
@@ -174,24 +184,25 @@ pub async fn get_order_quotes(
                                 signedContext: composed,
                             },
                         });
+                        quoted_slot_indices.push(slot_idx);
                     }
                     Err(e) => {
-                        oracle_errors.push(BatchOrderQuotesResponse {
+                        all_responses.push(Some(BatchOrderQuotesResponse {
                             pair,
                             block_number: req_block_number,
                             success: false,
                             data: None,
                             error: Some(e),
                             signed_context: vec![],
-                        });
+                        }));
                     }
                 }
             }
         }
     }
 
-    let results: Vec<BatchOrderQuotesResponse> = match BatchQuoteTarget(all_quote_targets)
-        .do_quote(rpcs, Some(req_block_number), None, chunk_size)
+    let quote_results: Vec<BatchOrderQuotesResponse> = match BatchQuoteTarget(all_quote_targets)
+        .do_quote(rpcs, Some(req_block_number), counterparty, chunk_size)
         .await
     {
         Ok(quote_values) => quote_values
@@ -236,9 +247,12 @@ pub async fn get_order_quotes(
         }
     };
 
-    let mut all_results = oracle_errors;
-    all_results.extend(results);
-    Ok(all_results)
+    // Scatter quote results back into the iteration-ordered response vector.
+    for (slot_idx, response) in quoted_slot_indices.into_iter().zip(quote_results) {
+        all_responses[slot_idx] = Some(response);
+    }
+
+    Ok(all_responses.into_iter().map(|r| r.unwrap()).collect())
 }
 
 #[cfg(test)]

@@ -346,7 +346,7 @@ mod tests {
         use crate::local_db::OrderbookIdentifier;
         use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
         use alloy::hex::encode_prefixed;
-        use alloy::primitives::{b256, Address, U256};
+        use alloy::primitives::{b256, Address, Bytes, U256};
         use alloy::{sol, sol_types::SolValue};
         use httpmock::MockServer;
         use rain_math_float::Float;
@@ -354,18 +354,19 @@ mod tests {
         use serde_json::{json, Value};
 
         sol!(
-            struct Result {
-                bool success;
-                bytes returnData;
-            }
-        );
-        sol!(
             struct quoteReturn {
                 bool exists;
                 uint256 outputMax;
                 uint256 ioRatio;
             }
         );
+
+        // OZ Multicall returns `bytes[]`; helper to wrap per-target
+        // `quote2Return`s into the outer multicall return payload.
+        fn encode_multicall_bytes(inner: Vec<quoteReturn>) -> String {
+            let elements: Vec<Bytes> = inner.into_iter().map(|r| r.abi_encode().into()).collect();
+            encode_prefixed(<Vec<Bytes> as SolValue>::abi_encode(&elements))
+        }
 
         fn get_order1_json() -> Value {
             json!(                        {
@@ -449,17 +450,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -549,17 +544,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -617,17 +606,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -698,29 +681,18 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(1),
-                        ioRatio: U256::from(2),
-                    }
-                    .abi_encode()
-                    .into(),
+            let response_hex = encode_multicall_bytes(vec![
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(1),
+                    ioRatio: U256::from(2),
                 },
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(2),
-                        ioRatio: U256::from(1),
-                    }
-                    .abi_encode()
-                    .into(),
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(2),
+                    ioRatio: U256::from(1),
                 },
-            ];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            ]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
