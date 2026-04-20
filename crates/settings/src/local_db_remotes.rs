@@ -37,6 +37,7 @@ impl YamlParsableHash for LocalDbRemoteCfg {
         _: Option<&Context>,
     ) -> Result<HashMap<String, Self>, YamlError> {
         let mut remotes = HashMap::new();
+        let mut remote_keys_by_url = HashMap::new();
 
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
@@ -65,18 +66,29 @@ impl YamlParsableHash for LocalDbRemoteCfg {
                             location: location.clone(),
                         })?;
 
-                    let remote = LocalDbRemoteCfg {
-                        document: document.clone(),
-                        key: remote_key.clone(),
-                        url,
-                    };
-
                     if remotes.contains_key(&remote_key) {
                         return Err(YamlError::KeyShadowing(
                             remote_key,
                             "local-db-remotes".to_string(),
                         ));
                     }
+                    if let Some(existing_key) = remote_keys_by_url.get(&url) {
+                        return Err(YamlError::Field {
+                            kind: FieldErrorKind::InvalidValue {
+                                field: "url".to_string(),
+                                reason: format!("duplicates local-db-remotes[{}]", existing_key),
+                            },
+                            location,
+                        });
+                    }
+
+                    let remote = LocalDbRemoteCfg {
+                        document: document.clone(),
+                        key: remote_key.clone(),
+                        url,
+                    };
+
+                    remote_keys_by_url.insert(remote.url.clone(), remote.key.clone());
                     remotes.insert(remote.key.clone(), remote);
                 }
             }
@@ -153,6 +165,28 @@ local-db-remotes:
         assert_eq!(
             err,
             YamlError::KeyShadowing("mainnet".to_string(), "local-db-remotes".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_local_db_remotes_from_yaml_duplicate_url() {
+        let yaml = r#"
+local-db-remotes:
+    mainnet: https://example.com/localdb/mainnet
+    duplicate: https://example.com/localdb/mainnet
+"#;
+        let err =
+            LocalDbRemoteCfg::parse_all_from_yaml(vec![get_document(yaml)], None).unwrap_err();
+
+        assert_eq!(
+            err,
+            YamlError::Field {
+                kind: FieldErrorKind::InvalidValue {
+                    field: "url".to_string(),
+                    reason: "duplicates local-db-remotes[mainnet]".to_string(),
+                },
+                location: "local-db-remotes[duplicate]".to_string(),
+            }
         );
     }
 
