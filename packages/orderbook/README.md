@@ -750,6 +750,63 @@ if (result.error) {
 console.log(result.value);
 ```
 
+## Vault lifecycle quick reference
+
+Common vault operations at a glance.
+
+### Deposit flow
+
+```ts
+// 1. Get vault (or use vaultsList from an order)
+const vaultResult = await client.getVault(chainId, orderbookAddress, vaultId);
+const vault = vaultResult.value;
+
+// 2. Check/set approval
+const allowanceResult = await vault.getAllowance();
+if (allowanceResult.value.lt(depositAmount)) {
+  const approvalCalldata = await vault.getApprovalCalldata(depositAmount);
+  // Execute approval transaction
+}
+
+// 3. Generate and execute deposit
+const depositCalldata = await vault.getDepositCalldata(depositAmount);
+// Execute deposit transaction
+```
+
+### Withdraw flow
+
+```ts
+// 1. Find vaults with balances
+const vaultsResult = await client.getVaults([chainId], { hideZeroBalance: true });
+const vaultsList = vaultsResult.value;
+
+// 2a. Withdraw from specific vault
+const vault = vaultsList.items[0];
+const withdrawCalldata = await vault.getWithdrawCalldata(amount);
+
+// 2b. Or withdraw all in one multicall
+const withdrawAllCalldata = await vaultsList.getWithdrawCalldata();
+```
+
+### Full strategy lifecycle
+
+```ts
+// Deploy: approval → deposit → add order (via GUI)
+const args = await gui.getDeploymentTransactionArgs(owner);
+for (const approval of args.approvals) { /* execute */ }
+/* execute args.deploymentCalldata */
+
+// Monitor
+const order = await waitForOrderFromTx(client, { chainId, orderbookAddress, txHash });
+const trades = await order.getTradesList();
+
+// Teardown: remove order → withdraw
+const removeCalldata = await order.getRemoveCalldata();
+/* execute remove */
+const withdrawCalldata = await order.vaultsList.getWithdrawCalldata();
+/* execute withdraw */
+```
+
 ## Contributing
 
 This SDK is part of the Rain Language ecosystem. For contributions and issues, please visit the [GitHub repository](https://github.com/rainlanguage/raindex).
