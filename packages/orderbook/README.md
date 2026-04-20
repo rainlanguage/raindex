@@ -721,6 +721,20 @@ const postTaskResult = await dotrain.composeScenarioToPostTaskRainlang('flare-pr
 if (!postTaskResult.error) console.log(postTaskResult.value);
 ```
 
+#### Self-contained dotrain files
+
+If your `.rain` file includes all necessary configuration (networks, tokens, orderbooks, deployers) before the `---` separator, you can pass an empty array for the settings parameter:
+
+```ts
+// When your .rain file contains ALL configuration:
+const dotrainResult = await DotrainOrder.create(selfContainedDotrain, []);
+
+// When you need to merge external settings:
+const dotrainResult = await DotrainOrder.create(dotrainSource, [settingsYaml1, settingsYaml2]);
+```
+
+The SDK merges all provided YAML sources. If your dotrain already has everything, the empty array works correctly.
+
 ## Utility exports
 
 - `getOrderHash`, `keccak256`, `keccak256HexString` – deterministic hashing helpers for Rain orders or arbitrary payloads.
@@ -749,6 +763,85 @@ if (result.error) {
 }
 console.log(result.value);
 ```
+
+## Troubleshooting
+
+### Common Errors
+
+#### "YAML file is empty"
+
+This typically occurs when:
+- Passing a string instead of an array to `DotrainOrder.create()` second parameter
+- The settings YAML is malformed or has encoding issues
+
+**Solution:** Ensure you pass an array of YAML strings, even if empty:
+```ts
+// Wrong - causes "YAML file is empty"
+await DotrainOrder.create(dotrain, settingsYaml);
+
+// Correct
+await DotrainOrder.create(dotrain, [settingsYaml]);
+
+// Also correct (for self-contained files)
+await DotrainOrder.create(dotrain, []);
+```
+
+#### "Missing required field 'deployment-block'"
+
+The `orderbooks` configuration requires a `deployment-block` field specifying the block number when the orderbook contract was deployed.
+
+**Solution:** Add the deployment block to your orderbook config:
+```yaml
+orderbooks:
+  base:
+    network: base
+    address: 0x52CEB8eBEf648744fFDDE89F7Bc9C3aC35944775
+    deployment-block: 36667253  # Required!
+    subgraph: base
+```
+
+#### "Missing required field 'description' in gui deployment"
+
+GUI deployments require both a `description` and `fields` array, even if fields are empty or reference scenario bindings.
+
+**Solution:** Ensure your GUI config includes all required fields:
+```yaml
+gui:
+  name: My Strategy
+  description: Strategy description
+  deployments:
+    my-deployment:
+      name: Deployment Name
+      description: Deployment description  # Required!
+      deposits:
+        - token: usdc
+      fields:  # Required! (can reference scenario bindings)
+        - binding: my-param
+          name: Parameter Name
+          description: Parameter description
+```
+
+#### "all providers failed to handle the request" (RPC errors)
+
+Rate limiting or RPC unavailability.
+
+**Solution:** Add multiple RPCs for redundancy:
+```yaml
+networks:
+  base:
+    rpcs:
+      - https://base-rpc.publicnode.com
+      - https://base.llamarpc.com
+      - https://mainnet.base.org
+    chain-id: 8453
+```
+
+### Tips for Production
+
+1. **Always use multiple RPCs** - Public RPCs have rate limits; configure fallbacks
+2. **Check required fields** - `deployment-block`, `description`, and `fields` are often missed
+3. **Validate YAML first** - Use `OrderbookYaml.new()` to validate settings before deployment
+4. **Handle WasmEncodedResult** - Always check `.error` before accessing `.value`
 
 ## Contributing
 
