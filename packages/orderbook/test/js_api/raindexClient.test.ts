@@ -1599,11 +1599,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 
 			const raindexClient = extractWasmEncodedData(await RaindexClient.new([YAML]));
 			const result = extractWasmEncodedData(
-				await raindexClient.getAddOrdersForTransaction(
-					1,
-					CHAIN_ID_1_ORDERBOOK_ADDRESS,
-					mockOrder.transaction.id
-				)
+				await raindexClient.getAddOrdersForTransaction(1, mockOrder.transaction.id)
 			);
 			assert.equal(result[0].id, mockAddOrder.order.id);
 			assert.equal(result[0].chainId, BigInt(1));

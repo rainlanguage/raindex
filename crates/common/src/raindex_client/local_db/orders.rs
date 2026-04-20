@@ -602,7 +602,7 @@ mod tests {
             let orderbook_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
 
             let local_order = LocalDbOrder {
-                chain_id: 137,
+                chain_id: 42161,
                 order_hash,
                 owner,
                 block_timestamp: 123456,
@@ -621,13 +621,12 @@ mod tests {
             let client = new_test_client_with_db_callback(
                 vec![get_local_db_test_yaml()],
                 callback,
-                vec![42161, 137],
+                vec![42161],
             );
 
             let orders = client
                 .get_add_orders_for_transaction_wasm_binding(
-                    137,
-                    orderbook_address.to_string(),
+                    42161,
                     transaction_hash.to_string(),
                     Some(1),
                     Some(1),
@@ -637,7 +636,7 @@ mod tests {
 
             assert_eq!(orders.len(), 1);
             let order = &orders[0];
-            assert_eq!(order.chain_id(), 137);
+            assert_eq!(order.chain_id(), 42161);
             assert_eq!(order.order_hash(), order_hash.to_string());
             assert_eq!(order.order_bytes(), order_bytes.to_string());
             let tx = order.transaction().expect("transaction should be set");

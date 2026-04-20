@@ -480,7 +480,7 @@ export class TransactionManager {
 		// SDK-based indexing - the SDK's getAddOrdersForTransaction handles
 		// local-DB-first polling followed by subgraph fallback internally
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getAddOrdersForTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getAddOrdersForTransaction(chainId, txHash),
 			isSuccess: (orders) => Array.isArray(orders) && orders.length > 0,
 			buildLinks: (orders) => {
 				if (!Array.isArray(orders) || orders.length === 0) return [];
