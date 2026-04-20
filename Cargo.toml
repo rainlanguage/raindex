@@ -90,9 +90,6 @@ path = "crates/math"
 [workspace.dependencies.rain_orderbook_js_api]
 path = "crates/js_api"
 
-[workspace.dependencies.rain_orderbook_rest_api]
-path = "crates/rest_api"
-
 # release profile for wasm build optimized for size reduction
 [profile.release-wasm]
 inherits = "release"
