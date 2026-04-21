@@ -75,7 +75,7 @@ jobs:
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
           VERCEL_DIR="$(mktemp -d)"
-          npm install --no-audit --no-fund --no-save --ignore-scripts --prefix "$VERCEL_DIR" vercel@33.4.1
+          npm install --no-audit --no-fund --no-save --ignore-scripts --prefix "$VERCEL_DIR" vercel@47.2.2
           echo "VERCEL_BIN=$VERCEL_DIR/node_modules/.bin/vercel" >> "$GITHUB_ENV"
           test -x "$VERCEL_DIR/node_modules/.bin/vercel"
       - name: Pull Vercel Environment Information
