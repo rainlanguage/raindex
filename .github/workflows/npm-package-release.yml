@@ -172,16 +172,10 @@ jobs:
 
       # from here on, we'll skip if OLD_HASH and NEW_HASH are the same (ie no publish)
       # this means we need to skip every step by using an if statement.
-      # set npm version
-      - name: Set Version
+      # resolve the next shared prerelease from npm registry state, not committed package versions
+      - name: Prepare Release Version
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: |
-          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/orderbook
-          NEW_VERSION=$(jq -r '.version' ./packages/orderbook/package.json)
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          jq --arg v "$NEW_VERSION" '.dependencies."@rainlanguage/orderbook" = $v' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
-          npx prettier --write ./packages/ui-components/package.json
-          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/ui-components
+        run: node .github/scripts/prepare-npm-release.mjs
 
       # Create orderbook npm package tarball
       - name: Create orderbook NPM Package Tarball
@@ -196,10 +190,14 @@ jobs:
       - name: Publish orderbook pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm publish orderbook_npm_package_${{ env.NEW_VERSION }}.tgz \
-            --access public \
-            --tag latest \
-            --verbose
+          if npm view @rainlanguage/orderbook@${{ env.NEW_VERSION }} version >/dev/null 2>&1; then
+            echo "@rainlanguage/orderbook@${{ env.NEW_VERSION }} is already published; skipping"
+          else
+            npm publish orderbook_npm_package_${{ env.NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --verbose
+          fi
 
       # Create npm package tarball for ui-components
       - name: Create ui-components NPM Package Tarball
@@ -214,10 +212,14 @@ jobs:
       - name: Publish ui-components To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm publish ui_components_npm_package_${{ env.NEW_VERSION }}.tgz \
-            --access public \
-            --tag latest \
-            --verbose
+          if npm view @rainlanguage/ui-components@${{ env.NEW_VERSION }} version >/dev/null 2>&1; then
+            echo "@rainlanguage/ui-components@${{ env.NEW_VERSION }} is already published; skipping"
+          else
+            npm publish ui_components_npm_package_${{ env.NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --verbose
+          fi
 
       # Commit changes and tag
       - name: Commit And Tag
@@ -226,7 +228,11 @@ jobs:
           git add "packages/orderbook/package.json"
           git add "packages/ui-components/package.json"
           git add "package-lock.json"
-          git commit -m "NPM Package Release v${{ env.NEW_VERSION }}"
+          if git diff --cached --quiet; then
+            echo "No package version changes to commit"
+          else
+            git commit -m "NPM Package Release v${{ env.NEW_VERSION }}"
+          fi
           git tag npm-v${{ env.NEW_VERSION }}
 
       # Push the commit to remote
