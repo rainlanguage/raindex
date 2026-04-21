@@ -151,97 +151,95 @@ jobs:
           git config --global user.email "${{ secrets.CI_GIT_EMAIL }}"
           git config --global user.name "${{ secrets.CI_GIT_USER }}"
 
-      # get hash of latest published pkgs from npm and concat them
+      # get hash of latest published pkgs from npm
       - name: Get Old Hash
         run: |
           OB_PKG_OLD_HASH=$(npm view @rainlanguage/orderbook@latest dist.shasum 2>/dev/null || echo "none")
           UC_PKG_OLD_HASH=$(npm view @rainlanguage/ui-components@latest dist.shasum 2>/dev/null || echo "none")
-          OLD_HASH=$OB_PKG_OLD_HASH-$UC_PKG_OLD_HASH
-          echo "OLD_HASH=$OLD_HASH" >> $GITHUB_ENV
-          echo "old hash: $OLD_HASH"
+          echo "OB_PKG_OLD_HASH=$OB_PKG_OLD_HASH" >> $GITHUB_ENV
+          echo "UC_PKG_OLD_HASH=$UC_PKG_OLD_HASH" >> $GITHUB_ENV
+          echo "old orderbook hash: $OB_PKG_OLD_HASH"
+          echo "old ui-components hash: $UC_PKG_OLD_HASH"
 
-      # calc hash of current workspace pkgs by packing them and concat them
+      # calc hash of current workspace pkgs by packing them
       - name: Get New Hash
         run: |
           OB_PKG_NEW_HASH=$(npm pack --silent -w @rainlanguage/orderbook | xargs shasum | cut -c1-40)
           UC_PKG_NEW_HASH=$(npm pack --silent -w @rainlanguage/ui-components | xargs shasum | cut -c1-40)
-          NEW_HASH=$OB_PKG_NEW_HASH-$UC_PKG_NEW_HASH
-          echo "NEW_HASH=$NEW_HASH" >> $GITHUB_ENV
-          echo "new hash: $NEW_HASH"
+          echo "OB_PKG_NEW_HASH=$OB_PKG_NEW_HASH" >> $GITHUB_ENV
+          echo "UC_PKG_NEW_HASH=$UC_PKG_NEW_HASH" >> $GITHUB_ENV
+          echo "new orderbook hash: $OB_PKG_NEW_HASH"
+          echo "new ui-components hash: $UC_PKG_NEW_HASH"
+          if [ "$OB_PKG_OLD_HASH" != "$OB_PKG_NEW_HASH" ]; then
+            echo "OB_SHOULD_PUBLISH=true" >> $GITHUB_ENV
+            HAS_RELEASE=true
+          else
+            echo "OB_SHOULD_PUBLISH=false" >> $GITHUB_ENV
+          fi
+          if [ "$UC_PKG_OLD_HASH" != "$UC_PKG_NEW_HASH" ]; then
+            echo "UC_SHOULD_PUBLISH=true" >> $GITHUB_ENV
+            HAS_RELEASE=true
+          else
+            echo "UC_SHOULD_PUBLISH=false" >> $GITHUB_ENV
+          fi
+          echo "HAS_RELEASE=${HAS_RELEASE:-false}" >> $GITHUB_ENV
           rm -f *.tgz
 
-      # from here on, we'll skip if OLD_HASH and NEW_HASH are the same (ie no publish)
-      # this means we need to skip every step by using an if statement.
-      # bump package versions independently from committed package state
+      # from here on, each package only publishes if its own hash changed
       - name: Bump Package Versions
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.HAS_RELEASE == 'true' }}
         run: |
-          node <<'NODE'
-          const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
-
-          function readJson(path) {
-            const text = readFileSync(path, "utf8");
-            return {
-              data: JSON.parse(text),
-              indent: text.match(/\n([ \t]+)"/)?.[1] ?? "  ",
-            };
+          bump_alpha() {
+            version="$1"
+            prefix="${version%.*}"
+            number="${version##*.}"
+            echo "$prefix.$((number + 1))"
           }
 
-          function writeJson(path, json, indent) {
-            writeFileSync(path, `${JSON.stringify(json, null, indent)}\n`);
-          }
+          OB_NEW_VERSION=$(jq -r '.version' ./packages/orderbook/package.json)
+          UC_NEW_VERSION=$(jq -r '.version' ./packages/ui-components/package.json)
 
-          function bumpAlpha(version) {
-            const match = /^(\d+\.\d+\.\d+-alpha\.)(\d+)$/.exec(version);
-            if (!match) {
-              throw new Error(`Unsupported alpha prerelease version: ${version}`);
-            }
-            return `${match[1]}${Number.parseInt(match[2], 10) + 1}`;
-          }
+          if [ "$OB_SHOULD_PUBLISH" = "true" ]; then
+            OB_NEW_VERSION=$(bump_alpha "$OB_NEW_VERSION")
+            jq --indent 4 --arg v "$OB_NEW_VERSION" '.version = $v' ./packages/orderbook/package.json > tmp.json && mv tmp.json ./packages/orderbook/package.json
+            jq --indent 4 --arg v "$OB_NEW_VERSION" '.packages."packages/orderbook".version = $v' ./package-lock.json > tmp.json && mv tmp.json ./package-lock.json
+          fi
 
-          const orderbook = readJson("packages/orderbook/package.json");
-          const uiComponents = readJson("packages/ui-components/package.json");
-          const lock = readJson("package-lock.json");
+          if [ "$UC_SHOULD_PUBLISH" = "true" ]; then
+            UC_NEW_VERSION=$(bump_alpha "$UC_NEW_VERSION")
+            jq --arg v "$UC_NEW_VERSION" --arg ob "$OB_NEW_VERSION" '.version = $v | .dependencies."@rainlanguage/orderbook" = $ob' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
+            npx prettier --write ./packages/ui-components/package.json
+            jq --indent 4 --arg v "$UC_NEW_VERSION" --arg ob "$OB_NEW_VERSION" '.packages."packages/ui-components".version = $v | .packages."packages/ui-components".dependencies."@rainlanguage/orderbook" = $ob' ./package-lock.json > tmp.json && mv tmp.json ./package-lock.json
+          fi
 
-          const orderbookVersion = bumpAlpha(orderbook.data.version);
-          const uiComponentsVersion = bumpAlpha(uiComponents.data.version);
-
-          orderbook.data.version = orderbookVersion;
-          uiComponents.data.version = uiComponentsVersion;
-          uiComponents.data.dependencies["@rainlanguage/orderbook"] = orderbookVersion;
-
-          lock.data.packages["packages/orderbook"].version = orderbookVersion;
-          lock.data.packages["packages/ui-components"].version = uiComponentsVersion;
-          lock.data.packages["packages/ui-components"].dependencies["@rainlanguage/orderbook"] =
-            orderbookVersion;
-
-          writeJson("packages/orderbook/package.json", orderbook.data, orderbook.indent);
-          writeJson("packages/ui-components/package.json", uiComponents.data, uiComponents.indent);
-          writeJson("package-lock.json", lock.data, lock.indent);
-
-          appendFileSync(process.env.GITHUB_ENV, `OB_NEW_VERSION=${orderbookVersion}\n`);
-          appendFileSync(process.env.GITHUB_ENV, `UC_NEW_VERSION=${uiComponentsVersion}\n`);
-          appendFileSync(
-            process.env.GITHUB_ENV,
-            `RELEASE_TAG=npm-ob-v${orderbookVersion}-uc-v${uiComponentsVersion}\n`,
-          );
-
-          console.log(`orderbook version: ${orderbookVersion}`);
-          console.log(`ui-components version: ${uiComponentsVersion}`);
-          NODE
+          {
+            echo "RELEASE_FILES<<EOF"
+            if [ "$OB_SHOULD_PUBLISH" = "true" ]; then
+              echo "orderbook_npm_package_${OB_NEW_VERSION}.tgz"
+            fi
+            if [ "$UC_SHOULD_PUBLISH" = "true" ]; then
+              echo "ui_components_npm_package_${UC_NEW_VERSION}.tgz"
+            fi
+            echo "EOF"
+          } >> $GITHUB_ENV
+          echo "OB_NEW_VERSION=$OB_NEW_VERSION" >> $GITHUB_ENV
+          echo "UC_NEW_VERSION=$UC_NEW_VERSION" >> $GITHUB_ENV
+          echo "RELEASE_TAG=npm-ob-v${OB_NEW_VERSION}-uc-v${UC_NEW_VERSION}" >> $GITHUB_ENV
+          echo "orderbook version: $OB_NEW_VERSION"
+          echo "ui-components version: $UC_NEW_VERSION"
 
       # Create orderbook npm package tarball
       - name: Create orderbook NPM Package Tarball
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OB_SHOULD_PUBLISH == 'true' }}
         run: echo "OB_NPM_PACKAGE=$(npm pack --silent -w @rainlanguage/orderbook)" >> $GITHUB_ENV
 
       - name: Rename orderbook NPM Package Tarball
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OB_SHOULD_PUBLISH == 'true' }}
         run: mv ${{ env.OB_NPM_PACKAGE }} orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
 
       # publish orderbook pkg to npm
       - name: Publish orderbook pkg To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OB_SHOULD_PUBLISH == 'true' }}
         run: |
           if npm view @rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} version >/dev/null 2>&1; then
             echo "@rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} is already published; skipping"
@@ -254,16 +252,16 @@ jobs:
 
       # Create npm package tarball for ui-components
       - name: Create ui-components NPM Package Tarball
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.UC_SHOULD_PUBLISH == 'true' }}
         run: echo "UC_NPM_PACKAGE=$(npm pack --silent -w @rainlanguage/ui-components)" >> $GITHUB_ENV
 
       - name: Rename ui-components NPM Package Tarball
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.UC_SHOULD_PUBLISH == 'true' }}
         run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
 
       # publish ui-components to npm
       - name: Publish ui-components To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.UC_SHOULD_PUBLISH == 'true' }}
         run: |
           if npm view @rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} version >/dev/null 2>&1; then
             echo "@rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} is already published; skipping"
@@ -276,7 +274,7 @@ jobs:
 
       # Commit changes and tag
       - name: Commit And Tag
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.HAS_RELEASE == 'true' }}
         run: |
           git add "packages/orderbook/package.json"
           git add "packages/ui-components/package.json"
@@ -294,7 +292,7 @@ jobs:
 
       # Push the commit to remote
       - name: Push Changes To Remote
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.HAS_RELEASE == 'true' }}
         run: |
           git push origin
           if git ls-remote --exit-code --tags origin "refs/tags/${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
@@ -307,15 +305,13 @@ jobs:
 
       # Create gitHub release with tarballs
       - name: Create GitHub Release
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.HAS_RELEASE == 'true' }}
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
-          files: |
-            orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
-            ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
+          files: ${{ env.RELEASE_FILES }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
