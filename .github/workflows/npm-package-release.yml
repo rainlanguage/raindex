@@ -217,14 +217,10 @@ jobs:
       - name: Publish orderbook pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          if npm view @rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} version >/dev/null 2>&1; then
-            echo "@rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} is already published; skipping"
-          else
-            npm publish orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz \
-              --access public \
-              --tag latest \
-              --verbose
-          fi
+          npm publish orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
 
       # Create npm package tarball for ui-components
       - name: Create ui-components NPM Package Tarball
@@ -239,14 +235,10 @@ jobs:
       - name: Publish ui-components To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          if npm view @rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} version >/dev/null 2>&1; then
-            echo "@rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} is already published; skipping"
-          else
-            npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
-              --access public \
-              --tag latest \
-              --verbose
-          fi
+          npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
 
       # Commit changes and tag
       - name: Commit And Tag
@@ -255,27 +247,15 @@ jobs:
           git add "packages/orderbook/package.json"
           git add "packages/ui-components/package.json"
           git add "package-lock.json"
-          if git diff --cached --quiet; then
-            echo "No package version changes to commit"
-          else
-            git commit -m "NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
-          fi
-          if git rev-parse "${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
-            echo "Tag ${{ env.RELEASE_TAG }} already exists locally"
-          else
-            git tag "${{ env.RELEASE_TAG }}"
-          fi
+          git commit -m "NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
+          git tag "${{ env.RELEASE_TAG }}"
 
       # Push the commit to remote
       - name: Push Changes To Remote
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
           git push origin
-          if git ls-remote --exit-code --tags origin "refs/tags/${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
-            echo "Tag ${{ env.RELEASE_TAG }} already exists on origin"
-          else
-            git push -u origin "${{ env.RELEASE_TAG }}"
-          fi
+          git push -u origin "${{ env.RELEASE_TAG }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
