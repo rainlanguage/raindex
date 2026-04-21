@@ -176,30 +176,19 @@ jobs:
       - name: Set Version
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          bump_alpha() {
-            version="$1"
-            prefix="${version%.*}"
-            number="${version##*.}"
-            echo "$prefix.$((number + 1))"
-          }
-
+          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/orderbook
           OB_NEW_VERSION=$(jq -r '.version' ./packages/orderbook/package.json)
-          UC_NEW_VERSION=$(jq -r '.version' ./packages/ui-components/package.json)
-
-          OB_NEW_VERSION=$(bump_alpha "$OB_NEW_VERSION")
-          UC_NEW_VERSION=$(bump_alpha "$UC_NEW_VERSION")
-
-          jq --indent 4 --arg v "$OB_NEW_VERSION" '.version = $v' ./packages/orderbook/package.json > tmp.json && mv tmp.json ./packages/orderbook/package.json
-          jq --arg v "$UC_NEW_VERSION" --arg ob "$OB_NEW_VERSION" '.version = $v | .dependencies."@rainlanguage/orderbook" = $ob' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
+          echo "OB_NEW_VERSION=$OB_NEW_VERSION" >> $GITHUB_ENV
+          jq --arg ob "$OB_NEW_VERSION" '.dependencies."@rainlanguage/orderbook" = $ob' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
           npx prettier --write ./packages/ui-components/package.json
+          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/ui-components
+          UC_NEW_VERSION=$(jq -r '.version' ./packages/ui-components/package.json)
+          echo "UC_NEW_VERSION=$UC_NEW_VERSION" >> $GITHUB_ENV
           jq --indent 4 --arg ob "$OB_NEW_VERSION" --arg uc "$UC_NEW_VERSION" '
             .packages."packages/orderbook".version = $ob |
             .packages."packages/ui-components".version = $uc |
             .packages."packages/ui-components".dependencies."@rainlanguage/orderbook" = $ob
           ' ./package-lock.json > tmp.json && mv tmp.json ./package-lock.json
-
-          echo "OB_NEW_VERSION=$OB_NEW_VERSION" >> $GITHUB_ENV
-          echo "UC_NEW_VERSION=$UC_NEW_VERSION" >> $GITHUB_ENV
           echo "RELEASE_TAG=npm-ob-v${OB_NEW_VERSION}-uc-v${UC_NEW_VERSION}" >> $GITHUB_ENV
           echo "orderbook version: $OB_NEW_VERSION"
           echo "ui-components version: $UC_NEW_VERSION"
