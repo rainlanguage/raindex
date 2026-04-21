@@ -48,7 +48,7 @@ impl OrderbookSubgraphClient {
         let has_token_filters = has_input_tokens || has_output_tokens;
 
         let filters = if has_basic_filters || has_token_filters {
-            let basic_filters = SgOrdersListQueryFilters {
+            let mut filters = SgOrdersListQueryFilters {
                 owner_in: filter_args.owners.clone(),
                 active: filter_args.active,
                 order_hash: filter_args.order_hash.clone(),
@@ -57,42 +57,20 @@ impl OrderbookSubgraphClient {
                 orderbook_in: filter_args.orderbooks.clone(),
             };
 
-            let or_filters = if has_input_tokens && has_output_tokens {
+            if has_input_tokens {
                 let tokens = tokens.unwrap();
-                let filter_with_inputs = SgOrdersListQueryFilters {
-                    inputs_: Some(SgVaultTokenFilter {
-                        token_in: tokens.inputs.clone(),
-                    }),
-                    ..basic_filters.clone()
-                };
-                let filter_with_outputs = SgOrdersListQueryFilters {
-                    outputs_: Some(SgVaultTokenFilter {
-                        token_in: tokens.outputs.clone(),
-                    }),
-                    ..basic_filters.clone()
-                };
-                vec![filter_with_inputs, filter_with_outputs]
-            } else if has_input_tokens {
+                filters.inputs_ = Some(SgVaultTokenFilter {
+                    token_in: tokens.inputs.clone(),
+                });
+            }
+            if has_output_tokens {
                 let tokens = tokens.unwrap();
-                vec![SgOrdersListQueryFilters {
-                    inputs_: Some(SgVaultTokenFilter {
-                        token_in: tokens.inputs.clone(),
-                    }),
-                    ..basic_filters
-                }]
-            } else if has_output_tokens {
-                let tokens = tokens.unwrap();
-                vec![SgOrdersListQueryFilters {
-                    outputs_: Some(SgVaultTokenFilter {
-                        token_in: tokens.outputs.clone(),
-                    }),
-                    ..basic_filters
-                }]
-            } else {
-                vec![basic_filters]
-            };
+                filters.outputs_ = Some(SgVaultTokenFilter {
+                    token_in: tokens.outputs.clone(),
+                });
+            }
 
-            Some(SgOrdersListQueryAnyFilters { or: or_filters })
+            Some(filters)
         } else {
             None
         };
@@ -908,7 +886,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_orders_list_with_both_token_filters_uses_or() {
+    async fn test_orders_list_with_both_token_filters_uses_directional_and() {
         let sg_server = MockServer::start_async().await;
         let client = setup_client(&sg_server);
         let token1 = "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d".to_string();
@@ -932,7 +910,6 @@ mod tests {
         sg_server.mock(|when, then| {
             when.method(POST)
                 .path("/")
-                .body_contains("\"or\":[{")
                 .body_contains("\"inputs_\":")
                 .body_contains("\"outputs_\":")
                 .body_contains(format!("\"token_in\":[\"{}\"]", token1))
