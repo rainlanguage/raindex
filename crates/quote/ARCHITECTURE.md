@@ -23,7 +23,7 @@ Key gating:
 ## High‑Level Responsibilities
 
 - Build quoting requests for one or many orders (direct or via subgraph lookups).
-- Perform efficient batched on‑chain calls using Multicall3 `aggregate3`.
+- Perform efficient batched on‑chain calls using the orderbook's own OpenZeppelin `Multicall` (`multicall(bytes[])`). This is critical — Multicall3 forwards via `CALL`, which would change `msg.sender` inside `quote2` to the Multicall3 contract and break any strategy that reads `order-counterparty()` in `calculate-io`. OZ Multicall uses `delegatecall`, preserving `msg.sender` as the caller-supplied `counterparty` so gated strategies simulate with the correct taker identity.
 - Represent quote results in a consistent, serializable format (`OrderQuoteValue`).
 - Decode revert data (including Rain errors) into structured failures (`FailedQuote`).
 - Provide a CLI to drive the above with ergonomic input formats and JSON output.
@@ -83,24 +83,26 @@ Key gating:
 
 ## RPC Layer: `rpc::batch_quote`
 
-Purpose: execute `quote2` for many `QuoteTarget`s in one multicall.
+Purpose: execute `quote2` for many `QuoteTarget`s efficiently while preserving the caller's `msg.sender`.
 
 Flow:
 1. Parse RPC URLs into `Url` and build a `ReadProvider` via `mk_read_provider(&rpcs)` from `rain_orderbook_bindings`.
-2. Create a dynamic `multicall` builder; override its address if `multicall_address` is provided.
-3. Optionally pin to `block_number` via `BlockId::Number(block)`.
-4. For each target, push `IOrderBookV5::quote2(QuoteV2)` into the multicall.
-5. Await `aggregate3()`:
-   - If the entire multicall returns `Err(MulticallError::CallFailed(bytes))`, decode the bytes via the Rain error selector registry and return a vector with the same per‑target error for each element (so callers still receive a `Vec<QuoteResult>` of the right length).
-   - If other transport‑level errors occur, bubble them up as `Error::MulticallError` and do not return per‑target results.
-6. For every `aggregate3` element:
-   - `Ok(ret)` and `ret.exists == true` → `Ok(OrderQuoteValue::from(ret))`.
-   - `Ok(ret)` and `ret.exists == false` → `Err(FailedQuote::NonExistent)`.
-   - `Err(failure)` → decode `failure.return_data` via the registry into `FailedQuote::RevertError` or `FailedQuote::RevertErrorDecodeFailed`.
+2. Partition `quote_targets` by their `orderbook` address — each orderbook has its own OZ `Multicall`, so each group becomes one `eth_call`.
+3. Within each orderbook group, chunk by `chunk_size` and issue one `eth_call` per chunk with:
+   - `to = orderbook`
+   - `from = counterparty` (preserved through `delegatecall` into each inner `quote2`)
+   - `data = abi_encode(multicall(bytes[] { abi_encode(quote2Call), ... }))`
+   - optional `block_number` via `BlockId::Number(block)`
+4. On success, decode the `bytes[]` response and per-element decode `quote2Return { exists, outputMax, ioRatio }`:
+   - `exists == true` → `Ok(OrderQuoteValue::from(ret))`.
+   - `exists == false` → `Err(FailedQuote::NonExistent)`.
+   - ABI decode failure → `Err(FailedQuote::CorruptReturnData)`.
+5. On chunk revert (OZ Multicall bubbles the first failing inner call's revert — it cannot isolate per-element), `quote_chunk_with_probe_and_split` recursively halves the chunk until each failing target is a batch-of-1 and the revert can be attributed to a specific `QuoteTarget`. There is no probe stage or whole-chunk shortcut: with heterogeneous chunks a probe can land on a stale target and cause surviving orders to be silently dropped, so bisection is always performed. RPC cost is bounded by `log2(chunk_size)` per isolated failing target.
+6. Orderbook groups run concurrently via `futures::future::join_all`; results are scattered back into the input order.
 
 Notes:
-- `gas` is currently accepted but unused (placeholder for future control).
 - `block_number` lets callers obtain deterministic historical quotes.
+- `counterparty` is the `from` address on every inner `quote2`, so strategies that read `order-counterparty()` in `calculate-io` observe the real taker rather than a batching contract.
 
 
 ## Subgraph Integration
@@ -136,7 +138,7 @@ Arguments (selected):
 - `--rpc <URL>` (required): JSON‑RPC endpoint.
 - `--sg|--subgraph <URL>` (optional): subgraph endpoint; required when using specs.
 - `--block-number <INTEGER>`: quote at a specific block.
-- `--multicall-address <ADDRESS>`: override Multicall3 address.
+- `--counterparty <ADDRESS>`: address used as `from` on each `eth_call`. This is what `msg.sender` and `order-counterparty()` will see inside `calculate-io`. Defaults to the zero address.
 - `--output <PATH>`: write JSON result to a file.
 - `--no-stdout`: suppress stdout; useful with `--output`.
 - `--pretty`: pretty‑print JSON.

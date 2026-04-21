@@ -36,9 +36,11 @@ pub struct Quoter {
     #[arg(short, long, env, value_name = "INTEGER")]
     pub block_number: Option<u64>,
 
-    /// Optional multicall3 address to use when quoting
-    #[arg(short, long, env, value_name = "ADDRESS")]
-    pub multicall_address: Option<Address>,
+    /// Counterparty address used as `from` of each `eth_call` when quoting.
+    /// This is what `msg.sender` / `order-counterparty()` will see inside
+    /// `calculate-io`. Defaults to the zero address.
+    #[arg(short, long, env, value_name = "ADDRESS", default_value_t = Address::ZERO)]
+    pub counterparty: Address,
 
     /// Optional file path to write the output results into
     #[arg(short, long, env, value_name = "PATH")]
@@ -93,7 +95,7 @@ impl Quoter {
                 .do_quote(
                     vec![self.rpc.to_string()],
                     self.block_number,
-                    self.multicall_address,
+                    self.counterparty,
                     None,
                 )
                 .await?
@@ -104,7 +106,7 @@ impl Quoter {
                         sg.as_str(),
                         vec![self.rpc.to_string()],
                         self.block_number,
-                        self.multicall_address,
+                        self.counterparty,
                         None,
                     )
                     .await?
@@ -148,7 +150,6 @@ mod tests {
     use super::*;
     use crate::{error::FailedQuote, BatchQuoteSpec, QuoteSpec};
     use alloy::primitives::{hex::encode_prefixed, keccak256, B256, U256};
-    use alloy::providers::bindings::IMulticall3::Result as MulticallResult;
     use alloy::sol_types::{SolCall, SolValue};
     use clap::CommandFactory;
     use httpmock::{Method::POST, MockServer};
@@ -266,7 +267,7 @@ mod tests {
             rpc: Url::parse("http://a.com").unwrap(),
             subgraph: None,
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: true,
             input: Input {
@@ -291,27 +292,18 @@ mod tests {
         let rpc_url = rpc_server.url("/rpc");
         let sg_url = rpc_server.url("/sg");
 
-        let rpc_response_data = vec![
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: true,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: false,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-        ]
-        .abi_encode();
+        // Only one of the two specs resolves to a QuoteTarget (the default
+        // spec is missing from the subgraph → yields `NonExistent` before
+        // any RPC call), so the orderbook-native multicall response carries
+        // a single element.
+        let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: Float::default().get_inner(),
+            ioRatio: Float::default().get_inner(),
+        })
+        .into();
+        let rpc_response_data =
+            <Vec<alloy::primitives::Bytes> as SolValue>::abi_encode(&vec![exists_true]);
 
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
@@ -415,7 +407,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: Some(Url::parse(&sg_url).unwrap()),
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: false,
             input: Input {
@@ -452,7 +444,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: Some(Url::parse(&sg_url).unwrap()),
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: false,
             input: Input {
@@ -496,7 +488,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: None,
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: false,
             pretty: false,
             input: Input {
@@ -506,27 +498,17 @@ mod tests {
             },
         };
 
-        let rpc_response_data = vec![
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: true,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: false,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-        ]
-        .abi_encode();
+        // The CLI `--target` flag here is parsed into a single QuoteTarget
+        // (four arg tokens per target), so the orderbook's multicall carries
+        // a single inner `quote2` return.
+        let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: Float::default().get_inner(),
+            ioRatio: Float::default().get_inner(),
+        })
+        .into();
+        let rpc_response_data =
+            <Vec<alloy::primitives::Bytes> as SolValue>::abi_encode(&vec![exists_true]);
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
             then.json_body_obj(&json!({
@@ -538,7 +520,7 @@ mod tests {
 
         // run
         let QuoterResult(result) = cli.run().await.unwrap();
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 1);
 
         let quote = if let QuoterResultInner::Ok(v) = &result[0] {
             v
@@ -548,17 +530,7 @@ mod tests {
         assert!(quote.max_output.eq(Float::default()).unwrap());
         assert!(quote.ratio.eq(Float::default()).unwrap());
 
-        let err = if let QuoterResultInner::Error(v) = &result[1] {
-            v
-        } else {
-            panic!("expected error quote result");
-        };
-        assert_eq!(err, &FailedQuote::NonExistent.to_string());
-
-        let expected = QuoterResult(vec![
-            QuoterResultInner::Ok(OrderQuoteValue::default()),
-            QuoterResultInner::Error(FailedQuote::NonExistent.to_string()),
-        ]);
+        let expected = QuoterResult(vec![QuoterResultInner::Ok(OrderQuoteValue::default())]);
 
         // output json format containing array of ok/err quote results:
         // [
