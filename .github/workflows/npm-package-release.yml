@@ -189,9 +189,6 @@ jobs:
             .packages."packages/ui-components".version = $uc |
             .packages."packages/ui-components".dependencies."@rainlanguage/orderbook" = $ob
           ' ./package-lock.json > tmp.json && mv tmp.json ./package-lock.json
-          echo "RELEASE_TAG=npm-ob-v${OB_NEW_VERSION}-uc-v${UC_NEW_VERSION}" >> $GITHUB_ENV
-          echo "orderbook version: $OB_NEW_VERSION"
-          echo "ui-components version: $UC_NEW_VERSION"
 
       # Create orderbook npm package tarball
       - name: Create orderbook NPM Package Tarball
@@ -237,14 +234,14 @@ jobs:
           git add "packages/ui-components/package.json"
           git add "package-lock.json"
           git commit -m "NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
-          git tag "${{ env.RELEASE_TAG }}"
+          git tag "npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
 
       # Push the commit to remote
       - name: Push Changes To Remote
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
           git push origin
-          git push -u origin "${{ env.RELEASE_TAG }}"
+          git push -u origin "npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -254,7 +251,7 @@ jobs:
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.RELEASE_TAG }}
+          tag_name: npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}
           name: NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
           files: |
             orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
