@@ -172,10 +172,63 @@ jobs:
 
       # from here on, we'll skip if OLD_HASH and NEW_HASH are the same (ie no publish)
       # this means we need to skip every step by using an if statement.
-      # resolve the next shared prerelease from npm registry state, not committed package versions
-      - name: Prepare Release Version
+      # bump package versions independently from committed package state
+      - name: Bump Package Versions
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: node .github/scripts/prepare-npm-release.mjs
+        run: |
+          node <<'NODE'
+          const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
+
+          function readJson(path) {
+            const text = readFileSync(path, "utf8");
+            return {
+              data: JSON.parse(text),
+              indent: text.match(/\n([ \t]+)"/)?.[1] ?? "  ",
+            };
+          }
+
+          function writeJson(path, json, indent) {
+            writeFileSync(path, `${JSON.stringify(json, null, indent)}\n`);
+          }
+
+          function bumpAlpha(version) {
+            const match = /^(\d+\.\d+\.\d+-alpha\.)(\d+)$/.exec(version);
+            if (!match) {
+              throw new Error(`Unsupported alpha prerelease version: ${version}`);
+            }
+            return `${match[1]}${Number.parseInt(match[2], 10) + 1}`;
+          }
+
+          const orderbook = readJson("packages/orderbook/package.json");
+          const uiComponents = readJson("packages/ui-components/package.json");
+          const lock = readJson("package-lock.json");
+
+          const orderbookVersion = bumpAlpha(orderbook.data.version);
+          const uiComponentsVersion = bumpAlpha(uiComponents.data.version);
+
+          orderbook.data.version = orderbookVersion;
+          uiComponents.data.version = uiComponentsVersion;
+          uiComponents.data.dependencies["@rainlanguage/orderbook"] = orderbookVersion;
+
+          lock.data.packages["packages/orderbook"].version = orderbookVersion;
+          lock.data.packages["packages/ui-components"].version = uiComponentsVersion;
+          lock.data.packages["packages/ui-components"].dependencies["@rainlanguage/orderbook"] =
+            orderbookVersion;
+
+          writeJson("packages/orderbook/package.json", orderbook.data, orderbook.indent);
+          writeJson("packages/ui-components/package.json", uiComponents.data, uiComponents.indent);
+          writeJson("package-lock.json", lock.data, lock.indent);
+
+          appendFileSync(process.env.GITHUB_ENV, `OB_NEW_VERSION=${orderbookVersion}\n`);
+          appendFileSync(process.env.GITHUB_ENV, `UC_NEW_VERSION=${uiComponentsVersion}\n`);
+          appendFileSync(
+            process.env.GITHUB_ENV,
+            `RELEASE_TAG=npm-ob-v${orderbookVersion}-uc-v${uiComponentsVersion}\n`,
+          );
+
+          console.log(`orderbook version: ${orderbookVersion}`);
+          console.log(`ui-components version: ${uiComponentsVersion}`);
+          NODE
 
       # Create orderbook npm package tarball
       - name: Create orderbook NPM Package Tarball
@@ -184,16 +237,16 @@ jobs:
 
       - name: Rename orderbook NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: mv ${{ env.OB_NPM_PACKAGE }} orderbook_npm_package_${{ env.NEW_VERSION }}.tgz
+        run: mv ${{ env.OB_NPM_PACKAGE }} orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
 
       # publish orderbook pkg to npm
       - name: Publish orderbook pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          if npm view @rainlanguage/orderbook@${{ env.NEW_VERSION }} version >/dev/null 2>&1; then
-            echo "@rainlanguage/orderbook@${{ env.NEW_VERSION }} is already published; skipping"
+          if npm view @rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} version >/dev/null 2>&1; then
+            echo "@rainlanguage/orderbook@${{ env.OB_NEW_VERSION }} is already published; skipping"
           else
-            npm publish orderbook_npm_package_${{ env.NEW_VERSION }}.tgz \
+            npm publish orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz \
               --access public \
               --tag latest \
               --verbose
@@ -206,16 +259,16 @@ jobs:
 
       - name: Rename ui-components NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.NEW_VERSION }}.tgz
+        run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
 
       # publish ui-components to npm
       - name: Publish ui-components To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          if npm view @rainlanguage/ui-components@${{ env.NEW_VERSION }} version >/dev/null 2>&1; then
-            echo "@rainlanguage/ui-components@${{ env.NEW_VERSION }} is already published; skipping"
+          if npm view @rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} version >/dev/null 2>&1; then
+            echo "@rainlanguage/ui-components@${{ env.UC_NEW_VERSION }} is already published; skipping"
           else
-            npm publish ui_components_npm_package_${{ env.NEW_VERSION }}.tgz \
+            npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
               --access public \
               --tag latest \
               --verbose
@@ -231,16 +284,24 @@ jobs:
           if git diff --cached --quiet; then
             echo "No package version changes to commit"
           else
-            git commit -m "NPM Package Release v${{ env.NEW_VERSION }}"
+            git commit -m "NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
           fi
-          git tag npm-v${{ env.NEW_VERSION }}
+          if git rev-parse "${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
+            echo "Tag ${{ env.RELEASE_TAG }} already exists locally"
+          else
+            git tag "${{ env.RELEASE_TAG }}"
+          fi
 
       # Push the commit to remote
       - name: Push Changes To Remote
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
           git push origin
-          git push -u origin npm-v${{ env.NEW_VERSION }}
+          if git ls-remote --exit-code --tags origin "refs/tags/${{ env.RELEASE_TAG }}" >/dev/null 2>&1; then
+            echo "Tag ${{ env.RELEASE_TAG }} already exists on origin"
+          else
+            git push -u origin "${{ env.RELEASE_TAG }}"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -250,11 +311,11 @@ jobs:
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: npm-v${{ env.NEW_VERSION }}
-          name: NPM Package Release v${{ env.NEW_VERSION }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
           files: |
-            orderbook_npm_package_${{ env.NEW_VERSION }}.tgz
-            ui_components_npm_package_${{ env.NEW_VERSION }}.tgz
+            orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
+            ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
