@@ -36,7 +36,7 @@
 
 	const { account } = useAccount();
 	const { manager } = useTransactions();
-	const { errToast, addToast } = useToasts();
+	const { errToast } = useToasts();
 
 	async function onRemove(raindexClient: RaindexClient, order: RaindexOrder) {
 		await handleRemoveOrder({
@@ -91,7 +91,6 @@
 			handleTakeOrderModal,
 			handleTransactionConfirmationModal,
 			errToast,
-			addToast,
 			manager,
 			account: $account as Hex
 		});

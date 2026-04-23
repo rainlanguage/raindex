@@ -7,8 +7,7 @@ import {
 import { type Hex } from 'viem';
 import type {
 	TransactionManager,
-	HandleTransactionConfirmationModal,
-	ToastProps
+	HandleTransactionConfirmationModal
 } from '@rainlanguage/ui-components';
 import type { HandleTakeOrderModal, TakeOrderSubmitParams } from './modal';
 
@@ -18,7 +17,6 @@ export interface TakeOrderHandlerDependencies {
 	handleTakeOrderModal: HandleTakeOrderModal;
 	handleTransactionConfirmationModal: HandleTransactionConfirmationModal;
 	errToast: (message: string) => void;
-	addToast: (toast: ToastProps) => void;
 	manager: TransactionManager;
 	account: Hex;
 }
@@ -69,18 +67,52 @@ async function executeTakeOrder(args: ExecuteTakeOrderArgs): Promise<void> {
 	});
 }
 
+async function executeTakeOrderWithFreshCalldata(
+	deps: Omit<TakeOrderHandlerDependencies, 'handleTakeOrderModal'>,
+	params: TakeOrderSubmitParams,
+	inputTokenSymbol: string
+): Promise<void> {
+	const { order, errToast, account } = deps;
+	const { quote, mode, amount, priceCap } = params;
+
+	const calldataResult = await order.getTakeCalldata(
+		quote.pair.inputIndex,
+		quote.pair.outputIndex,
+		account,
+		mode,
+		amount,
+		priceCap
+	);
+	if (calldataResult.error) {
+		errToast(calldataResult.error.readableMsg);
+		return;
+	}
+
+	const result = calldataResult.value;
+	if (!result.isReady || !result.takeOrdersInfo) {
+		errToast('Failed to get take order calldata after approval');
+		return;
+	}
+
+	await executeTakeOrder({
+		...deps,
+		takeOrdersInfo: result.takeOrdersInfo,
+		inputTokenSymbol
+	});
+}
+
 async function processSubmit(
 	deps: TakeOrderHandlerDependencies,
 	params: TakeOrderSubmitParams
-): Promise<boolean> {
-	const { order, errToast, addToast, account, handleTransactionConfirmationModal, manager } = deps;
+): Promise<void> {
+	const { order, errToast, account, handleTransactionConfirmationModal, manager } = deps;
 	const { quote, mode, amount, priceCap } = params;
 
 	try {
 		const inputTokenSymbol = getInputTokenSymbol(order, quote);
 		if (!inputTokenSymbol) {
 			errToast('Could not determine input token for this order');
-			return true;
+			return;
 		}
 
 		const calldataResult = await order.getTakeCalldata(
@@ -93,7 +125,7 @@ async function processSubmit(
 		);
 		if (calldataResult.error) {
 			errToast(calldataResult.error.readableMsg);
-			return true;
+			return;
 		}
 
 		const result = calldataResult.value;
@@ -101,7 +133,7 @@ async function processSubmit(
 		if (result.isNeedsApproval) {
 			const approvalInfo = result.approvalInfo!;
 
-			const approvalResult = await handleTransactionConfirmationModal({
+			handleTransactionConfirmationModal({
 				open: true,
 				modalTitle: `Approving ${inputTokenSymbol} spend`,
 				closeOnConfirm: true,
@@ -115,26 +147,16 @@ async function processSubmit(
 							chainId: order.chainId,
 							queryKey: order.orderHash
 						});
+						executeTakeOrderWithFreshCalldata(deps, params, inputTokenSymbol);
 					}
 				}
 			});
-
-			if (!approvalResult.success) {
-				errToast('Approval was cancelled or failed');
-				return true;
-			}
-
-			addToast({
-				message: "Approval successful! Click 'Take Order' again to proceed with fresh quotes.",
-				type: 'success',
-				color: 'green'
-			});
-			return false;
+			return;
 		}
 
 		if (!result.isReady) {
 			errToast('Unexpected state from take order calldata');
-			return true;
+			return;
 		}
 
 		const takeOrdersInfo = result.takeOrdersInfo!;
@@ -143,10 +165,8 @@ async function processSubmit(
 			takeOrdersInfo,
 			inputTokenSymbol
 		});
-		return true;
 	} catch {
 		errToast('Failed to get calldata for take order.');
-		return true;
 	}
 }
 
@@ -157,7 +177,7 @@ export async function handleTakeOrder(deps: TakeOrderHandlerDependencies): Promi
 		open: true,
 		order,
 		onSubmit: async (params: TakeOrderSubmitParams) => {
-			return await processSubmit(deps, params);
+			await processSubmit(deps, params);
 		}
 	});
 }
