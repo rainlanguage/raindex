@@ -68,7 +68,12 @@ const mockTradeOrdersList: RaindexTrade[] = [
 			},
 			orderbook: '0x1'
 		},
-		orderbook: '0x00'
+		orderbook: '0x00',
+		tradeEventType: 'TakeOrder',
+		counterparty: {
+			owner: '0xsender_address',
+			orderHash: undefined
+		}
 	},
 	{
 		id: '2',
@@ -132,7 +137,12 @@ const mockTradeOrdersList: RaindexTrade[] = [
 			},
 			orderbook: '0x1'
 		},
-		orderbook: '0x00'
+		orderbook: '0x00',
+		tradeEventType: 'TakeOrder',
+		counterparty: {
+			owner: '0xsender_address',
+			orderHash: undefined
+		}
 	}
 ] as unknown as RaindexTrade[];
 
@@ -140,6 +150,8 @@ vi.mock('@tanstack/svelte-query');
 
 const mockOrder: RaindexOrder = {
 	id: '1',
+	chainId: BigInt(1),
+	orderbook: '0x00',
 	getTradeCount: vi.fn(),
 	getTradesList: vi.fn()
 } as unknown as RaindexOrder;
@@ -388,7 +400,12 @@ const createMockTrade = (id: string, inputAmount: string, outputAmount: string):
 			},
 			orderbook: '0x1'
 		},
-		orderbook: '0x00'
+		orderbook: '0x00',
+		tradeEventType: 'TakeOrder',
+		counterparty: {
+			owner: '0xsender_address',
+			orderHash: undefined
+		}
 	}) as unknown as RaindexTrade;
 
 test('displays dash when output amount is zero (prevents division by zero)', async () => {
@@ -478,5 +495,116 @@ test('displays dash when both amounts are zero', async () => {
 		const ioRatioCell = screen.getByTestId('io-ratio');
 		expect(ioRatioCell).toHaveTextContent('-');
 		expect(ioRatioCell).not.toHaveTextContent('NaN');
+	});
+});
+
+test('renders TakeOrder trade type badge and Taker label', async () => {
+	const queryClient = new QueryClient();
+
+	const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		subscribe: (fn: (value: any) => void) => {
+			fn({
+				data: { pages: [mockTradeOrdersList] },
+				status: 'success',
+				isFetching: false,
+				isFetched: true
+			});
+			return { unsubscribe: () => {} };
+		}
+	})) as Mock;
+
+	render(OrderTradesListTable, {
+		context: new Map([['$$_queryClient', queryClient]]),
+		props: { order: mockOrder, rpcs: ['https://example.com'] }
+	});
+
+	await waitFor(async () => {
+		const rows = screen.getAllByTestId('bodyRow');
+		rows.forEach((row) => {
+			expect(row).toHaveTextContent('Take order');
+			expect(row).toHaveTextContent('Taker:');
+		});
+	});
+});
+
+test('renders Clear trade with counterparty info', async () => {
+	const queryClient = new QueryClient();
+	const mockClearTrades = [
+		{
+			...mockTradeOrdersList[0],
+			id: '3',
+			tradeEventType: 'Clear',
+			counterparty: {
+				owner: '0xcounterparty_owner',
+				orderHash: '0xcounterparty_order_hash'
+			}
+		}
+	] as unknown as RaindexTrade[];
+
+	const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		subscribe: (fn: (value: any) => void) => {
+			fn({
+				data: { pages: [mockClearTrades] },
+				status: 'success',
+				isFetching: false,
+				isFetched: true
+			});
+			return { unsubscribe: () => {} };
+		}
+	})) as Mock;
+
+	render(OrderTradesListTable, {
+		context: new Map([['$$_queryClient', queryClient]]),
+		props: { order: mockOrder, rpcs: ['https://example.com'] }
+	});
+
+	await waitFor(async () => {
+		const rows = screen.getAllByTestId('bodyRow');
+		expect(rows[0]).toHaveTextContent('Clear');
+		expect(rows[0]).toHaveTextContent('Counterparty:');
+		expect(rows[0]).toHaveTextContent('Order:');
+	});
+});
+
+test('renders dash when counterparty is missing', async () => {
+	const queryClient = new QueryClient();
+	const mockNoCounterpartyTrades = [
+		{
+			...mockTradeOrdersList[0],
+			id: '4',
+			tradeEventType: 'Clear',
+			counterparty: undefined
+		}
+	] as unknown as RaindexTrade[];
+
+	const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		subscribe: (fn: (value: any) => void) => {
+			fn({
+				data: { pages: [mockNoCounterpartyTrades] },
+				status: 'success',
+				isFetching: false,
+				isFetched: true
+			});
+			return { unsubscribe: () => {} };
+		}
+	})) as Mock;
+
+	render(OrderTradesListTable, {
+		context: new Map([['$$_queryClient', queryClient]]),
+		props: { order: mockOrder, rpcs: ['https://example.com'] }
+	});
+
+	await waitFor(async () => {
+		const rows = screen.getAllByTestId('bodyRow');
+		expect(rows[0]).toHaveTextContent('-');
 	});
 });

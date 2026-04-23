@@ -79,6 +79,7 @@ mod tests {
                 id: SgBytes("0xorderbook_default".to_string()),
             },
             trade_event: SgTradeEvent {
+                __typename: "TakeOrder".to_string(),
                 transaction: SgTransaction {
                     id: SgBytes("0xtx_default".to_string()),
                     from: SgBytes("0xfrom_default".to_string()),
@@ -86,6 +87,7 @@ mod tests {
                     timestamp: SgBigInt(timestamp.to_string()),
                 },
                 sender: SgBytes("0xsender_default".to_string()),
+                trades: vec![],
             },
             input_vault_balance_change: SgTradeVaultBalanceChange {
                 id: SgBytes("ivbc_default".to_string()),

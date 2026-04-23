@@ -378,10 +378,31 @@ pub struct SgClearBounty {
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
 #[cynic(graphql_type = "TradeEvent")]
 pub struct SgTradeEvent {
+    #[serde(rename = "__typename")]
+    pub __typename: String,
     pub transaction: SgTransaction,
     pub sender: SgBytes,
+    pub trades: Vec<SgSiblingTrade>,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[cynic(graphql_type = "Trade")]
+pub struct SgSiblingTrade {
+    pub id: SgBytes,
+    pub order: SgSiblingTradeOrder,
+}
+
+#[derive(cynic::QueryFragment, Debug, Clone, Serialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[cynic(graphql_type = "Order")]
+pub struct SgSiblingTradeOrder {
+    pub id: SgBytes,
+    pub order_hash: SgBytes,
+    pub owner: SgBytes,
 }
 
 #[derive(cynic::QueryFragment, Debug, Clone, Serialize, Tsify)]
@@ -804,4 +825,6 @@ mod impls {
     impl_wasm_traits!(SgTradeEvent);
     impl_wasm_traits!(SgTradeEventTypename);
     impl_wasm_traits!(SgTradeRef);
+    impl_wasm_traits!(SgSiblingTrade);
+    impl_wasm_traits!(SgSiblingTradeOrder);
 }

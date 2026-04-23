@@ -3062,13 +3062,15 @@ mod tests {
                 "id": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
                 "timestamp": "1632000000",
                 "tradeEvent": {
+                    "__typename": "TakeOrder",
                     "sender": "0x0000000000000000000000000000000000000000",
                     "transaction": {
                         "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
                         "from": "0x0000000000000000000000000000000000000000",
                         "timestamp": "1632000000",
                         "blockNumber": "0"
-                    }
+                    },
+                    "trades": []
                 },
                 "order": {
                     "id": "0x557147dd0daa80d5beff0023fe6a3505469b2b8c4406ce1ab873e1a652572dd4",

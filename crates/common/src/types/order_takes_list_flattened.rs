@@ -71,6 +71,7 @@ mod tests {
             id: SgBytes("trade001".to_string()),
             timestamp: SgBigInt("1678886400".to_string()),
             trade_event: SgTradeEvent {
+                __typename: "TakeOrder".to_string(),
                 transaction: SgTransaction {
                     id: SgBytes("tx001".to_string()),
                     from: SgBytes("0xfromAddress".to_string()),
@@ -78,6 +79,7 @@ mod tests {
                     timestamp: SgBigInt("1678886300".to_string()),
                 },
                 sender: SgBytes("0xsenderAddress".to_string()),
+                trades: vec![],
             },
             order: SgTradeStructPartialOrder {
                 id: SgBytes("orderPartial001".to_string()),
