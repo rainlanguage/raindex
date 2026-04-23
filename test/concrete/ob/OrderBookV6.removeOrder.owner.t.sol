@@ -3,7 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {NotOrderOwner} from "../../../src/concrete/ob/OrderBookV6.sol";
@@ -20,19 +21,20 @@ contract OrderBookV6RemoveOrderOwnerTest is OrderBookV6ExternalRealTest {
         vm.startPrank(owner);
 
         for (uint256 i = 0; i < 2; i++) {
-            bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            bool stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             assert(stateChange);
-            assert(iOrderbook.orderExists(order.hash()));
-            stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
+            stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             assert(!stateChange);
-            assert(iOrderbook.orderExists(order.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
 
-            stateChange = iOrderbook.removeOrder3(order, new TaskV2[](0));
+            stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(order, new TaskV2[](0));
             assert(stateChange);
-            assert(!iOrderbook.orderExists(order.hash()));
-            stateChange = iOrderbook.removeOrder3(order, new TaskV2[](0));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
+            stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(order, new TaskV2[](0));
             assert(!stateChange);
-            assert(!iOrderbook.orderExists(order.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
         }
 
         vm.stopPrank();
@@ -51,69 +53,78 @@ contract OrderBookV6RemoveOrderOwnerTest is OrderBookV6ExternalRealTest {
 
         {
             vm.prank(alice);
-            bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            bool stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
 
             assert(stateChange);
-            assert(iOrderbook.orderExists(orderAlice.hash()));
-            assert(!iOrderbook.orderExists(orderBob.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iOrderbook.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderBob, new TaskV2[](0));
             assert(!stateChange);
-            assert(iOrderbook.orderExists(orderAlice.hash()));
-            assert(!iOrderbook.orderExists(orderBob.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
 
             vm.prank(alice);
-            stateChange = iOrderbook.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderAlice, new TaskV2[](0));
             assert(stateChange);
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
-            assert(!iOrderbook.orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
         }
 
         {
             vm.prank(bob);
-            bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            bool stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             assert(stateChange);
-            assert(iOrderbook.orderExists(orderBob.hash()));
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
 
             vm.prank(alice);
-            stateChange = iOrderbook.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderAlice, new TaskV2[](0));
             assert(!stateChange);
-            assert(iOrderbook.orderExists(orderBob.hash()));
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
 
             vm.prank(bob);
-            stateChange = iOrderbook.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderBob, new TaskV2[](0));
             assert(stateChange);
-            assert(!iOrderbook.orderExists(orderBob.hash()));
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
         }
 
         {
             vm.prank(alice);
-            bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            bool stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             assert(stateChange);
-            assert(iOrderbook.orderExists(orderAlice.hash()));
-            assert(!iOrderbook.orderExists(orderBob.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+            stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             assert(stateChange);
-            assert(iOrderbook.orderExists(orderBob.hash()));
-            assert(iOrderbook.orderExists(orderAlice.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
 
             vm.prank(alice);
-            stateChange = iOrderbook.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderAlice, new TaskV2[](0));
             assert(stateChange);
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
-            assert(iOrderbook.orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
+            assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iOrderbook.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(orderBob, new TaskV2[](0));
             assert(stateChange);
-            assert(!iOrderbook.orderExists(orderBob.hash()));
-            assert(!iOrderbook.orderExists(orderAlice.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
+            assert(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
         }
     }
 
@@ -125,14 +136,14 @@ contract OrderBookV6RemoveOrderOwnerTest is OrderBookV6ExternalRealTest {
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(alice);
-        bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+        bool stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         assert(stateChange);
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
-        stateChange = iOrderbook.removeOrder3(order, new TaskV2[](0));
+        stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(order, new TaskV2[](0));
         assert(!stateChange);
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
     }
 }

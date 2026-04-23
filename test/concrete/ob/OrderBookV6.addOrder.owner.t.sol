@@ -3,7 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -17,14 +18,14 @@ contract OrderBookV6AddOrderOwnerTest is OrderBookV6ExternalRealTest {
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(owner);
-        bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+        bool stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         assert(stateChange);
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
 
         vm.prank(owner);
-        stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+        stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         assert(!stateChange);
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
     }
 
     /// forge-config: default.fuzz.runs = 100
@@ -39,13 +40,13 @@ contract OrderBookV6AddOrderOwnerTest is OrderBookV6ExternalRealTest {
         OrderV4 memory orderBob = OrderV4(bob, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(alice);
-        bool stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+        bool stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         assert(stateChange);
-        assert(iOrderbook.orderExists(orderAlice.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderAlice.hash()));
 
         vm.prank(bob);
-        stateChange = iOrderbook.addOrder4(config, new TaskV2[](0));
+        stateChange = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         assert(stateChange);
-        assert(iOrderbook.orderExists(orderBob.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderBob.hash()));
     }
 }

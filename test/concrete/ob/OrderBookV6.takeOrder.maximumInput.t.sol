@@ -15,6 +15,7 @@ import {
     IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rain.interpreter.interface/interface/deprecated/v1/IInterpreterCallerV2.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
@@ -44,7 +45,8 @@ contract OrderBookV6TakeOrderMaximumInputTest is OrderBookV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -89,7 +91,7 @@ contract OrderBookV6TakeOrderMaximumInputTest is OrderBookV6ExternalRealTest {
 
                 vm.prank(testOrders[i].owner);
                 vm.recordLogs();
-                iOrderbook.addOrder4(orderConfig, new TaskV2[](0));
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(orderConfig, new TaskV2[](0));
                 Vm.Log[] memory entries = vm.getRecordedLogs();
                 assertEq(entries.length, 1);
                 orders[i] = LibTestTakeOrder.extractOrderFromLogs(entries);
@@ -113,26 +115,31 @@ contract OrderBookV6TakeOrderMaximumInputTest is OrderBookV6ExternalRealTest {
                     vm.mockCall(
                         address(iToken1),
                         abi.encodeWithSelector(
-                            IERC20.transferFrom.selector, testVaults[i].owner, address(iOrderbook), depositAmount18
+                            IERC20.transferFrom.selector,
+                            testVaults[i].owner,
+                            LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                            depositAmount18
                         ),
                         abi.encode(true)
                     );
                     vm.expectCall(
                         address(iToken1),
                         abi.encodeWithSelector(
-                            IERC20.transferFrom.selector, testVaults[i].owner, address(iOrderbook), depositAmount18
+                            IERC20.transferFrom.selector,
+                            testVaults[i].owner,
+                            LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                            depositAmount18
                         ),
                         1
                     );
-                    Float balanceBefore =
-                        iOrderbook.vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
+                    Float balanceBefore = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
                     vm.prank(testVaults[i].owner);
-                    iOrderbook.deposit4(
-                        testVaults[i].token, testVaults[i].vaultId, testVaults[i].deposit, new TaskV2[](0)
-                    );
+                    IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .deposit4(testVaults[i].token, testVaults[i].vaultId, testVaults[i].deposit, new TaskV2[](0));
 
-                    Float balanceAfter =
-                        iOrderbook.vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
+                    Float balanceAfter = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
                     Float expectedBalance = testVaults[i].deposit.add(balanceBefore);
 
                     assertTrue(balanceAfter.eq(expectedBalance), "vaultBalance after");
@@ -167,26 +174,37 @@ contract OrderBookV6TakeOrderMaximumInputTest is OrderBookV6ExternalRealTest {
             );
             vm.mockCall(
                 address(iToken0),
-                abi.encodeWithSelector(IERC20.transferFrom.selector, bob, address(iOrderbook), expectedTakerOutput18),
+                abi.encodeWithSelector(
+                    IERC20.transferFrom.selector,
+                    bob,
+                    LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                    expectedTakerOutput18
+                ),
                 abi.encode(true)
             );
             vm.expectCall(
                 address(iToken0),
-                abi.encodeWithSelector(IERC20.transferFrom.selector, bob, address(iOrderbook), expectedTakerOutput18),
+                abi.encodeWithSelector(
+                    IERC20.transferFrom.selector,
+                    bob,
+                    LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                    expectedTakerOutput18
+                ),
                 expectedTakerOutput18 > 0 ? 1 : 0
             );
         }
         {
             vm.prank(bob);
-            (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+            (Float totalTakerInput, Float totalTakerOutput) =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
             assertTrue(totalTakerInput.eq(expectedTakerInput), "totalTakerInput");
             assertTrue(totalTakerOutput.eq(expectedTakerOutput), "totalTakerOutput");
         }
 
         for (uint256 i = 0; i < testVaults.length; i++) {
             if (testVaults[i].vaultId != bytes32(0)) {
-                Float vaultBalance =
-                    iOrderbook.vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
+                Float vaultBalance = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
                 assertTrue(vaultBalance.eq(testVaults[i].expect), "vaultBalance");
             }
         }

@@ -9,8 +9,10 @@ import {
     TaskV2,
     TakeOrderConfigV4,
     SignedContextV1,
-    TakeOrdersConfigV5
+    TakeOrdersConfigV5,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {TokenSelfTrade} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
@@ -26,7 +28,7 @@ contract OrderBookV6TakeOrderSameTokenTest is OrderBookV6ExternalRealTest {
             OrderV4(alice, configAlice.evaluable, configAlice.validInputs, configAlice.validOutputs, configAlice.nonce);
 
         vm.prank(alice);
-        iOrderbook.addOrder4(configAlice, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(configAlice, new TaskV2[](0));
 
         TakeOrderConfigV4[] memory takeOrders = new TakeOrderConfigV4[](1);
         takeOrders[0] = TakeOrderConfigV4({
@@ -43,6 +45,6 @@ contract OrderBookV6TakeOrderSameTokenTest is OrderBookV6ExternalRealTest {
         });
 
         vm.expectRevert(abi.encodeWithSelector(TokenSelfTrade.selector));
-        iOrderbook.takeOrders4(takeOrdersConfig);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeOrdersConfig);
     }
 }

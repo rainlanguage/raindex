@@ -14,6 +14,8 @@ import {
 } from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {IERC3156FlashLender} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashLender.sol";
 import {FlashLenderCallbackFailed} from "../../src/abstract/OrderBookV6FlashLender.sol";
+import {IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../src/lib/deploy/LibOrderBookDeploy.sol";
 
 contract TKN is ERC20 {
     constructor(address recipient, uint256 supply) ERC20("TKN", "TKN") {
@@ -86,7 +88,7 @@ contract OrderBookV6FlashLenderTransferTest is OrderBookV6ExternalMockTest {
     /// be repaid.
     /// forge-config: default.fuzz.runs = 100
     function testFlashLoanTransferSuccess(uint256 amount, bool success) public {
-        TKN tkn = new TKN(address(iOrderbook), amount);
+        TKN tkn = new TKN(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, amount);
 
         Bob bob = new Bob();
         Alice alice = new Alice(IPull(address(bob)), success);
@@ -94,7 +96,8 @@ contract OrderBookV6FlashLenderTransferTest is OrderBookV6ExternalMockTest {
         if (!success) {
             vm.expectRevert(abi.encodeWithSelector(FlashLenderCallbackFailed.selector, bytes32(0)));
         }
-        bool result = iOrderbook.flashLoan(IERC3156FlashBorrower(address(alice)), address(tkn), amount, "");
+        bool result = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(address(alice)), address(tkn), amount, "");
         if (success) {
             assertTrue(result);
         }
@@ -106,7 +109,7 @@ contract OrderBookV6FlashLenderTransferTest is OrderBookV6ExternalMockTest {
     function testFlashLoanTransferFail(uint256 amount, uint256 amountWithheld, bool success) public {
         amount = bound(amount, 1, type(uint256).max);
         amountWithheld = bound(amountWithheld, 1, amount);
-        TKN tkn = new TKN(address(iOrderbook), amount);
+        TKN tkn = new TKN(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, amount);
 
         Carol carol = new Carol(amountWithheld);
         Alice alice = new Alice(IPull(address(carol)), success);
@@ -120,6 +123,7 @@ contract OrderBookV6FlashLenderTransferTest is OrderBookV6ExternalMockTest {
                 )
             );
         }
-        iOrderbook.flashLoan(IERC3156FlashBorrower(address(alice)), address(tkn), amount, "");
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(address(alice)), address(tkn), amount, "");
     }
 }

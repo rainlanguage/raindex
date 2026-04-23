@@ -9,6 +9,7 @@ import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {OrderBookV6ExternalMockTest, REVERTING_MOCK_BYTECODE} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
 import {Reenteroor, IERC20} from "test/util/concrete/Reenteroor.sol";
 import {TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
@@ -30,7 +31,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     function testWithdrawZeroVaultId(address alice, address token) external {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroVaultId.selector, alice, token));
-        iOrderbook.withdraw4(token, bytes32(0), Float.wrap(0), new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(token, bytes32(0), Float.wrap(0), new TaskV2[](0));
     }
 
     /// Withdrawing a zero target amount should revert.
@@ -39,7 +41,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.assume(vaultId != bytes32(0));
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(ZeroWithdrawTargetAmount.selector, alice, token, vaultId));
-        iOrderbook.withdraw4(token, vaultId, Float.wrap(0), new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(token, vaultId, Float.wrap(0), new TaskV2[](0));
     }
 
     /// Withdrawing a non-zero amount from an empty vault should be a noop.
@@ -52,8 +55,9 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(iToken0), vaultId, amount, Float.wrap(0), 0);
         vm.record();
-        iOrderbook.withdraw4(address(iToken0), vaultId, amount, new TaskV2[](0));
-        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         assertEq(reads.length, 6, "reads");
         assertEq(writes.length, 3, "writes");
     }
@@ -69,15 +73,21 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.prank(alice);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iOrderbook), depositAmount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+            ),
             abi.encode(true)
         );
 
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
 
-        iOrderbook.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
-        assertTrue(iOrderbook.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount)
+        );
 
         vm.prank(alice);
         vm.mockCall(
@@ -85,8 +95,13 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         );
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(iToken0), vaultId, withdrawAmount, depositAmount, depositAmount18);
-        iOrderbook.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
-        assertTrue(iOrderbook.vaultBalance2(address(alice), address(iToken0), vaultId).isZero(), "vault balance");
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(address(alice), address(iToken0), vaultId).isZero(),
+            "vault balance"
+        );
     }
 
     /// Withdrawing a partial amount from a vault should reduce the vault balance.
@@ -100,15 +115,21 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.prank(alice);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iOrderbook), depositAmount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+            ),
             abi.encode(true)
         );
 
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
 
-        iOrderbook.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
-        assertTrue(iOrderbook.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount)
+        );
 
         vm.prank(alice);
         vm.mockCall(
@@ -119,10 +140,12 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.expectEmit(false, false, false, true);
         // The full withdraw amount is possible as it's only a partial withdraw.
         emit WithdrawV2(alice, address(iToken0), vaultId, withdrawAmount, withdrawAmount, withdrawAmount18);
-        iOrderbook.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
         // The vault balance is reduced by the withdraw amount.
         assertTrue(
-            iOrderbook.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount.sub(withdrawAmount))
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount.sub(withdrawAmount))
         );
     }
 
@@ -137,18 +160,25 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         vm.prank(alice);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iOrderbook), depositAmount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+            ),
             abi.encode(true)
         );
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
-        iOrderbook.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
-        assertTrue(iOrderbook.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount)
+        );
 
         // The token contract always reverts when not mocked.
         vm.prank(alice);
         vm.expectRevert();
-        iOrderbook.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
 
         vm.prank(alice);
         vm.mockCall(
@@ -157,7 +187,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
             abi.encode(false)
         );
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(iToken0)));
-        iOrderbook.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
     }
 
     /// Defines an action that can be taken in withdrawal tests.
@@ -209,7 +240,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
                 action.vaultId = bytes32(uint256(0x01));
             }
             vm.etch(action.token, REVERTING_MOCK_BYTECODE);
-            Float balance = iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId);
+            Float balance = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .vaultBalance2(action.alice, action.token, action.vaultId);
 
             vm.prank(action.alice);
             if (action.actionKind || !sHasDeposit[sRunID][action.token]) {
@@ -217,7 +249,10 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
                 vm.mockCall(
                     action.token,
                     abi.encodeWithSelector(
-                        IERC20.transferFrom.selector, action.alice, address(iOrderbook), uint256(action.amount)
+                        IERC20.transferFrom.selector,
+                        action.alice,
+                        LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                        uint256(action.amount)
                     ),
                     abi.encode(true)
                 );
@@ -227,10 +262,11 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
 
                 vm.expectEmit(false, false, false, true);
                 emit DepositV2(action.alice, action.token, action.vaultId, action.amount);
-                iOrderbook.deposit4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .deposit4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
                 assertTrue(
-                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId)
-                        .eq(balance.add(action.amountFloat)),
+                    IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .vaultBalance2(action.alice, action.token, action.vaultId).eq(balance.add(action.amountFloat)),
                     "vault balance on deposit"
                 );
             } else {
@@ -256,9 +292,11 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
                         expectedActualAmount18
                     );
                 }
-                iOrderbook.withdraw4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .withdraw4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
                 assertTrue(
-                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId)
+                    IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .vaultBalance2(action.alice, action.token, action.vaultId)
                         .eq(balance.sub(expectedActualAmount)),
                     "vault balance on withdraw"
                 );

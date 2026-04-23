@@ -12,6 +12,7 @@ import {
     OrderV4,
     SignedContextV1
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -31,7 +32,8 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
     /// Dead orders always eval to false.
     /// forge-config: default.fuzz.runs = 100
     function testQuoteDeadOrder(QuoteV2 memory quoteConfig) external view {
-        (bool success, Float maxOutput, Float ioRatio) = iOrderbook.quote2(quoteConfig);
+        (bool success, Float maxOutput, Float ioRatio) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).quote2(quoteConfig);
         assert(!success);
         assertTrue(maxOutput.isZero(), "max output");
         assertTrue(ioRatio.isZero(), "io ratio");
@@ -86,13 +88,14 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
         } else {
             vm.mockCall(
                 address(iToken0),
-                abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook), depositAmount18),
+                abi.encodeWithSelector(
+                    IERC20.transferFrom.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+                ),
                 abi.encode(true)
             );
             vm.prank(owner);
-            iOrderbook.deposit4(
-                config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV2[](0)
-            );
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .deposit4(config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV2[](0));
         }
         if (inputVaultId == bytes32(0)) {
             config.validInputs[0].vaultId = bytes32(0);
@@ -102,7 +105,7 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
         for (uint256 i = 0; i < rainlang.length; i++) {
             config.evaluable.bytecode = iParserV2.parse2(rainlang[i]);
             vm.prank(owner);
-            iOrderbook.addOrder4(config, new TaskV2[](0));
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
 
             OrderV4 memory order = OrderV4({
                 owner: owner,
@@ -114,7 +117,8 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
 
             QuoteV2 memory quoteConfig =
                 QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-            (bool success, Float maxOutput, Float ioRatio) = iOrderbook.quote2(quoteConfig);
+            (bool success, Float maxOutput, Float ioRatio) =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).quote2(quoteConfig);
             assert(success);
 
             assertTrue(maxOutput.eq(expectedMaxOutput[i]), "max output");
@@ -252,7 +256,7 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
 
         Float[] memory expectedIoRatio = new Float[](10);
         expectedIoRatio[0] = Float.wrap(bytes32(uint256(uint160(address(this)))));
-        expectedIoRatio[1] = Float.wrap(bytes32(uint256(uint160(address(iOrderbook)))));
+        expectedIoRatio[1] = Float.wrap(bytes32(uint256(uint160(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS))));
         expectedIoRatio[2] = Float.wrap(bytes32(uint256(uint160(owner))));
         expectedIoRatio[3] = Float.wrap(bytes32(uint256(uint160(address(this)))));
         expectedIoRatio[4] = Float.wrap(bytes32(uint256(uint160(address(iToken1)))));

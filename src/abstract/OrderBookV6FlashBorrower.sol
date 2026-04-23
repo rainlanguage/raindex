@@ -108,7 +108,7 @@ abstract contract OrderBookV6FlashBorrower is IERC3156FlashBorrower, ReentrancyG
     }
 
     /// Primary function to process arbitrage opportunities.
-    /// The configured task hash is validated via `onlyValidTask` to gate access.
+    /// The configured task hash is validated via `_beforeArb` to gate access.
     /// If there is no task configured, anyone can call this and should expect
     /// to be front run on the arb for any sufficiently profitable opportunity.
     ///

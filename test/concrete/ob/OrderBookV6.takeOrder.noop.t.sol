@@ -11,8 +11,10 @@ import {
     OrderV4,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
-    SignedContextV1
+    SignedContextV1,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -28,7 +30,8 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
     function testTakeOrderNoopZeroOrders() external {
         TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(new TakeOrderConfigV4[](0));
         vm.expectRevert(NoOrders.selector);
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -60,10 +63,11 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
         TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
         orders[0] = orderConfig;
         TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
-        vm.expectEmit(address(iOrderbook));
+        vm.expectEmit(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         emit OrderNotFound(address(this), order.owner, order.hash());
         vm.recordLogs();
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
         assertTrue(totalTakerInput.isZero());
         assertTrue(totalTakerOutput.isZero());
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -126,7 +130,8 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
 
         vm.recordLogs();
         {
-            (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+            (Float totalTakerInput, Float totalTakerOutput) =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
             assertTrue(totalTakerInput.isZero());
             assertTrue(totalTakerOutput.isZero());
         }

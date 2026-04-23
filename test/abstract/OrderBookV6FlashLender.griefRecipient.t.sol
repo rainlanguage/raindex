@@ -3,6 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalMockTest} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
+import {IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {
     IERC3156FlashBorrower,
     ON_FLASH_LOAN_CALLBACK_SUCCESS
@@ -32,7 +34,8 @@ contract OrderBookV6FlashLenderGriefRecipientTest is OrderBookV6ExternalMockTest
         // A call to an EOA will revert with no data.
         address receiver = address(0xDEADBEEF);
         vm.expectRevert();
-        iOrderbook.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
 
         // A call to a contract that does not implement `IERC3156FlashBorrower`
         // will revert with `FlashLenderCallbackFailed`.
@@ -43,7 +46,8 @@ contract OrderBookV6FlashLenderGriefRecipientTest is OrderBookV6ExternalMockTest
             abi.encode(notFlashLoanSuccess)
         );
         vm.expectRevert(abi.encodeWithSelector(FlashLenderCallbackFailed.selector, notFlashLoanSuccess));
-        iOrderbook.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
 
         // A call to a contract that does not implement `IERC3156FlashBorrower`
         // will revert with no data if the return value is not `bytes32`.
@@ -51,6 +55,7 @@ contract OrderBookV6FlashLenderGriefRecipientTest is OrderBookV6ExternalMockTest
             receiver, abi.encodeWithSelector(IERC3156FlashBorrower.onFlashLoan.selector), notFlashLoanSuccessBytes
         );
         vm.expectRevert();
-        iOrderbook.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data);
     }
 }

@@ -28,7 +28,6 @@ abstract contract OrderBookV6ExternalRealTest is Test, IRaindexV6Stub {
     IInterpreterV4 internal immutable iInterpreter;
     IInterpreterStoreV3 internal immutable iStore;
     IParserV2 internal immutable iParserV2;
-    IRaindexV6 internal immutable iOrderbook;
     IERC20 internal immutable iToken0;
     IERC20 internal immutable iToken1;
     OrderBookV6SubParser internal immutable iSubParser;
@@ -43,8 +42,6 @@ abstract contract OrderBookV6ExternalRealTest is Test, IRaindexV6Stub {
         iInterpreter = IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS);
         iStore = IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS);
         iParserV2 = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
-
-        iOrderbook = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
 
         iToken0 = IERC20(address(uint160(uint256(keccak256("token0.rain.test")))));
         vm.etch(address(iToken0), REVERTING_MOCK_BYTECODE);
@@ -90,11 +87,13 @@ abstract contract OrderBookV6ExternalRealTest is Test, IRaindexV6Stub {
         vm.mockCall(token, abi.encodeWithSelector(IERC20.balanceOf.selector, owner), abi.encode(depositAmount18));
         vm.mockCall(
             token,
-            abi.encodeWithSelector(IERC20.allowance.selector, owner, address(iOrderbook)),
+            abi.encodeWithSelector(IERC20.allowance.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS),
             abi.encode(depositAmount18)
         );
         vm.mockCall(
-            token, abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook)), abi.encode(true)
+            token,
+            abi.encodeWithSelector(IERC20.transferFrom.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS),
+            abi.encode(true)
         );
     }
 
@@ -103,7 +102,11 @@ abstract contract OrderBookV6ExternalRealTest is Test, IRaindexV6Stub {
     /// the expected amount is non-zero.
     function mockVault0Input(address token, address owner, uint256 expectAmount18) internal {
         vm.mockCall(token, abi.encodeWithSelector(IERC20.balanceOf.selector, owner), abi.encode(0));
-        vm.mockCall(token, abi.encodeWithSelector(IERC20.allowance.selector, owner, address(iOrderbook)), abi.encode(0));
+        vm.mockCall(
+            token,
+            abi.encodeWithSelector(IERC20.allowance.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS),
+            abi.encode(0)
+        );
         if (expectAmount18 > 0) {
             vm.mockCall(
                 token, abi.encodeWithSelector(IERC20.transfer.selector, owner, expectAmount18), abi.encode(true)

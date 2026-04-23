@@ -18,6 +18,7 @@ import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {EvaluableV4, SignedContextV1} from "rain.interpreter.interface/interface/IInterpreterCallerV4.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {LibOrderBookDeploy} from "../../src/lib/deploy/LibOrderBookDeploy.sol";
 
 /// @title OrderBookV6FlashLenderReentrant
 /// Test that flash borrowers can reenter the orderbook, which is necessary for
@@ -32,17 +33,20 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         );
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.approve.selector, address(iOrderbook), loanAmount),
+            abi.encodeWithSelector(IERC20.approve.selector, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, loanAmount),
             abi.encode(true)
         );
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, borrower, address(iOrderbook), loanAmount),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, borrower, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, loanAmount
+            ),
             abi.encode(true)
         );
 
         // Create a flash loan.
-        iOrderbook.flashLoan(IERC3156FlashBorrower(address(borrower)), address(iToken0), loanAmount, "");
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .flashLoan(IERC3156FlashBorrower(address(borrower)), address(iToken0), loanAmount, "");
     }
 
     /// Can reenter and read vault balances from within a flash loan.
@@ -80,7 +84,9 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, borrower, address(iOrderbook), depositAmount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, borrower, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+            ),
             abi.encode(true)
         );
         checkFlashLoanNotRevert(
@@ -149,7 +155,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         config.evaluable.bytecode = iParserV2.parse2("_ _:max-positive-value() 1;:;");
 
         vm.recordLogs();
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         TakeOrdersConfigV5 memory takeOrdersConfig =
@@ -187,32 +193,34 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
 
         vm.recordLogs();
         vm.prank(alice);
-        iOrderbook.addOrder4(aliceConfig, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(aliceConfig, new TaskV2[](0));
         OrderV4 memory aliceOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         vm.recordLogs();
         vm.prank(bob);
-        iOrderbook.addOrder4(bobConfig, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(bobConfig, new TaskV2[](0));
         OrderV4 memory bobOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         ClearConfigV2 memory clearConfig = ClearConfigV2(0, 0, 0, 0, 0, 0);
 
         vm.mockCall(aliceOrder.validOutputs[0].token, bytes(""), abi.encode(true));
         vm.prank(aliceOrder.owner);
-        iOrderbook.deposit4(
-            aliceOrder.validOutputs[0].token,
-            aliceOrder.validOutputs[0].vaultId,
-            LibDecimalFloat.packLossless(type(int64).max, 0),
-            new TaskV2[](0)
-        );
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(
+                aliceOrder.validOutputs[0].token,
+                aliceOrder.validOutputs[0].vaultId,
+                LibDecimalFloat.packLossless(type(int64).max, 0),
+                new TaskV2[](0)
+            );
         vm.mockCall(bobOrder.validOutputs[0].token, bytes(""), abi.encode(true));
         vm.prank(bobOrder.owner);
-        iOrderbook.deposit4(
-            bobOrder.validOutputs[0].token,
-            bobOrder.validOutputs[0].vaultId,
-            LibDecimalFloat.packLossless(type(int64).max, 0),
-            new TaskV2[](0)
-        );
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(
+                bobOrder.validOutputs[0].token,
+                bobOrder.validOutputs[0].vaultId,
+                LibDecimalFloat.packLossless(type(int64).max, 0),
+                new TaskV2[](0)
+            );
 
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();

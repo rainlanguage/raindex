@@ -12,8 +12,10 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2,
-    Float
+    Float,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {SourceIndexOutOfBounds} from "rain.interpreter.interface/error/ErrBytecode.sol";
 import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
@@ -62,10 +64,10 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
             mockVault0Output(outputToken, owner, uint256(int256(type(int224).max)));
         } else {
             vm.prank(owner);
-            iOrderbook.deposit4(
-                outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV2[](0)
-            );
-            Float balance = iOrderbook.vaultBalance2(owner, outputToken, vaultId);
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .deposit4(outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV2[](0));
+            Float balance =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).vaultBalance2(owner, outputToken, vaultId);
             assertTrue(balance.eq(LibDecimalFloat.packLossless(type(int224).max, 0)));
         }
         if (inputVaultId == bytes32(0)) {
@@ -78,7 +80,7 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
 
         vm.prank(owner);
         vm.recordLogs();
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
 
@@ -117,12 +119,14 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         if (aliceErr.length > 0) {
             vm.expectRevert(aliceErr);
         }
-        iOrderbook.clear3(aliceOrder, bobOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .clear3(aliceOrder, bobOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
 
         if (bobErr.length > 0) {
             vm.expectRevert(bobErr);
         }
-        iOrderbook.clear3(bobOrder, aliceOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .clear3(bobOrder, aliceOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
     }
 
     function testClearOrderHandleIO0() external {

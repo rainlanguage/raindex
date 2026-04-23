@@ -11,8 +11,10 @@ import {
     ClearConfigV2,
     SignedContextV1,
     IOV2,
-    EvaluableV4
+    EvaluableV4,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
@@ -86,7 +88,7 @@ contract OrderBookV6ClearOrderContextTest is OrderBookV6ExternalRealTest {
                 ioPart,
                 ":ensure(equal-to(output-vault-before() 100) \"output vault before\"),",
                 ":ensure(equal-to(orderbook() ",
-                address(iOrderbook).toHexString(),
+                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS.toHexString(),
                 ") \"OrderBook\"),",
                 ":ensure(equal-to(order-clearer() ",
                 address(this).toHexString(),
@@ -127,11 +129,14 @@ contract OrderBookV6ClearOrderContextTest is OrderBookV6ExternalRealTest {
         } else {
             vm.mockCall(
                 token,
-                abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook)),
+                abi.encodeWithSelector(
+                    IERC20.transferFrom.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS
+                ),
                 abi.encode(true)
             );
             vm.prank(owner);
-            iOrderbook.deposit4(token, vaultId, LibDecimalFloat.packLossless(amount, exponent), new TaskV2[](0));
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .deposit4(token, vaultId, LibDecimalFloat.packLossless(amount, exponent), new TaskV2[](0));
         }
     }
 
@@ -230,10 +235,10 @@ contract OrderBookV6ClearOrderContextTest is OrderBookV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iOrderbook.addOrder4(configAlice, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(configAlice, new TaskV2[](0));
 
         vm.prank(bob);
-        iOrderbook.addOrder4(configBob, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(configBob, new TaskV2[](0));
 
         setupOutputVault(address(iToken1), alice, vaultIds.aliceOutputVaultId, 100e6, -6, 6);
         setupOutputVault(address(iToken0), bob, vaultIds.bobOutputVaultId, 100e12, -12, 12);
@@ -245,9 +250,14 @@ contract OrderBookV6ClearOrderContextTest is OrderBookV6ExternalRealTest {
             mockVault0Input(address(iToken0), alice, 3e12);
         }
 
-        iOrderbook.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
-        );
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .clear3(
+                orderAlice,
+                orderBob,
+                ClearConfigV2(0, 0, 0, 0, 0, 0),
+                new SignedContextV1[](0),
+                new SignedContextV1[](0)
+            );
     }
 
     /// forge-config: default.fuzz.runs = 10

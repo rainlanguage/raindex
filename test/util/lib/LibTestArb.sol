@@ -136,14 +136,22 @@ library LibTestArb {
     }
 
     /// Set up an order-taker arb scenario without executing it.
-    /// The caller provides their own exchange. Returns everything needed
+    /// Convenience overload where spender == pool.
+    function setup(Vm vm, address exchange, uint256 amount) internal returns (OrderTakerSetup memory) {
+        return setup(vm, exchange, exchange, amount);
+    }
+
+    /// Set up an order-taker arb scenario without executing it.
+    /// The caller provides separate spender and pool addresses.
+    /// Input tokens are minted to the pool. Returns everything needed
     /// to call arb5 directly.
     ///
     /// @param vm The Vm cheatcode handle.
-    /// @param exchange The exchange contract address.
+    /// @param spender The address that receives the token approval.
+    /// @param pool The address that is called to execute the swap.
     /// @param amount Token amount for the swap (18 decimals). Used as
     /// obPullAmount, obOutputAmount, exchangeInputAmount, and swapAmount.
-    function setup(Vm vm, address exchange, uint256 amount) internal returns (OrderTakerSetup memory) {
+    function setup(Vm vm, address spender, address pool, uint256 amount) internal returns (OrderTakerSetup memory) {
         deployPrereqs(vm);
 
         MockToken inputToken = new MockToken("Input", "IN", 18);
@@ -152,7 +160,7 @@ library LibTestArb {
         RealisticOrderTakerMockOrderBook orderBook = new RealisticOrderTakerMockOrderBook(amount);
 
         outputToken.mint(address(orderBook), amount);
-        inputToken.mint(exchange, amount);
+        inputToken.mint(pool, amount);
 
         GenericPoolOrderBookV6ArbOrderTaker arb = new GenericPoolOrderBookV6ArbOrderTaker();
 
@@ -187,7 +195,7 @@ library LibTestArb {
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
                 IOIsInput: true,
                 orders: orders,
-                data: abi.encode(exchange, exchange, exchangeData)
+                data: abi.encode(spender, pool, exchangeData)
             });
         }
 

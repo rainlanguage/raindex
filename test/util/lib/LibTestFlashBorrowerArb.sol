@@ -37,15 +37,23 @@ struct FlashBorrowerSetup {
 
 library LibTestFlashBorrowerArb {
     /// Set up a flash-borrower arb scenario without executing it.
-    /// The caller provides their own exchange contract. Returns everything
-    /// needed to call arb4 directly.
+    /// Convenience overload where spender == pool.
+    function setup(Vm vm, address exchange, uint256 amount) internal returns (FlashBorrowerSetup memory) {
+        return setup(vm, exchange, exchange, amount);
+    }
+
+    /// Set up a flash-borrower arb scenario without executing it.
+    /// The caller provides separate spender and pool addresses for the
+    /// exchange data. Input tokens are minted to the pool. Returns
+    /// everything needed to call arb4 directly.
     ///
     /// @param vm The Vm cheatcode handle.
-    /// @param exchange The exchange contract address.
+    /// @param spender The address that receives the token approval.
+    /// @param pool The address that is called to execute the swap.
     /// @param amount Token amount for the swap (18 decimals). Used as
     /// exchangeInputAmount, swapAmount, and minimumIO (flash loan size).
     /// The orderbook receives 10x amount of outputToken.
-    function setup(Vm vm, address exchange, uint256 amount) internal returns (FlashBorrowerSetup memory) {
+    function setup(Vm vm, address spender, address pool, uint256 amount) internal returns (FlashBorrowerSetup memory) {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
 
@@ -57,13 +65,13 @@ library LibTestFlashBorrowerArb {
         IRaindexV6 orderBook = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
 
         outputToken.mint(address(orderBook), 10 * amount);
-        inputToken.mint(exchange, amount);
+        inputToken.mint(pool, amount);
 
         GenericPoolOrderBookV6FlashBorrower arb = new GenericPoolOrderBookV6FlashBorrower();
 
         bytes memory exchangeData = abi.encode(
-            exchange,
-            exchange,
+            spender,
+            pool,
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), amount))
         );
 

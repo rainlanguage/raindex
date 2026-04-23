@@ -3,11 +3,18 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {
+    OrderConfigV4,
+    EvaluableV4,
+    TaskV2,
+    SignedContextV1,
+    IRaindexV6
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 
 contract OrderBookV6EnactTest is OrderBookV6ExternalRealTest {
     function checkReentrancyRW() internal view {
-        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         // reads/writes for reentrancy guard.
         // ReentrancyGuard.REENTRANCY_GUARD_STORAGE
         bytes32 reentrancyGuardStorage = 0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00;
@@ -30,7 +37,7 @@ contract OrderBookV6EnactTest is OrderBookV6ExternalRealTest {
                 TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
         }
         vm.record();
-        iOrderbook.entask2(actions);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).entask2(actions);
         checkReentrancyRW();
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
         assert(reads.length == expectedReads);

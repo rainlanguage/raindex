@@ -8,18 +8,16 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {LibOrder} from "../../../src/lib/LibOrder.sol";
+import {MinimumIO} from "../../../src/concrete/ob/OrderBookV6.sol";
 
-/// When an order's IORatio exceeds the taker's maximumIORatio, the order
-/// is skipped and OrderExceedsMaxRatio is emitted.
-contract OrderBookV6TakeOrderExceedsMaxRatioTest is OrderBookV6ExternalRealTest {
-    using LibDecimalFloat for Float;
-
-    function testTakeOrderExceedsMaxRatio() external {
+/// When `IOIsInput = false`, `minimumIO` is checked against `totalTakerOutput`.
+/// Verify the revert fires correctly in this branch.
+contract OrderBookV6TakeOrderMinimumIOIsOutputTest is OrderBookV6ExternalRealTest {
+    function testTakeOrderMinimumIOIsOutputRevert() external {
         address alice = address(uint160(uint256(keccak256("alice.rain.test"))));
         address bob = address(uint160(uint256(keccak256("bob.rain.test"))));
 
-        // Deposit so the order can fill.
+        // Deposit to alice's output vault.
         vm.mockCall(
             address(iToken1),
             abi.encodeWithSelector(IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS),
@@ -27,30 +25,30 @@ contract OrderBookV6TakeOrderExceedsMaxRatioTest is OrderBookV6ExternalRealTest 
         );
         vm.prank(alice);
         IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
-            .deposit4(address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+            .deposit4(address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, 0), new TaskV2[](0));
 
-        // Order with outputMax=1 and IORatio=100.
+        // Order outputs 1e-18 at ratio 1.
         OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
             vm,
             alice,
-            "_ _:1 100;:;",
+            "_ _:1e-18 1;:;",
             address(iToken0),
             bytes32(uint256(0x01)),
             address(iToken1),
             bytes32(uint256(0x01))
         );
 
-        // maximumIORatio = 1, but order ratio is 100 -> skip.
+        // IOIsInput = false means minimumIO is checked against totalTakerOutput.
         TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
-        takeConfig.maximumIORatio = LibDecimalFloat.packLossless(1, 0);
+        takeConfig.IOIsInput = false;
+        takeConfig.minimumIO = LibDecimalFloat.packLossless(1, 0);
 
         vm.prank(bob);
-        vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderExceedsMaxRatio(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) =
-            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeConfig);
-
-        assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
-        assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MinimumIO.selector, LibDecimalFloat.packLossless(1, 0), LibDecimalFloat.packLossless(1, -18)
+            )
+        );
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeConfig);
     }
 }

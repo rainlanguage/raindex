@@ -3,6 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalMockTest} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
+import {IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {
     IERC3156FlashBorrower,
     ON_FLASH_LOAN_CALLBACK_SUCCESS
@@ -29,6 +31,9 @@ contract OrderBookV6FlashLenderMockSuccessTest is OrderBookV6ExternalMockTest {
             abi.encodeWithSelector(IERC3156FlashBorrower.onFlashLoan.selector),
             abi.encode(ON_FLASH_LOAN_CALLBACK_SUCCESS)
         );
-        assertTrue(iOrderbook.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data));
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data)
+        );
     }
 }

@@ -8,8 +8,10 @@ import {
     EvaluableV4,
     OrderV4,
     TaskV2,
-    SignedContextV1
+    SignedContextV1,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -21,7 +23,7 @@ contract OrderBookV6RemoveOrderEnactTest is OrderBookV6ExternalRealTest {
     using Strings for uint256;
 
     function checkReentrancyRW(uint256 expectedReads, uint256 expectedWrites) internal view {
-        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         // 3 reads for reentrancy guard.
         // 1 reads for remove order.
         assert(reads.length == expectedReads);
@@ -55,11 +57,11 @@ contract OrderBookV6RemoveOrderEnactTest is OrderBookV6ExternalRealTest {
         // Hacky way to give a unique nonce to each order passed in.
         config.nonce = keccak256(abi.encode(evalStrings));
         if (addOrder) {
-            iOrderbook.addOrder4(config, new TaskV2[](0));
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         }
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
         vm.record();
-        bool stateChanged = iOrderbook.removeOrder3(order, actions);
+        bool stateChanged = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(order, actions);
         assertEq(stateChanged, addOrder);
         checkReentrancyRW(addOrder ? 5 : 4, addOrder ? 3 : 2);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
@@ -157,12 +159,12 @@ contract OrderBookV6RemoveOrderEnactTest is OrderBookV6ExternalRealTest {
         bytes[] memory evals0 = new bytes[](1);
         evals0[0] = bytes(":;");
         TaskV2[] memory actions = evalsToActions(evals0);
-        bool stateChanged = iOrderbook.addOrder4(config, actions);
+        bool stateChanged = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, actions);
         assert(stateChanged);
 
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
 
         bytes[] memory evals1 = new bytes[](1);
         evals1[0] = bytes(":ensure(0 \"always revert\");");
@@ -170,11 +172,11 @@ contract OrderBookV6RemoveOrderEnactTest is OrderBookV6ExternalRealTest {
         TaskV2[] memory actions1 = evalsToActions(evals1);
 
         vm.expectRevert("always revert");
-        bool stateChanged2 = iOrderbook.removeOrder3(order, actions1);
+        bool stateChanged2 = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).removeOrder3(order, actions1);
 
         assert(!stateChanged2);
 
-        assert(iOrderbook.orderExists(order.hash()));
+        assert(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(order.hash()));
     }
 
     /// forge-config: default.fuzz.runs = 100
@@ -191,7 +193,10 @@ contract OrderBookV6RemoveOrderEnactTest is OrderBookV6ExternalRealTest {
         bytes[] memory evals = new bytes[](3);
         evals[0] = bytes(
             string.concat(
-                usingWordsFrom, ":ensure(equal-to(orderbook() ", address(iOrderbook).toHexString(), ") \"orderbook\");"
+                usingWordsFrom,
+                ":ensure(equal-to(orderbook() ",
+                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS.toHexString(),
+                ") \"orderbook\");"
             )
         );
         evals[1] = bytes(

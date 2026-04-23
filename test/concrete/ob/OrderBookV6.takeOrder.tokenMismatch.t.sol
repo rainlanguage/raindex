@@ -9,8 +9,10 @@ import {
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     EvaluableV4,
-    SignedContextV1
+    SignedContextV1,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {TokenMismatch} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 
@@ -64,7 +66,8 @@ contract OrderBookV6TakeOrderTokenMismatchTest is OrderBookV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(abi.encodeWithSelector(TokenMismatch.selector));
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -110,7 +113,8 @@ contract OrderBookV6TakeOrderTokenMismatchTest is OrderBookV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(abi.encodeWithSelector(TokenMismatch.selector));
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }
 }

@@ -38,26 +38,26 @@ Where a finding was flagged in multiple passes, the primary finding is listed an
 | 16 | GAP-A03-1 | P2 | OrderBookV6FlashBorrower.sol | No reentrancy test for `arb4` (flash borrower path) | FIXED | Added OrderBookV6FlashBorrower.reentrancy.t.sol with ReentrantExchange that re-enters arb4 during _exchange pool call |
 | 17 | A05-1 | P2 | GenericPoolOrderBookV6ArbOrderTaker.sol | No dedicated test for approval revocation after onTakeOrders2 | FIXED | Added approvalRevoked.t.sol asserting max allowance during call and zero after arb5 |
 | 18 | A05-2 | P2 | GenericPoolOrderBookV6ArbOrderTaker.sol | No test for pool call revert propagation (order-taker path) | FIXED | Added exchangeRevert.t.sol using LibTestArb.setup abstraction; also refactored 3 flash borrower tests + order-taker approvalRevoked to use shared LibTestFlashBorrowerArb/LibTestArb setup helpers |
-| 19 | A06-1 | P2 | GenericPoolOrderBookV6FlashBorrower.sol | No test for `spender != pool` in `_exchange` | PENDING | |
-| 20 | A06-2 | P2 | GenericPoolOrderBookV6FlashBorrower.sol | No fuzz test over `exchangeData` decoding in `_exchange` | PENDING | |
-| 21 | A07-2 | P2 | RouteProcessorOrderBookV6ArbOrderTaker.sol | No test for receive() and fallback() payable functions | PENDING | |
-| 22 | A07-3 | P2 | RouteProcessorOrderBookV6ArbOrderTaker.sol | No fuzz test on onTakeOrders2 parameters directly | PENDING | |
-| 23 | A08-4 | P2 | OrderBookV6.sol | No test for `OrderZeroAmount` event/skip path in `takeOrders4` | PENDING | |
-| 24 | A08-5 | P2 | OrderBookV6.sol | No test for `NegativeVaultBalance` revert | PENDING | |
-| 25 | A08-6 | P2 | OrderBookV6.sol | No test for `NegativeVaultBalanceChange` revert | PENDING | |
-| 26 | A08-7 | P2 | OrderBookV6.sol | No test for `NegativePull` and `NegativePush` reverts | PENDING | |
-| 27 | A08-8 | P2 | OrderBookV6.sol | No test for `IOIsInput = false` branch with `minimumIO` check | PENDING | |
-| 28 | A08-12 | P2 | OrderBookV6.sol | No test for `Multicall` functionality | PENDING | |
+| 19 | A06-1 | P2 | GenericPoolOrderBookV6FlashBorrower.sol | No test for `spender != pool` in `_exchange` | FIXED | Added splitSpender.t.sol for both flash borrower and order-taker using SplitSpenderExchange mock (SpenderProxy + SplitSpenderPool); updated LibTestFlashBorrowerArb/LibTestArb with spender/pool overloads |
+| 20 | A06-2 | P2 | GenericPoolOrderBookV6FlashBorrower.sol | No fuzz test over `exchangeData` decoding in `_exchange` | DISMISSED | Decoding is just `abi.decode(data, (address, address, bytes))` — fuzzing this tests the Solidity ABI codec, not application logic. The approve-call-revoke behavior and spender!=pool path are already covered by concrete tests |
+| 21 | A07-2 | P2 | RouteProcessorOrderBookV6ArbOrderTaker.sol | No test for receive() and fallback() payable functions | FIXED | Added receiveAndFallback.t.sol with direct tests for both receive() (empty data) and fallback() (non-empty data) |
+| 22 | A07-3 | P2 | RouteProcessorOrderBookV6ArbOrderTaker.sol | No fuzz test on onTakeOrders2 parameters directly | FIXED | Added onTakeOrders2Fuzz.t.sol with fuzzed Float inputs via try/catch to exercise toFixedDecimalLossy edge cases |
+| 23 | A08-4 | P2 | OrderBookV6.sol | No test for `OrderZeroAmount` event/skip path in `takeOrders4` | FIXED | Added zeroAmount.t.sol with expression `_ _:0 1;:;` verifying OrderZeroAmount event and zero IO totals |
+| 24 | A08-5 | P2 | OrderBookV6.sol | No test for `NegativeVaultBalance` revert | FIXED | Added negativeVaultBalance.t.sol via OrderBookV6SelfTest harness with external wrapper |
+| 25 | A08-6 | P2 | OrderBookV6.sol | No test for `NegativeVaultBalanceChange` revert | FIXED | Added negativeVaultBalanceChange.t.sol testing both increase and decrease paths |
+| 26 | A08-7 | P2 | OrderBookV6.sol | No test for `NegativePull` and `NegativePush` reverts | FIXED | Added negativePullPush.t.sol via OrderBookV6SelfTest with TOFU setup |
+| 27 | A08-8 | P2 | OrderBookV6.sol | No test for `IOIsInput = false` branch with `minimumIO` check | FIXED | Added minimumIOIsOutput.t.sol with IOIsInput=false and MinimumIO revert |
+| 28 | A08-12 | P2 | OrderBookV6.sol | No test for `Multicall` functionality | FIXED | Added multicall.t.sol with two deposit4 calls via multicall |
 | 29 | A09-1 | P2 | OrderBookV6SubParser.sol | No dedicated sub-parser unit tests for deposit context words | DISMISSED | Carried from prior triage 2026-03-13-01 #49; trivial constant lookups |
 | 30 | A09-2 | P2 | OrderBookV6SubParser.sol | No dedicated sub-parser unit tests for withdraw context words | DISMISSED | Same as #29 |
-| 31 | A10-1 | P2 | LibOrder.sol | `testHashNotEqual` missing `vm.assume` guard for equal inputs | PENDING | Dup: A10-1 P5 |
-| 32 | GAP-A11-1 | P2 | LibOrderBook.sol | No direct unit test for `doPost` with empty post array | PENDING | |
-| 33 | GAP-A11-2 | P2 | LibOrderBook.sol | No test for `doPost` skipping tasks with empty bytecode | PENDING | |
-| 34 | GAP-A11-3 | P2 | LibOrderBook.sol | No test for `doPost` store.set path when writes are empty | PENDING | |
-| 35 | GAP-A12-1 | P2 | LibOrderBookArb.sol | No test for zero-balance token transfers path | PENDING | |
-| 36 | GAP-A12-4 | P2 | LibOrderBookArb.sol | No fuzz testing on finalizeArb | PENDING | |
+| 31 | A10-1 | P2 | LibOrder.sol | `testHashNotEqual` missing `vm.assume` guard for equal inputs | FIXED | Added vm.assume guard + testHashNotEqualMutatedOwner fuzz test |
+| 32 | GAP-A11-1 | P2 | LibOrderBook.sol | No direct unit test for `doPost` with empty post array | FIXED | Added doPost.t.sol with testDoPostEmptyArray via entask2 |
+| 33 | GAP-A11-2 | P2 | LibOrderBook.sol | No test for `doPost` skipping tasks with empty bytecode | FIXED | Added testDoPostEmptyBytecodeSkipped in doPost.t.sol |
+| 34 | GAP-A11-3 | P2 | LibOrderBook.sol | No test for `doPost` store.set path when writes are empty | FIXED | Added testDoPostNoStoreSetWhenNoWrites with vm.record/vm.accesses |
+| 35 | GAP-A12-1 | P2 | LibOrderBookArb.sol | No test for zero-balance token transfers path | FIXED | Added finalizeArbZeroBalance.t.sol with zero-profit arb |
+| 36 | GAP-A12-4 | P2 | LibOrderBookArb.sol | No fuzz testing on finalizeArb | FIXED | Added finalizeArbFuzz.t.sol with bounded fuzz on all amounts |
 | 37 | GAP-A13-1 | P2 | LibOrderBookSubParser.sol | No dedicated sub-parser unit tests for deposit/withdraw context words | DISMISSED | Same as #29 |
-| 38 | A14-3 | P2 | LibOrderBookDeploy.sol | Prod fork tests do not verify RouteProcessor deployment | PENDING | Dup: A14-3 P5 |
+| 38 | A14-3 | P2 | LibOrderBookDeploy.sol | Prod fork tests do not verify RouteProcessor deployment | FIXED | Already present in _checkAllContracts at lines 22-26; also checks arb contracts |
 | 39 | GAP-A15-1 | P2 | Deploy.sol | Deploy script has zero unit test coverage | DISMISSED | Carried from prior triage 2026-03-13-01 #43; deploy script tested via CI dry-runs |
 | 40 | A02-1 | P3 | OrderBookV6ArbOrderTaker.sol | Constructor has no NatSpec documentation | FIXED | Added `@param config` NatSpec |
 | 41 | A02-2 | P3 | OrderBookV6ArbOrderTaker.sol | `onTakeOrders2` parameter names are elided | DISMISSED | Naming unused params causes compiler warnings; elided intentionally |
@@ -92,7 +92,7 @@ Where a finding was flagged in multiple passes, the primary finding is listed an
 | 70 | A13-1 | P4 | LibOrderBookSubParser.sol | Pragma version inconsistency across `src/lib/` | FIXED | Fixed via #67; Dup: A10-1 P4 (#67) |
 | 71 | A13-3 | P4 | LibOrderBookSubParser.sol | Deposit metadata uses row+1 offsets instead of named constants | FIXED | Replaced `CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_* + 1` with `DEPOSIT_WORD_*` constants |
 | 72 | A03-1 | P5 | OrderBookV6FlashBorrower.sol | Test contract name uses "V5" instead of "V6" | FIXED | Renamed contract and function to V6 |
-| 73 | A04-1 | P5 | OrderBookV6FlashLender.sol | `flashFee` does not revert for unsupported tokens per ERC-3156 | PENDING | |
+| 73 | A04-1 | P5 | OrderBookV6FlashLender.sol | `flashFee` does not revert for unsupported tokens per ERC-3156 | DISMISSED | OrderBook is token-agnostic (any ERC20 supported); zero fee is correct; maxFlashLoan returns 0 for unheld tokens preventing actual loans |
 | 74 | A08-1 | P5 | OrderBookV6.sol | NatSpec says "18 decimal fixed point" but uses Floats | FIXED | Updated NatSpec to say "Float values" |
 | 75 | A13-1 | P5 | LibOrderBookSubParser.sol | Test uses hardcoded depth `2` instead of `EXTERN_PARSE_META_BUILD_DEPTH` (1) | FIXED | Test now uses `EXTERN_PARSE_META_BUILD_DEPTH` constant |
 
@@ -100,8 +100,11 @@ Where a finding was flagged in multiple passes, the primary finding is listed an
 
 | # | ID | File | Title | Status | Notes |
 |---|-----|------|-------|--------|-------|
-| 76 | CR-1 | LibGenericPoolExchange.sol | No zero-address guards for decoded spender/pool | PENDING | |
-| 77 | CR-2 | LibOrderBookDeployProd.t.sol | Comments say "Both contracts" but 3 are verified | PENDING | |
-| 78 | CR-3 | OrderBookV6FlashBorrower.sol | NatSpec references obsolete `onlyValidTask`; code uses `_beforeArb` | PENDING | |
+| 76 | CR-1 | LibGenericPoolExchange.sol | No zero-address guards for decoded spender/pool | DISMISSED | Zero-address spender causes forceApprove to fail; zero-address pool causes functionCallWithValue to fail; self-correcting |
+| 77 | CR-2 | LibOrderBookDeployProd.t.sol | Comments say "Both contracts" but 3 are verified | FIXED | Comment already removed in current code |
+| 78 | CR-3 | OrderBookV6FlashBorrower.sol | NatSpec references obsolete `onlyValidTask`; code uses `_beforeArb` | FIXED | Updated NatSpec to reference `_beforeArb` |
 | 79 | CR-4 | Tests (multiple) | Repeated TaskV2 literal with deploy addresses should be shared helper | FIXED | Extracted to LibTestArb.noopTask() shared helper |
 | 80 | CR-5 | Tests (multiple) | Inconsistent use of `address(0)` vs `LibInterpreterDeploy` constants | FIXED | LibTestArb.noopTask() and setupAndArb() use deploy constants throughout |
+| 81 | CR-6 | OrderBookV6ExternalRealTest.sol | `iOrderbook` should use `LibOrderBookDeploy` constant directly | FIXED | Removed `iOrderbook` immutable; replaced all 312+ references across 46 test files with `LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS` and `IRaindexV6(...)` casts |
+| 82 | CR-7 | Codebase-wide | Rename orderbook references to raindex | PENDING | |
+| 83 | CR-8 | OrderBookV6ExternalRealTest.sol | `iInterpreter`, `iStore`, `iParserV2`, `iSubParser` should use deploy constants directly | PENDING | Same pattern as CR-6; immutables are assigned from deploy constants |

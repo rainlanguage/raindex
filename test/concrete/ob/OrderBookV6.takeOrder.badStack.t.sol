@@ -5,7 +5,14 @@ pragma solidity =0.8.25;
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderConfigV4, OrderV4, TaskV2, TakeOrdersConfigV5} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {
+    OrderConfigV4,
+    OrderV4,
+    TaskV2,
+    TakeOrdersConfigV5,
+    IRaindexV6
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 contract OrderBookV6TakeOrderBadStackTest is OrderBookV6ExternalRealTest {
@@ -28,11 +35,11 @@ contract OrderBookV6TakeOrderBadStackTest is OrderBookV6ExternalRealTest {
         config.validOutputs[0].token = address(iToken1);
 
         vm.prank(alice);
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, badStackHeight));
-        iOrderbook.takeOrders4(takeOrdersConfig);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeOrdersConfig);
     }
 
     /// forge-config: default.fuzz.runs = 100

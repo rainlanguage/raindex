@@ -11,8 +11,10 @@ import {
     IOV2,
     OrderConfigV4,
     EvaluableV4,
-    TaskV2
+    TaskV2,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
@@ -75,7 +77,10 @@ contract OrderBookV6TakeOrderPrecisionTest is OrderBookV6ExternalRealTest {
                 vm.mockCall(
                     outputToken,
                     abi.encodeWithSelector(
-                        IERC20.transferFrom.selector, address(this), address(iOrderbook), absoluteDepositAmount
+                        IERC20.transferFrom.selector,
+                        address(this),
+                        LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                        absoluteDepositAmount
                     ),
                     abi.encode(true)
                 );
@@ -102,7 +107,10 @@ contract OrderBookV6TakeOrderPrecisionTest is OrderBookV6ExternalRealTest {
             vm.mockCall(
                 inputToken,
                 abi.encodeWithSelector(
-                    IERC20.transferFrom.selector, address(this), address(iOrderbook), absoluteTakerOutputAmount
+                    IERC20.transferFrom.selector,
+                    address(this),
+                    LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                    absoluteTakerOutputAmount
                 ),
                 abi.encode(true)
             );
@@ -126,28 +134,35 @@ contract OrderBookV6TakeOrderPrecisionTest is OrderBookV6ExternalRealTest {
 
         {
             if (outputVaultId != bytes32(0) && expectedTakerTotalInput.gt(LibDecimalFloat.packLossless(0, 0))) {
-                iOrderbook.deposit4(outputToken, outputVaultId, expectedTakerTotalInput, new TaskV2[](0));
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .deposit4(outputToken, outputVaultId, expectedTakerTotalInput, new TaskV2[](0));
             }
             if (outputVaultId != bytes32(0)) {
                 assertTrue(
-                    iOrderbook.vaultBalance2(address(this), outputToken, outputVaultId).eq(expectedTakerTotalInput)
+                    IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .vaultBalance2(address(this), outputToken, outputVaultId).eq(expectedTakerTotalInput)
                 );
             }
             vm.recordLogs();
-            iOrderbook.addOrder4(config, new TaskV2[](0));
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             Vm.Log[] memory entries = vm.getRecordedLogs();
             assertEq(entries.length, 1);
             OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(entries);
 
             TakeOrdersConfigV5 memory takeOrdersConfig =
                 LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
-            (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(takeOrdersConfig);
+            (Float totalTakerInput, Float totalTakerOutput) =
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeOrdersConfig);
             assertTrue(totalTakerInput.eq(expectedTakerTotalInput), "input");
             assertTrue(totalTakerOutput.eq(expectedTakerTotalOutput), "output");
         }
 
         if (outputVaultId != bytes32(0)) {
-            assertTrue(iOrderbook.vaultBalance2(address(this), outputToken, outputVaultId).isZero(), "vault balance");
+            assertTrue(
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .vaultBalance2(address(this), outputToken, outputVaultId).isZero(),
+                "vault balance"
+            );
         }
     }
 

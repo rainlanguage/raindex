@@ -11,8 +11,10 @@ import {
     OrderConfigV4,
     TakeOrdersConfigV5,
     EvaluableV4,
-    TaskV2
+    TaskV2,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {SourceIndexOutOfBounds} from "rain.interpreter.interface/error/ErrBytecode.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -55,7 +57,9 @@ contract OrderBookV6TakeOrderHandleIORevertTest is OrderBookV6ExternalRealTest {
             vm.mockCall(outputToken, abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(18)));
             vm.mockCall(
                 outputToken,
-                abi.encodeWithSelector(IERC20.transferFrom.selector, address(this), address(iOrderbook)),
+                abi.encodeWithSelector(
+                    IERC20.transferFrom.selector, address(this), LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS
+                ),
                 abi.encode(true)
             );
             vm.mockCall(outputToken, abi.encodeWithSelector(IERC20.transfer.selector, address(this)), abi.encode(true));
@@ -64,11 +68,11 @@ contract OrderBookV6TakeOrderHandleIORevertTest is OrderBookV6ExternalRealTest {
         if (outputVaultId == bytes32(0)) {
             mockVault0Output(outputToken, address(this), uint256(int256(type(int224).max)));
         } else {
-            iOrderbook.deposit4(
-                outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, -18), new TaskV2[](0)
-            );
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                .deposit4(outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, -18), new TaskV2[](0));
             assertTrue(
-                iOrderbook.vaultBalance2(address(this), outputToken, vaultId)
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .vaultBalance2(address(this), outputToken, vaultId)
                     .eq(LibDecimalFloat.packLossless(type(int224).max, -18))
             );
         }
@@ -84,7 +88,7 @@ contract OrderBookV6TakeOrderHandleIORevertTest is OrderBookV6ExternalRealTest {
             config = OrderConfigV4(evaluable, validInputs, validOutputs, bytes32(i), bytes32(0), "");
 
             vm.recordLogs();
-            iOrderbook.addOrder4(config, new TaskV2[](0));
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
             Vm.Log[] memory entries = vm.getRecordedLogs();
             assertEq(entries.length, 1);
             OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(entries);
@@ -97,7 +101,8 @@ contract OrderBookV6TakeOrderHandleIORevertTest is OrderBookV6ExternalRealTest {
         if (err.length > 0) {
             vm.expectRevert(err);
         }
-        (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(takeOrdersConfig);
+        (Float totalTakerInput, Float totalTakerOutput) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).takeOrders4(takeOrdersConfig);
         // We don't really care about the outputs as the tests are basically just
         // trying to show that the IO handler is running or not running by simple
         // reverts.

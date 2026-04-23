@@ -10,8 +10,10 @@ import {
     EvaluableV4,
     ClearConfigV2,
     SignedContextV1,
-    TaskV2
+    TaskV2,
+    IRaindexV6
 } from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -43,15 +45,20 @@ contract OrderBookV6ClearOrderBadStackTest is OrderBookV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iOrderbook.addOrder4(configAlice, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(configAlice, new TaskV2[](0));
 
         vm.prank(bob);
-        iOrderbook.addOrder4(configBob, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(configBob, new TaskV2[](0));
 
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, badStackHeight));
-        iOrderbook.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
-        );
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .clear3(
+                orderAlice,
+                orderBob,
+                ClearConfigV2(0, 0, 0, 0, 0, 0),
+                new SignedContextV1[](0),
+                new SignedContextV1[](0)
+            );
     }
 
     /// forge-config: default.fuzz.runs = 100

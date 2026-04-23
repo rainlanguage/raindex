@@ -3,7 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {QuoteV2, OrderConfigV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {QuoteV2, OrderConfigV4, TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {TokenSelfTrade} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {Float} from "rain.math.float/lib/LibDecimalFloat.sol";
 
@@ -18,8 +19,9 @@ contract OrderBookV6QuoteSameTokenTest is OrderBookV6ExternalRealTest {
         quoteConfig.inputIOIndex = 0;
         quoteConfig.outputIOIndex = 0;
         vm.prank(quoteConfig.order.owner);
-        iOrderbook.addOrder4(
-            OrderConfigV4({
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .addOrder4(
+                OrderConfigV4({
                 evaluable: quoteConfig.order.evaluable,
                 validInputs: quoteConfig.order.validInputs,
                 validOutputs: quoteConfig.order.validOutputs,
@@ -27,10 +29,11 @@ contract OrderBookV6QuoteSameTokenTest is OrderBookV6ExternalRealTest {
                 secret: bytes32(0),
                 meta: ""
             }),
-            new TaskV2[](0)
-        );
+                new TaskV2[](0)
+            );
         vm.expectRevert(abi.encodeWithSelector(TokenSelfTrade.selector));
-        (bool success, Float maxOutput, Float ioRatio) = iOrderbook.quote2(quoteConfig);
+        (bool success, Float maxOutput, Float ioRatio) =
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).quote2(quoteConfig);
         (success, maxOutput, ioRatio);
     }
 }

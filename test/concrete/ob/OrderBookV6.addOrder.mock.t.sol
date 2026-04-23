@@ -3,7 +3,15 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalMockTest} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
-import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {
+    OrderConfigV4,
+    OrderV4,
+    IOV2,
+    EvaluableV4,
+    TaskV2,
+    IRaindexV6
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotRainMetaV1, META_MAGIC_NUMBER_V1} from "rain.metadata/interface/unstable/IMetaV1_2.sol";
 import {LibMeta} from "rain.metadata/lib/LibMeta.sol";
@@ -19,10 +27,10 @@ contract OrderBookV6AddOrderMockTest is OrderBookV6ExternalMockTest {
         vm.prank(owner);
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         config.evaluable.bytecode = "";
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
-        assertTrue(iOrderbook.orderExists(orderHash));
+        assertTrue(IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderHash));
     }
 
     /// Adding an order without inputs reverts.
@@ -32,10 +40,10 @@ contract OrderBookV6AddOrderMockTest is OrderBookV6ExternalMockTest {
         config.evaluable.bytecode = hex"02000000040000000000000000";
         config.validInputs = new IOV2[](0);
         vm.expectRevert(abi.encodeWithSelector(OrderNoInputs.selector));
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
-        assertTrue(!iOrderbook.orderExists(orderHash));
+        assertTrue(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderHash));
     }
 
     /// Adding an order without token outputs reverts.
@@ -46,10 +54,10 @@ contract OrderBookV6AddOrderMockTest is OrderBookV6ExternalMockTest {
         vm.assume(config.validInputs.length > 0);
         config.validOutputs = new IOV2[](0);
         vm.expectRevert(abi.encodeWithSelector(OrderNoOutputs.selector));
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
-        assertTrue(!iOrderbook.orderExists(orderHash));
+        assertTrue(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderHash));
     }
 
     /// Adding an order with calculations, inputs and outputs will succeed if
@@ -82,11 +90,11 @@ contract OrderBookV6AddOrderMockTest is OrderBookV6ExternalMockTest {
         vm.assume(config.meta.length > 0);
 
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, config.meta));
-        iOrderbook.addOrder4(config, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).addOrder4(config, new TaskV2[](0));
 
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
-        assertTrue(!iOrderbook.orderExists(orderHash));
+        assertTrue(!IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).orderExists(orderHash));
     }
 
     /// Adding a valid order with a non-empty meta MUST emit MetaV1 if the meta

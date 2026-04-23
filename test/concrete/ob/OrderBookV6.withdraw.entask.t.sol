@@ -3,7 +3,14 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {
+    OrderConfigV4,
+    EvaluableV4,
+    TaskV2,
+    SignedContextV1,
+    IRaindexV6
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -21,7 +28,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
     using LibFormatDecimalFloat for Float;
 
     function checkReentrancyRW(uint256 expectedReads, uint256 expectedWrites) internal view {
-        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         // 3 reads for reentrancy guard.
         // 2 reads for deposit.
         assertEq(reads.length, expectedReads, "reads length");
@@ -68,7 +75,10 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
                 vm.mockCall(
                     address(iToken0),
                     abi.encodeWithSelector(
-                        IERC20.transferFrom.selector, owner, address(iOrderbook), depositAmountAbsolute
+                        IERC20.transferFrom.selector,
+                        owner,
+                        LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
+                        depositAmountAbsolute
                     ),
                     abi.encode(true)
                 );
@@ -76,7 +86,8 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
                 vm.startPrank(owner);
 
                 if (depositAmountAbsolute > 0) {
-                    iOrderbook.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+                    IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                        .deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
                 }
             }
 
@@ -110,7 +121,8 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
                 withdrawAmount18
             );
         }
-        iOrderbook.withdraw4(address(iToken0), vaultId, targetAmount, actions);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, targetAmount, actions);
         if (err.length == 0) {
             checkReentrancyRW(6, 3);
             (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
@@ -311,10 +323,13 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         vm.startPrank(alice);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iOrderbook), depositAmount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, depositAmount18
+            ),
             abi.encode(true)
         );
-        iOrderbook.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
 
         vm.mockCall(
             address(iToken0),
@@ -326,12 +341,23 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         evals[0] = bytes(":ensure(0 \"revert in action\");");
         TaskV2[] memory actions = evalsToActions(evals);
 
-        assertTrue(depositAmount.eq(iOrderbook.vaultBalance2(alice, address(iToken0), vaultId)));
+        assertTrue(
+            depositAmount.eq(
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .vaultBalance2(alice, address(iToken0), vaultId)
+            )
+        );
 
         vm.expectRevert("revert in action");
-        iOrderbook.withdraw4(address(iToken0), vaultId, withdrawAmount, actions);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+            .withdraw4(address(iToken0), vaultId, withdrawAmount, actions);
 
-        assertTrue(depositAmount.eq(iOrderbook.vaultBalance2(alice, address(iToken0), vaultId)));
+        assertTrue(
+            depositAmount.eq(
+                IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS)
+                    .vaultBalance2(alice, address(iToken0), vaultId)
+            )
+        );
     }
 
     /// forge-config: default.fuzz.runs = 100
@@ -354,8 +380,8 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
             string.concat(
                 usingWordsFrom,
                 ":ensure(equal-to(orderbook() ",
-                address(iOrderbook).toHexString(),
-                ") \"orderbook is iOrderbook\");"
+                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS.toHexString(),
+                ") \"orderbook is orderbook\");"
             )
         );
         evals[1] = bytes(

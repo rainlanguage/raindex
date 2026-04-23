@@ -3,7 +3,14 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest, LibDecimalFloat, Float} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {
+    OrderConfigV4,
+    EvaluableV4,
+    TaskV2,
+    SignedContextV1,
+    IRaindexV6
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibFormatDecimalFloat} from "rain.math.float/lib/format/LibFormatDecimalFloat.sol";
@@ -17,7 +24,7 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
     using LibFormatDecimalFloat for Float;
 
     function checkReentrancyRW() internal view {
-        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
+        (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         // ReentrancyGuard.REENTRANCY_GUARD_STORAGE
         bytes32 reentrancyGuardStorage = 0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00;
 
@@ -45,7 +52,9 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
         vm.startPrank(owner);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook), amount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, owner, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, amount18
+            ),
             abi.encode(true)
         );
 
@@ -55,7 +64,7 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
                 TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
         }
         vm.record();
-        iOrderbook.deposit4(address(iToken0), vaultId, amount, actions);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).deposit4(address(iToken0), vaultId, amount, actions);
         checkReentrancyRW();
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
         assert(reads.length == expectedReads);
@@ -199,8 +208,8 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
             string.concat(
                 usingWordsFrom,
                 ":ensure(equal-to(orderbook() ",
-                address(iOrderbook).toHexString(),
-                ") \"orderbook is iOrderbook\");"
+                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS.toHexString(),
+                ") \"orderbook is orderbook\");"
             )
         );
         evals[1] = bytes(
@@ -252,7 +261,9 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
         vm.startPrank(alice);
         vm.mockCall(
             address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iOrderbook), amount18),
+            abi.encodeWithSelector(
+                IERC20.transferFrom.selector, alice, LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, amount18
+            ),
             abi.encode(true)
         );
 
@@ -263,11 +274,17 @@ contract OrderBookV6DepositEnactTest is OrderBookV6ExternalRealTest {
 
         TaskV2[] memory actions = evalsToActions(evals);
 
-        assertTrue(iOrderbook.vaultBalance2(alice, address(iToken0), vaultId).isZero());
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).vaultBalance2(alice, address(iToken0), vaultId)
+                .isZero()
+        );
 
         vm.expectRevert("revert in action");
-        iOrderbook.deposit4(address(iToken0), vaultId, amount, actions);
+        IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).deposit4(address(iToken0), vaultId, amount, actions);
 
-        assertTrue(iOrderbook.vaultBalance2(alice, address(iToken0), vaultId).isZero());
+        assertTrue(
+            IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS).vaultBalance2(alice, address(iToken0), vaultId)
+                .isZero()
+        );
     }
 }
