@@ -23,8 +23,9 @@
         "test": "npm run test --workspaces",
         "lint:all": "npm run lint --workspaces --if-present",
         "format:all": "npm run format --workspaces --if-present",
+        "format-check:all": "npm run format-check --workspaces --if-present",
         "check:all": "npm run check --workspaces --if-present",
-        "lint-format-check:all": "npm run lint:all && npm run format:all && npm run check:all"
+        "lint-format-check:all": "npm run lint:all && npm run format-check:all && npm run check:all"
     },
     "devDependencies": {
         "@square/svelte-store": "1.0.18",

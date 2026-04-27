@@ -140,9 +140,14 @@ vi.mock('@tanstack/svelte-query');
 
 const mockOrder: RaindexOrder = {
 	id: '1',
-	getTradeCount: vi.fn(),
 	getTradesList: vi.fn()
 } as unknown as RaindexOrder;
+
+const wrapInResult = (trades: RaindexTrade[]) => ({
+	trades,
+	totalCount: BigInt(trades.length),
+	summary: {}
+});
 
 test('renders table with correct data', async () => {
 	const queryClient = new QueryClient();
@@ -153,7 +158,7 @@ test('renders table with correct data', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		subscribe: (fn: (value: any) => void) => {
 			fn({
-				data: { pages: [mockTradeOrdersList] },
+				data: { pages: [wrapInResult(mockTradeOrdersList)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -192,7 +197,7 @@ test('renders a debug button for each trade', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		subscribe: (fn: (value: any) => void) => {
 			fn({
-				data: { pages: [mockTradeOrdersList] },
+				data: { pages: [wrapInResult(mockTradeOrdersList)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -225,7 +230,7 @@ test('renders combined Transaction column with Sender and Tx', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		subscribe: (fn: (value: any) => void) => {
 			fn({
-				data: { pages: [mockTradeOrdersList] },
+				data: { pages: [wrapInResult(mockTradeOrdersList)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -260,7 +265,7 @@ test('renders Input column with token symbol and amount', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		subscribe: (fn: (value: any) => void) => {
 			fn({
-				data: { pages: [mockTradeOrdersList] },
+				data: { pages: [wrapInResult(mockTradeOrdersList)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -297,7 +302,7 @@ test('renders Output column with token symbol and amount', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		subscribe: (fn: (value: any) => void) => {
 			fn({
-				data: { pages: [mockTradeOrdersList] },
+				data: { pages: [wrapInResult(mockTradeOrdersList)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -400,7 +405,7 @@ test('displays dash when output amount is zero (prevents division by zero)', asy
 	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 		subscribe: (fn: (value: unknown) => void) => {
 			fn({
-				data: { pages: [mockTrades] },
+				data: { pages: [wrapInResult(mockTrades)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -430,7 +435,7 @@ test('displays dash when input amount is zero', async () => {
 	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 		subscribe: (fn: (value: unknown) => void) => {
 			fn({
-				data: { pages: [mockTrades] },
+				data: { pages: [wrapInResult(mockTrades)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
@@ -460,7 +465,7 @@ test('displays dash when both amounts are zero', async () => {
 	mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 		subscribe: (fn: (value: unknown) => void) => {
 			fn({
-				data: { pages: [mockTrades] },
+				data: { pages: [wrapInResult(mockTrades)] },
 				status: 'success',
 				isFetching: false,
 				isFetched: true
