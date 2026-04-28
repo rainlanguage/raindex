@@ -777,7 +777,7 @@ impl RaindexOrder {
         mode: TakeOrdersMode,
         amount: String,
         price_cap: String,
-        injector: &dyn rain_orderbook_quote::SignedContextInjector,
+        injector: &dyn raindex_quote::SignedContextInjector,
     ) -> Result<TakeOrdersCalldataResult, RaindexError> {
         let taker_addr = Address::from_str(&taker)?;
         let parsed_mode = ParsedTakeOrdersMode::parse(mode, &amount)?;

@@ -653,8 +653,8 @@ mod tests {
         use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
         use alloy::primitives::{b256, Address, Bytes, FixedBytes, U256};
         use httpmock::MockServer;
-        use rain_orderbook_bindings::IRaindexV6::SignedContextV1;
-        use rain_orderbook_subgraph_client::utils::float::F1;
+        use raindex_bindings::IRaindexV6::SignedContextV1;
+        use raindex_subgraph_client::utils::float::F1;
         use serde_json::json;
         use std::str::FromStr;
 

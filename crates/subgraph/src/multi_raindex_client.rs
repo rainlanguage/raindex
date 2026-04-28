@@ -34,7 +34,7 @@ impl MultiRaindexSubgraphClient {
         &self,
         filter_args: SgOrdersListFilterArgs,
         pagination_args: SgPaginationArgs,
-    ) -> Result<Vec<SgOrderWithSubgraphName>, OrderbookSubgraphClientError> {
+    ) -> Result<Vec<SgOrderWithSubgraphName>, RaindexSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             let filter_args = filter_args.clone();
@@ -103,7 +103,7 @@ impl MultiRaindexSubgraphClient {
         &self,
         filter_args: SgVaultsListFilterArgs,
         pagination_args: SgPaginationArgs,
-    ) -> Result<Vec<SgVaultWithSubgraphName>, OrderbookSubgraphClientError> {
+    ) -> Result<Vec<SgVaultWithSubgraphName>, RaindexSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             let filter_args = filter_args.clone();
@@ -143,7 +143,7 @@ impl MultiRaindexSubgraphClient {
 
     pub async fn tokens_list(
         &self,
-    ) -> Result<Vec<SgErc20WithSubgraphName>, OrderbookSubgraphClientError> {
+    ) -> Result<Vec<SgErc20WithSubgraphName>, RaindexSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             async move {
@@ -442,7 +442,7 @@ mod tests {
             then.status(429).body("rate limit exceeded");
         });
 
-        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+        let client = MultiRaindexSubgraphClient::new(vec![MultiSubgraphArgs {
             url: sg1_url,
             name: sg1_name.to_string(),
         }]);
@@ -452,7 +452,7 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         match err {
-            OrderbookSubgraphClientError::CynicClientError(CynicClientError::HttpError {
+            RaindexSubgraphClientError::CynicClientError(CynicClientError::HttpError {
                 status,
                 body,
             }) => {
@@ -484,7 +484,7 @@ mod tests {
             then.status(429).body("rate limit exceeded");
         });
 
-        let client = MultiOrderbookSubgraphClient::new(vec![
+        let client = MultiRaindexSubgraphClient::new(vec![
             MultiSubgraphArgs {
                 url: sg1_url,
                 name: sg1_name.to_string(),
