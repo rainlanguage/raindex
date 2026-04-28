@@ -16,7 +16,7 @@
 	import { handleTransactionConfirmationModal } from '$lib/services/modal';
 	import { pushGuiStateToUrlHistory } from '$lib/services/handleUpdateGuiState';
 
-	const { orderName, deployment, orderDetail, rainlang } = $page.data;
+	const { orderName, deployment, orderDetail, registry } = $page.data;
 	const stateFromUrl = $page.url.searchParams?.get('state') || '';
 
 	const { account } = useAccount();
@@ -27,7 +27,7 @@
 	let getGuiError: string | null = null;
 
 	onMount(async () => {
-		if (!deployment || !rainlang || !orderName) {
+		if (!deployment || !registry || !orderName) {
 			setTimeout(() => {
 				goto('/deploy');
 			}, 5000);
@@ -35,7 +35,7 @@
 		}
 
 		const serializedState = stateFromUrl || undefined;
-		const guiResult = await rainlang.getGui(
+		const guiResult = await registry.getGui(
 			orderName,
 			deployment.key,
 			serializedState,
@@ -66,7 +66,7 @@
 	};
 </script>
 
-{#if !deployment || !rainlang}
+{#if !deployment || !registry}
 	<div>Deployment not found. Redirecting to deployments page...</div>
 {:else if gui}
 	<div data-testid="gui-provider">

@@ -6,8 +6,10 @@ mod quote;
 mod quote_debug;
 pub mod rpc;
 
+pub mod injector;
 pub mod oracle;
 mod order_quotes;
+pub use injector::{NoopInjector, SignedContextInjector};
 pub use order_quotes::*;
 
 pub use quote::*;

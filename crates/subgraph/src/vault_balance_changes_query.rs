@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_query_page_network_error() {
+    async fn test_query_page_http_error() {
         let server = MockServer::start_async().await;
         let client = setup_query_client(&server);
 
@@ -211,7 +211,7 @@ mod tests {
         assert!(result.is_err());
         assert!(matches!(
             result.err().unwrap(),
-            CynicClientError::Request(_)
+            CynicClientError::HttpError { status: 500, .. }
         ));
     }
 

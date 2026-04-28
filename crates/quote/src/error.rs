@@ -51,6 +51,15 @@ pub enum Error {
     ReadProviderError(#[from] ReadProviderError),
     #[error("Multicall failed: {0}")]
     MulticallError(#[from] MulticallError),
+    /// Internal signal from `quote_chunk_once` that the orderbook's own
+    /// `multicall(bytes[])` reverted at the chunk level (OZ Multicall bubbles
+    /// the first failing inner call's revert; it cannot isolate per-element).
+    /// The quote RPC layer consumes this to drive bisection and attribute the
+    /// failure to a specific `QuoteTarget`.
+    #[error("Quote chunk reverted: {0}")]
+    ChunkReverted(Box<FailedQuote>),
+    #[error("RPC transport error: {0}")]
+    TransportError(String),
 }
 
 #[cfg(target_family = "wasm")]

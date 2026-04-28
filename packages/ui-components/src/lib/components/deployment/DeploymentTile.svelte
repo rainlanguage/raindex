@@ -7,18 +7,18 @@
 	export let name: string;
 	export let description: string;
 
-	let customRainlangParam = '';
+	let customRegistryParam = '';
 
 	onMount(async () => {
-		// Get the custom rainlang from URL if it exists
-		customRainlangParam = $page.url.searchParams.get('rainlang')
-			? `?rainlang=${$page.url.searchParams.get('rainlang')}`
+		// Get the custom registry from URL if it exists
+		customRegistryParam = $page.url.searchParams.get('registry')
+			? `?registry=${$page.url.searchParams.get('registry')}`
 			: '';
 	});
 </script>
 
 <a
-	href={`/deploy/${orderName}/${key}${customRainlangParam}`}
+	href={`/deploy/${orderName}/${key}${customRegistryParam}`}
 	class="flex h-full w-full max-w-sm cursor-pointer flex-col gap-y-4 rounded-3xl border border-gray-200 bg-white p-4 text-left hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-700"
 >
 	<h1 class="text-2xl font-semibold text-gray-900 dark:text-white">{name}</h1>

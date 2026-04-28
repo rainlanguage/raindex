@@ -10,11 +10,11 @@ import {
 } from '@rainlanguage/ui-components';
 import { readable, writable } from 'svelte/store';
 import {
-	DotrainRainlang,
+	DotrainRegistry,
 	type DotrainOrderGui,
 	type NameAndDescriptionCfg
 } from '@rainlanguage/raindex';
-import { RAINLANG_URL } from '$lib/constants';
+import { REGISTRY_URL } from '$lib/constants';
 import { retry, DEFAULT_MAX_RETRIES } from '$lib/retry';
 import { handleTransactionConfirmationModal } from '$lib/services/modal';
 
@@ -22,18 +22,18 @@ const ACCOUNT = '0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E';
 const TOKEN1_ADDRESS = '0x000000000000012def132e61759048be5b5c6033';
 const TOKEN2_ADDRESS = '0x00000000000007c8612ba63df8ddefd9e6077c97';
 
-async function createRainlang(): Promise<DotrainRainlang> {
+async function createRegistry(): Promise<DotrainRegistry> {
 	return retry(async () => {
-		const result = await DotrainRainlang.new(RAINLANG_URL);
+		const result = await DotrainRegistry.new(REGISTRY_URL);
 		if (result.error) {
-			throw new Error('Failed to create rainlang: ' + result.error.msg);
+			throw new Error('Failed to create registry: ' + result.error.msg);
 		}
 		return result.value;
 	});
 }
 
 async function getGui(
-	rl: DotrainRainlang,
+	rl: DotrainRegistry,
 	serializedState?: string,
 	stateCallback?: (state: string) => void
 ): Promise<DotrainOrderGui> {
@@ -47,7 +47,7 @@ async function getGui(
 }
 
 async function createConfiguredGui(
-	rl: DotrainRainlang,
+	rl: DotrainRegistry,
 	stateCallback?: (state: string) => void
 ): Promise<DotrainOrderGui> {
 	const gui = await getGui(rl, undefined, stateCallback);
@@ -106,16 +106,16 @@ vi.mock('$lib/stores/wagmi', () => ({
 
 // Shared across all describe blocks to avoid duplicate HTTP fetches to the
 // remote registry/settings/token-list endpoints, which are rate-limited on CI.
-let rainlang: DotrainRainlang;
+let registry: DotrainRegistry;
 beforeAll(async () => {
-	rainlang = await createRainlang();
+	registry = await createRegistry();
 });
 
 describe('GUI deployment args isolation tests', () => {
 	it(
 		'standalone GUI without callback produces deployment args',
 		async () => {
-			const gui = await createConfiguredGui(rainlang);
+			const gui = await createConfiguredGui(registry);
 			const result = await gui.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			const args = result.value!;
@@ -131,7 +131,7 @@ describe('GUI deployment args isolation tests', () => {
 		'standalone GUI with noop state callback produces deployment args',
 		async () => {
 			const callback = vi.fn();
-			const gui = await createConfiguredGui(rainlang, callback);
+			const gui = await createConfiguredGui(registry, callback);
 			const result = await gui.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			const args = result.value!;
@@ -145,7 +145,7 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateAddOrderCalldata works standalone',
 		async () => {
-			const gui = await createConfiguredGui(rainlang);
+			const gui = await createConfiguredGui(registry);
 			const result = await gui.generateAddOrderCalldata();
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
@@ -156,7 +156,7 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateApprovalCalldatas works standalone',
 		async () => {
-			const gui = await createConfiguredGui(rainlang);
+			const gui = await createConfiguredGui(registry);
 			const result = await gui.generateApprovalCalldatas(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
@@ -167,7 +167,7 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateDepositCalldatas works standalone',
 		async () => {
-			const gui = await createConfiguredGui(rainlang);
+			const gui = await createConfiguredGui(registry);
 			const result = await gui.generateDepositCalldatas();
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
@@ -178,11 +178,11 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'serializeState and restore produce deployment args',
 		async () => {
-			const gui1 = await createConfiguredGui(rainlang);
+			const gui1 = await createConfiguredGui(registry);
 			const serialized = gui1.serializeState();
 			expect(serialized.error).toBeUndefined();
 
-			const gui2 = await getGui(rainlang, serialized.value);
+			const gui2 = await getGui(registry, serialized.value);
 
 			const result = await gui2.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
@@ -242,12 +242,12 @@ describe('Full Deployment Tests', () => {
 	it(
 		'Fixed limit order',
 		async () => {
-			const fixedLimitDeploymentDetails = rainlang.getDeploymentDetails('fixed-limit');
+			const fixedLimitDeploymentDetails = registry.getDeploymentDetails('fixed-limit');
 			if (fixedLimitDeploymentDetails.error) {
 				throw new Error('Failed to get deployment details');
 			}
 			const deployment = fixedLimitDeploymentDetails.value.get('base') as NameAndDescriptionCfg;
-			const fixedLimitOrderDetail = rainlang
+			const fixedLimitOrderDetail = registry
 				.getAllOrderDetails()
 				.value?.valid.get('fixed-limit') as NameAndDescriptionCfg;
 
@@ -255,7 +255,7 @@ describe('Full Deployment Tests', () => {
 				data: {
 					orderName: 'fixed-limit',
 					deployment: { key: 'base', ...deployment },
-					rainlang,
+					registry,
 					orderDetail: fixedLimitOrderDetail
 				}
 			});
@@ -338,7 +338,7 @@ describe('Full Deployment Tests', () => {
 
 			await new Promise((resolve) => setTimeout(resolve, 10000));
 
-			const gui = await createConfiguredGui(rainlang);
+			const gui = await createConfiguredGui(registry);
 			const standaloneArgs = await gui.getDeploymentTransactionArgs(ACCOUNT);
 			const args = standaloneArgs.value;
 

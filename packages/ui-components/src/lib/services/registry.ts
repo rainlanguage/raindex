@@ -1,12 +1,12 @@
 import type { InvalidOrderDetail, ValidOrderDetail } from '$lib/types/order';
 import { DotrainOrderGui } from '@rainlanguage/raindex';
 
-export type RainlangFile = {
+export type RegistryFile = {
 	name: string;
 	url: string;
 };
 
-export type RainlangDotrain = {
+export type RegistryDotrain = {
 	name: string;
 	dotrain: string;
 };
@@ -17,23 +17,23 @@ export interface OrderValidationResult {
 }
 
 /**
- * Fetches and parses a file rainlang from a given URL.
- * The rainlang is expected to be a text file where each line contains a file name and URL separated by a space.
+ * Fetches and parses a file registry from a given URL.
+ * The registry is expected to be a text file where each line contains a file name and URL separated by a space.
  *
- * @param url - The URL of the rainlang file to fetch
+ * @param url - The URL of the registry file to fetch
  * @returns A Promise that resolves to an array of objects containing file names and their corresponding URLs
- * @throws Will throw an error if the fetch fails, if the response is not ok, or if the rainlang format is invalid
+ * @throws Will throw an error if the fetch fails, if the response is not ok, or if the registry format is invalid
  *
  * @example
- * const files = await fetchParseRainlangFile('https://example.com/rainlang');
+ * const files = await fetchParseRegistryFile('https://example.com/registry');
  * // Returns: [{ name: 'file1', url: 'https://example.com/file1.rain' }, ...]
  */
 
-export const fetchParseRainlang = async (url: string): Promise<{ name: string; url: string }[]> => {
+export const fetchParseRegistry = async (url: string): Promise<{ name: string; url: string }[]> => {
 	try {
 		const response = await fetch(url);
 		if (!response.ok) {
-			throw new Error('Failed to fetch rainlang.');
+			throw new Error('Failed to fetch registry.');
 		}
 		const filesList = await response.text();
 		const files = filesList
@@ -44,7 +44,7 @@ export const fetchParseRainlang = async (url: string): Promise<{ name: string; u
 				return { name, url };
 			});
 		if (!files) {
-			throw new Error('Invalid stategy rainlang.');
+			throw new Error('Invalid stategy registry.');
 		}
 		return files;
 	} catch (e) {
@@ -52,8 +52,8 @@ export const fetchParseRainlang = async (url: string): Promise<{ name: string; u
 	}
 };
 
-export const fetchRainlangDotrains = async (url: string): Promise<RainlangDotrain[]> => {
-	const files = await fetchParseRainlang(url);
+export const fetchRegistryDotrains = async (url: string): Promise<RegistryDotrain[]> => {
+	const files = await fetchParseRegistry(url);
 	const dotrains = await Promise.all(
 		files.map(async (file) => {
 			try {
@@ -76,11 +76,11 @@ export const fetchRainlangDotrains = async (url: string): Promise<RainlangDotrai
 };
 
 export async function validateOrders(
-	rainlangDotrains: RainlangDotrain[]
+	registryDotrains: RegistryDotrain[]
 ): Promise<OrderValidationResult> {
-	const ordersPromises = rainlangDotrains.map(async (rainlangDotrain) => {
+	const ordersPromises = registryDotrains.map(async (registryDotrain) => {
 		try {
-			const result = await DotrainOrderGui.getOrderDetails(rainlangDotrain.dotrain);
+			const result = await DotrainOrderGui.getOrderDetails(registryDotrain.dotrain);
 
 			if (result.error) {
 				throw new Error(result.error.msg);
@@ -89,7 +89,7 @@ export async function validateOrders(
 			return {
 				valid: true,
 				data: {
-					...rainlangDotrain,
+					...registryDotrain,
 					details: result.value
 				}
 			};
@@ -97,7 +97,7 @@ export async function validateOrders(
 			return {
 				valid: false,
 				data: {
-					name: rainlangDotrain.name,
+					name: registryDotrain.name,
 					error: error instanceof Error ? error.message : String(error)
 				}
 			};

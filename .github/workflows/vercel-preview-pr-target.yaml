@@ -50,32 +50,26 @@ jobs:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
-
       - run: ./prep-webapp.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: test
-
       - run: nix develop .#webapp-shell -c npm run build
         working-directory: packages/webapp
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: test
-
       # check for npm package blacklists pkgs across all packages
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/raindex
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/ui-components
-
       - name: Install Vercel CLI (local, pinned)
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
           VERCEL_DIR="$(mktemp -d)"
-          npm install --no-audit --no-fund --no-save --ignore-scripts --prefix "$VERCEL_DIR" vercel@33.4.1
+          npm install --no-audit --no-fund --no-save --ignore-scripts --prefix "$VERCEL_DIR" vercel@51.8.0
           echo "VERCEL_BIN=$VERCEL_DIR/node_modules/.bin/vercel" >> "$GITHUB_ENV"
           test -x "$VERCEL_DIR/node_modules/.bin/vercel"
       - name: Pull Vercel Environment Information
@@ -94,7 +88,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN_PREVIEWS }}
         run: |
           "$VERCEL_BIN" deploy --prebuilt --token="$VERCEL_TOKEN" packages/webapp
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

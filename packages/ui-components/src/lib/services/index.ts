@@ -1,3 +1,3 @@
-export { fetchParseRainlang, fetchRainlangDotrains, validateOrders } from './rainlang';
-export { loadRainlangUrl } from './loadRainlangUrl';
-export type { RainlangDotrain, RainlangFile } from './rainlang';
+export { fetchParseRegistry, fetchRegistryDotrains, validateOrders } from './registry';
+export { loadRegistryUrl } from './loadRegistryUrl';
+export type { RegistryDotrain, RegistryFile } from './registry';

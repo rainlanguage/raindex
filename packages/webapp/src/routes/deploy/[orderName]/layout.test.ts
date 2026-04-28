@@ -34,7 +34,7 @@ describe('Layout load function', () => {
 				}
 			],
 			invalidOrders: [],
-			rainlang: {
+			registry: {
 				getDeploymentDetails: vi.fn().mockReturnValue({ value: mockDeployments })
 			}
 		});
@@ -52,7 +52,7 @@ describe('Layout load function', () => {
 			orderName: mockorderName,
 			orderDetail: mockorderDetail,
 			deployments: mockDeployments,
-			rainlang: {
+			registry: {
 				getDeploymentDetails: expect.any(Function)
 			},
 			pageName: mockorderName
@@ -78,7 +78,7 @@ describe('Layout load function', () => {
 				{ name: 'other-order', details: { name: 'Other', description: '', config: {} } }
 			],
 			invalidOrders: [],
-			rainlang: {
+			registry: {
 				getDeploymentDetails: vi.fn().mockReturnValue({ value: mockDeployments })
 			}
 		});

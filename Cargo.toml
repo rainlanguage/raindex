@@ -1,16 +1,13 @@
 [workspace]
 members = ["crates/*"]
-exclude = [
-    "lib/rain.interpreter",
-    "lib/rain.raindex.interface",
-]
+exclude = ["lib/rain.interpreter", "lib/rain.raindex.interface"]
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
 license = "LicenseRef-DCL-1.0"
 version = "0.0.0-alpha.0"
-homepage = "https://github.com/rainprotocol/raindex"
+homepage = "https://github.com/rainlanguage/raindex"
 
 [workspace.dependencies]
 foundry-block-explorers = "0.2.6"

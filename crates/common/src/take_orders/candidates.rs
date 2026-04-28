@@ -1,9 +1,12 @@
-use crate::raindex_client::order_quotes::{get_order_quotes_batch, RaindexOrderQuote};
+use crate::raindex_client::order_quotes::{
+    get_order_quotes_batch_with_injector, RaindexOrderQuote,
+};
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::RaindexError;
 use alloy::primitives::Address;
 use rain_math_float::Float;
 use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_quote::SignedContextInjector;
 #[cfg(target_family = "wasm")]
 use std::str::FromStr;
 
@@ -38,7 +41,12 @@ pub struct TakeOrderCandidate {
     pub output_io_index: u32,
     pub max_output: Float,
     pub ratio: Float,
-    /// Signed context data fetched from the order's oracle endpoint (if any).
+    /// Signed context data attached to this candidate.
+    ///
+    /// Composition order is `[oracle..., injected...]`: any entries fetched
+    /// from the order's oracle endpoint come first, followed by entries
+    /// contributed by a caller-supplied [`SignedContextInjector`]. Strategies
+    /// that verify signed context by index must be aware of this ordering.
     pub signed_context: Vec<SignedContextV1>,
 }
 
@@ -59,42 +67,33 @@ pub async fn build_take_order_candidates_for_pair(
     output_token: Address,
     block_number: Option<u64>,
     chunk_size: Option<u32>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let all_quotes = get_order_quotes_batch(orders, block_number, chunk_size).await?;
+    // Oracle fetch and injector invocation both happen inside the quote
+    // pipeline now: `get_order_quotes_batch_with_injector` composes them into
+    // `QuoteV2.signedContext` before issuing the quote RPC, so gated orders
+    // whose `calculate-io` asserts on signed context do not revert during
+    // quoting. Each returned quote carries the exact composed context that
+    // the quote call saw, which we propagate straight into the candidate.
+    let all_quotes = get_order_quotes_batch_with_injector(
+        orders,
+        block_number,
+        chunk_size,
+        counterparty,
+        injector,
+    )
+    .await?;
 
     let mut all_candidates = vec![];
     for (order, quotes) in orders.iter().zip(all_quotes) {
         let order_v4: OrderV4 = order.try_into()?;
         let raindex = get_raindex_address(order)?;
-        let oracle_url = order.oracle_url();
 
         for quote in &quotes {
-            let signed_context = match &oracle_url {
-                Some(url) => {
-                    fetch_oracle_for_pair(
-                        url,
-                        &order_v4,
-                        quote.pair.input_index,
-                        quote.pair.output_index,
-                        // Counterparty is unknown at candidate-building time (the taker
-                        // address isn't known until the transaction is submitted).
-                        // The oracle server ignores this field — it only uses the order's
-                        // input/output tokens to determine the price pair.
-                        Address::ZERO,
-                    )
-                    .await?
-                }
-                None => vec![],
-            };
-
-            if let Some(candidate) = try_build_candidate(
-                raindex,
-                &order_v4,
-                quote,
-                input_token,
-                output_token,
-                signed_context,
-            )? {
+            if let Some(candidate) =
+                try_build_candidate(raindex, &order_v4, quote, input_token, output_token)?
+            {
                 all_candidates.push(candidate);
             }
         }
@@ -103,32 +102,12 @@ pub async fn build_take_order_candidates_for_pair(
     Ok(all_candidates)
 }
 
-/// Fetch signed context from an order's oracle endpoint for a specific IO pair.
-async fn fetch_oracle_for_pair(
-    oracle_url: &str,
-    order: &OrderV4,
-    input_io_index: u32,
-    output_io_index: u32,
-    counterparty: Address,
-) -> Result<Vec<SignedContextV1>, RaindexError> {
-    let body =
-        crate::oracle::encode_oracle_body(order, input_io_index, output_io_index, counterparty);
-    match crate::oracle::fetch_signed_context(oracle_url, body).await {
-        Ok(ctx) => Ok(vec![ctx]),
-        Err(e) => Err(RaindexError::OracleFetchError(format!(
-            "Oracle fetch failed for pair ({}, {}): {}",
-            input_io_index, output_io_index, e
-        ))),
-    }
-}
-
 fn try_build_candidate(
     raindex: Address,
     order: &OrderV4,
     quote: &RaindexOrderQuote,
     input_token: Address,
     output_token: Address,
-    signed_context: Vec<SignedContextV1>,
 ) -> Result<Option<TakeOrderCandidate>, RaindexError> {
     let data = match (quote.success, &quote.data) {
         (true, Some(d)) => d,
@@ -156,6 +135,7 @@ fn try_build_candidate(
         return Ok(None);
     }
 
+    // Defer clone until the candidate survives all filters.
     Ok(Some(TakeOrderCandidate {
         raindex,
         order: order.clone(),
@@ -163,7 +143,7 @@ fn try_build_candidate(
         output_io_index,
         max_output: data.max_output,
         ratio: data.ratio,
-        signed_context,
+        signed_context: quote.signed_context.clone(),
     }))
 }
 
@@ -289,8 +269,7 @@ mod tests {
         let f1 = Float::parse("1".to_string()).unwrap();
         let quote = make_quote(0, 0, Some(make_quote_value(f1, f1, f1)), true);
 
-        let result =
-            try_build_candidate(raindex, &order, &quote, token_b, token_a, vec![]).unwrap();
+        let result = try_build_candidate(raindex, &order, &quote, token_b, token_a).unwrap();
 
         assert!(result.is_none());
     }
@@ -306,8 +285,7 @@ mod tests {
         let f1 = Float::parse("1".to_string()).unwrap();
         let quote = make_quote(0, 0, Some(make_quote_value(zero, zero, f1)), true);
 
-        let result =
-            try_build_candidate(raindex, &order, &quote, token_a, token_b, vec![]).unwrap();
+        let result = try_build_candidate(raindex, &order, &quote, token_a, token_b).unwrap();
 
         assert!(result.is_none());
     }
@@ -323,8 +301,7 @@ mod tests {
         let f2 = Float::parse("2".to_string()).unwrap();
         let quote = make_quote(0, 0, Some(make_quote_value(f2, f1, f1)), true);
 
-        let result =
-            try_build_candidate(raindex, &order, &quote, token_a, token_b, vec![]).unwrap();
+        let result = try_build_candidate(raindex, &order, &quote, token_a, token_b).unwrap();
 
         assert!(result.is_some());
         let candidate = result.unwrap();
@@ -343,7 +320,7 @@ mod tests {
         let order = make_basic_order(token_a, token_b);
         let quote = make_quote(0, 0, None, false);
 
-        let result = try_build_candidate(raindex, &order, &quote, token_a, token_b, vec![]);
+        let result = try_build_candidate(raindex, &order, &quote, token_a, token_b);
 
         assert!(
             result.is_ok(),
@@ -356,6 +333,55 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn test_noop_injector_returns_empty() {
+        use raindex_quote::injector::{NoopInjector, SignedContextInjector};
+
+        let token_a = Address::from([4u8; 20]);
+        let token_b = Address::from([5u8; 20]);
+        let order = make_basic_order(token_a, token_b);
+
+        let injector = NoopInjector;
+        let ctxs = injector.contexts_for(&order, 0, 0, Address::ZERO).await;
+        assert!(ctxs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_try_build_candidate_propagates_signed_context() {
+        use alloy::primitives::{FixedBytes, U256};
+
+        // A candidate built from a quote that already carries signed context
+        // (as produced by the quote pipeline) should inherit that exact list.
+        let oracle_entry = SignedContextV1 {
+            signer: Address::from([0xAAu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(1u64).to_be_bytes::<32>())],
+            signature: alloy::primitives::Bytes::from(vec![0x01]),
+        };
+        let injected_entry = SignedContextV1 {
+            signer: Address::from([0xBBu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(2u64).to_be_bytes::<32>())],
+            signature: alloy::primitives::Bytes::from(vec![0x02]),
+        };
+
+        let token_a = Address::from([4u8; 20]);
+        let token_b = Address::from([5u8; 20]);
+        let raindex = Address::from([0xAAu8; 20]);
+
+        let order = make_basic_order(token_a, token_b);
+        let f1 = Float::parse("1".to_string()).unwrap();
+        let f2 = Float::parse("2".to_string()).unwrap();
+        let mut quote = make_quote(0, 0, Some(make_quote_value(f2, f1, f1)), true);
+        quote.signed_context = vec![oracle_entry.clone(), injected_entry.clone()];
+
+        let result = try_build_candidate(raindex, &order, &quote, token_a, token_b)
+            .unwrap()
+            .expect("candidate should be built");
+
+        assert_eq!(result.signed_context.len(), 2);
+        assert_eq!(result.signed_context[0].signer, oracle_entry.signer);
+        assert_eq!(result.signed_context[1].signer, injected_entry.signer);
+    }
+
     #[test]
     fn test_try_build_candidate_out_of_bounds_indices() {
         let token_a = Address::from([4u8; 20]);
@@ -366,14 +392,7 @@ mod tests {
         let f1 = Float::parse("1".to_string()).unwrap();
 
         let quote_bad_input_index = make_quote(99, 0, Some(make_quote_value(f1, f1, f1)), true);
-        let result = try_build_candidate(
-            raindex,
-            &order,
-            &quote_bad_input_index,
-            token_a,
-            token_b,
-            vec![],
-        );
+        let result = try_build_candidate(raindex, &order, &quote_bad_input_index, token_a, token_b);
         assert!(
             result.is_ok(),
             "Out-of-bounds input index must not cause an error"
@@ -384,14 +403,8 @@ mod tests {
         );
 
         let quote_bad_output_index = make_quote(0, 99, Some(make_quote_value(f1, f1, f1)), true);
-        let result = try_build_candidate(
-            raindex,
-            &order,
-            &quote_bad_output_index,
-            token_a,
-            token_b,
-            vec![],
-        );
+        let result =
+            try_build_candidate(raindex, &order, &quote_bad_output_index, token_a, token_b);
         assert!(
             result.is_ok(),
             "Out-of-bounds output index must not cause an error"

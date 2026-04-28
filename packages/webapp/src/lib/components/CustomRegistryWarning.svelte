@@ -1,11 +1,11 @@
 <script lang="ts">
-	import { useRainlang } from '@rainlanguage/ui-components';
-	const rainlang = useRainlang();
+	import { useRegistry } from '@rainlanguage/ui-components';
+	const registry = useRegistry();
 </script>
 
 <div
 	class="flex items-center gap-x-2 rounded-lg bg-yellow-50 p-4 text-sm text-yellow-800 dark:bg-yellow-800/30 dark:text-yellow-300"
-	data-testid="custom-rainlang-warning"
+	data-testid="custom-registry-warning"
 >
 	<svg
 		class="h-5 w-5 flex-shrink-0"
@@ -20,10 +20,10 @@
 		/>
 	</svg>
 	<span>
-		You are using a <span class="font-medium">custom orders rainlang. </span>
+		You are using a <span class="font-medium">custom orders registry. </span>
 		<a
 			on:click={() => {
-				rainlang.resetToDefault();
+				registry.resetToDefault();
 			}}
 			href="/deploy"
 			data-sveltekit-reload

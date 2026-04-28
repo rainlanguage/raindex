@@ -67,7 +67,7 @@ export { default as WalletConnect } from './components/wallet/WalletConnect.svel
 export { default as DisclaimerModal } from './components/deployment/DisclaimerModal.svelte';
 export { default as InvalidOrdersSection } from './components/deployment/InvalidOrdersSection.svelte';
 export { default as ValidOrdersSection } from './components/deployment/ValidOrdersSection.svelte';
-export { default as InputRainlangUrl } from './components/input/InputRainlangUrl.svelte';
+export { default as InputRegistryUrl } from './components/input/InputRegistryUrl.svelte';
 export { default as TransactionList } from './components/transactions/TransactionList.svelte';
 export { default as FixedBottomTransaction } from './components/transactions/FixedBottomTransaction.svelte';
 export { default as LocalDbStatusCard } from './components/LocalDbStatusCard.svelte';
@@ -92,7 +92,7 @@ export type {
 } from './types/modal';
 export type { ValidOrderDetail, InvalidOrderDetail } from './types/order.ts';
 export type { ToastProps } from './types/toast';
-export type { DotrainRainlangContext } from './providers/dotrainRainlang/context';
+export type { DotrainRegistryContext } from './providers/dotrainRegistry/context';
 
 // Functions
 export { createResolvableQuery, createResolvableInfiniteQuery } from './__mocks__/queries';
@@ -139,24 +139,24 @@ export { default as logoDark } from './assets/logo-dark.svg';
 export { default as GuiProvider } from './providers/GuiProvider.svelte';
 export { default as RaindexClientProvider } from './providers/RaindexClientProvider.svelte';
 export { default as WalletProvider } from './providers/wallet/WalletProvider.svelte';
-export { default as RainlangProvider } from './providers/rainlang/RainlangProvider.svelte';
+export { default as RegistryProvider } from './providers/registry/RegistryProvider.svelte';
 export { default as ToastProvider } from './providers/toasts/ToastProvider.svelte';
 export { default as TransactionProvider } from './providers/transactions/TransactionProvider.svelte';
 export { default as LocalDbProvider } from './providers/LocalDbProvider.svelte';
-export { default as DotrainRainlangProvider } from './providers/dotrainRainlang/DotrainRainlangProvider.svelte';
+export { default as DotrainRegistryProvider } from './providers/dotrainRegistry/DotrainRegistryProvider.svelte';
 
 // Hooks
 export { useGui } from './hooks/useGui';
 export { useRaindexClient, RAINDEX_CLIENT_CONTEXT_KEY } from './hooks/useRaindexClient';
 export { useLocalDb } from './hooks/useLocalDb';
 export { useAccount } from './providers/wallet/useAccount';
-export { useRainlang } from './providers/rainlang/useRainlang';
+export { useRegistry } from './providers/registry/useRegistry';
 export { useToasts } from './providers/toasts/useToasts';
 export { useTransactions } from './providers/transactions/useTransactions';
-export { useDotrainRainlang } from './providers/dotrainRainlang/useDotrainRainlang';
+export { useDotrainRegistry } from './providers/dotrainRegistry/useDotrainRegistry';
 
 // Classes
-export { RainlangManager } from './providers/rainlang/RainlangManager';
+export { RegistryManager } from './providers/registry/RegistryManager';
 export { TransactionStore } from './models/Transaction';
 export { TransactionManager } from './providers/transactions/TransactionManager';
 

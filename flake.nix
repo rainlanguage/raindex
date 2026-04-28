@@ -7,12 +7,18 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, flake-utils, rainix, rain }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      flake-utils,
+      rainix,
+      rain,
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = rainix.pkgs.${system};
-        old-pkgs = rainix.old-pkgs.${system};
-      in rec {
+      in
+      rec {
         packages = rec {
 
           raindex-prelude = rainix.mkTask.${system} {
@@ -65,7 +71,16 @@
               ARCHIVE_NAME=raindex-cli.tar.gz
               BINARY_NAME=raindex-cli
 
-              TARGET_TRIPLE=x86_64-unknown-linux-gnu
+              TARGET_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+
+              case "$TARGET_TRIPLE" in
+                aarch64-apple-darwin|x86_64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu)
+                  ;;
+                *)
+                  echo "Unsupported host target: $TARGET_TRIPLE" >&2
+                  exit 1
+                  ;;
+              esac
 
               cargo build --release -p raindex_cli --target "$TARGET_TRIPLE"
 
@@ -77,8 +92,6 @@
               strip "$OUTPUT_DIR/$BINARY_NAME" || true
 
               tar -C "$OUTPUT_DIR" -czf "$OUTPUT_DIR/$ARCHIVE_NAME" "$BINARY_NAME"
-
-              rm -f "$OUTPUT_DIR/$BINARY_NAME"
             '';
           };
 
@@ -146,7 +159,8 @@
             '';
           };
 
-        } // rainix.packages.${system};
+        }
+        // rainix.packages.${system};
 
         devShells.default = pkgs.mkShell {
           packages = [
@@ -163,17 +177,13 @@
             packages.raindex-cli-artifact
           ];
 
-          shellHook = rainix.devShells.${system}.default.shellHook;
-          buildInputs = rainix.devShells.${system}.default.buildInputs;
-          nativeBuildInputs =
-            rainix.devShells.${system}.default.nativeBuildInputs;
+          inherit (rainix.devShells.${system}.default) shellHook buildInputs nativeBuildInputs;
         };
         devShells.webapp-shell = pkgs.mkShell {
           packages = with pkgs; [ nodejs_20 ];
-          buildInputs = rainix.devShells.${system}.default.buildInputs;
-          nativeBuildInputs =
-            rainix.devShells.${system}.default.nativeBuildInputs;
+          inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
-      });
+      }
+    );
 
 }

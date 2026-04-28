@@ -24,11 +24,21 @@ import {
 const SPEC_VERSION = RaindexYaml.getCurrentSpecVersion().value;
 
 // Rainlang contract function selectors
-const EXPRESSION_DEPLOYER_ADDRESS_SELECTOR = toFunctionSelector('function expressionDeployerAddress() external view returns (address)');
-const INTERPRETER_ADDRESS_SELECTOR = toFunctionSelector('function interpreterAddress() external view returns (address)');
-const STORE_ADDRESS_SELECTOR = toFunctionSelector('function storeAddress() external view returns (address)');
-const PARSER_ADDRESS_SELECTOR = toFunctionSelector('function parserAddress() external view returns (address)');
-const PARSE2_SELECTOR = toFunctionSelector('function parse2(bytes calldata data) external view returns (bytes calldata bytecode)');
+const EXPRESSION_DEPLOYER_ADDRESS_SELECTOR = toFunctionSelector(
+	'function expressionDeployerAddress() external view returns (address)'
+);
+const INTERPRETER_ADDRESS_SELECTOR = toFunctionSelector(
+	'function interpreterAddress() external view returns (address)'
+);
+const STORE_ADDRESS_SELECTOR = toFunctionSelector(
+	'function storeAddress() external view returns (address)'
+);
+const PARSER_ADDRESS_SELECTOR = toFunctionSelector(
+	'function parserAddress() external view returns (address)'
+);
+const PARSE2_SELECTOR = toFunctionSelector(
+	'function parse2(bytes calldata data) external view returns (bytes calldata bytecode)'
+);
 import { getLocal } from 'mockttp';
 
 const guiConfig = `

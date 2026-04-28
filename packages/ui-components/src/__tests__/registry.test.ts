@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
-	fetchParseRainlang,
-	fetchRainlangDotrains,
+	fetchParseRegistry,
+	fetchRegistryDotrains,
 	validateOrders
-} from '../lib/services/rainlang';
+} from '../lib/services/registry';
 import { DotrainOrderGui } from '@rainlanguage/raindex';
 import type { Mock } from 'vitest';
 
@@ -14,8 +14,8 @@ vi.mock('@rainlanguage/raindex', () => ({
 	}
 }));
 
-describe('fetchParseRainlang', () => {
-	it('should parse rainlang file content correctly', async () => {
+describe('fetchParseRegistry', () => {
+	it('should parse registry file content correctly', async () => {
 		const mockResponse = `file1.js https://example.com/file1.js
 file2.js https://example.com/file2.js`;
 
@@ -24,7 +24,7 @@ file2.js https://example.com/file2.js`;
 			text: () => Promise.resolve(mockResponse)
 		});
 
-		const result = await fetchParseRainlang('https://example.com/rainlang');
+		const result = await fetchParseRegistry('https://example.com/registry');
 		expect(result).toEqual([
 			{ name: 'file1.js', url: 'https://example.com/file1.js' },
 			{ name: 'file2.js', url: 'https://example.com/file2.js' }
@@ -36,23 +36,23 @@ file2.js https://example.com/file2.js`;
 			ok: false
 		});
 
-		await expect(fetchParseRainlang('https://example.com/rainlang')).rejects.toThrow(
-			'Failed to fetch rainlang'
+		await expect(fetchParseRegistry('https://example.com/registry')).rejects.toThrow(
+			'Failed to fetch registry'
 		);
 	});
 
 	it('should handle network errors', async () => {
 		global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
-		await expect(fetchParseRainlang('https://example.com/rainlang')).rejects.toThrow(
+		await expect(fetchParseRegistry('https://example.com/registry')).rejects.toThrow(
 			'Network error'
 		);
 	});
 });
 
-describe('fetchRainlangDotrains', () => {
+describe('fetchRegistryDotrains', () => {
 	it('should fetch and parse dotrains correctly', async () => {
-		const mockRainlang = `file1.rain https://example.com/file1.rain
+		const mockRegistry = `file1.rain https://example.com/file1.rain
 file2.rain https://example.com/file2.rain`;
 
 		const mockDotrain1 = 'content of file1';
@@ -62,7 +62,7 @@ file2.rain https://example.com/file2.rain`;
 			.fn()
 			.mockResolvedValueOnce({
 				ok: true,
-				text: () => Promise.resolve(mockRainlang)
+				text: () => Promise.resolve(mockRegistry)
 			})
 			.mockResolvedValueOnce({
 				ok: true,
@@ -73,7 +73,7 @@ file2.rain https://example.com/file2.rain`;
 				text: () => Promise.resolve(mockDotrain2)
 			});
 
-		const result = await fetchRainlangDotrains('https://example.com/rainlang');
+		const result = await fetchRegistryDotrains('https://example.com/registry');
 		expect(result).toEqual([
 			{ name: 'file1.rain', dotrain: mockDotrain1 },
 			{ name: 'file2.rain', dotrain: mockDotrain2 }
@@ -81,35 +81,35 @@ file2.rain https://example.com/file2.rain`;
 	});
 
 	it('should handle failed dotrain fetch', async () => {
-		const mockRainlang = `file1.rain https://example.com/file1.rain`;
+		const mockRegistry = `file1.rain https://example.com/file1.rain`;
 
 		global.fetch = vi
 			.fn()
 			.mockResolvedValueOnce({
 				ok: true,
-				text: () => Promise.resolve(mockRainlang)
+				text: () => Promise.resolve(mockRegistry)
 			})
 			.mockResolvedValueOnce({
 				ok: false
 			});
 
-		await expect(fetchRainlangDotrains('https://example.com/rainlang')).rejects.toThrow(
+		await expect(fetchRegistryDotrains('https://example.com/registry')).rejects.toThrow(
 			'Failed to fetch dotrain for file1.rain'
 		);
 	});
 
 	it('should handle network errors during dotrain fetch', async () => {
-		const mockRainlang = `file1.rain https://example.com/file1.rain`;
+		const mockRegistry = `file1.rain https://example.com/file1.rain`;
 
 		global.fetch = vi
 			.fn()
 			.mockResolvedValueOnce({
 				ok: true,
-				text: () => Promise.resolve(mockRainlang)
+				text: () => Promise.resolve(mockRegistry)
 			})
 			.mockRejectedValueOnce(new Error('Network error'));
 
-		await expect(fetchRainlangDotrains('https://example.com/rainlang')).rejects.toThrow(
+		await expect(fetchRegistryDotrains('https://example.com/registry')).rejects.toThrow(
 			'Error fetching dotrain for file1.rain: Network error'
 		);
 	});
@@ -122,7 +122,7 @@ describe('validateOrders', () => {
 
 	it('should validate orders and categorize them properly', async () => {
 		// Input data
-		const rainlangDotrains = [
+		const registryDotrains = [
 			{ name: 'valid.rain', dotrain: 'valid dotrain content' },
 			{ name: 'invalid.rain', dotrain: 'invalid dotrain content' },
 			{ name: 'another-valid.rain', dotrain: 'another valid content' }
@@ -144,7 +144,7 @@ describe('validateOrders', () => {
 			});
 
 		// Call the function with our test data
-		const result = await validateOrders(rainlangDotrains);
+		const result = await validateOrders(registryDotrains);
 
 		// Verify DotrainOrderGui was called correctly
 		expect(DotrainOrderGui.getOrderDetails).toHaveBeenCalledTimes(3);
@@ -169,7 +169,7 @@ describe('validateOrders', () => {
 
 	it('should handle exceptions thrown during order validation', async () => {
 		// Input data
-		const rainlangDotrains = [{ name: 'error.rain', dotrain: 'will throw error' }];
+		const registryDotrains = [{ name: 'error.rain', dotrain: 'will throw error' }];
 
 		// Mock the DotrainOrderGui to throw an exception
 		(DotrainOrderGui.getOrderDetails as Mock).mockRejectedValueOnce(
@@ -177,7 +177,7 @@ describe('validateOrders', () => {
 		);
 
 		// Call the function
-		const result = await validateOrders(rainlangDotrains);
+		const result = await validateOrders(registryDotrains);
 
 		// Verify results
 		expect(result.validOrders).toHaveLength(0);
@@ -188,13 +188,13 @@ describe('validateOrders', () => {
 
 	it('should handle non-Error objects being thrown', async () => {
 		// Input data
-		const rainlangDotrains = [{ name: 'string-error.rain', dotrain: 'will throw string' }];
+		const registryDotrains = [{ name: 'string-error.rain', dotrain: 'will throw string' }];
 
 		// Mock the DotrainOrderGui to throw a string instead of an Error
 		(DotrainOrderGui.getOrderDetails as Mock).mockRejectedValueOnce('String error message');
 
 		// Call the function
-		const result = await validateOrders(rainlangDotrains);
+		const result = await validateOrders(registryDotrains);
 
 		// Verify results
 		expect(result.validOrders).toHaveLength(0);
@@ -213,7 +213,7 @@ describe('validateOrders', () => {
 
 	it('should handle mixed validation results correctly', async () => {
 		// Create a mix of scenarios
-		const rainlangDotrains = [
+		const registryDotrains = [
 			{ name: 'valid1.rain', dotrain: 'valid content 1' },
 			{ name: 'error.rain', dotrain: 'will throw error' },
 			{ name: 'valid2.rain', dotrain: 'valid content 2' },
@@ -237,7 +237,7 @@ describe('validateOrders', () => {
 			});
 
 		// Call the function
-		const result = await validateOrders(rainlangDotrains);
+		const result = await validateOrders(registryDotrains);
 
 		// Verify results
 		expect(result.validOrders).toHaveLength(2);

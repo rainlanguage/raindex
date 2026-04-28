@@ -1,11 +1,14 @@
+#[cfg(test)]
+use crate::injector::NoopInjector;
 use crate::{
     error::Error,
+    injector::SignedContextInjector,
     quote::{BatchQuoteTarget, QuoteTarget},
     OrderQuoteValue,
 };
 use alloy::primitives::{Address, U256};
 use alloy_ethers_typecast::ReadableClient;
-use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2};
+use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -23,6 +26,14 @@ pub struct BatchOrderQuotesResponse {
     pub success: bool,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub error: Option<String>,
+    /// Composed signed context that was sent with the quote RPC: any
+    /// oracle-fetched entries first, followed by injector-contributed entries
+    /// (composition order: `[oracle..., injected...]`). This is propagated so
+    /// downstream candidate construction can reuse the same context that the
+    /// quote call saw, rather than re-fetching or re-composing.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub signed_context: Vec<SignedContextV1>,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(BatchOrderQuotesResponse);
@@ -38,15 +49,23 @@ pub struct Pair {
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(Pair);
 
-/// Get order quotes, automatically fetching signed oracle context from order meta.
+/// Get order quotes, automatically fetching signed oracle context from order
+/// meta and appending any caller-supplied injector contexts.
 ///
-/// For each order, if the meta contains a `RaindexSignedContextOracleV1` entry,
-/// the oracle URL is extracted and signed context is fetched per IO pair via POST.
+/// For each order, if the meta contains a `RaindexSignedContextOracleV1`
+/// entry, the oracle URL is extracted and signed context is fetched per IO
+/// pair via POST. Any additional entries produced by `injector` are appended
+/// after the oracle entries (composition order: `[oracle..., injected...]`),
+/// and the composed list is attached to the `QuoteV2.signedContext` before
+/// the multicall is issued. This matters for gated orders whose
+/// `calculate-io` asserts on signed context during quoting.
 pub async fn get_order_quotes(
     orders: Vec<SgOrder>,
     block_number: Option<u64>,
     rpcs: Vec<String>,
     chunk_size: Option<usize>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
 ) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
     let req_block_number = match block_number {
         Some(block) => block,
@@ -57,9 +76,18 @@ pub async fn get_order_quotes(
         }
     };
 
+    // Responses are assembled in strict iteration order. Pairs whose oracle
+    // fetch failed get a failure response stored immediately; quoted pairs
+    // leave a hole that is filled in after the RPC batch returns. This
+    // preserves per-order positional alignment for callers that re-slice the
+    // flat response vector by per-order pair counts.
+    let mut all_responses: Vec<Option<BatchOrderQuotesResponse>> = Vec::new();
+    // Parallel tracking for the subset of iteration slots that were quoted,
+    // so we can scatter RPC results back into `all_responses`.
     let mut all_pairs: Vec<Pair> = Vec::new();
     let mut all_quote_targets: Vec<QuoteTarget> = Vec::new();
-    let mut oracle_errors: Vec<BatchOrderQuotesResponse> = Vec::new();
+    let mut all_signed_contexts: Vec<Vec<SignedContextV1>> = Vec::new();
+    let mut quoted_slot_indices: Vec<usize> = Vec::new();
 
     for order in &orders {
         let order_struct: OrderV4 = order.clone().try_into()?;
@@ -103,12 +131,12 @@ pub async fn get_order_quotes(
                 // the quote is pinned to a historical block. This means historical quotes
                 // for oracle-backed orders reflect current oracle prices against past chain
                 // state, which may not represent a quote that actually existed.
-                let signed_context = if let Some(ref url) = oracle_url {
+                let oracle_context = if let Some(ref url) = oracle_url {
                     let body = crate::oracle::encode_oracle_body(
                         &order_struct,
                         input_index as u32,
                         output_index as u32,
-                        Address::ZERO, // counterparty unknown at quote time
+                        counterparty,
                     );
                     match crate::oracle::fetch_signed_context(url, body).await {
                         Ok(ctx) => Ok(vec![ctx]),
@@ -127,75 +155,104 @@ pub async fn get_order_quotes(
                     output_index: output_index as u32,
                 };
 
-                match signed_context {
-                    Ok(ctx) => {
+                let slot_idx = all_responses.len();
+                match oracle_context {
+                    Ok(oracle_ctx) => {
+                        // Append injector-contributed contexts after the oracle
+                        // context. Gated orders that verify signed context by
+                        // index must know the composition order.
+                        let injected = injector
+                            .contexts_for(
+                                &order_struct,
+                                input_index as u32,
+                                output_index as u32,
+                                counterparty,
+                            )
+                            .await;
+                        let composed: Vec<SignedContextV1> =
+                            oracle_ctx.into_iter().chain(injected).collect();
+
+                        all_responses.push(None);
                         all_pairs.push(pair);
+                        all_signed_contexts.push(composed.clone());
                         all_quote_targets.push(QuoteTarget {
                             raindex,
                             quote_config: QuoteV2 {
                                 order: order_struct.clone(),
                                 inputIOIndex: U256::from(input_index),
                                 outputIOIndex: U256::from(output_index),
-                                signedContext: ctx,
+                                signedContext: composed,
                             },
                         });
+                        quoted_slot_indices.push(slot_idx);
                     }
                     Err(e) => {
-                        oracle_errors.push(BatchOrderQuotesResponse {
+                        all_responses.push(Some(BatchOrderQuotesResponse {
                             pair,
                             block_number: req_block_number,
                             success: false,
                             data: None,
                             error: Some(e),
-                        });
+                            signed_context: vec![],
+                        }));
                     }
                 }
             }
         }
     }
 
-    let results: Vec<BatchOrderQuotesResponse> = match BatchQuoteTarget(all_quote_targets)
-        .do_quote(rpcs, Some(req_block_number), None, chunk_size)
+    let quote_results: Vec<BatchOrderQuotesResponse> = match BatchQuoteTarget(all_quote_targets)
+        .do_quote(rpcs, Some(req_block_number), counterparty, chunk_size)
         .await
     {
         Ok(quote_values) => quote_values
             .into_iter()
             .zip(all_pairs)
-            .map(|(quote_result, pair)| match quote_result {
-                Ok(data) => BatchOrderQuotesResponse {
-                    pair,
-                    block_number: req_block_number,
-                    success: true,
-                    data: Some(data),
-                    error: None,
+            .zip(all_signed_contexts)
+            .map(
+                |((quote_result, pair), signed_context)| match quote_result {
+                    Ok(data) => BatchOrderQuotesResponse {
+                        pair,
+                        block_number: req_block_number,
+                        success: true,
+                        data: Some(data),
+                        error: None,
+                        signed_context,
+                    },
+                    Err(e) => BatchOrderQuotesResponse {
+                        pair,
+                        block_number: req_block_number,
+                        success: false,
+                        data: None,
+                        error: Some(e.to_string()),
+                        signed_context,
+                    },
                 },
-                Err(e) => BatchOrderQuotesResponse {
-                    pair,
-                    block_number: req_block_number,
-                    success: false,
-                    data: None,
-                    error: Some(e.to_string()),
-                },
-            })
+            )
             .collect(),
         Err(e) => {
             let error = e.to_string();
             all_pairs
                 .into_iter()
-                .map(|pair| BatchOrderQuotesResponse {
+                .zip(all_signed_contexts)
+                .map(|(pair, signed_context)| BatchOrderQuotesResponse {
                     pair,
                     block_number: req_block_number,
                     success: false,
                     data: None,
                     error: Some(error.clone()),
+                    signed_context,
                 })
                 .collect()
         }
     };
 
-    let mut all_results = oracle_errors;
-    all_results.extend(results);
-    Ok(all_results)
+    // Scatter quote results back into the iteration-ordered response vector.
+    for (slot_idx, response) in quoted_slot_indices.into_iter().zip(quote_results) {
+        all_responses[slot_idx] = Some(response);
+    }
+
+    Ok(all_responses.into_iter().map(|r| r.unwrap()).collect())
 }
 
 #[cfg(test)]
@@ -434,9 +491,16 @@ amount price: 2 3;
 
         let order = create_sg_order(&setup, order, inputs, outputs);
 
-        let result = get_order_quotes(vec![order], None, vec![setup.local_evm.url()], None)
-            .await
-            .unwrap();
+        let result = get_order_quotes(
+            vec![order],
+            None,
+            vec![setup.local_evm.url()],
+            None,
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await
+        .unwrap();
 
         let expected_max_output = Float::parse("2".to_string()).unwrap();
         let expected_ratio = Float::parse("3".to_string()).unwrap();
@@ -456,6 +520,7 @@ amount price: 2 3;
                 }),
                 success: true,
                 error: None,
+                signed_context: vec![],
             },
             BatchOrderQuotesResponse {
                 pair: Pair {
@@ -470,6 +535,7 @@ amount price: 2 3;
                 }),
                 success: true,
                 error: None,
+                signed_context: vec![],
             },
         ];
 
@@ -509,18 +575,32 @@ amount price: 2 3;
         let mut invalid_order = create_sg_order(&setup, order.clone(), vec![], vec![]);
         invalid_order.raindex.id = SgBytes("invalid_address".to_string());
 
-        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None)
-            .await
-            .unwrap_err();
+        let err = get_order_quotes(
+            vec![invalid_order],
+            None,
+            vec![setup.local_evm.url()],
+            None,
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(err, Error::FromHexError(FromHexError::OddLength)));
 
         // Test invalid order bytes
         let invalid_order = create_sg_order(&setup, B256::random().to_string(), vec![], vec![]);
 
-        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None)
-            .await
-            .unwrap_err();
+        let err = get_order_quotes(
+            vec![invalid_order],
+            None,
+            vec![setup.local_evm.url()],
+            None,
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await
+        .unwrap_err();
 
         assert!(matches!(
             err,
@@ -535,6 +615,8 @@ amount price: 2 3;
             None,
             vec!["invalid_rpc_url".to_string()],
             None,
+            Address::ZERO,
+            &NoopInjector,
         )
         .await
         .unwrap_err();

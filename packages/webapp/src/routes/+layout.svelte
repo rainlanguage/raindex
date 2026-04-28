@@ -13,20 +13,20 @@
 		FixedBottomTransaction,
 		RaindexClientProvider,
 		LocalDbProvider,
-		DotrainRainlangProvider,
-		RainlangManager
+		DotrainRegistryProvider,
+		RegistryManager
 	} from '@rainlanguage/ui-components';
 	import { signerAddress } from '$lib/stores/wagmi';
 	import { validChainIds } from '$lib/stores/settings';
 	import ErrorPage from '$lib/components/ErrorPage.svelte';
 	import TransactionProviderWrapper from '$lib/components/TransactionProviderWrapper.svelte';
 	import { initWallet } from '$lib/services/handleWalletInitialization';
-	import { RAINLANG_URL } from '$lib/constants';
+	import { REGISTRY_URL } from '$lib/constants';
 	import { onMount } from 'svelte';
 	import type { RaindexClient } from '@rainlanguage/raindex';
 
-	const { errorMessage, localDb, raindexClient, rainlang } = $page.data;
-	const rainlangManager = new RainlangManager(RAINLANG_URL);
+	const { errorMessage, localDb, raindexClient, registry } = $page.data;
+	const registryManager = new RegistryManager(REGISTRY_URL);
 
 	const queryClient = new QueryClient({
 		defaultOptions: {
@@ -39,7 +39,7 @@
 	let walletInitError: string | null = null;
 
 	onMount(() => {
-		if (!browser || !raindexClient || !rainlang) return;
+		if (!browser || !raindexClient || !registry) return;
 		let client = raindexClient as RaindexClient;
 
 		const uniqueChainIds = client.getUniqueChainIds();
@@ -73,7 +73,7 @@
 					{:else if errorMessage}
 						<ErrorPage />
 					{:else}
-						<DotrainRainlangProvider {rainlang} error={errorMessage} manager={rainlangManager}>
+						<DotrainRegistryProvider {registry} error={errorMessage} manager={registryManager}>
 							<LocalDbProvider {localDb}>
 								<RaindexClientProvider {raindexClient}>
 									<div
@@ -89,7 +89,7 @@
 									</div>
 								</RaindexClientProvider>
 							</LocalDbProvider>
-						</DotrainRainlangProvider>
+						</DotrainRegistryProvider>
 					{/if}
 					<FixedBottomTransaction />
 				</LoadingWrapper>

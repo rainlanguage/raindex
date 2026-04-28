@@ -1,9 +1,13 @@
 use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
+use alloy::primitives::Address;
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::OrderV4;
-use raindex_quote::{get_order_quotes, BatchOrderQuotesResponse, OrderQuoteValue, Pair};
+use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_quote::{
+    get_order_quotes, BatchOrderQuotesResponse, NoopInjector, OrderQuoteValue, Pair,
+    SignedContextInjector,
+};
 use raindex_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
 
@@ -17,6 +21,12 @@ pub struct RaindexOrderQuote {
     pub success: bool,
     #[tsify(optional)]
     pub error: Option<String>,
+    /// Composed signed context that was attached to the quote RPC: oracle
+    /// entries first, then any injector-contributed entries. Propagated so
+    /// the candidate builder can reuse the same context the quote saw.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[tsify(optional)]
+    pub signed_context: Vec<SignedContextV1>,
 }
 impl_wasm_traits!(RaindexOrderQuote);
 impl RaindexOrderQuote {
@@ -32,6 +42,7 @@ impl RaindexOrderQuote {
                 .transpose()?,
             success: value.success,
             error: value.error,
+            signed_context: value.signed_context,
         })
     }
 }
@@ -129,6 +140,44 @@ impl RaindexOrder {
             block_number,
             rpcs.iter().map(|s| s.to_string()).collect(),
             chunk_size.map(|v| v as usize),
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await?;
+
+        let mut result_order_quotes = vec![];
+        for order_quote in order_quotes {
+            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
+            result_order_quotes.push(data);
+        }
+        Ok(result_order_quotes)
+    }
+}
+
+impl RaindexOrder {
+    /// Non-wasm variant of [`Self::get_quotes`] that threads a `counterparty`
+    /// address and a caller-supplied [`SignedContextInjector`] through to the
+    /// quote RPC. Used by single-take flows that need to populate signed
+    /// context for gated orders whose `calculate-io` asserts on `signer<0>()`
+    /// or similar. The resulting `RaindexOrderQuote.signed_context` carries
+    /// the composed `[oracle..., injected...]` list that the multicall saw.
+    pub async fn get_quotes_with_injector(
+        &self,
+        block_number: Option<u64>,
+        chunk_size: Option<u32>,
+        counterparty: Address,
+        injector: &dyn SignedContextInjector,
+    ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
+        let rpcs = self.get_rpc_urls()?;
+        let sg_order = self.clone().into_sg_order()?;
+
+        let order_quotes = get_order_quotes(
+            vec![sg_order],
+            block_number,
+            rpcs.iter().map(|s| s.to_string()).collect(),
+            chunk_size.map(|v| v as usize),
+            counterparty,
+            injector,
         )
         .await?;
 
@@ -195,6 +244,30 @@ pub async fn get_order_quotes_batch(
     block_number: Option<u64>,
     chunk_size: Option<u32>,
 ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
+    get_order_quotes_batch_with_injector(
+        orders,
+        block_number,
+        chunk_size,
+        Address::ZERO,
+        &NoopInjector,
+    )
+    .await
+}
+
+/// Batch variant of [`get_order_quotes_batch`] that threads a
+/// `counterparty` address and a caller-supplied [`SignedContextInjector`]
+/// through to the quote RPC. Oracle-fetched contexts come first, followed by
+/// entries produced by the injector; the composed list is attached to each
+/// `QuoteV2.signedContext` before the multicall and is therefore visible to
+/// any `calculate-io` execution run during quoting (e.g. gated orders that
+/// assert on `signer<0>()`).
+pub async fn get_order_quotes_batch_with_injector(
+    orders: &[RaindexOrder],
+    block_number: Option<u64>,
+    chunk_size: Option<u32>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
+) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
     if orders.is_empty() {
         return Ok(vec![]);
     }
@@ -242,6 +315,8 @@ pub async fn get_order_quotes_batch(
         block_number,
         rpcs,
         chunk_size.map(|v| v as usize),
+        counterparty,
+        injector,
     )
     .await?;
 
@@ -271,7 +346,7 @@ mod tests {
         use crate::local_db::RaindexIdentifier;
         use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS};
         use alloy::hex::encode_prefixed;
-        use alloy::primitives::{b256, Address, U256};
+        use alloy::primitives::{b256, Address, Bytes, U256};
         use alloy::{sol, sol_types::SolValue};
         use httpmock::MockServer;
         use rain_math_float::Float;
@@ -279,18 +354,19 @@ mod tests {
         use serde_json::{json, Value};
 
         sol!(
-            struct Result {
-                bool success;
-                bytes returnData;
-            }
-        );
-        sol!(
             struct quoteReturn {
                 bool exists;
                 uint256 outputMax;
                 uint256 ioRatio;
             }
         );
+
+        // OZ Multicall returns `bytes[]`; helper to wrap per-target
+        // `quote2Return`s into the outer multicall return payload.
+        fn encode_multicall_bytes(inner: Vec<quoteReturn>) -> String {
+            let elements: Vec<Bytes> = inner.into_iter().map(|r| r.abi_encode().into()).collect();
+            encode_prefixed(<Vec<Bytes> as SolValue>::abi_encode(&elements))
+        }
 
         fn get_order1_json() -> Value {
             json!(                        {
@@ -374,17 +450,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -474,17 +544,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -542,17 +606,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -623,29 +681,18 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(1),
-                        ioRatio: U256::from(2),
-                    }
-                    .abi_encode()
-                    .into(),
+            let response_hex = encode_multicall_bytes(vec![
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(1),
+                    ioRatio: U256::from(2),
                 },
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(2),
-                        ioRatio: U256::from(1),
-                    }
-                    .abi_encode()
-                    .into(),
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(2),
+                    ioRatio: U256::from(1),
                 },
-            ];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            ]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
