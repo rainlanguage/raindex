@@ -56,7 +56,7 @@ fn open_connection(db_path: &Path) -> Result<Connection, LocalDbQueryError> {
         .map_err(|e| LocalDbQueryError::database(format!("Failed to open database: {e}")))?;
     conn.pragma_update(None, "journal_mode", "wal")
         .map_err(|e| LocalDbQueryError::database(format!("Failed to set WAL journal mode: {e}")))?;
-    conn.busy_timeout(Duration::from_millis(500))
+    conn.busy_timeout(Duration::from_secs(10))
         .map_err(|e| LocalDbQueryError::database(format!("Failed to set busy_timeout: {e}")))?;
     functions::register_all(&conn).map_err(|e| {
         LocalDbQueryError::database(format!("Failed to register sqlite functions: {e}"))
