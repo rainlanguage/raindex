@@ -18,7 +18,7 @@ sol!(
 );
 
 sol!(
-    #![sol(all_derives = true)]
+    #![sol(all_derives = true, rpc)]
     ERC20, "../../out/ERC20.sol/ERC20.json"
 );
 

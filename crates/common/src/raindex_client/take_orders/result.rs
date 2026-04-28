@@ -672,7 +672,7 @@ mod tests {
             .expect("Should decode approval calldata");
         let expected_truncated = U256::from(22_446_685u64);
         assert_eq!(
-            decoded.amount, expected_truncated,
+            decoded.value, expected_truncated,
             "Approved amount should be 22.446685 truncated to 6 decimals = 22446685"
         );
 

@@ -357,7 +357,7 @@ impl DotrainOrderGui {
             if !allowance_float.eq(*deposit_amount)? {
                 let calldata = approveCall {
                     spender: tx_args.orderbook_address,
-                    amount: deposit_amount.to_fixed_decimal(decimals)?,
+                    value: deposit_amount.to_fixed_decimal(decimals)?,
                 }
                 .abi_encode();
 

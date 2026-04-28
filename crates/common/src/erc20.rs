@@ -5,7 +5,7 @@ use alloy_ethers_typecast::ReadContractParametersBuilderError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
 use rain_orderbook_app_settings::token::TokenCfg;
 use rain_orderbook_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
-use rain_orderbook_bindings::IERC20::IERC20Instance;
+use rain_orderbook_bindings::ERC20::ERC20Instance;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -87,9 +87,9 @@ impl ERC20 {
         Self { rpcs, address }
     }
 
-    fn get_instance(&self) -> Result<IERC20Instance<ReadProvider, AnyNetwork>, Error> {
+    fn get_instance(&self) -> Result<ERC20Instance<ReadProvider, AnyNetwork>, Error> {
         let provider = mk_read_provider(&self.rpcs)?;
-        let erc20 = IERC20Instance::new(self.address, provider);
+        let erc20 = ERC20Instance::new(self.address, provider);
         Ok(erc20)
     }
 

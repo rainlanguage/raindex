@@ -28,7 +28,7 @@ use rain_orderbook_app_settings::{
     order::OrderIOCfg,
     yaml::{dotrain::DotrainYaml, YamlError, YamlParsable},
 };
-use rain_orderbook_bindings::IERC20;
+use rain_orderbook_bindings::ERC20;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -417,7 +417,7 @@ impl FuzzRunner {
             .alloy_call(
                 deployer.address,
                 input_token.address,
-                IERC20::symbolCall {},
+                ERC20::symbolCall {},
                 false,
             )
             .await?;
@@ -426,7 +426,7 @@ impl FuzzRunner {
             .alloy_call(
                 deployer.address,
                 output_token.address,
-                IERC20::symbolCall {},
+                ERC20::symbolCall {},
                 false,
             )
             .await?;
