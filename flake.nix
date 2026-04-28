@@ -12,6 +12,7 @@
       flake-utils,
       rainix,
       rain,
+      ...
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
