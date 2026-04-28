@@ -5,7 +5,7 @@ use crate::{
 };
 use alloy::primitives::{Address, U256};
 use alloy_ethers_typecast::ReadableClient;
-use rain_orderbook_bindings::IOrderBookV6::{OrderV4, QuoteV2};
+use rain_orderbook_bindings::IOrderBookV6::{OrderV4, QuoteV2, SignedContextV1};
 use rain_orderbook_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -43,6 +43,7 @@ pub async fn get_order_quotes(
     block_number: Option<u64>,
     rpcs: Vec<String>,
     chunk_size: Option<usize>,
+    signed_contexts: Option<&[Vec<SignedContextV1>]>,
 ) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
     let req_block_number = match block_number {
         Some(block) => block,
@@ -56,9 +57,13 @@ pub async fn get_order_quotes(
     let mut all_pairs: Vec<Pair> = Vec::new();
     let mut all_quote_targets: Vec<QuoteTarget> = Vec::new();
 
-    for order in &orders {
+    for (order_idx, order) in orders.iter().enumerate() {
         let order_struct: OrderV4 = order.clone().try_into()?;
         let orderbook = Address::from_str(&order.orderbook.id.0)?;
+        let order_signed_context = signed_contexts
+            .and_then(|ctxs| ctxs.get(order_idx))
+            .cloned()
+            .unwrap_or_default();
 
         for (input_index, input) in order_struct.validInputs.iter().enumerate() {
             for (output_index, output) in order_struct.validOutputs.iter().enumerate() {
@@ -103,7 +108,7 @@ pub async fn get_order_quotes(
                         order: order_struct.clone(),
                         inputIOIndex: U256::from(input_index),
                         outputIOIndex: U256::from(output_index),
-                        signedContext: vec![],
+                        signedContext: order_signed_context.clone(),
                     },
                 });
             }
@@ -389,7 +394,7 @@ amount price: context<3 0>() context<4 0>();
 
         let order = create_sg_order(&setup, order, inputs, outputs);
 
-        let result = get_order_quotes(vec![order], None, vec![setup.local_evm.url()], None)
+        let result = get_order_quotes(vec![order], None, vec![setup.local_evm.url()], None, None)
             .await
             .unwrap();
 
@@ -466,7 +471,7 @@ amount price: context<3 0>() context<4 0>();
         let mut invalid_order = create_sg_order(&setup, order.clone(), vec![], vec![]);
         invalid_order.orderbook.id = SgBytes("invalid_address".to_string());
 
-        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None)
+        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None, None)
             .await
             .unwrap_err();
 
@@ -475,7 +480,7 @@ amount price: context<3 0>() context<4 0>();
         // Test invalid order bytes
         let invalid_order = create_sg_order(&setup, B256::random().to_string(), vec![], vec![]);
 
-        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None)
+        let err = get_order_quotes(vec![invalid_order], None, vec![setup.local_evm.url()], None, None)
             .await
             .unwrap_err();
 
@@ -491,6 +496,7 @@ amount price: context<3 0>() context<4 0>();
             vec![valid_order],
             None,
             vec!["invalid_rpc_url".to_string()],
+            None,
             None,
         )
         .await

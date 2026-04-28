@@ -74,7 +74,7 @@ pub async fn build_take_order_candidates_for_pair(
     block_number: Option<u64>,
     chunk_size: Option<u32>,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let all_quotes = get_order_quotes_batch(orders, block_number, chunk_size).await?;
+    let all_quotes = get_order_quotes_batch(orders, block_number, chunk_size, None).await?;
 
     orders
         .iter()

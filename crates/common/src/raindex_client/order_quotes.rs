@@ -2,7 +2,7 @@ use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::OrderV4;
+use rain_orderbook_bindings::IOrderBookV6::{OrderV4, SignedContextV1};
 use rain_orderbook_quote::{get_order_quotes, BatchOrderQuotesResponse, OrderQuoteValue, Pair};
 use rain_orderbook_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
@@ -127,6 +127,7 @@ impl RaindexOrder {
             block_number,
             rpcs.iter().map(|s| s.to_string()).collect(),
             chunk_size.map(|v| v as usize),
+            None,
         )
         .await?;
 
@@ -184,7 +185,7 @@ impl RaindexClient {
         )]
         chunk_size: Option<u32>,
     ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
-        get_order_quotes_batch(orders.inner(), block_number, chunk_size).await
+        get_order_quotes_batch(orders.inner(), block_number, chunk_size, None).await
     }
 }
 
@@ -192,6 +193,7 @@ pub async fn get_order_quotes_batch(
     orders: &[RaindexOrder],
     block_number: Option<u64>,
     chunk_size: Option<u32>,
+    signed_contexts: Option<&[Vec<SignedContextV1>]>,
 ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
     if orders.is_empty() {
         return Ok(vec![]);
@@ -240,6 +242,7 @@ pub async fn get_order_quotes_batch(
         block_number,
         rpcs,
         chunk_size.map(|v| v as usize),
+        signed_contexts,
     )
     .await?;
 
@@ -446,7 +449,7 @@ mod tests {
 
         #[tokio::test]
         async fn test_get_order_quotes_batch_empty() {
-            let result = get_order_quotes_batch(&[], None, None).await;
+            let result = get_order_quotes_batch(&[], None, None, None).await;
             assert!(result.is_ok());
             assert!(result.unwrap().is_empty());
         }
@@ -583,7 +586,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            let result = get_order_quotes_batch(&[order], None, None).await.unwrap();
+            let result = get_order_quotes_batch(&[order], None, None, None).await.unwrap();
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].len(), 1);
@@ -677,7 +680,7 @@ mod tests {
                 .unwrap();
             let orders = vec![order.clone(), order];
 
-            let result = get_order_quotes_batch(&orders, None, None).await.unwrap();
+            let result = get_order_quotes_batch(&orders, None, None, None).await.unwrap();
 
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].len(), 1);
