@@ -22,10 +22,17 @@ pub enum ReadProviderError {
 }
 
 pub fn mk_read_provider(rpcs: &[Url]) -> Result<ReadProvider, ReadProviderError> {
-    let size = rpcs.len();
+    if rpcs.is_empty() {
+        return Err(ReadProviderError::NoRpcs);
+    }
 
+    // Use one active transport per request: alloy's FallbackLayer health-routes
+    // to the best-scored transport and falls back to others on error/429. With
+    // `active_transport_count = rpcs.len()` it would dispatch every request to
+    // ALL transports in parallel (request amplification), defeating the purpose
+    // of providing multiple RPCs for load sharing.
     let fallback_layer = FallbackLayer::default()
-        .with_active_transport_count(NonZeroUsize::new(size).ok_or(ReadProviderError::NoRpcs)?);
+        .with_active_transport_count(NonZeroUsize::new(1).expect("1 is non-zero"));
 
     let transports = rpcs
         .iter()
