@@ -649,8 +649,8 @@ mod tests {
     /// `calculate-io` saw at quote time.
     #[test]
     fn test_build_candidate_inherits_signed_context_from_quote() {
-        use crate::local_db::OrderbookIdentifier;
-        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+        use crate::local_db::RaindexIdentifier;
+        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS};
         use alloy::primitives::{b256, Address, Bytes, FixedBytes, U256};
         use httpmock::MockServer;
         use raindex_bindings::IRaindexV6::SignedContextV1;
@@ -699,7 +699,7 @@ mod tests {
                                     "symbol": "sFLR",
                                     "decimals": "18"
                                 },
-                                "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                                "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                                 "ordersAsOutput": [],
                                 "ordersAsInput": [],
                                 "balanceChanges": []
@@ -716,12 +716,12 @@ mod tests {
                                     "symbol": "WFLR",
                                     "decimals": "18"
                                 },
-                                "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                                "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                                 "ordersAsOutput": [],
                                 "ordersAsInput": [],
                                 "balanceChanges": []
                             }],
-                            "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                            "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                             "active": true,
                             "timestampAdded": "1739448802",
                             "meta": null,
@@ -748,9 +748,9 @@ mod tests {
 
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
