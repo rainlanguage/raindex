@@ -699,7 +699,7 @@ mod tests {
                                     "symbol": "sFLR",
                                     "decimals": "18"
                                 },
-                                "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
+                                "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                                 "ordersAsOutput": [],
                                 "ordersAsInput": [],
                                 "balanceChanges": []
@@ -716,12 +716,12 @@ mod tests {
                                     "symbol": "WFLR",
                                     "decimals": "18"
                                 },
-                                "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
+                                "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                                 "ordersAsOutput": [],
                                 "ordersAsInput": [],
                                 "balanceChanges": []
                             }],
-                            "orderbook": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
+                            "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                             "active": true,
                             "timestampAdded": "1739448802",
                             "meta": null,
