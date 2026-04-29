@@ -5,7 +5,7 @@ use alloy::primitives::{
     Address, B256,
 };
 use alloy::sol_types::SolValue;
-use rain_orderbook_bindings::IOrderBookV6::{OrderV4, IOV2};
+use rain_orderbook_bindings::IRaindexV6::{OrderV4, IOV2};
 use std::{num::TryFromIntError, str::FromStr};
 use thiserror::Error;
 
@@ -49,7 +49,7 @@ impl TryFrom<SgOrder> for OrderV4 {
 mod tests {
     use alloy::hex;
     use alloy::primitives::{bytes, B256};
-    use rain_orderbook_bindings::IOrderBookV6::EvaluableV4;
+    use rain_orderbook_bindings::IRaindexV6::EvaluableV4;
     use std::vec;
 
     use super::*;

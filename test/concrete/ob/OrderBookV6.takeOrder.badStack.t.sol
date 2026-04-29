@@ -4,18 +4,9 @@ pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {
-    OrderConfigV4,
-    SignedContextV1,
-    OrderV4,
-    EvaluableV4,
-    TaskV2,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
-import {UnsupportedCalculateOutputs} from "src/concrete/ob/OrderBookV6.sol";
-import {LibDecimalFloat, Float} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
+import {OrderConfigV4, OrderV4, TaskV2, TakeOrdersConfigV5} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {UnsupportedCalculateOutputs} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 contract OrderBookV6TakeOrderBadStackTest is OrderBookV6ExternalRealTest {
     function checkBadStack(
@@ -31,16 +22,8 @@ contract OrderBookV6TakeOrderBadStackTest is OrderBookV6ExternalRealTest {
 
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
-        TakeOrderConfigV4[] memory takeOrderConfigs = new TakeOrderConfigV4[](1);
-        takeOrderConfigs[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory takeOrdersConfig = TakeOrdersConfigV5({
-            minimumIO: LibDecimalFloat.packLossless(0, 0),
-            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
-            maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
-            IOIsInput: true,
-            orders: takeOrderConfigs,
-            data: ""
-        });
+        TakeOrdersConfigV5 memory takeOrdersConfig =
+            LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.validInputs[0].token = address(iToken0);
         config.validOutputs[0].token = address(iToken1);
 

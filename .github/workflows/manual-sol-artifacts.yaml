@@ -2,38 +2,17 @@ name: Manual sol artifacts
 on:
   workflow_dispatch:
     inputs:
-      network:
-        description: "Network to deploy to"
-        required: true
-        type: choice
-        options:
-          - arbitrum
-          - arbitrum_sepolia
-          - avalanche
-          - base
-          - bsc
-          - ethereum
-          - flare
-          - mumbai
-          - oasis_sapphire
-          - polygon
-          - sepolia
-          - songbird
-          - linea
-          - matchain
-          - bera
-          - sonic
-
       suite:
         description: "Suite to deploy"
         required: true
         type: choice
         options:
-          - all
           - raindex
           - subparser
           - route-processor
-          - arb
+          - arb-generic-pool-order-taker
+          - arb-route-processor-order-taker
+          - arb-generic-pool-flash-borrower
 
 jobs:
   deploy:
@@ -42,17 +21,6 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - run: |
-          network=${{ inputs.network }}
-          echo "etherscan_api_key_secret_name=CI_DEPLOY_${network^^}_ETHERSCAN_API_KEY" >> $GITHUB_ENV
-          echo "rpc_secret_name=CI_DEPLOY_${network^^}_RPC_URL" >> $GITHUB_ENV
-          echo "verify_secret_name=CI_DEPLOY_${network^^}_VERIFY" >> $GITHUB_ENV
-          echo "verifier_secret_name=CI_DEPLOY_${network^^}_VERIFIER" >> $GITHUB_ENV
-          echo "verifier_url_secret_name=CI_DEPLOY_${network^^}_VERIFIER_URL" >> $GITHUB_ENV
-          echo "metaboard_address_secret_name=CI_DEPLOY_${network^^}_METABOARD_ADDRESS" >> $GITHUB_ENV
-          echo "route_processor_4_address_secret_name=CI_DEPLOY_${network^^}_ROUTE_PROCESSOR_4_ADDRESS" >> $GITHUB_ENV
-          echo "raindex_address_secret_name=CI_DEPLOY_${network^^}_RAINDEX_ADDRESS" >> $GITHUB_ENV
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -79,20 +47,25 @@ jobs:
       - run: nix develop -c rainix-rs-prelude
       - run: nix develop -c raindex-prelude
 
-      - name: deploy to ${{ inputs.network }}
+      - name: deploy to all supported networks
         run: nix develop -c rainix-sol-artifacts
         env:
           DEPLOYMENT_SUITE: ${{ inputs.suite }}
           DEPLOY_BROADCAST: "1"
           DEPLOYMENT_KEY: ${{ github.ref == 'refs/heads/main' && secrets.PRIVATE_KEY || secrets.PRIVATE_KEY_DEV }}
-          ETH_RPC_URL: ${{ secrets[env.rpc_secret_name] || vars[env.rpc_secret_name] || '' }}
-          ETHERSCAN_API_KEY: ${{ secrets[env.etherscan_api_key_secret_name] || vars[env.etherscan_api_key_secret_name] || ''}}
-          DEPLOY_VERIFY: ${{ secrets[env.verify_secret_name] || vars[env.verify_secret_name] || '' }}
-          DEPLOY_VERIFIER: ${{ secrets[env.verifier_secret_name] || vars[env.verifier_secret_name] || '' }}
-          DEPLOY_VERIFIER_URL: ${{ secrets[env.verifier_url_secret_name] || vars[env.verifier_url_secret_name] || '' }}
-          DEPLOY_METABOARD_ADDRESS: ${{ secrets[env.metaboard_address_secret_name] || vars[env.metaboard_address_secret_name] || '' }}
-          DEPLOY_ROUTE_PROCESSOR_4_ADDRESS: ${{ secrets[env.route_processor_4_address_secret_name] || vars[env.route_processor_4_address_secret_name] || '' }}
-          DEPLOY_RAINDEX_ADDRESS: ${{ secrets[env.raindex_address_secret_name] || vars[env.raindex_address_secret_name] || '' }}
+          ETH_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
+
+          CI_DEPLOY_ARBITRUM_RPC_URL: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL || vars.CI_DEPLOY_ARBITRUM_RPC_URL || '' }}
+          CI_DEPLOY_BASE_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
+          CI_DEPLOY_BASE_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || vars.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || '' }}
+          CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL || vars.CI_DEPLOY_FLARE_RPC_URL || '' }}
+          CI_DEPLOY_POLYGON_RPC_URL: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL || vars.CI_DEPLOY_POLYGON_RPC_URL || '' }}
+
+          CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || vars.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || '' }}
+          CI_DEPLOY_BASE_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || '' }}
+          CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || '' }}
+          CI_DEPLOY_FLARE_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || '' }}
+          CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || vars.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || '' }}
 
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status

@@ -1,14 +1,14 @@
-use crate::raindex_client::order_quotes::RaindexOrderQuote;
+use crate::raindex_client::order_quotes::{
+    get_order_quotes_batch_with_injector, RaindexOrderQuote,
+};
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::RaindexError;
 use alloy::primitives::Address;
-use futures::StreamExt;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::OrderV4;
+use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use rain_orderbook_quote::SignedContextInjector;
 #[cfg(target_family = "wasm")]
 use std::str::FromStr;
-
-const DEFAULT_QUOTE_CONCURRENCY: usize = 5;
 
 fn indices_in_bounds(order: &OrderV4, input_index: u32, output_index: u32) -> bool {
     (input_index as usize) < order.validInputs.len()
@@ -41,6 +41,13 @@ pub struct TakeOrderCandidate {
     pub output_io_index: u32,
     pub max_output: Float,
     pub ratio: Float,
+    /// Signed context data attached to this candidate.
+    ///
+    /// Composition order is `[oracle..., injected...]`: any entries fetched
+    /// from the order's oracle endpoint come first, followed by entries
+    /// contributed by a caller-supplied [`SignedContextInjector`]. Strategies
+    /// that verify signed context by index must be aware of this ordering.
+    pub signed_context: Vec<SignedContextV1>,
 }
 
 fn get_orderbook_address(order: &RaindexOrder) -> Result<Address, RaindexError> {
@@ -54,48 +61,45 @@ fn get_orderbook_address(order: &RaindexOrder) -> Result<Address, RaindexError> 
     }
 }
 
-fn build_candidates_for_order(
-    order: &RaindexOrder,
-    quotes: Vec<RaindexOrderQuote>,
-    input_token: Address,
-    output_token: Address,
-) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let order_v4: OrderV4 = order.try_into()?;
-    let orderbook = get_orderbook_address(order)?;
-
-    quotes
-        .iter()
-        .map(|quote| try_build_candidate(orderbook, &order_v4, quote, input_token, output_token))
-        .collect::<Result<Vec<_>, _>>()
-        .map(|opts| opts.into_iter().flatten().collect())
-}
-
 pub async fn build_take_order_candidates_for_pair(
     orders: &[RaindexOrder],
     input_token: Address,
     output_token: Address,
     block_number: Option<u64>,
-    gas: Option<u64>,
+    chunk_size: Option<u32>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let gas_string = gas.map(|g| g.to_string());
+    // Oracle fetch and injector invocation both happen inside the quote
+    // pipeline now: `get_order_quotes_batch_with_injector` composes them into
+    // `QuoteV2.signedContext` before issuing the quote RPC, so gated orders
+    // whose `calculate-io` asserts on signed context do not revert during
+    // quoting. Each returned quote carries the exact composed context that
+    // the quote call saw, which we propagate straight into the candidate.
+    let all_quotes = get_order_quotes_batch_with_injector(
+        orders,
+        block_number,
+        chunk_size,
+        counterparty,
+        injector,
+    )
+    .await?;
 
-    let quote_results: Vec<Result<_, RaindexError>> =
-        futures::stream::iter(orders.iter().map(|order| {
-            let gas_string = gas_string.clone();
-            async move { order.get_quotes(block_number, gas_string).await }
-        }))
-        .buffered(DEFAULT_QUOTE_CONCURRENCY)
-        .collect()
-        .await;
+    let mut all_candidates = vec![];
+    for (order, quotes) in orders.iter().zip(all_quotes) {
+        let order_v4: OrderV4 = order.try_into()?;
+        let orderbook = get_orderbook_address(order)?;
 
-    orders
-        .iter()
-        .zip(quote_results)
-        .map(|(order, quotes_result)| {
-            build_candidates_for_order(order, quotes_result?, input_token, output_token)
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .map(|vecs| vecs.into_iter().flatten().collect())
+        for quote in &quotes {
+            if let Some(candidate) =
+                try_build_candidate(orderbook, &order_v4, quote, input_token, output_token)?
+            {
+                all_candidates.push(candidate);
+            }
+        }
+    }
+
+    Ok(all_candidates)
 }
 
 fn try_build_candidate(
@@ -131,6 +135,7 @@ fn try_build_candidate(
         return Ok(None);
     }
 
+    // Defer clone until the candidate survives all filters.
     Ok(Some(TakeOrderCandidate {
         orderbook,
         order: order.clone(),
@@ -138,6 +143,7 @@ fn try_build_candidate(
         output_io_index,
         max_output: data.max_output,
         ratio: data.ratio,
+        signed_context: quote.signed_context.clone(),
     }))
 }
 
@@ -325,6 +331,55 @@ mod tests {
             result.unwrap().is_none(),
             "Failed quote must not produce a candidate"
         );
+    }
+
+    #[tokio::test]
+    async fn test_noop_injector_returns_empty() {
+        use rain_orderbook_quote::injector::{NoopInjector, SignedContextInjector};
+
+        let token_a = Address::from([4u8; 20]);
+        let token_b = Address::from([5u8; 20]);
+        let order = make_basic_order(token_a, token_b);
+
+        let injector = NoopInjector;
+        let ctxs = injector.contexts_for(&order, 0, 0, Address::ZERO).await;
+        assert!(ctxs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_try_build_candidate_propagates_signed_context() {
+        use alloy::primitives::{FixedBytes, U256};
+
+        // A candidate built from a quote that already carries signed context
+        // (as produced by the quote pipeline) should inherit that exact list.
+        let oracle_entry = SignedContextV1 {
+            signer: Address::from([0xAAu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(1u64).to_be_bytes::<32>())],
+            signature: alloy::primitives::Bytes::from(vec![0x01]),
+        };
+        let injected_entry = SignedContextV1 {
+            signer: Address::from([0xBBu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(2u64).to_be_bytes::<32>())],
+            signature: alloy::primitives::Bytes::from(vec![0x02]),
+        };
+
+        let token_a = Address::from([4u8; 20]);
+        let token_b = Address::from([5u8; 20]);
+        let orderbook = Address::from([0xAAu8; 20]);
+
+        let order = make_basic_order(token_a, token_b);
+        let f1 = Float::parse("1".to_string()).unwrap();
+        let f2 = Float::parse("2".to_string()).unwrap();
+        let mut quote = make_quote(0, 0, Some(make_quote_value(f2, f1, f1)), true);
+        quote.signed_context = vec![oracle_entry.clone(), injected_entry.clone()];
+
+        let result = try_build_candidate(orderbook, &order, &quote, token_a, token_b)
+            .unwrap()
+            .expect("candidate should be built");
+
+        assert_eq!(result.signed_context.len(), 2);
+        assert_eq!(result.signed_context[0].signer, oracle_entry.signer);
+        assert_eq!(result.signed_context[1].signer, injected_entry.signer);
     }
 
     #[test]

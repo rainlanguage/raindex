@@ -1,7 +1,8 @@
 use crate::local_db::OrderbookIdentifier;
 use crate::raindex_client::order_quotes::RaindexOrderQuote;
 use crate::raindex_client::take_orders::single::{
-    build_candidate_from_quote, estimate_take_order, execute_single_take,
+    build_candidate_from_quote, estimate_take_order, execute_single_take, RpcContext,
+    TakeOrderExecutionParams,
 };
 use crate::raindex_client::RaindexClient;
 use crate::raindex_client::RaindexError;
@@ -15,13 +16,13 @@ use crate::test_helpers::orders::deploy::deploy_order;
 use crate::test_helpers::quotes::{make_quote, make_quote_value};
 use crate::test_helpers::subgraph::{create_sg_order_json, get_minimal_yaml_for_chain};
 use alloy::network::{ReceiptResponse, TransactionBuilder};
-use alloy::primitives::{Bytes, B256, U256};
+use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::rpc::types::TransactionRequest;
 use alloy::serde::WithOtherFields;
 use alloy::sol_types::SolCall;
 use httpmock::MockServer;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::takeOrders4Call;
+use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
 use rain_orderbook_quote::Pair;
 use serde_json::json;
 use std::ops::{Div, Mul};
@@ -96,7 +97,7 @@ async fn test_single_order_take_happy_path_buy_up_to() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -131,17 +132,15 @@ async fn test_single_order_take_happy_path_buy_up_to() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with BuyUpTo mode");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with BuyUpTo mode");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -204,7 +203,7 @@ async fn test_single_order_take_happy_path_buy_exact() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -240,17 +239,15 @@ async fn test_single_order_take_happy_path_buy_exact() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with BuyExact mode");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with BuyExact mode");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -307,7 +304,7 @@ async fn test_single_order_take_happy_path_spend_up_to() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -342,17 +339,15 @@ async fn test_single_order_take_happy_path_spend_up_to() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with SpendUpTo mode");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with SpendUpTo mode");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -416,7 +411,7 @@ async fn test_single_order_take_no_capacity_returns_error() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -466,7 +461,7 @@ async fn test_single_order_take_invalid_io_index_returns_none() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -486,6 +481,7 @@ async fn test_single_order_take_invalid_io_index_returns_none() {
         data: Some(make_quote_value(max_output, max_input, ratio)),
         success: true,
         error: None,
+        signed_context: vec![],
     };
 
     let result = build_candidate_from_quote(&order, &quote).unwrap();
@@ -533,7 +529,7 @@ async fn test_single_order_take_buy_exact_insufficient_liquidity() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -568,16 +564,13 @@ async fn test_single_order_take_buy_exact_insufficient_liquidity() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await;
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context).await;
 
     assert!(
         matches!(result, Err(RaindexError::InsufficientLiquidity { .. })),
@@ -624,7 +617,7 @@ async fn test_single_order_take_price_exceeds_cap() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -659,16 +652,13 @@ async fn test_single_order_take_price_exceeds_cap() {
     let price_cap = Float::parse("2".to_string()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await;
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context).await;
 
     assert!(
         matches!(result, Err(RaindexError::NoLiquidity)),
@@ -713,7 +703,7 @@ async fn test_single_order_take_failed_quote_returns_none() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -764,7 +754,7 @@ async fn test_single_order_take_preflight_insufficient_balance() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -791,17 +781,15 @@ async fn test_single_order_take_preflight_insufficient_balance() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with approval result");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with approval result");
 
     assert!(
         result.is_needs_approval(),
@@ -851,7 +839,7 @@ async fn test_single_order_take_preflight_insufficient_allowance() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -896,17 +884,15 @@ async fn test_single_order_take_preflight_insufficient_allowance() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with approval result");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with approval result");
 
     assert!(
         result.is_needs_approval(),
@@ -956,7 +942,7 @@ async fn test_single_order_take_approval_then_ready_flow() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1002,17 +988,15 @@ async fn test_single_order_take_approval_then_ready_flow() {
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
     // Step 1: First call should return NeedsApproval
-    let result = execute_single_take(
-        candidate.clone(),
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with approval result");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate.clone(), execution_params, rpc_context)
+        .await
+        .expect("Should succeed with approval result");
 
     assert!(
         result.is_needs_approval(),
@@ -1048,17 +1032,15 @@ async fn test_single_order_take_approval_then_ready_flow() {
     );
 
     // Step 3: Second call should return Ready with take order calldata
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with ready result after approval");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with ready result after approval");
 
     assert!(
         result.is_ready(),
@@ -1123,7 +1105,7 @@ async fn test_single_order_take_calldata_encoding_buy_mode() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1160,17 +1142,15 @@ async fn test_single_order_take_calldata_encoding_buy_mode() {
     let price_cap = Float::parse(price_cap_str.to_string()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -1232,7 +1212,7 @@ async fn test_single_order_take_expected_spend_calculation() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1267,17 +1247,15 @@ async fn test_single_order_take_expected_spend_calculation() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -1342,7 +1320,7 @@ async fn test_single_order_take_spend_exact_mode() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1378,17 +1356,15 @@ async fn test_single_order_take_spend_exact_mode() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed with SpendExact mode");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed with SpendExact mode");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -1573,7 +1549,7 @@ async fn test_single_order_take_spend_exact_insufficient_liquidity() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1608,16 +1584,13 @@ async fn test_single_order_take_spend_exact_insufficient_liquidity() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await;
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context).await;
 
     assert!(
         matches!(result, Err(RaindexError::InsufficientLiquidity { .. })),
@@ -1664,7 +1637,7 @@ async fn test_single_order_take_calldata_encoding_spend_mode() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1701,17 +1674,15 @@ async fn test_single_order_take_calldata_encoding_spend_mode() {
     let price_cap = Float::parse(price_cap_str.to_string()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
@@ -1742,6 +1713,21 @@ async fn test_single_order_take_calldata_encoding_spend_mode() {
     );
 
     assert_eq!(config.orders.len(), 1, "Should have exactly 1 order");
+}
+
+/// Helper function to create execution parameters for tests.
+fn create_execution_params(
+    mode: ParsedTakeOrdersMode,
+    price_cap: Float,
+    taker: Address,
+    sell_token: Address,
+) -> TakeOrderExecutionParams {
+    TakeOrderExecutionParams {
+        mode,
+        price_cap,
+        taker,
+        sell_token,
+    }
 }
 
 #[tokio::test]
@@ -1782,7 +1768,7 @@ async fn test_single_order_take_expected_receive_calculation() {
         &setup.orderbook.to_string(),
     );
 
-    let client = RaindexClient::new(vec![yaml], None).unwrap();
+    let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
         .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
@@ -1817,17 +1803,15 @@ async fn test_single_order_take_expected_receive_calculation() {
     let price_cap = Float::parse(high_price_cap()).unwrap();
     let rpc_urls = vec![url::Url::parse(&setup.local_evm.url()).unwrap()];
 
-    let result = execute_single_take(
-        candidate,
-        mode,
-        price_cap,
-        taker,
-        &rpc_urls,
-        None,
-        setup.token1,
-    )
-    .await
-    .expect("Should succeed");
+    let execution_params = create_execution_params(mode, price_cap, taker, setup.token1);
+    let rpc_context = RpcContext {
+        rpc_urls: &rpc_urls,
+        block_number: None,
+    };
+
+    let result = execute_single_take(candidate, execution_params, rpc_context)
+        .await
+        .expect("Should succeed");
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();

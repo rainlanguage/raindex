@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RouteProcessorOrderBookV6ArbOrderTakerTest} from
-    "test/util/abstract/RouteProcessorOrderBookV6ArbOrderTakerTest.sol";
+import {
+    RouteProcessorOrderBookV6ArbOrderTakerTest
+} from "test/util/abstract/RouteProcessorOrderBookV6ArbOrderTakerTest.sol";
 import {
     OrderV4,
     EvaluableV4,
@@ -13,12 +14,12 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {
-    RouteProcessorOrderBookV6ArbOrderTaker,
-    OrderBookV6ArbConfig
-} from "src/concrete/arb/RouteProcessorOrderBookV6ArbOrderTaker.sol";
+    RouteProcessorOrderBookV6ArbOrderTaker
+} from "../../../src/concrete/arb/RouteProcessorOrderBookV6ArbOrderTaker.sol";
 import {LibDecimalFloat, Float} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
 
 contract RouteProcessorOrderBookV6ArbOrderTakerSenderTest is RouteProcessorOrderBookV6ArbOrderTakerTest {
     /// forge-config: default.fuzz.runs = 100
@@ -27,9 +28,10 @@ contract RouteProcessorOrderBookV6ArbOrderTakerSenderTest is RouteProcessorOrder
     {
         TakeOrderConfigV4[] memory orders = buildTakeOrderConfig(order, inputIOIndex, outputIOIndex);
 
-        RouteProcessorOrderBookV6ArbOrderTaker(iArb).arb5(
-            iOrderBook,
-            TakeOrdersConfigV5({
+        RouteProcessorOrderBookV6ArbOrderTaker(iArb)
+            .arb5(
+                iOrderBook,
+                TakeOrdersConfigV5({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -37,10 +39,14 @@ contract RouteProcessorOrderBookV6ArbOrderTakerSenderTest is RouteProcessorOrder
                 orders: orders,
                 data: abi.encode(bytes("0x00"))
             }),
-            TaskV2({
-                evaluable: EvaluableV4(iInterpreter, iInterpreterStore, ""),
+                TaskV2({
+                evaluable: EvaluableV4(
+                    IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
+                    IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
+                    ""
+                ),
                 signedContext: new SignedContextV1[](0)
             })
-        );
+            );
     }
 }

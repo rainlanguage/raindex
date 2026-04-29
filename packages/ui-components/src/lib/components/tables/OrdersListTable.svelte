@@ -107,13 +107,14 @@
 		},
 		initialPageParam: 0,
 		getNextPageParam(lastPage, _allPages, lastPageParam) {
-			return lastPage.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
+			return lastPage.orders.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
 		},
 		refetchInterval: DEFAULT_REFRESH_INTERVAL,
 		enabled: true
 	});
 
-	const AppTable = TanstackAppTable<RaindexOrder>;
+	type OrdersListResult = { orders: RaindexOrder[]; totalCount: number };
+	const AppTable = TanstackAppTable<RaindexOrder, OrdersListResult>;
 </script>
 
 <ListViewOrderbookFilters
@@ -134,6 +135,7 @@
 	{query}
 	queryKey={QKEY_ORDERS}
 	emptyMessage="No Orders Found"
+	dataSelector={(page) => page.orders}
 	on:clickRow={(e) => {
 		goto(`/orders/${e.detail.item.chainId}-${e.detail.item.orderbook}-${e.detail.item.orderHash}`);
 	}}

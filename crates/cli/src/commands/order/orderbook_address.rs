@@ -42,7 +42,7 @@ impl Execute for OrderbookAddress {
         let orderbook_address = if let Some(v) = &deployment_ref.order.orderbook {
             v.address
         } else {
-            let network_key = &deployment_ref.scenario.deployer.network.key;
+            let network_key = &deployment_ref.scenario.rainlang.network.key;
             let mut orderbook_address = None;
             for key in dotrain_order.orderbook_yaml().get_orderbook_keys()? {
                 let orderbook = dotrain_order.orderbook_yaml().get_orderbook(&key)?;
@@ -127,8 +127,8 @@ networks:
 subgraphs:
     some-sg: https://www.some-sg.com
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -157,7 +157,7 @@ tokens:
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key1: 10
 
@@ -169,7 +169,7 @@ orders:
         outputs:
             - token: token2
               vault-id: 1
-        deployer: some-deployer
+        rainlang: some-rainlang
 
 deployments:
     some-deployment:

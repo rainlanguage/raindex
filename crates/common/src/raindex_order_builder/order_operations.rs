@@ -15,7 +15,7 @@ use rain_orderbook_app_settings::{
     orderbook::OrderbookCfg,
 };
 use rain_orderbook_bindings::{
-    IOrderBookV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
+    IRaindexV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
 };
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use url::Url;

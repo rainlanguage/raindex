@@ -11,11 +11,11 @@ use rain_interpreter_eval::{
     error::ForkCallError,
     eval::ForkEvalArgs,
     fork::{Forker, NewForkedEvm},
-    trace::RainEvalResults,
+    trace::{RainEvalResultFromRawCallResultError, RainEvalResults},
 };
 use rain_orderbook_app_settings::{
     blocks::BlockError,
-    deployer::DeployerCfg,
+    rainlang::RainlangCfg,
     unit_test::TestConfig,
     yaml::{
         orderbook::{OrderbookYaml, OrderbookYamlValidation},
@@ -38,7 +38,7 @@ pub struct TestRunner {
 #[derive(Clone)]
 pub struct TestSetup {
     pub block_number: u64,
-    pub deployer: Arc<DeployerCfg>,
+    pub rainlang: Arc<RainlangCfg>,
     pub scenario_name: String,
 }
 
@@ -72,6 +72,8 @@ pub enum TestRunnerError {
     InvalidArgs(String),
     #[error(transparent)]
     YamlError(#[from] YamlError),
+    #[error(transparent)]
+    RainEvalResultFromRawCallResult(#[from] RainEvalResultFromRawCallResultError),
 }
 
 impl From<ForkCallError> for TestRunnerError {
@@ -113,7 +115,7 @@ impl TestRunner {
             rng: TestRng::from_seed(RngAlgorithm::ChaCha, &seed.unwrap_or([0; 32])),
             test_setup: TestSetup {
                 block_number: 0,
-                deployer: Arc::new(DeployerCfg::dummy()),
+                rainlang: Arc::new(RainlangCfg::dummy()),
                 scenario_name: String::new(),
             },
             test_config: test_config.clone(),
@@ -170,7 +172,7 @@ impl TestRunner {
             .roll_fork(Some(self.test_setup.block_number), None)?;
         let fork = Arc::new(self.forker.clone());
         let fork_clone = Arc::clone(&fork);
-        let deployer = Arc::clone(&self.test_setup.deployer);
+        let rainlang_cfg = Arc::clone(&self.test_setup.rainlang);
         let dotrain = Arc::clone(&dotrain);
 
         let handle = tokio::spawn(async move {
@@ -180,7 +182,7 @@ impl TestRunner {
             let args = ForkEvalArgs {
                 rainlang_string,
                 source_index: 0,
-                deployer: deployer.address,
+                rainlang: rainlang_cfg.address,
                 namespace: FullyQualifiedNamespace::default(),
                 context: vec![vec![U256::from(0); 1]; 1],
                 decode_errors: true,
@@ -193,7 +195,7 @@ impl TestRunner {
                 .await
         });
 
-        Ok(vec![handle.await??.into()].into())
+        Ok(vec![handle.await??.try_into()?].into())
     }
 
     async fn run_calculate_entrypoint(
@@ -211,7 +213,7 @@ impl TestRunner {
             .roll_fork(Some(self.test_setup.block_number), None)?;
         let fork = Arc::new(self.forker.clone());
         let fork_clone = Arc::clone(&fork);
-        let deployer = Arc::clone(&self.test_setup.deployer);
+        let rainlang_cfg = Arc::clone(&self.test_setup.rainlang);
         let dotrain = Arc::clone(&dotrain);
 
         let handle = tokio::spawn(async move {
@@ -233,7 +235,7 @@ impl TestRunner {
             let args = ForkEvalArgs {
                 rainlang_string,
                 source_index: 0,
-                deployer: deployer.address,
+                rainlang: rainlang_cfg.address,
                 namespace: FullyQualifiedNamespace::default(),
                 context,
                 decode_errors: true,
@@ -246,7 +248,7 @@ impl TestRunner {
                 .await
         });
 
-        Ok(vec![handle.await??.into()].into())
+        Ok(vec![handle.await??.try_into()?].into())
     }
 
     async fn run_handle_entrypoint(
@@ -265,7 +267,7 @@ impl TestRunner {
             .roll_fork(Some(self.test_setup.block_number), None)?;
         let fork = Arc::new(self.forker.clone());
         let fork_clone = Arc::clone(&fork);
-        let deployer = Arc::clone(&self.test_setup.deployer);
+        let rainlang_cfg = Arc::clone(&self.test_setup.rainlang);
         let dotrain = Arc::clone(&dotrain);
 
         let handle = tokio::spawn(async move {
@@ -280,7 +282,7 @@ impl TestRunner {
             let args = ForkEvalArgs {
                 rainlang_string,
                 source_index: 0,
-                deployer: deployer.address,
+                rainlang: rainlang_cfg.address,
                 namespace: FullyQualifiedNamespace::default(),
                 context,
                 decode_errors: true,
@@ -293,7 +295,7 @@ impl TestRunner {
                 .await
         });
 
-        Ok(vec![handle.await??.into()].into())
+        Ok(vec![handle.await??.try_into()?].into())
     }
 
     async fn run_post_entrypoint(
@@ -314,7 +316,7 @@ impl TestRunner {
             .roll_fork(Some(self.test_setup.block_number), None)?;
         let fork = Arc::new(self.forker.clone());
         let fork_clone = Arc::clone(&fork);
-        let deployer = Arc::clone(&self.test_setup.deployer);
+        let rainlang_cfg = Arc::clone(&self.test_setup.rainlang);
         let dotrain = Arc::clone(&dotrain);
 
         let handle = tokio::spawn(async move {
@@ -337,7 +339,7 @@ impl TestRunner {
             let args = ForkEvalArgs {
                 rainlang_string,
                 source_index: 0,
-                deployer: deployer.address,
+                rainlang: rainlang_cfg.address,
                 namespace: FullyQualifiedNamespace::default(),
                 context,
                 decode_errors: true,
@@ -350,7 +352,7 @@ impl TestRunner {
                 .await
         });
 
-        Ok(vec![handle.await??.into()].into())
+        Ok(vec![handle.await??.try_into()?].into())
     }
 
     async fn create_fork(
@@ -390,16 +392,16 @@ impl TestRunner {
     }
 
     pub async fn run_unit_test(&mut self) -> Result<RainEvalResults, TestRunnerError> {
-        self.test_setup.deployer = Arc::new(
+        self.test_setup.rainlang = Arc::new(
             self.orderbook_yamls
                 .main
-                .get_deployer(&self.test_config.scenario_name)?,
+                .get_rainlang(&self.test_config.scenario_name)?,
         );
 
         // Fetch the latest block number
         let rpcs = self
             .test_setup
-            .deployer
+            .rainlang
             .network
             .rpcs
             .iter()
@@ -485,9 +487,9 @@ using-words-from orderbook-subparser
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -515,7 +517,7 @@ using-words-from orderbook-subparser
 _: output-vault-decrease();
     "#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             orderbook_subparser = local_evm.orderbook_subparser.address(),
             spec_version = SpecVersion::current()
         );

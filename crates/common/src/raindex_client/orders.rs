@@ -1,12 +1,15 @@
 use super::local_db::orders::LocalDbOrders;
 use super::local_db::query::fetch_order_vaults_volume::fetch_order_vaults_volume;
 use super::trades::RaindexTrade;
+use super::ClientRef;
+use super::QuerySource;
 use super::*;
 use crate::local_db::query::fetch_orders::LocalDbOrder;
 use crate::local_db::query::fetch_vaults::LocalDbVault;
-use crate::local_db::{is_chain_supported_local_db, OrderbookIdentifier};
+use crate::local_db::OrderbookIdentifier;
 use crate::parsed_meta::ParsedMeta;
 use crate::raindex_client::order_quotes::RaindexOrderQuote;
+use crate::raindex_client::take_orders::single::{RpcContext, TakeOrderExecutionParams};
 use crate::raindex_client::take_orders::{
     build_candidate_from_quote, estimate_take_order, execute_single_take, TakeOrderEstimate,
     TakeOrdersCalldataResult,
@@ -42,7 +45,7 @@ use rain_orderbook_subgraph_client::{
     SgPaginationArgs,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, io::Cursor, rc::Rc, str::FromStr};
+use std::{collections::HashSet, io::Cursor, str::FromStr};
 use tsify::Tsify;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -50,6 +53,39 @@ use wasm_bindgen_utils::prelude::js_sys::BigInt;
 const DEFAULT_PAGE_SIZE: u16 = 100;
 // Limit concurrent dotrain source fetches to avoid overwhelming the subgraph/metaboard.
 const MAX_CONCURRENT_DOTRAIN_SOURCE_FETCHES: usize = 5;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexOrdersListResult {
+    pub(crate) orders: Vec<RaindexOrder>,
+    pub(crate) total_count: u32,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexOrdersListResult {
+    #[wasm_bindgen(getter)]
+    pub fn orders(&self) -> Vec<RaindexOrder> {
+        self.orders.clone()
+    }
+
+    #[wasm_bindgen(getter, js_name = "totalCount")]
+    pub fn total_count(&self) -> u32 {
+        self.total_count
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexOrdersListResult {
+    pub fn orders(&self) -> &[RaindexOrder] {
+        &self.orders
+    }
+
+    pub fn total_count(&self) -> u32 {
+        self.total_count
+    }
+}
 
 pub(crate) struct SubgraphOrders<'a> {
     client: &'a RaindexClient,
@@ -60,14 +96,16 @@ impl<'a> SubgraphOrders<'a> {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub(crate) trait OrdersDataSource {
     async fn list(
         &self,
         chain_ids: Option<Vec<u32>>,
         filters: &GetOrdersFilters,
         page: Option<u16>,
-    ) -> Result<Vec<RaindexOrder>, RaindexError>;
+        page_size: Option<u16>,
+    ) -> Result<RaindexOrdersListResult, RaindexError>;
 
     async fn get_by_hash(
         &self,
@@ -120,7 +158,7 @@ pub(crate) trait OrdersDataSource {
 #[serde(rename_all = "camelCase")]
 #[wasm_bindgen]
 pub struct RaindexOrder {
-    raindex_client: Rc<RaindexClient>,
+    raindex_client: ClientRef,
     chain_id: u32,
     id: B256,
     order_bytes: Bytes,
@@ -148,7 +186,7 @@ fn get_io_by_type(order: &RaindexOrder, vault_type: RaindexVaultType) -> Vec<Rai
 
 impl RaindexOrder {
     pub(crate) fn from_local_db_order(
-        raindex_client: Rc<RaindexClient>,
+        raindex_client: ClientRef,
         order: LocalDbOrder,
         inputs: Vec<LocalDbVault>,
         outputs: Vec<LocalDbVault>,
@@ -163,7 +201,7 @@ impl RaindexOrder {
         id.extend_from_slice(order.order_hash.as_ref());
 
         Ok(Self {
-            raindex_client: Rc::clone(&raindex_client),
+            raindex_client: ClientRef::clone(&raindex_client),
             chain_id,
             id: keccak256(&id),
             order_bytes: order.order_bytes,
@@ -173,7 +211,7 @@ impl RaindexOrder {
                 .into_iter()
                 .map(|v| {
                     RaindexVault::try_from_local_db(
-                        Rc::clone(&raindex_client),
+                        ClientRef::clone(&raindex_client),
                         v,
                         Some(RaindexVaultType::Input),
                     )
@@ -183,7 +221,7 @@ impl RaindexOrder {
                 .into_iter()
                 .map(|v| {
                     RaindexVault::try_from_local_db(
-                        Rc::clone(&raindex_client),
+                        ClientRef::clone(&raindex_client),
                         v,
                         Some(RaindexVaultType::Output),
                     )
@@ -272,6 +310,14 @@ impl RaindexOrder {
             _ => None,
         })
     }
+    /// Returns the signed context oracle URL if this order has oracle metadata.
+    #[wasm_bindgen(getter = oracleUrl)]
+    pub fn oracle_url(&self) -> Option<String> {
+        self.parsed_meta().into_iter().find_map(|meta| match meta {
+            ParsedMeta::RaindexSignedContextOracleV1(oracle) => Some(oracle.0),
+            _ => None,
+        })
+    }
     #[wasm_bindgen(getter)]
     pub fn transaction(&self) -> Option<RaindexTransaction> {
         self.transaction.clone()
@@ -348,6 +394,13 @@ impl RaindexOrder {
             _ => None,
         })
     }
+    /// Returns the signed context oracle URL if this order has oracle metadata.
+    pub fn oracle_url(&self) -> Option<String> {
+        self.parsed_meta().into_iter().find_map(|meta| match meta {
+            ParsedMeta::RaindexSignedContextOracleV1(oracle) => Some(oracle.0),
+            _ => None,
+        })
+    }
     pub fn transaction(&self) -> Option<RaindexTransaction> {
         self.transaction.clone()
     }
@@ -405,8 +458,8 @@ fn get_vaults_with_type(
 #[wasm_export]
 impl RaindexOrder {
     #[wasm_export(skip)]
-    pub fn get_raindex_client(&self) -> Rc<RaindexClient> {
-        Rc::clone(&self.raindex_client)
+    pub fn get_raindex_client(&self) -> ClientRef {
+        ClientRef::clone(&self.raindex_client)
     }
     #[wasm_export(skip)]
     pub fn get_orderbook_client(&self) -> Result<OrderbookSubgraphClient, RaindexError> {
@@ -455,9 +508,9 @@ impl RaindexOrder {
         #[cfg(not(target_family = "wasm"))]
         let orderbook = self.orderbook();
 
-        if is_chain_supported_local_db(chain_id) {
-            let raindex_client = self.get_raindex_client();
-            if let Some(local_db) = raindex_client.local_db() {
+        let raindex_client = self.get_raindex_client();
+        match raindex_client.query_source(chain_id) {
+            QuerySource::LocalDb(local_db) => {
                 #[cfg(target_family = "wasm")]
                 let order_hash = B256::from_str(&self.order_hash())?;
                 #[cfg(not(target_family = "wasm"))]
@@ -472,21 +525,26 @@ impl RaindexOrder {
                 )
                 .await?;
 
-                return volumes
+                volumes
                     .into_iter()
                     .map(|v| RaindexVaultVolume::try_from_local_db_vault_volume(chain_id, v))
-                    .collect();
+                    .collect()
+            }
+            QuerySource::Subgraph => {
+                let client = self.get_orderbook_client()?;
+                let volumes = client
+                    .order_vaults_volume(
+                        Id::new(self.id.to_string()),
+                        start_timestamp,
+                        end_timestamp,
+                    )
+                    .await?;
+                volumes
+                    .into_iter()
+                    .map(|v| RaindexVaultVolume::try_from_vault_volume(self.chain_id, v))
+                    .collect()
             }
         }
-
-        let client = self.get_orderbook_client()?;
-        let volumes = client
-            .order_vaults_volume(Id::new(self.id.to_string()), start_timestamp, end_timestamp)
-            .await?;
-        volumes
-            .into_iter()
-            .map(|v| RaindexVaultVolume::try_from_vault_volume(self.chain_id, v))
-            .collect()
     }
 
     // /// Gets comprehensive performance metrics and analytics for this order over a specified time period
@@ -551,7 +609,7 @@ impl RaindexOrder {
         Ok(sg_order)
     }
 
-    /// Generates calldata for `IOrderBookV6.takeOrders4` targeting this specific order.
+    /// Generates calldata for `IRaindexV6.takeOrders4` targeting this specific order.
     ///
     /// Unlike `getTakeOrdersCalldata` on `RaindexClient` which discovers orders from the subgraph,
     /// this method generates calldata for taking this single known order that the user has already
@@ -638,6 +696,10 @@ impl RaindexOrder {
         #[cfg(target_family = "wasm")]
         let sell_token = Address::from_str(&sell_token)?;
 
+        if (output_index as usize) >= self.outputs.len() {
+            return Err(RaindexError::InvalidOutputIndex(output_index));
+        }
+
         let rpc_urls = self.get_rpc_urls()?;
 
         let rpc_client = RpcClient::new_with_urls(rpc_urls.clone())?;
@@ -653,16 +715,18 @@ impl RaindexOrder {
         let candidate =
             build_candidate_from_quote(self, &fresh_quote)?.ok_or(RaindexError::NoLiquidity)?;
 
-        execute_single_take(
-            candidate,
-            parsed_mode,
-            parsed_price_cap,
-            taker_addr,
-            &rpc_urls,
-            Some(block_number),
+        let execution_params = TakeOrderExecutionParams {
+            mode: parsed_mode,
+            price_cap: parsed_price_cap,
+            taker: taker_addr,
             sell_token,
-        )
-        .await
+        };
+        let rpc_context = RpcContext {
+            rpc_urls: &rpc_urls,
+            block_number: Some(block_number),
+        };
+
+        execute_single_take(candidate, execution_params, rpc_context).await
     }
 
     #[wasm_export(
@@ -685,6 +749,86 @@ impl RaindexOrder {
         let amount_float = Float::parse(amount)?;
 
         estimate_take_order(data.max_output, data.ratio, is_buy, amount_float)
+    }
+}
+
+impl RaindexOrder {
+    /// Non-wasm variant of [`Self::get_take_calldata`] that threads a
+    /// caller-supplied [`SignedContextInjector`] through the quote pipeline.
+    ///
+    /// Mirrors the shape of [`RaindexClient::get_take_orders_calldata_with_injector`]:
+    /// any injector-contributed `SignedContextV1` entries are appended after
+    /// any oracle-fetched context on each `QuoteV2` before the quote multicall
+    /// (composition order: `[oracle..., injected...]`). The candidate inherits
+    /// that exact composed list, so `takeOrders4` executes with the same
+    /// signed context the quote saw — required for gated orders whose
+    /// `calculate-io` asserts on `signer<0>()` or similar.
+    ///
+    /// The injector is only needed at the quote stage; once the candidate is
+    /// built with the correct `signed_context`, [`execute_single_take`] is
+    /// sufficient without any injector parameter.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn get_take_calldata_with_injector(
+        &self,
+        input_index: u32,
+        output_index: u32,
+        taker: String,
+        mode: TakeOrdersMode,
+        amount: String,
+        price_cap: String,
+        injector: &dyn rain_orderbook_quote::SignedContextInjector,
+    ) -> Result<TakeOrdersCalldataResult, RaindexError> {
+        let taker_addr = Address::from_str(&taker)?;
+        let parsed_mode = ParsedTakeOrdersMode::parse(mode, &amount)?;
+        let parsed_price_cap = Float::parse(price_cap)?;
+
+        let zero = Float::zero()?;
+        if parsed_price_cap.lt(zero)? {
+            return Err(RaindexError::NegativePriceCap);
+        }
+
+        let sell_token = self
+            .inputs
+            .get(input_index as usize)
+            .ok_or(RaindexError::InvalidInputIndex(input_index))?
+            .token()
+            .address();
+        #[cfg(target_family = "wasm")]
+        let sell_token = Address::from_str(&sell_token)?;
+
+        if (output_index as usize) >= self.outputs.len() {
+            return Err(RaindexError::InvalidOutputIndex(output_index));
+        }
+
+        let rpc_urls = self.get_rpc_urls()?;
+
+        let rpc_client = RpcClient::new_with_urls(rpc_urls.clone())?;
+        let block_number = rpc_client.get_latest_block_number().await?;
+
+        let fresh_quotes = self
+            .get_quotes_with_injector(Some(block_number), None, taker_addr, injector)
+            .await?;
+
+        let fresh_quote = fresh_quotes
+            .into_iter()
+            .find(|q| q.pair.input_index == input_index && q.pair.output_index == output_index)
+            .ok_or(RaindexError::NoLiquidity)?;
+
+        let candidate =
+            build_candidate_from_quote(self, &fresh_quote)?.ok_or(RaindexError::NoLiquidity)?;
+
+        let execution_params = TakeOrderExecutionParams {
+            mode: parsed_mode,
+            price_cap: parsed_price_cap,
+            taker: taker_addr,
+            sell_token,
+        };
+        let rpc_context = RpcContext {
+            rpc_urls: &rpc_urls,
+            block_number: Some(block_number),
+        };
+
+        execute_single_take(candidate, execution_params, rpc_context).await
     }
 }
 
@@ -808,13 +952,13 @@ impl RaindexClient {
     ///   console.error("Error fetching orders:", result.error.readableMsg);
     ///   return;
     /// }
-    /// const orders = result.value;
+    /// const { orders, totalCount } = result.value;
     /// // Do something with orders
     /// ```
     #[wasm_export(
         js_name = "getOrders",
-        return_description = "Array of raindex order instances",
-        unchecked_return_type = "RaindexOrder[]",
+        return_description = "Orders list result with total count for pagination",
+        unchecked_return_type = "RaindexOrdersListResult",
         preserve_js_class
     )]
     pub async fn get_orders(
@@ -830,24 +974,50 @@ impl RaindexClient {
         filters: Option<GetOrdersFilters>,
         #[wasm_export(param_description = "Page number for pagination (optional, defaults to 1)")]
         page: Option<u16>,
-    ) -> Result<Vec<RaindexOrder>, RaindexError> {
+        #[wasm_export(
+            js_name = "pageSize",
+            param_description = "Number of items per page (optional, defaults to 100)"
+        )]
+        page_size: Option<u16>,
+    ) -> Result<RaindexOrdersListResult, RaindexError> {
         let filters = filters.unwrap_or_default();
-        let page_number = page.unwrap_or(1);
+        let page_number = page.unwrap_or(1).max(1);
+        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
         let ids = chain_ids.map(|ChainIds(ids)| ids);
 
-        if let Some(local_db) = self.local_db() {
-            let local_source = LocalDbOrders::new(&local_db, Rc::new(self.clone()));
-            let orders = local_source.list(ids, &filters, None).await?;
-            let orders = fetch_orders_dotrain_sources(orders).await?;
-            return Ok(orders);
+        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+
+        let mut all_orders = Vec::new();
+        let mut total_count: u32 = 0;
+
+        if let Some(db) = local_db {
+            let local_source = LocalDbOrders::new(&db, ClientRef::new(self.clone()));
+            let result = local_source
+                .list(
+                    Some(local_ids),
+                    &filters,
+                    Some(page_number),
+                    Some(page_size),
+                )
+                .await?;
+            total_count += result.total_count;
+            all_orders.extend(result.orders);
         }
 
-        let subgraph_source = SubgraphOrders::new(self);
-        let orders = subgraph_source
-            .list(ids, &filters, Some(page_number))
-            .await?;
-        let orders = fetch_orders_dotrain_sources(orders).await?;
-        Ok(orders)
+        if !sg_ids.is_empty() {
+            let subgraph_source = SubgraphOrders::new(self);
+            let result = subgraph_source
+                .list(Some(sg_ids), &filters, Some(page_number), Some(page_size))
+                .await?;
+            total_count += result.total_count;
+            all_orders.extend(result.orders);
+        }
+
+        let orders = fetch_orders_dotrain_sources(all_orders).await?;
+        Ok(RaindexOrdersListResult {
+            orders,
+            total_count,
+        })
     }
 
     /// Retrieves a specific order by its hash from a particular blockchain network
@@ -905,30 +1075,41 @@ impl RaindexClient {
     }
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl OrdersDataSource for SubgraphOrders<'_> {
     async fn list(
         &self,
         chain_ids: Option<Vec<u32>>,
         filters: &GetOrdersFilters,
         page: Option<u16>,
-    ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let raindex_client = Rc::new(self.client.clone());
+        page_size: Option<u16>,
+    ) -> Result<RaindexOrdersListResult, RaindexError> {
+        let raindex_client = ClientRef::new(self.client.clone());
         let multi_subgraph_args = self.client.get_multi_subgraph_args(chain_ids)?;
 
         let client = MultiOrderbookSubgraphClient::new(
             multi_subgraph_args.values().flatten().cloned().collect(),
         );
 
+        let sg_filter_args: SgOrdersListFilterArgs = filters.clone().try_into()?;
+        let effective_page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+
+        let total_count = if page.is_some() {
+            client.orders_count(sg_filter_args.clone()).await?
+        } else {
+            0
+        };
+
         let orders = client
             .orders_list(
-                filters.clone().try_into()?,
+                sg_filter_args,
                 SgPaginationArgs {
                     page: page.unwrap_or(1),
-                    page_size: DEFAULT_PAGE_SIZE,
+                    page_size: effective_page_size,
                 },
             )
-            .await;
+            .await?;
 
         let orders = orders
             .iter()
@@ -950,7 +1131,10 @@ impl OrdersDataSource for SubgraphOrders<'_> {
             })
             .collect::<Result<Vec<RaindexOrder>, RaindexError>>()?;
 
-        Ok(orders)
+        Ok(RaindexOrdersListResult {
+            orders,
+            total_count,
+        })
     }
 
     async fn get_by_hash(
@@ -958,7 +1142,7 @@ impl OrdersDataSource for SubgraphOrders<'_> {
         ob_id: &OrderbookIdentifier,
         order_hash: &B256,
     ) -> Result<Option<RaindexOrder>, RaindexError> {
-        let raindex_client = Rc::new(self.client.clone());
+        let raindex_client = ClientRef::new(self.client.clone());
         let client = self.client.get_orderbook_client(ob_id.orderbook_address)?;
         let order = match client
             .order_detail_by_hash(SgBytes(order_hash.to_string()))
@@ -978,7 +1162,7 @@ impl OrdersDataSource for SubgraphOrders<'_> {
         orderbook: Address,
         tx_hash: B256,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let raindex_client = Rc::new(self.client.clone());
+        let raindex_client = ClientRef::new(self.client.clone());
         let client = self.client.get_orderbook_client(orderbook)?;
         let sg_orders = client
             .transaction_add_orders(Id::new(tx_hash.to_string()))
@@ -1003,7 +1187,7 @@ impl OrdersDataSource for SubgraphOrders<'_> {
         orderbook: Address,
         tx_hash: B256,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let raindex_client = Rc::new(self.client.clone());
+        let raindex_client = ClientRef::new(self.client.clone());
         let client = self.client.get_orderbook_client(orderbook)?;
         let sg_orders = client
             .transaction_remove_orders(Id::new(tx_hash.to_string()))
@@ -1089,26 +1273,37 @@ impl RaindexClient {
             ));
         }
 
-        if let Some(local_db) = self.local_db() {
-            let local_source = LocalDbOrders::new(&local_db, Rc::new(self.clone()));
-            if let Some(mut order) = local_source.get_by_hash(ob_id, &order_hash).await? {
+        match self.query_source(ob_id.chain_id) {
+            QuerySource::LocalDb(local_db) => {
+                let local_source = LocalDbOrders::new(&local_db, ClientRef::new(self.clone()));
+                let mut order = local_source
+                    .get_by_hash(ob_id, &order_hash)
+                    .await?
+                    .ok_or_else(|| {
+                        RaindexError::OrderNotFound(
+                            ob_id.orderbook_address.to_string(),
+                            ob_id.chain_id,
+                            order_hash,
+                        )
+                    })?;
                 order.fetch_dotrain_source().await?;
-                return Ok(order);
+                Ok(order)
+            }
+            QuerySource::Subgraph => {
+                let mut order = SubgraphOrders::new(self)
+                    .get_by_hash(ob_id, &order_hash)
+                    .await?
+                    .ok_or_else(|| {
+                        RaindexError::OrderNotFound(
+                            ob_id.orderbook_address.to_string(),
+                            ob_id.chain_id,
+                            order_hash,
+                        )
+                    })?;
+                order.fetch_dotrain_source().await?;
+                Ok(order)
             }
         }
-
-        let mut order = SubgraphOrders::new(self)
-            .get_by_hash(ob_id, &order_hash)
-            .await?
-            .ok_or_else(|| {
-                RaindexError::OrderNotFound(
-                    ob_id.orderbook_address.to_string(),
-                    ob_id.chain_id,
-                    order_hash,
-                )
-            })?;
-        order.fetch_dotrain_source().await?;
-        Ok(order)
     }
 }
 
@@ -1130,15 +1325,32 @@ impl RaindexClient {
             orderbook_addresses: None,
         };
 
-        let orders = self
-            .get_orders(Some(ChainIds(vec![chain_id])), Some(filters), None)
-            .await?;
+        let ids = Some(vec![chain_id]);
+        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
 
-        if orders.is_empty() {
+        let mut all_orders = Vec::new();
+
+        if let Some(db) = local_db {
+            let local_source = LocalDbOrders::new(&db, ClientRef::new(self.clone()));
+            let result = local_source
+                .list(Some(local_ids), &filters, None, None)
+                .await?;
+            all_orders.extend(result.orders);
+        }
+
+        if !sg_ids.is_empty() {
+            let subgraph_source = SubgraphOrders::new(self);
+            let result = subgraph_source
+                .list(Some(sg_ids), &filters, None, None)
+                .await?;
+            all_orders.extend(result.orders);
+        }
+
+        if all_orders.is_empty() {
             return Err(RaindexError::NoLiquidity);
         }
 
-        Ok(orders)
+        Ok(all_orders)
     }
 }
 
@@ -1268,7 +1480,7 @@ impl RaindexOrder {
     }
 
     pub fn try_from_sg_order(
-        raindex_client: Rc<RaindexClient>,
+        raindex_client: ClientRef,
         chain_id: u32,
         order: SgOrder,
         transaction: Option<RaindexTransaction>,
@@ -1279,7 +1491,7 @@ impl RaindexOrder {
             .and_then(|meta| meta.0.try_decode_rainlangsource().ok());
 
         Ok(Self {
-            raindex_client: Rc::clone(&raindex_client),
+            raindex_client: ClientRef::clone(&raindex_client),
             chain_id,
             id: B256::from_str(&order.id.0)?,
             order_bytes: Bytes::from_str(&order.order_bytes.0)?,
@@ -1291,7 +1503,7 @@ impl RaindexOrder {
                     .iter()
                     .map(|v| {
                         RaindexVault::try_from_sg_vault(
-                            Rc::clone(&raindex_client),
+                            ClientRef::clone(&raindex_client),
                             chain_id,
                             v.clone(),
                             Some(RaindexVaultType::Input),
@@ -1305,7 +1517,7 @@ impl RaindexOrder {
                     .iter()
                     .map(|v| {
                         RaindexVault::try_from_sg_vault(
-                            Rc::clone(&raindex_client),
+                            ClientRef::clone(&raindex_client),
                             chain_id,
                             v.clone(),
                             Some(RaindexVaultType::Output),
@@ -1387,7 +1599,9 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
         use super::super::*;
-        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+        use crate::raindex_client::tests::{
+            get_test_yaml, new_with_local_db, CHAIN_ID_1_ORDERBOOK_ADDRESS,
+        };
         use crate::{
             local_db::query::{
                 fetch_orders::LocalDbOrder, FromDbJson, LocalDbQueryError, LocalDbQueryExecutor,
@@ -1413,6 +1627,7 @@ mod tests {
         use serde_bytes::ByteBuf;
         use serde_json::{json, Value};
         use std::collections::BTreeMap;
+        use std::sync::Arc;
 
         fn sample_dotrain_source() -> DotrainSourceV1 {
             DotrainSourceV1("sample dotrain source".to_string())
@@ -1437,7 +1652,10 @@ mod tests {
         }
         use std::str::FromStr;
 
-        fn build_client_with_metaboard(metaboard_url: &str, subgraph_url: &str) -> RaindexClient {
+        async fn build_client_with_metaboard(
+            metaboard_url: &str,
+            subgraph_url: &str,
+        ) -> RaindexClient {
             let yaml = get_test_yaml(
                 subgraph_url,
                 subgraph_url,
@@ -1450,11 +1668,11 @@ mod tests {
                     "https://api.thegraph.com/subgraphs/name/polygon",
                     metaboard_url,
                 );
-            RaindexClient::new(vec![yaml], None).unwrap()
+            RaindexClient::new(vec![yaml], None, None).await.unwrap()
         }
 
-        #[test]
-        fn try_from_sg_order_populates_parsed_meta() {
+        #[tokio::test]
+        async fn try_from_sg_order_populates_parsed_meta() {
             let source = sample_dotrain_source();
             let builder_state = sample_order_builder_state(&source);
             let meta_hex = encode_meta_items_hex(vec![
@@ -1473,11 +1691,13 @@ mod tests {
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let order =
-                RaindexOrder::try_from_sg_order(Rc::new(client), 1, sg_order, None).unwrap();
+                RaindexOrder::try_from_sg_order(Arc::new(client), 1, sg_order, None).unwrap();
 
             assert_eq!(order.parsed_meta().len(), 2);
             assert_eq!(order.dotrain_source(), Some(source.0));
@@ -1486,8 +1706,8 @@ mod tests {
             assert_eq!(parsed_builder_state, builder_state);
         }
 
-        #[test]
-        fn from_local_db_order_populates_parsed_meta() {
+        #[tokio::test]
+        async fn from_local_db_order_populates_parsed_meta() {
             let source = sample_dotrain_source();
             let builder_state = sample_order_builder_state(&source);
             let meta_hex = encode_meta_items_hex(vec![
@@ -1505,7 +1725,9 @@ mod tests {
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let local_order = LocalDbOrder {
@@ -1529,7 +1751,7 @@ mod tests {
             };
 
             let order =
-                RaindexOrder::from_local_db_order(Rc::new(client), local_order, vec![], vec![])
+                RaindexOrder::from_local_db_order(Arc::new(client), local_order, vec![], vec![])
                     .unwrap();
 
             assert_eq!(order.parsed_meta().len(), 2);
@@ -1559,11 +1781,13 @@ mod tests {
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let mut order =
-                RaindexOrder::try_from_sg_order(Rc::new(client), 1, sg_order, None).unwrap();
+                RaindexOrder::try_from_sg_order(Arc::new(client), 1, sg_order, None).unwrap();
             order.fetch_dotrain_source().await.unwrap();
             assert_eq!(order.parsed_meta().len(), 2);
         }
@@ -1581,11 +1805,13 @@ mod tests {
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let mut order =
-                RaindexOrder::try_from_sg_order(Rc::new(client), 1, sg_order, None).unwrap();
+                RaindexOrder::try_from_sg_order(Arc::new(client), 1, sg_order, None).unwrap();
             order.fetch_dotrain_source().await.unwrap();
             assert!(order.parsed_meta().is_empty());
         }
@@ -1632,16 +1858,14 @@ mod tests {
                 }));
             });
 
-            let client = Rc::new(build_client_with_metaboard(
-                &server.url("/"),
-                &server.url("/sg"),
-            ));
+            let client =
+                Arc::new(build_client_with_metaboard(&server.url("/"), &server.url("/sg")).await);
 
             let mut sg_order = get_order1();
             sg_order.meta = Some(SgBytes(order_meta_hex));
 
             let mut order =
-                RaindexOrder::try_from_sg_order(Rc::clone(&client), 1, sg_order, None).unwrap();
+                RaindexOrder::try_from_sg_order(Arc::clone(&client), 1, sg_order, None).unwrap();
 
             order.fetch_dotrain_source().await.unwrap();
 
@@ -1688,16 +1912,14 @@ mod tests {
                 }));
             });
 
-            let client = Rc::new(build_client_with_metaboard(
-                &server.url("/"),
-                &server.url("/sg"),
-            ));
+            let client =
+                Arc::new(build_client_with_metaboard(&server.url("/"), &server.url("/sg")).await);
 
             let mut sg_order = get_order1();
             sg_order.meta = Some(SgBytes(meta_hex));
 
             let mut order =
-                RaindexOrder::try_from_sg_order(Rc::clone(&client), 1, sg_order, None).unwrap();
+                RaindexOrder::try_from_sg_order(Arc::clone(&client), 1, sg_order, None).unwrap();
 
             order.fetch_dotrain_source().await.unwrap();
 
@@ -1712,7 +1934,8 @@ mod tests {
             json: String,
         }
 
-        #[async_trait(?Send)]
+        #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+        #[cfg_attr(not(target_family = "wasm"), async_trait)]
         impl LocalDbQueryExecutor for StaticJsonExec {
             async fn execute_batch(
                 &self,
@@ -2219,24 +2442,27 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let result = raindex_client
-                .get_orders(None, Some(filter_args), Some(1))
+                .get_orders(None, Some(filter_args), Some(1), None)
                 .await
                 .unwrap();
 
-            assert_eq!(result.len(), 2);
+            assert_eq!(result.orders().len(), 2);
+            assert_eq!(result.total_count(), 2);
 
             let expected_order1 = RaindexOrder::try_from_sg_order(
-                Rc::new(raindex_client.clone()),
+                Arc::new(raindex_client.clone()),
                 1,
                 get_order1(),
                 None,
             )
             .unwrap();
 
-            let order1 = result[0].clone();
+            let order1 = result.orders()[0].clone();
             assert_eq!(order1.chain_id, expected_order1.chain_id);
             assert_eq!(order1.id, expected_order1.id);
             assert_eq!(order1.order_bytes, expected_order1.order_bytes);
@@ -2292,7 +2518,7 @@ mod tests {
             assert_eq!(order1.orderbook(), expected_order1.orderbook());
             assert_eq!(order1.timestamp_added(), expected_order1.timestamp_added());
 
-            let order2 = result[1].clone();
+            let order2 = result.orders()[1].clone();
             assert_eq!(order2.chain_id, 137);
             assert_eq!(
                 order2.id,
@@ -2394,7 +2620,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let res = raindex_client
                 .get_order_by_hash(
@@ -2408,7 +2636,7 @@ mod tests {
                 .unwrap();
 
             let expected_order = RaindexOrder::try_from_sg_order(
-                Rc::new(raindex_client.clone()),
+                Arc::new(raindex_client.clone()),
                 1,
                 get_order1(),
                 None,
@@ -2460,7 +2688,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let order_hash =
                 b256!("0x0000000000000000000000000000000000000000000000000000000000000123");
@@ -2524,7 +2754,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let res = raindex_client
                 .get_order_by_hash(
@@ -2559,7 +2791,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let res = raindex_client
                 .get_order_by_hash(
@@ -2640,26 +2874,26 @@ mod tests {
                 json: serde_json::to_string(&vec![local_order]).unwrap(),
             };
             let local_db = LocalDb::new(exec.clone());
-            let client = RaindexClient::new(
+            let client = new_with_local_db(
                 vec![get_test_yaml(
                     "https://example/sg1",
                     "https://example/sg2",
                     "https://example/rpc1",
                     "https://example/rpc2",
                 )],
-                None,
+                local_db.clone(),
+                vec![137],
             )
-            .unwrap();
-            client.local_db.borrow_mut().replace(local_db.clone());
+            .await;
 
-            let orders_source = LocalDbOrders::new(&local_db, Rc::new(client.clone()));
-            let orders = orders_source
-                .list(Some(vec![137]), &GetOrdersFilters::default(), None)
+            let orders_source = LocalDbOrders::new(&local_db, ClientRef::new(client.clone()));
+            let result = orders_source
+                .list(Some(vec![137]), &GetOrdersFilters::default(), None, None)
                 .await
                 .unwrap();
 
-            assert_eq!(orders.len(), 1);
-            let order = &orders[0];
+            assert_eq!(result.orders().len(), 1);
+            let order = &result.orders()[0];
             assert_eq!(order.inputs.len(), 1);
             assert_eq!(order.outputs.len(), 1);
             assert_eq!(order.trades_count, 2);
@@ -2672,21 +2906,21 @@ mod tests {
                 json: "not-json".to_string(),
             };
             let local_db = LocalDb::new(exec);
-            let client = RaindexClient::new(
+            let client = new_with_local_db(
                 vec![get_test_yaml(
                     "https://example/sg1",
                     "https://example/sg2",
                     "https://example/rpc1",
                     "https://example/rpc2",
                 )],
-                None,
+                local_db.clone(),
+                vec![137],
             )
-            .unwrap();
-            client.local_db.borrow_mut().replace(local_db.clone());
+            .await;
 
-            let orders_source = LocalDbOrders::new(&local_db, Rc::new(client.clone()));
+            let orders_source = LocalDbOrders::new(&local_db, ClientRef::new(client.clone()));
             let err = orders_source
-                .list(Some(vec![137]), &GetOrdersFilters::default(), None)
+                .list(Some(vec![137]), &GetOrdersFilters::default(), None, None)
                 .await
                 .unwrap_err();
             match err {
@@ -2742,7 +2976,9 @@ mod tests {
                     "https://example/rpc2",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let result = client
@@ -2750,12 +2986,13 @@ mod tests {
                     Some(ChainIds(vec![137])),
                     Some(GetOrdersFilters::default()),
                     Some(1),
+                    None,
                 )
                 .await
                 .unwrap();
-            assert_eq!(result.len(), 1);
+            assert_eq!(result.orders().len(), 1);
             assert_eq!(
-                result[0].order_hash,
+                result.orders()[0].order_hash,
                 b256!("0x0000000000000000000000000000000000000000000000000000000000002345")
             );
         }
@@ -2788,17 +3025,17 @@ mod tests {
             };
             let local_db = LocalDb::new(exec);
 
-            let client = RaindexClient::new(
+            let client = new_with_local_db(
                 vec![get_test_yaml(
                     "https://example/sg1",
                     "https://example/sg2",
                     "https://example/rpc1",
                     "https://example/rpc2",
                 )],
-                None,
+                local_db,
+                vec![137],
             )
-            .unwrap();
-            client.local_db.borrow_mut().replace(local_db);
+            .await;
 
             let order = client
                 .get_order_by_hash(
@@ -2948,7 +3185,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let order = raindex_client
@@ -3134,7 +3373,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let sell = address!("1d80c49bbbcd1c0911346656b529df9e5c2f783d");
@@ -3168,7 +3409,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let sell = address!("1d80c49bbbcd1c0911346656b529df9e5c2f783d");
@@ -3220,6 +3463,7 @@ mod tests {
                 data: Some(make_test_quote_value()),
                 success: true,
                 error: None,
+                signed_context: vec![],
             }
         }
 
@@ -3265,6 +3509,7 @@ mod tests {
             let original_data = quote.data.expect("Original should have data");
             assert!(data.max_output.eq(original_data.max_output).unwrap());
             assert!(data.ratio.eq(original_data.ratio).unwrap());
+            assert!(roundtrip.signed_context.is_empty());
         }
 
         #[wasm_bindgen_test]
@@ -3279,6 +3524,7 @@ mod tests {
                 data: None,
                 success: false,
                 error: Some("Quote simulation failed".to_string()),
+                signed_context: vec![],
             };
 
             let js_value = to_js_value(&quote).expect("Should serialize failed quote to JS");
@@ -3289,6 +3535,7 @@ mod tests {
             assert!(!roundtrip.success);
             assert!(roundtrip.data.is_none());
             assert_eq!(roundtrip.error, Some("Quote simulation failed".to_string()));
+            assert!(roundtrip.signed_context.is_empty());
         }
 
         #[wasm_bindgen_test]

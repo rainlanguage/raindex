@@ -120,8 +120,8 @@ networks:
 subgraphs:
     some-sg: https://www.some-sg.com
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -134,7 +134,7 @@ orderbooks:
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key1: 10
 

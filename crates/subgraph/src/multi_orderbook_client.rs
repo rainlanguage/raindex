@@ -34,7 +34,7 @@ impl MultiOrderbookSubgraphClient {
         &self,
         filter_args: SgOrdersListFilterArgs,
         pagination_args: SgPaginationArgs,
-    ) -> Vec<SgOrderWithSubgraphName> {
+    ) -> Result<Vec<SgOrderWithSubgraphName>, OrderbookSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             let filter_args = filter_args.clone();
@@ -55,11 +55,19 @@ impl MultiOrderbookSubgraphClient {
 
         let results = join_all(futures).await;
 
-        let mut all_orders: Vec<SgOrderWithSubgraphName> = results
-            .into_iter()
-            .filter_map(Result::ok)
-            .flatten()
-            .collect();
+        let mut all_orders = Vec::new();
+        let mut last_error = None;
+        for result in results {
+            match result {
+                Ok(items) => all_orders.extend(items),
+                Err(e) => last_error = Some(e),
+            }
+        }
+        if all_orders.is_empty() {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
 
         all_orders.sort_by(|a, b| {
             let a_timestamp = a.order.timestamp_added.0.parse::<i64>().unwrap_or(0);
@@ -67,14 +75,35 @@ impl MultiOrderbookSubgraphClient {
             b_timestamp.cmp(&a_timestamp)
         });
 
-        all_orders
+        Ok(all_orders)
+    }
+
+    pub async fn orders_count(
+        &self,
+        filter_args: SgOrdersListFilterArgs,
+    ) -> Result<u32, OrderbookSubgraphClientError> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let filter_args = filter_args.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url);
+                client.orders_count(filter_args).await
+            }
+        });
+
+        let results = join_all(futures).await;
+        let mut total: u32 = 0;
+        for result in results {
+            total += result?;
+        }
+        Ok(total)
     }
 
     pub async fn vaults_list(
         &self,
         filter_args: SgVaultsListFilterArgs,
         pagination_args: SgPaginationArgs,
-    ) -> Vec<SgVaultWithSubgraphName> {
+    ) -> Result<Vec<SgVaultWithSubgraphName>, OrderbookSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             let filter_args = filter_args.clone();
@@ -95,16 +124,26 @@ impl MultiOrderbookSubgraphClient {
 
         let results = join_all(futures).await;
 
-        let all_vaults: Vec<SgVaultWithSubgraphName> = results
-            .into_iter()
-            .filter_map(Result::ok)
-            .flatten()
-            .collect();
+        let mut all_vaults = Vec::new();
+        let mut last_error = None;
+        for result in results {
+            match result {
+                Ok(items) => all_vaults.extend(items),
+                Err(e) => last_error = Some(e),
+            }
+        }
+        if all_vaults.is_empty() {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
 
-        all_vaults
+        Ok(all_vaults)
     }
 
-    pub async fn tokens_list(&self) -> Vec<SgErc20WithSubgraphName> {
+    pub async fn tokens_list(
+        &self,
+    ) -> Result<Vec<SgErc20WithSubgraphName>, OrderbookSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
             async move {
@@ -123,19 +162,28 @@ impl MultiOrderbookSubgraphClient {
 
         let results = join_all(futures).await;
 
-        let all_tokens: Vec<SgErc20WithSubgraphName> = results
-            .into_iter()
-            .filter_map(Result::ok)
-            .flatten()
-            .collect();
+        let mut all_tokens = Vec::new();
+        let mut last_error = None;
+        for result in results {
+            match result {
+                Ok(items) => all_tokens.extend(items),
+                Err(e) => last_error = Some(e),
+            }
+        }
+        if all_tokens.is_empty() {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
 
-        all_tokens
+        Ok(all_tokens)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cynic_client::CynicClientError;
     use crate::types::common::{
         SgBigInt, SgBytes, SgErc20, SgOrder, SgOrderbook, SgOrdersListFilterArgs, SgVault,
     };
@@ -186,7 +234,8 @@ mod tests {
         let client = MultiOrderbookSubgraphClient::new(vec![]);
         let result = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert!(result.is_empty());
     }
 
@@ -210,7 +259,8 @@ mod tests {
 
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(orders.len(), 1);
         assert_eq!(orders[0].order.id, order1_s1.id);
         assert_eq!(orders[0].subgraph_name, sg1_name);
@@ -254,7 +304,8 @@ mod tests {
 
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(orders.len(), 3);
         assert_eq!(orders[0].order.id, order_b_s2.id);
@@ -298,7 +349,8 @@ mod tests {
         ]);
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(orders.len(), 1);
         assert_eq!(orders[0].order.id, order_a_s1.id);
         assert_eq!(orders[0].subgraph_name, sg1_name);
@@ -337,7 +389,8 @@ mod tests {
         ]);
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(orders.len(), 1);
         assert_eq!(orders[0].order.id, order_a_s1.id);
         assert_eq!(orders[0].subgraph_name, sg1_name);
@@ -372,10 +425,82 @@ mod tests {
                 name: sg2_name.to_string(),
             },
         ]);
-        let orders = client
+        let result = client
             .orders_list(default_filter_args(), default_pagination_args())
             .await;
-        assert!(orders.is_empty());
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_orders_list_rate_limited_returns_http_429_error() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let sg1_name = "sg_rate_limited";
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(429).body("rate limit exceeded");
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg1_url,
+            name: sg1_name.to_string(),
+        }]);
+        let result = client
+            .orders_list(default_filter_args(), default_pagination_args())
+            .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            OrderbookSubgraphClientError::CynicClientError(CynicClientError::HttpError {
+                status,
+                body,
+            }) => {
+                assert_eq!(status, 429);
+                assert_eq!(body, "rate limit exceeded");
+            }
+            other => panic!("Expected HttpError with status 429, got: {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_orders_list_rate_limited_with_one_successful_subgraph() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let sg1_name = "sg_ok";
+
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+        let sg2_name = "sg_rate_limited";
+
+        let order_a = sample_sg_order("s1_A", "100");
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": [order_a]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(429).body("rate limit exceeded");
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: sg1_name.to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: sg2_name.to_string(),
+            },
+        ]);
+        let orders = client
+            .orders_list(default_filter_args(), default_pagination_args())
+            .await
+            .unwrap();
+        assert_eq!(orders.len(), 1);
+        assert_eq!(orders[0].order.id, order_a.id);
+        assert_eq!(orders[0].subgraph_name, sg1_name);
     }
 
     #[tokio::test]
@@ -400,7 +525,8 @@ mod tests {
         }]);
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(orders.len(), 3);
         assert_eq!(orders[0].order.id, order_a.id);
         assert_eq!(orders[1].order.id, order_c.id);
@@ -432,7 +558,8 @@ mod tests {
         }]);
         let orders = client
             .orders_list(default_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(orders.len(), 5);
 
         assert_eq!(orders[0].order.id, order_b.id);
@@ -456,6 +583,178 @@ mod tests {
                 || (order_ids_sorted[2] == order_e.id && order_ids_sorted[3] == order_a.id)
         );
         assert_eq!(order_ids_sorted[4], order_d.id);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_no_subgraphs() {
+        let client = MultiOrderbookSubgraphClient::new(vec![]);
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_one_subgraph() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+
+        let orders: Vec<_> = (0..3)
+            .map(|i| sample_sg_order(&format!("c_{}", i), "100"))
+            .collect();
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg1_url,
+            name: "sg_one".to_string(),
+        }]);
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, 3);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_multiple_subgraphs_sums() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let orders_s1: Vec<_> = (0..2)
+            .map(|i| sample_sg_order(&format!("s1_{}", i), "100"))
+            .collect();
+        let orders_s2: Vec<_> = (0..5)
+            .map(|i| sample_sg_order(&format!("s2_{}", i), "200"))
+            .collect();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders_s1}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders_s2}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two".to_string(),
+            },
+        ]);
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, 7);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_one_subgraph_errors_propagates() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let orders_s1: Vec<_> = (0..4)
+            .map(|i| sample_sg_order(&format!("s1_{}", i), "100"))
+            .collect();
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders_s1}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let result = client.orders_count(default_filter_args()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_all_subgraphs_error() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one_err".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let result = client.orders_count(default_filter_args()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_pagination_boundary() {
+        use crate::orderbook_client::ALL_PAGES_QUERY_PAGE_SIZE;
+
+        let server = MockServer::start_async().await;
+        let sg_url = Url::parse(&server.url("")).unwrap();
+
+        let page1_orders: Vec<_> = (0..ALL_PAGES_QUERY_PAGE_SIZE)
+            .map(|i| sample_sg_order(&format!("p1_{}", i), "100"))
+            .collect();
+        let page2_orders: Vec<_> = (0..10)
+            .map(|i| sample_sg_order(&format!("p2_{}", i), "100"))
+            .collect();
+
+        server.mock(|when, then| {
+            when.method(POST).path("/").body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"orders": page1_orders}}));
+        });
+        server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200)
+                .json_body(json!({"data": {"orders": page2_orders}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![MultiSubgraphArgs {
+            url: sg_url,
+            name: "sg_one".to_string(),
+        }]);
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, ALL_PAGES_QUERY_PAGE_SIZE as u32 + 10);
     }
 
     fn sample_sg_erc20(id_suffix: &str) -> SgErc20 {
@@ -510,7 +809,8 @@ mod tests {
         let client = MultiOrderbookSubgraphClient::new(vec![]);
         let result = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert!(result.is_empty());
     }
 
@@ -534,7 +834,8 @@ mod tests {
 
         let vaults = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(vaults.len(), 1);
         assert_eq!(vaults[0].vault.id, vault1_s1.id);
         assert_eq!(vaults[0].subgraph_name, sg1_name);
@@ -578,7 +879,8 @@ mod tests {
 
         let vaults_with_names = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
 
         assert_eq!(vaults_with_names.len(), 3);
 
@@ -628,7 +930,8 @@ mod tests {
         ]);
         let vaults = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(vaults.len(), 1);
         assert_eq!(vaults[0].vault.id, vault_a_s1.id);
         assert_eq!(vaults[0].subgraph_name, sg1_name);
@@ -667,7 +970,8 @@ mod tests {
         ]);
         let vaults = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
-            .await;
+            .await
+            .unwrap();
         assert_eq!(vaults.len(), 1);
         assert_eq!(vaults[0].vault.id, vault_a_s1.id);
         assert_eq!(vaults[0].subgraph_name, sg1_name);
@@ -702,9 +1006,9 @@ mod tests {
                 name: sg2_name.to_string(),
             },
         ]);
-        let vaults = client
+        let result = client
             .vaults_list(default_vault_filter_args(), default_pagination_args())
             .await;
-        assert!(vaults.is_empty());
+        assert!(result.is_err());
     }
 }

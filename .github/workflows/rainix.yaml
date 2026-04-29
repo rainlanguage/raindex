@@ -26,8 +26,6 @@ jobs:
             task: rainix-sol-test
           - os: ubuntu-latest
             task: rainix-sol-static
-          - os: ubuntu-latest
-            task: rainix-sol-artifacts
           # We don't need to do rust static analysis on multiple platforms
           - os: ubuntu-latest
             task: rainix-rs-static
@@ -51,9 +49,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       COMMIT_SHA: ${{ github.sha }}
-      # This is the address of a metaboard on Sepolia. It's needed for the sol
-      # artifact deploy dry run.
-      DEPLOY_METABOARD_ADDRESS: ${{ vars.CI_DEPLOY_SEPOLIA_METABOARD_ADDRESS || '0x77991674ca8887D4ee1b583DB7324B41d5f894c4' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,23 +79,14 @@ jobs:
 
       - run: ./pointers.sh
 
-      - name: Generate ephemeral deployment key
-        run: |
-          # Generate wallet within nix develop environment
-          WALLET_OUTPUT=$(nix develop -c cast wallet new)
-
-          # Extract the private key
-          KEY=$(echo "$WALLET_OUTPUT" | grep "Private key:" | awk '{print $3}')
-
-          # Store in GitHub environment (overwrites the hardcoded test key)
-          echo "DEPLOYMENT_KEY=$KEY" >> "$GITHUB_ENV"
-
-          echo "Generated ephemeral deployment key for this run"
-
       - name: Run ${{ matrix.task }}
         env:
-          ETH_RPC_URL: ${{ secrets.CI_DEPLOY_SEPOLIA_RPC_URL || vars.CI_DEPLOY_SEPOLIA_RPC_URL || 'https://sepolia.gateway.tenderly.co' }}
-
+          ETH_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
+          CI_DEPLOY_ARBITRUM_RPC_URL: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL || vars.CI_DEPLOY_ARBITRUM_RPC_URL || '' }}
+          CI_DEPLOY_BASE_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
+          CI_DEPLOY_BASE_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || vars.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || '' }}
+          CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL || vars.CI_DEPLOY_FLARE_RPC_URL || '' }}
+          CI_DEPLOY_POLYGON_RPC_URL: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL || vars.CI_DEPLOY_POLYGON_RPC_URL || '' }}
         run: nix develop -c ${{ matrix.task }}
 
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch

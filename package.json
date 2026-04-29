@@ -5,13 +5,13 @@
     "private": true,
     "repository": {
         "type": "git",
-        "url": "https://github.com/rainlanguage/rain.orderbook.git"
+        "url": "https://github.com/rainlanguage/raindex.git"
     },
     "keywords": [],
     "bugs": {
-        "url": "https://github.com/rainlanguage/rain.orderbook/issues"
+        "url": "https://github.com/rainlanguage/raindex/issues"
     },
-    "homepage": "https://github.com/rainlanguage/rain.orderbook#readme",
+    "homepage": "https://github.com/rainlanguage/raindex#readme",
     "engines": {
         "node": ">=18"
     },

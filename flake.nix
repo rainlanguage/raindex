@@ -65,7 +65,16 @@
               ARCHIVE_NAME=rain-orderbook-cli.tar.gz
               BINARY_NAME=rain-orderbook-cli
 
-              TARGET_TRIPLE=x86_64-unknown-linux-gnu
+              TARGET_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
+
+              case "$TARGET_TRIPLE" in
+                aarch64-apple-darwin|x86_64-apple-darwin|x86_64-unknown-linux-gnu|aarch64-unknown-linux-gnu)
+                  ;;
+                *)
+                  echo "Unsupported host target: $TARGET_TRIPLE" >&2
+                  exit 1
+                  ;;
+              esac
 
               cargo build --release -p rain_orderbook_cli --target "$TARGET_TRIPLE"
 
@@ -77,8 +86,6 @@
               strip "$OUTPUT_DIR/$BINARY_NAME" || true
 
               tar -C "$OUTPUT_DIR" -czf "$OUTPUT_DIR/$ARCHIVE_NAME" "$BINARY_NAME"
-
-              rm -f "$OUTPUT_DIR/$BINARY_NAME"
             '';
           };
 
@@ -107,7 +114,8 @@
 
               cd crates/common
               wasm-pack test --headless --chrome --features browser-tests -- leadership::wasm_tests
-              wasm-pack test --headless --chrome --features browser-tests -- scheduler::wasm_tests
+              wasm-pack test --headless --chrome --features browser-tests -- scheduler::wasm::wasm_tests
+              wasm-pack test --headless --chrome --features browser-tests -- status::wasm::wasm_tests
               wasm-pack test --headless --chrome --features browser-tests -- retry::wasm_tests
               wasm-pack test --headless --chrome --features browser-tests -- raindex_client::local_db::wasm_tests
             '';

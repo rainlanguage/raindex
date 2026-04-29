@@ -200,6 +200,34 @@
 				</svelte:fragment>
 			</CardProperty>
 
+			{#if data.oracleUrl}
+				<CardProperty>
+					<svelte:fragment slot="key">
+						<div class="flex items-center gap-x-2">
+							Oracle
+							<InfoCircleOutline class="h-4 w-4" /><Tooltip
+								>This order uses a signed context oracle for external data (e.g. price feeds).
+								Quotes include oracle data automatically.</Tooltip
+							>
+						</div>
+					</svelte:fragment>
+					<svelte:fragment slot="value">
+						{#if data.oracleUrl.startsWith('https://') || data.oracleUrl.startsWith('http://')}
+							<a
+								href={data.oracleUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="break-all text-blue-500 hover:underline"
+							>
+								{data.oracleUrl}
+							</a>
+						{:else}
+							<span class="break-all text-gray-500">{data.oracleUrl}</span>
+						{/if}
+					</svelte:fragment>
+				</CardProperty>
+			{/if}
+
 			{#each vaultTypesMap as { key, type, getter }}
 				{@const filteredVaults = data.vaultsList.items.filter((vault) => vault.vaultType === type)}
 				{@const vaultsListByType = data[getter]}

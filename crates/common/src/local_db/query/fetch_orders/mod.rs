@@ -3,6 +3,8 @@ use crate::utils::serde::bool_from_int_or_bool;
 use alloy::primitives::{Address, Bytes, B256};
 use serde::{Deserialize, Serialize};
 
+use super::fetch_orders_common::bind_common_order_filters;
+
 const QUERY_TEMPLATE: &str = include_str!("query.sql");
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -29,6 +31,8 @@ pub struct FetchOrdersArgs {
     pub order_hash: Option<B256>,
     pub tx_hash: Option<B256>,
     pub tokens: FetchOrdersTokensFilter,
+    pub page: Option<u16>,
+    pub page_size: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -50,59 +54,6 @@ pub struct LocalDbOrder {
     pub meta: Option<Bytes>,
 }
 
-/// Builds the SQL query fetching orders from the local database based on the
-/// supplied filters.
-const OWNERS_CLAUSE: &str = "/*OWNERS_CLAUSE*/";
-const OWNERS_CLAUSE_BODY: &str = "AND l.order_owner IN ({list})";
-
-const ORDER_HASH_CLAUSE: &str = "/*ORDER_HASH_CLAUSE*/";
-const ORDER_HASH_CLAUSE_BODY: &str = "AND COALESCE(la.order_hash, l.order_hash) = {param}";
-
-const INPUT_TOKENS_CLAUSE: &str = "/*INPUT_TOKENS_CLAUSE*/";
-const INPUT_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
-      SELECT 1 FROM order_ios io2
-      WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
-        AND io2.transaction_hash = la.transaction_hash
-        AND io2.log_index = la.log_index
-        AND lower(io2.io_type) = 'input'
-        AND io2.token IN ({list})
-    )";
-
-const OUTPUT_TOKENS_CLAUSE: &str = "/*OUTPUT_TOKENS_CLAUSE*/";
-const OUTPUT_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
-      SELECT 1 FROM order_ios io2
-      WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
-        AND io2.transaction_hash = la.transaction_hash
-        AND io2.log_index = la.log_index
-        AND lower(io2.io_type) = 'output'
-        AND io2.token IN ({list})
-    )";
-
-const COMBINED_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
-      SELECT 1 FROM order_ios io2
-      WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
-        AND io2.transaction_hash = la.transaction_hash
-        AND io2.log_index = la.log_index
-        AND (
-          (lower(io2.io_type) = 'input' AND io2.token IN ({input_list}))
-          OR
-          (lower(io2.io_type) = 'output' AND io2.token IN ({output_list}))
-        )
-    )";
-
-const MAIN_CHAIN_IDS_CLAUSE: &str = "/*MAIN_CHAIN_IDS_CLAUSE*/";
-const MAIN_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
-const MAIN_ORDERBOOKS_CLAUSE: &str = "/*MAIN_ORDERBOOKS_CLAUSE*/";
-const MAIN_ORDERBOOKS_CLAUSE_BODY: &str = "AND oe.orderbook_address IN ({list})";
-
-const LATEST_ADD_CHAIN_IDS_CLAUSE: &str = "/*LATEST_ADD_CHAIN_IDS_CLAUSE*/";
-const LATEST_ADD_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
-const LATEST_ADD_ORDERBOOKS_CLAUSE: &str = "/*LATEST_ADD_ORDERBOOKS_CLAUSE*/";
-const LATEST_ADD_ORDERBOOKS_CLAUSE_BODY: &str = "AND oe.orderbook_address IN ({list})";
-
 const FIRST_ADD_CHAIN_IDS_CLAUSE: &str = "/*FIRST_ADD_CHAIN_IDS_CLAUSE*/";
 const FIRST_ADD_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
 const FIRST_ADD_ORDERBOOKS_CLAUSE: &str = "/*FIRST_ADD_ORDERBOOKS_CLAUSE*/";
@@ -119,43 +70,16 @@ const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/
 const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND entries.orderbook_address IN ({list})";
 const TX_HASH_CLAUSE: &str = "/*TX_HASH_CLAUSE*/";
 const TX_HASH_CLAUSE_BODY: &str = "AND oe.transaction_hash = {param}";
+const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
 
 pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
 
-    // ?1 active filter
-    let active_str = match args.filter {
-        FetchOrdersActiveFilter::All => "all",
-        FetchOrdersActiveFilter::Active => "active",
-        FetchOrdersActiveFilter::Inactive => "inactive",
-    };
-    stmt.push(SqlValue::from(active_str));
+    let prepared = bind_common_order_filters(&mut stmt, args)?;
 
-    // Chain ids (deduplicated, sorted)
-    let mut chain_ids = args.chain_ids.clone();
-    chain_ids.sort_unstable();
-    chain_ids.dedup();
+    let chain_ids_iter = || prepared.chain_ids.iter().cloned().map(SqlValue::from);
+    let orderbooks_iter = || prepared.orderbooks.iter().cloned().map(SqlValue::from);
 
-    // Orderbook addresses (lowercase, deduplicated)
-    let mut orderbooks = args.orderbook_addresses.clone();
-    orderbooks.sort();
-    orderbooks.dedup();
-
-    // Helper closures to bind repeated clauses without ownership issues
-    let chain_ids_iter = || chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || orderbooks.iter().cloned().map(SqlValue::from);
-
-    // Apply chain-id filters across query sections
-    stmt.bind_list_clause(
-        MAIN_CHAIN_IDS_CLAUSE,
-        MAIN_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        LATEST_ADD_CHAIN_IDS_CLAUSE,
-        LATEST_ADD_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
     stmt.bind_list_clause(
         FIRST_ADD_CHAIN_IDS_CLAUSE,
         FIRST_ADD_CHAIN_IDS_CLAUSE_BODY,
@@ -172,17 +96,6 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
         chain_ids_iter(),
     )?;
 
-    // Apply orderbook filters if provided
-    stmt.bind_list_clause(
-        MAIN_ORDERBOOKS_CLAUSE,
-        MAIN_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
-    )?;
-    stmt.bind_list_clause(
-        LATEST_ADD_ORDERBOOKS_CLAUSE,
-        LATEST_ADD_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
-    )?;
     stmt.bind_list_clause(
         FIRST_ADD_ORDERBOOKS_CLAUSE,
         FIRST_ADD_ORDERBOOKS_CLAUSE_BODY,
@@ -199,89 +112,19 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
         orderbooks_iter(),
     )?;
 
-    // Optional tx hash param
     let tx_hash_val = args.tx_hash.as_ref().map(|hash| SqlValue::from(*hash));
     stmt.bind_param_clause(TX_HASH_CLAUSE, TX_HASH_CLAUSE_BODY, tx_hash_val)?;
 
-    let mut owners_lower = args.owners.clone();
-    owners_lower.sort();
-    owners_lower.dedup();
-    stmt.bind_list_clause(
-        OWNERS_CLAUSE,
-        OWNERS_CLAUSE_BODY,
-        owners_lower.into_iter().map(SqlValue::from),
-    )?;
-
-    // Optional order hash param
-    let order_hash_val = args.order_hash.as_ref().map(|hash| SqlValue::from(*hash));
-    stmt.bind_param_clause(ORDER_HASH_CLAUSE, ORDER_HASH_CLAUSE_BODY, order_hash_val)?;
-
-    // Directional token filters
-    // - When inputs == outputs (identical lists): OR logic for "any-IO" filtering
-    // - When inputs != outputs (different lists): AND logic for directional filtering
-    let mut input_tokens = args.tokens.inputs.clone();
-    input_tokens.sort();
-    input_tokens.dedup();
-
-    let mut output_tokens = args.tokens.outputs.clone();
-    output_tokens.sort();
-    output_tokens.dedup();
-
-    let has_inputs = !input_tokens.is_empty();
-    let has_outputs = !output_tokens.is_empty();
-
-    if has_inputs && has_outputs && input_tokens == output_tokens {
-        // Combined OR clause: matches orders where token is in inputs OR outputs
-        // Used when lists are identical for "any-IO" behavior (e.g., UI token filter)
-
-        // Build parameter placeholders for input tokens
-        let input_placeholders: Vec<String> = input_tokens
-            .iter()
-            .enumerate()
-            .map(|(i, _)| format!("?{}", stmt.params.len() + i + 1))
-            .collect();
-        let input_list_str = input_placeholders.join(", ");
-
-        // Push input token params
-        for token in &input_tokens {
-            stmt.push(SqlValue::from(*token));
-        }
-
-        // Build parameter placeholders for output tokens
-        let output_placeholders: Vec<String> = output_tokens
-            .iter()
-            .enumerate()
-            .map(|(i, _)| format!("?{}", stmt.params.len() + i + 1))
-            .collect();
-        let output_list_str = output_placeholders.join(", ");
-
-        // Push output token params
-        for token in &output_tokens {
-            stmt.push(SqlValue::from(*token));
-        }
-
-        // Build the combined clause
-        let combined_clause = COMBINED_TOKENS_CLAUSE_BODY
-            .replace("{input_list}", &input_list_str)
-            .replace("{output_list}", &output_list_str);
-
-        // Replace INPUT_TOKENS_CLAUSE with combined clause, clear OUTPUT_TOKENS_CLAUSE
-        stmt.sql = stmt.sql.replace(INPUT_TOKENS_CLAUSE, &combined_clause);
-        stmt.sql = stmt.sql.replace(OUTPUT_TOKENS_CLAUSE, "");
+    if let (Some(page), Some(page_size)) = (args.page, args.page_size) {
+        let offset = (page.saturating_sub(1) as u64) * (page_size as u64);
+        let limit_placeholder = format!("?{}", stmt.params.len() + 1);
+        let offset_placeholder = format!("?{}", stmt.params.len() + 2);
+        let pagination = format!("LIMIT {} OFFSET {}", limit_placeholder, offset_placeholder);
+        stmt.sql = stmt.sql.replace(PAGINATION_CLAUSE, &pagination);
+        stmt.push(SqlValue::U64(page_size as u64));
+        stmt.push(SqlValue::U64(offset));
     } else {
-        // Separate EXISTS clauses with AND logic:
-        // - When only inputs or only outputs specified: single-direction filtering
-        // - When both specified but different: directional filtering (input AND output)
-        stmt.bind_list_clause(
-            INPUT_TOKENS_CLAUSE,
-            INPUT_TOKENS_CLAUSE_BODY,
-            input_tokens.into_iter().map(SqlValue::from),
-        )?;
-        stmt.bind_list_clause(
-            OUTPUT_TOKENS_CLAUSE,
-            OUTPUT_TOKENS_CLAUSE_BODY,
-            output_tokens.into_iter().map(SqlValue::from),
-        )?;
+        stmt.sql = stmt.sql.replace(PAGINATION_CLAUSE, "");
     }
 
     Ok(stmt)
@@ -289,6 +132,11 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
 
 #[cfg(test)]
 mod tests {
+    use super::super::fetch_orders_common::{
+        INPUT_TOKENS_CLAUSE, LATEST_ADD_CHAIN_IDS_CLAUSE, LATEST_ADD_ORDERBOOKS_CLAUSE,
+        MAIN_CHAIN_IDS_CLAUSE, MAIN_ORDERBOOKS_CLAUSE, ORDER_HASH_CLAUSE, ORDER_HASH_CLAUSE_BODY,
+        OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE,
+    };
     use super::*;
     use alloy::hex;
     use alloy::primitives::{address, b256};
@@ -331,6 +179,8 @@ mod tests {
                 ],
                 outputs: vec![address!("0xF3dEe5b36E3402893e6953A8670E37D329683ABB")],
             },
+            page: None,
+            page_size: None,
         };
 
         let stmt = build_fetch_orders_stmt(&args).unwrap();
@@ -596,6 +446,91 @@ mod tests {
             stmt.params.contains(&expected),
             "tx hash param should be bound"
         );
+    }
+
+    #[test]
+    fn pagination_clause_page1() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            page: Some(1),
+            page_size: Some(10),
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(stmt.sql.contains("LIMIT"), "should contain LIMIT clause");
+        assert!(stmt.sql.contains("OFFSET"), "should contain OFFSET clause");
+        assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
+        let last_two: Vec<&SqlValue> = stmt.params.iter().rev().take(2).collect();
+        assert_eq!(last_two[1], &SqlValue::U64(10));
+        assert_eq!(last_two[0], &SqlValue::U64(0));
+    }
+
+    #[test]
+    fn pagination_clause_page3() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            page: Some(3),
+            page_size: Some(25),
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(stmt.sql.contains("LIMIT"));
+        assert!(stmt.sql.contains("OFFSET"));
+        let last_two: Vec<&SqlValue> = stmt.params.iter().rev().take(2).collect();
+        assert_eq!(last_two[1], &SqlValue::U64(25));
+        assert_eq!(last_two[0], &SqlValue::U64(50));
+    }
+
+    #[test]
+    fn pagination_clause_page0_saturates_to_zero_offset() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            page: Some(0),
+            page_size: Some(10),
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(stmt.sql.contains("LIMIT"));
+        let last_two: Vec<&SqlValue> = stmt.params.iter().rev().take(2).collect();
+        assert_eq!(last_two[1], &SqlValue::U64(10));
+        assert_eq!(last_two[0], &SqlValue::U64(0));
+    }
+
+    #[test]
+    fn pagination_clause_omitted_when_only_page_set() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            page: Some(2),
+            page_size: None,
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(!stmt.sql.contains("OFFSET"));
+        assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
+    }
+
+    #[test]
+    fn pagination_clause_omitted_when_only_page_size_set() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            page: None,
+            page_size: Some(10),
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(!stmt.sql.contains("OFFSET"));
+        assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
+    }
+
+    #[test]
+    fn pagination_clause_omitted_when_neither_set() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            ..FetchOrdersArgs::default()
+        };
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+        assert!(!stmt.sql.contains("OFFSET"));
+        assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
     }
 
     #[test]

@@ -14,7 +14,7 @@
   "hideGenerator": true,
   "theme": "default",
   "navigationLinks": {
-    "GitHub": "https://github.com/rainlanguage/rain.orderbook",
+    "GitHub": "https://github.com/rainlanguage/raindex",
     "NPM": "https://www.npmjs.com/package/@rainlanguage/orderbook"
   },
   "kindSortOrder": [

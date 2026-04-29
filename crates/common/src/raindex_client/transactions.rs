@@ -1,9 +1,9 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::local_db::is_chain_supported_local_db;
 use crate::local_db::OrderbookIdentifier;
 use crate::raindex_client::local_db::transactions::LocalDbTransactions;
+use crate::raindex_client::QuerySource;
 use alloy::primitives::{Address, B256, U256};
 #[cfg(target_family = "wasm")]
 use gloo_timers::future::TimeoutFuture;
@@ -99,8 +99,7 @@ impl RaindexClient {
     /// Fetches transaction details for a given transaction hash
     ///
     /// Retrieves basic transaction information including sender, block number,
-    /// and timestamp. Uses a two-phase polling mechanism: first polls the local DB
-    /// (if available and the chain is supported), then falls back to subgraph polling.
+    /// and timestamp. Polls either local DB or subgraph based on the query source.
     ///
     /// ## Examples
     ///
@@ -170,16 +169,13 @@ impl RaindexClient {
         max_attempts: Option<usize>,
         interval_ms: Option<u64>,
     ) -> Result<RaindexTransaction, RaindexError> {
-        let client = self.get_orderbook_client(orderbook_address)?;
-
         let attempts = max_attempts
             .unwrap_or(DEFAULT_TRANSACTION_POLL_ATTEMPTS)
             .max(1);
         let interval_ms = interval_ms.unwrap_or(DEFAULT_TRANSACTION_POLL_INTERVAL_MS);
 
-        // Phase 1: give the local DB the full polling window before touching subgraph
-        if let Some(local_db) = self.local_db() {
-            if is_chain_supported_local_db(chain_id) {
+        match self.query_source(chain_id) {
+            QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbTransactions::new(&local_db);
                 let ob_id = OrderbookIdentifier::new(chain_id, orderbook_address);
 
@@ -191,29 +187,32 @@ impl RaindexClient {
                         sleep_ms(interval_ms).await;
                     }
                 }
-            }
-        }
 
-        // Phase 2: fall back to subgraph polling
-        for attempt in 1..=attempts {
-            match client
-                .transaction_detail(Id::new(tx_hash.to_string()))
-                .await
-            {
-                Ok(transaction) => {
-                    return transaction.try_into();
-                }
-                Err(OrderbookSubgraphClientError::Empty) => {
-                    if attempt < attempts {
-                        sleep_ms(interval_ms).await;
-                        continue;
+                Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
+            }
+            QuerySource::Subgraph => {
+                let client = self.get_orderbook_client(orderbook_address)?;
+                for attempt in 1..=attempts {
+                    match client
+                        .transaction_detail(Id::new(tx_hash.to_string()))
+                        .await
+                    {
+                        Ok(transaction) => {
+                            return transaction.try_into();
+                        }
+                        Err(OrderbookSubgraphClientError::Empty) => {
+                            if attempt < attempts {
+                                sleep_ms(interval_ms).await;
+                                continue;
+                            }
+                        }
+                        Err(e) => return Err(e.into()),
                     }
                 }
-                Err(e) => return Err(e.into()),
+
+                Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
             }
         }
-
-        Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
     }
 }
 
@@ -280,7 +279,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let tx = raindex_client
                 .get_transaction(
@@ -321,7 +322,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let tx = raindex_client
@@ -358,7 +361,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let err = raindex_client

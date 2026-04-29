@@ -1,8 +1,10 @@
 use super::local_db::orders::LocalDbOrders;
 use super::orders::{OrdersDataSource, SubgraphOrders};
+use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
-use crate::local_db::{is_chain_supported_local_db, OrderbookIdentifier};
+use crate::local_db::OrderbookIdentifier;
+use crate::raindex_client::QuerySource;
 use crate::raindex_client::{
     orders::RaindexOrder,
     transactions::RaindexTransaction,
@@ -10,7 +12,6 @@ use crate::raindex_client::{
 };
 use alloy::primitives::{Address, Bytes, B256, U256};
 use rain_orderbook_subgraph_client::types::{common::SgTrade, Id};
-use std::rc::Rc;
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -140,19 +141,20 @@ impl RaindexOrder {
         let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
         let raindex_client = self.get_raindex_client();
 
-        if is_chain_supported_local_db(chain_id) {
-            if let Some(local_db) = raindex_client.local_db() {
-                let local_source = LocalDbOrders::new(&local_db, Rc::clone(&raindex_client));
-                return local_source
+        match raindex_client.query_source(chain_id) {
+            QuerySource::LocalDb(local_db) => {
+                let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
+                local_source
                     .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
-                    .await;
+                    .await
+            }
+            QuerySource::Subgraph => {
+                let subgraph_source = SubgraphOrders::new(&raindex_client);
+                subgraph_source
+                    .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
+                    .await
             }
         }
-
-        let subgraph_source = SubgraphOrders::new(&raindex_client);
-        subgraph_source
-            .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
-            .await
     }
 
     /// Fetches detailed information for a specific trade
@@ -237,19 +239,20 @@ impl RaindexOrder {
         let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
         let raindex_client = self.get_raindex_client();
 
-        if is_chain_supported_local_db(chain_id) {
-            if let Some(local_db) = raindex_client.local_db() {
-                let local_source = LocalDbOrders::new(&local_db, Rc::clone(&raindex_client));
-                return local_source
+        match raindex_client.query_source(chain_id) {
+            QuerySource::LocalDb(local_db) => {
+                let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
+                local_source
                     .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
-                    .await;
+                    .await
+            }
+            QuerySource::Subgraph => {
+                let subgraph_source = SubgraphOrders::new(&raindex_client);
+                subgraph_source
+                    .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
+                    .await
             }
         }
-
-        let subgraph_source = SubgraphOrders::new(&raindex_client);
-        subgraph_source
-            .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
-            .await
     }
 }
 impl RaindexOrder {
@@ -634,7 +637,11 @@ mod test_helpers {
                 vec![fixture.trade.clone()],
                 4,
             );
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161],
+            );
 
             let order = client
                 .get_order_by_hash(
@@ -729,7 +736,11 @@ mod test_helpers {
                 vec![fixture.trade.clone()],
                 7,
             );
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161],
+            );
 
             let order = client
                 .get_order_by_hash(
@@ -1096,7 +1107,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
@@ -1282,7 +1295,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
@@ -1465,7 +1480,9 @@ mod test_helpers {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(

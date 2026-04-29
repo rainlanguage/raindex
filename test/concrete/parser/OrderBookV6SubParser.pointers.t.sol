@@ -3,33 +3,43 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std/Test.sol";
-import {LibOrderBookSubParser, AuthoringMetaV2} from "src/lib/LibOrderBookSubParser.sol";
+import {
+    LibOrderBookSubParser,
+    AuthoringMetaV2,
+    EXTERN_PARSE_META_BUILD_DEPTH
+} from "../../../src/lib/LibOrderBookSubParser.sol";
 import {
     SUB_PARSER_PARSE_META,
     SUB_PARSER_WORD_PARSERS,
     SUB_PARSER_OPERAND_HANDLERS,
     OrderBookV6SubParser
-} from "src/concrete/parser/OrderBookV6SubParser.sol";
+} from "../../../src/concrete/parser/OrderBookV6SubParser.sol";
 import {LibGenParseMeta} from "rain.interpreter.interface/lib/codegen/LibGenParseMeta.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
+import {LibEtchOrderBook} from "test/util/lib/LibEtchOrderBook.sol";
 
 contract OrderBookV6SubParserPointersTest is Test {
+    function setUp() public {
+        LibEtchOrderBook.etchOrderBook(vm);
+    }
+
     function testSubParserParseMeta() external pure {
         bytes memory authoringMetaBytes = LibOrderBookSubParser.authoringMetaV2();
         AuthoringMetaV2[] memory authoringMeta = abi.decode(authoringMetaBytes, (AuthoringMetaV2[]));
-        bytes memory expected = LibGenParseMeta.buildParseMetaV2(authoringMeta, 2);
+        bytes memory expected = LibGenParseMeta.buildParseMetaV2(authoringMeta, EXTERN_PARSE_META_BUILD_DEPTH);
         bytes memory actual = SUB_PARSER_PARSE_META;
         assertEq(actual, expected);
     }
 
-    function testSubParserFunctionPointers() external {
-        OrderBookV6SubParser extern = new OrderBookV6SubParser();
+    function testSubParserFunctionPointers() external pure {
+        OrderBookV6SubParser extern = OrderBookV6SubParser(LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS);
         bytes memory expected = extern.buildSubParserWordParsers();
         bytes memory actual = SUB_PARSER_WORD_PARSERS;
         assertEq(actual, expected);
     }
 
-    function testSubParserOperandParsers() external {
-        OrderBookV6SubParser extern = new OrderBookV6SubParser();
+    function testSubParserOperandParsers() external pure {
+        OrderBookV6SubParser extern = OrderBookV6SubParser(LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS);
         bytes memory expected = extern.buildOperandHandlerFunctionPointers();
         bytes memory actual = SUB_PARSER_OPERAND_HANDLERS;
         assertEq(actual, expected);

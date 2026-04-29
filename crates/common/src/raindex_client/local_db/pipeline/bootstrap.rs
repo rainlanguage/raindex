@@ -187,7 +187,8 @@ mod tests {
         }
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for MockDb {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             for stmt in batch {
@@ -663,7 +664,8 @@ mod tests {
         }
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for CorruptedDb {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             for stmt in batch {
@@ -771,7 +773,8 @@ mod tests {
         }
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for IntegrityCheckFailsDb {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             for stmt in batch {
@@ -832,7 +835,8 @@ mod tests {
 
     struct WipeFailsDb;
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for WipeFailsDb {
         async fn execute_batch(&self, _batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             Ok(())

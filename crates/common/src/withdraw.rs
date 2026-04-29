@@ -8,7 +8,7 @@ use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use serde::{Deserialize, Serialize};
 
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::withdraw4Call;
+use rain_orderbook_bindings::IRaindexV6::withdraw4Call;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct WithdrawArgs {

@@ -5,6 +5,7 @@ libs = ['lib']
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
+ffi = true
 solc = "0.8.25"
 evm_version = "cancun"
 
@@ -16,9 +17,10 @@ evm_version = "cancun"
 
 # optimizer settings for snapshotting.
 optimizer = true
-# this is a bit low, was set to 1000000 previously but this caused deployment
-# code size cap to be hit.
-optimizer_runs = 1000
+# Lowered from 1000000 → 1000 → 800 to stay under the EIP-170 24KB contract
+# size limit. At 1000 runs OrderBookV6 was 24,650 bytes (74 over); at 800 it
+# is 23,437 bytes (1,139 under).
+optimizer_runs = 800
 
 bytecode_hash = "none"
 cbor_metadata = false
@@ -33,20 +35,38 @@ fs_permissions = [
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterExpressionDeployerNPE2" },
   { access = "read-write", path = "./meta/OrderBookV6SubParserAuthoringMeta.rain.meta"},
   { access = "read-write", path = "src/generated" },
+  { access = "read", path = "./subgraph" },
 ]
 
 remappings = [
   "forge-std/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/forge-std/src/",
-  "openzeppelin-contracts/=lib/rain.orderbook.interface/lib/rain.interpreter.interface/lib/openzeppelin-contracts/",
+  "openzeppelin-contracts/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/openzeppelin-contracts/",
   "rain.interpreter/=lib/rain.interpreter/src/",
   "rain.metadata/=lib/rain.interpreter/lib/rain.metadata/src/",
-  "rain.interpreter.interface/=lib/rain.orderbook.interface/lib/rain.interpreter.interface/src/",
+  "rain.interpreter.interface/=lib/rain.raindex.interface/lib/rain.interpreter.interface/src/",
   "rain.intorastring/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.intorastring/src/",
   "rain.sol.codegen/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.sol.codegen/src/",
-  "rain.solmem/=lib/rain.orderbook.interface/lib/rain.interpreter.interface/lib/rain.solmem/src",
-  "rain.math.float/=lib/rain.orderbook.interface/lib/rain.interpreter.interface/lib/rain.math.float/src/",
-  "rain.tofu.erc20-decimals/=lib/rain.tofu.erc20-decimals/src/",
+  "rain.solmem/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.solmem/src",
+  "rain.math.float/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.math.float/src/",
+  "rain.tofu.erc20-decimals/=lib/rain.interpreter/lib/rain.tofu.erc20-decimals/src/",
+  "rain.deploy/=lib/rain.deploy/src/",
+  "rain.lib.typecast/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.lib.typecast/src/",
+  "sushixswap-v2/=lib/sushixswap-v2/",
 ]
 
 [fuzz]
 runs = 5096
+
+[rpc_endpoints]
+arbitrum = "${CI_DEPLOY_ARBITRUM_RPC_URL}"
+base = "${CI_DEPLOY_BASE_RPC_URL}"
+base_sepolia = "${CI_DEPLOY_BASE_SEPOLIA_RPC_URL}"
+flare = "${CI_DEPLOY_FLARE_RPC_URL}"
+polygon = "${CI_DEPLOY_POLYGON_RPC_URL}"
+
+[etherscan]
+arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
+base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
+base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
+flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
+polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }

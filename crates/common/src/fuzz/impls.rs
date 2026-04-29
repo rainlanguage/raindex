@@ -14,8 +14,8 @@ use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
 use rain_interpreter_bindings::IInterpreterStoreV3::FullyQualifiedNamespace;
 use rain_interpreter_bindings::IInterpreterV4::EvalV4;
 use rain_interpreter_bindings::{
-    DeployerISP::{I_INTERPRETERCall, I_STORECall},
     IInterpreterV4::eval4Call,
+    Rainlang::{interpreterAddressCall, storeAddressCall},
 };
 use rain_interpreter_eval::eval::ForkParseArgs;
 use rain_interpreter_eval::fork::{Forker, NewForkedEvm};
@@ -28,7 +28,7 @@ use rain_orderbook_app_settings::{
     order::OrderIOCfg,
     yaml::{dotrain::DotrainYaml, YamlError, YamlParsable},
 };
-use rain_orderbook_bindings::IERC20;
+use rain_orderbook_bindings::IERC20Metadata;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -207,10 +207,10 @@ impl FuzzRunner {
         // If the scenario doesn't have runs, default is 1
         let no_of_runs = scenario.runs.unwrap_or(1);
 
-        let deployer = scenario.deployer.clone();
+        let rainlang_cfg = scenario.rainlang.clone();
 
         // Fetch the latest block number
-        let rpcs = deployer
+        let rpcs = rainlang_cfg
             .network
             .rpcs
             .iter()
@@ -267,7 +267,7 @@ impl FuzzRunner {
             for _ in 0..no_of_runs {
                 let fork_clone = Arc::clone(&fork); // Clone the Arc for each thread
                 let elided_binding_keys = Arc::clone(&elided_binding_keys);
-                let deployer = Arc::clone(&deployer);
+                let rainlang_cfg = Arc::clone(&rainlang_cfg);
                 let scenario_bindings = scenario_bindings.clone();
                 let dotrain = Arc::clone(&dotrain);
 
@@ -300,7 +300,7 @@ impl FuzzRunner {
                     let args = ForkEvalArgs {
                         rainlang_string,
                         source_index: 0,
-                        deployer: deployer.address,
+                        rainlang: rainlang_cfg.address,
                         namespace: FullyQualifiedNamespace::default(),
                         context,
                         decode_errors: true,
@@ -320,7 +320,7 @@ impl FuzzRunner {
 
         for handle in handles {
             let res = handle.await??;
-            runs.push(res.into());
+            runs.push(res.try_into()?);
         }
 
         Ok(FuzzResult {
@@ -348,10 +348,10 @@ impl FuzzRunner {
         ),
         FuzzRunnerError,
     > {
-        let deployer = scenario.deployer.clone();
+        let rainlang_cfg = scenario.rainlang.clone();
 
         // Create or select a cached fork
-        let rpcs = deployer
+        let rpcs = rainlang_cfg
             .network
             .rpcs
             .iter()
@@ -389,7 +389,7 @@ impl FuzzRunner {
 
         let dotrain = Arc::new(context.dotrain.clone());
         let elided_binding_keys = Arc::clone(&elided_binding_keys);
-        let deployer = Arc::clone(&deployer);
+        let rainlang_cfg = Arc::clone(&rainlang_cfg);
         let scenario_bindings = scenario_bindings.clone();
         let dotrain = Arc::clone(&dotrain);
 
@@ -415,18 +415,18 @@ impl FuzzRunner {
         let input_symbol_res = self
             .forker
             .alloy_call(
-                deployer.address,
+                rainlang_cfg.address,
                 input_token.address,
-                IERC20::symbolCall {},
+                IERC20Metadata::symbolCall {},
                 false,
             )
             .await?;
         let output_symbol_res = self
             .forker
             .alloy_call(
-                deployer.address,
+                rainlang_cfg.address,
                 output_token.address,
-                IERC20::symbolCall {},
+                IERC20Metadata::symbolCall {},
                 false,
             )
             .await?;
@@ -475,23 +475,28 @@ impl FuzzRunner {
             .forker
             .fork_parse(ForkParseArgs {
                 rainlang_string: rainlang_string.clone(),
-                deployer: deployer.address,
+                rainlang: rainlang_cfg.address,
                 decode_errors: true,
             })
             .await
             .map_err(|e| FuzzRunnerError::ForkCallError(Box::new(e)))?;
-        let store = self
-            .forker
-            .alloy_call(Address::default(), deployer.address, I_STORECall {}, true)
-            .await?
-            .typed_return;
-
-        let Address(interpreter) = self
+        let store: Address = self
             .forker
             .alloy_call(
                 Address::default(),
-                deployer.address,
-                I_INTERPRETERCall {},
+                rainlang_cfg.address,
+                storeAddressCall {},
+                true,
+            )
+            .await?
+            .typed_return;
+
+        let interpreter: Address = self
+            .forker
+            .alloy_call(
+                Address::default(),
+                rainlang_cfg.address,
+                interpreterAddressCall {},
                 true,
             )
             .await?
@@ -588,7 +593,7 @@ impl FuzzRunner {
             let scenario = deployment.scenario.clone();
 
             // set the result chain id
-            result.chain_id = deployment.scenario.deployer.network.chain_id;
+            result.chain_id = deployment.scenario.rainlang.network.chain_id;
 
             // handle the block number for this network/deployment debug case
             // and keep it as last fetched block number for the returned report
@@ -601,7 +606,7 @@ impl FuzzRunner {
             } else {
                 // Fetch the latest block number, if failed, record the error and continue to next deployment key
                 let rpcs = scenario
-                    .deployer
+                    .rainlang
                     .network
                     .rpcs
                     .iter()
@@ -732,7 +737,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     async fn test_fuzz_runner_missing_spec_version() {
         let dotrain = r#"
-deployers:
+rainlangs:
     some-key:
         address: 0x1111111111111111111111111111111111111111
 networks:
@@ -769,7 +774,7 @@ b: fuzzed;
     async fn test_fuzz_runner_invalid_spec_version() {
         let dotrain = r#"
 version: 1
-deployers:
+rainlangs:
     some-key:
         address: 0x1111111111111111111111111111111111111111
 networks:
@@ -803,7 +808,7 @@ b: fuzzed;
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
         address: 0x1111111111111111111111111111111111111111
 networks:
@@ -873,9 +878,9 @@ bad-networks-key:
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -897,7 +902,7 @@ b: fuzzed;
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current()
         );
         let mut runner = FuzzRunner::new(None).unwrap();
@@ -923,9 +928,9 @@ b: fuzzed;
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -945,7 +950,7 @@ _: block-number();
 :;"#,
             spec_version = SpecVersion::current(),
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             start_block = start_block_number,
             end_block = last_block_number
         );
@@ -974,9 +979,9 @@ _: block-number();
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -1007,7 +1012,7 @@ d: 4;
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current()
         );
         let mut runner = FuzzRunner::new(None).unwrap();
@@ -1044,9 +1049,9 @@ d: 4;
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -1064,7 +1069,7 @@ _: context<4 4>();
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current()
         );
         let mut runner = FuzzRunner::new(None).unwrap();
@@ -1092,9 +1097,9 @@ _: context<4 4>();
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -1111,7 +1116,7 @@ _: context<50 50>();
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current()
         );
         let mut runner = FuzzRunner::new(None).unwrap();
@@ -1130,9 +1135,9 @@ _: context<50 50>();
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     some-key:
         rpcs:
@@ -1149,7 +1154,7 @@ _: context<1 0>();
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current()
         );
         let mut runner = FuzzRunner::new(None).unwrap();
@@ -1209,9 +1214,9 @@ _: context<1 0>();
         let dotrain = format!(
             r#"
 version: {spec_version}
-deployers:
+rainlangs:
     flare:
-        address: {deployer}
+        address: {rainlang_address}
 networks:
     flare:
         rpcs:
@@ -1228,7 +1233,7 @@ tokens:
         decimals: 6
 scenarios:
     flare:
-        deployer: flare
+        rainlang: flare
         runs: 1
         bindings:
             orderbook-subparser: {orderbook_subparser}
@@ -1268,7 +1273,7 @@ _: 30;
 #handle-add-order
 :;"#,
             rpc_url = local_evm.url(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             orderbook_subparser = local_evm.orderbook_subparser.address(),
             wflr_address = wflr_address,
             usdce_address = usdce_address,

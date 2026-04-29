@@ -10,7 +10,7 @@ publish = false
 
 [dependencies]
 serde_json = { workspace = true }
-rain_interpreter_test_fixtures = { path = "../../lib/rain.interpreter/crates/test_fixtures" }
+rain_interpreter_test_fixtures = { package = "rainlang_test_fixtures", path = "../../lib/rain.interpreter/crates/test_fixtures" }
 rain-math-float.workspace = true
 alloy = { workspace = true, features = [
     "node-bindings",

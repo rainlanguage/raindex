@@ -13,7 +13,7 @@ use url::Url;
 use wasm_bindgen_utils::{add_ts_content, impl_wasm_traits, prelude::*};
 
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::{quote2Return, OrderV4, QuoteV2, SignedContextV1};
+use rain_orderbook_bindings::IRaindexV6::{quote2Return, OrderV4, QuoteV2, SignedContextV1};
 use rain_orderbook_subgraph_client::{
     types::{common::SgBytes, Id},
     utils::make_order_id,
@@ -74,16 +74,16 @@ impl QuoteTarget {
         &self,
         rpcs: Vec<String>,
         block_number: Option<u64>,
-        gas: Option<u64>,
-        multicall_address: Option<Address>,
+        counterparty: Address,
+        chunk_size: Option<usize>,
     ) -> Result<QuoteResult, Error> {
         Ok(batch_quote(
             std::slice::from_ref(self),
             rpcs,
             block_number,
-            gas,
-            multicall_address,
+            counterparty,
             None,
+            chunk_size,
         )
         .await?
         .into_iter()
@@ -118,10 +118,10 @@ impl BatchQuoteTarget {
         &self,
         rpcs: Vec<String>,
         block_number: Option<u64>,
-        gas: Option<u64>,
-        multicall_address: Option<Address>,
+        counterparty: Address,
+        chunk_size: Option<usize>,
     ) -> Result<Vec<QuoteResult>, Error> {
-        batch_quote(&self.0, rpcs, block_number, gas, multicall_address, None).await
+        batch_quote(&self.0, rpcs, block_number, counterparty, None, chunk_size).await
     }
 }
 
@@ -183,17 +183,17 @@ impl QuoteSpec {
         subgraph_url: &str,
         rpcs: Vec<String>,
         block_number: Option<u64>,
-        gas: Option<u64>,
-        multicall_address: Option<Address>,
+        counterparty: Address,
+        chunk_size: Option<usize>,
     ) -> Result<QuoteResult, Error> {
         let quote_target = self.get_quote_target_from_subgraph(subgraph_url).await?;
         let quote_result = batch_quote(
             &[quote_target],
             rpcs,
             block_number,
-            gas,
-            multicall_address,
+            counterparty,
             None,
+            chunk_size,
         )
         .await?;
 
@@ -262,8 +262,8 @@ impl BatchQuoteSpec {
         subgraph_url: &str,
         rpcs: Vec<String>,
         block_number: Option<u64>,
-        gas: Option<u64>,
-        multicall_address: Option<Address>,
+        counterparty: Address,
+        chunk_size: Option<usize>,
     ) -> Result<Vec<QuoteResult>, Error> {
         let opts_quote_targets = self
             .get_batch_quote_target_from_subgraph(subgraph_url)
@@ -279,9 +279,9 @@ impl BatchQuoteSpec {
                 &quote_targets,
                 rpcs,
                 block_number,
-                gas,
-                multicall_address,
+                counterparty,
                 None,
+                chunk_size,
             )
             .await?,
         );
@@ -311,15 +311,13 @@ mod tests {
     use super::*;
     use alloy::hex;
     use alloy::hex::ToHexExt;
+    use alloy::primitives::Bytes;
     use alloy::primitives::{address, keccak256};
     use alloy::primitives::{hex::encode_prefixed, U256};
-    use alloy::providers::bindings::IMulticall3::Result as MulticallResult;
-    use alloy::providers::MulticallError;
     use alloy::sol_types::{SolCall, SolValue};
-    use alloy::transports::TransportError;
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::AbiDecodedErrorType;
-    use rain_orderbook_bindings::IOrderBookV6::{quote2Call, QuoteV2, IOV2};
+    use rain_orderbook_bindings::IRaindexV6::{quote2Call, QuoteV2, IOV2};
     use rain_orderbook_subgraph_client::OrderbookSubgraphClientError;
     use serde_json::{json, Value};
 
@@ -727,16 +725,13 @@ mod tests {
         let two = Float::parse("2".to_string()).unwrap();
 
         // build response data
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: quote2Call::abi_encode_returns(&quote2Return {
-                exists: true,
-                outputMax: one.get_inner(),
-                ioRatio: two.get_inner(),
-            })
-            .into(),
-        }]
-        .abi_encode();
+        let inner_return: Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: one.get_inner(),
+            ioRatio: two.get_inner(),
+        })
+        .into();
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![inner_return]);
 
         // mock rpc with call data and response data
         rpc_server.mock(|when, then| {
@@ -767,7 +762,7 @@ mod tests {
                 rpc_server.url("/sg").as_str(),
                 vec![rpc_server.url("/rpc").to_string()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await
@@ -791,16 +786,13 @@ mod tests {
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
 
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: quote2Call::abi_encode_returns(&quote2Return {
-                exists: true,
-                outputMax: one.get_inner(),
-                ioRatio: two.get_inner(),
-            })
-            .into(),
-        }]
-        .abi_encode();
+        let inner_return: Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: one.get_inner(),
+            ioRatio: two.get_inner(),
+        })
+        .into();
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![inner_return]);
 
         server.mock(|when, then| {
             when.method(POST).path("/rpc");
@@ -838,34 +830,26 @@ mod tests {
             orderbook,
         };
 
-        let err = quote_target_specifier
+        // A malformed RPC body causes per-target `CorruptReturnData` (surfaced
+        // via the bisection path); the top-level call still returns Ok.
+        let res = quote_target_specifier
             .do_quote(
                 server.url("/sg").as_str(),
                 vec![server.url("/bad-rpc").to_string()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await
-            .unwrap_err();
-
-        assert!(
-            matches!(
-                err,
-                Error::MulticallError(MulticallError::TransportError(TransportError::DeserError {
-                    err: _,
-                    text: _
-                }))
-            ),
-            "unexpected error: {err:?}"
-        );
+            .unwrap();
+        assert!(matches!(res, Err(FailedQuote::CorruptReturnData(_))));
 
         let err = quote_target_specifier
             .do_quote(
                 server.url("/bad-sg").as_str(),
                 vec![server.url("/rpc").to_string()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await
@@ -889,16 +873,13 @@ mod tests {
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
 
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: quote2Call::abi_encode_returns(&quote2Return {
-                exists: true,
-                outputMax: one.get_inner(),
-                ioRatio: two.get_inner(),
-            })
-            .into(),
-        }]
-        .abi_encode();
+        let inner_return: Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: one.get_inner(),
+            ioRatio: two.get_inner(),
+        })
+        .into();
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![inner_return]);
 
         // mock rpc with call data and response data
         rpc_server.mock(|when, then| {
@@ -929,32 +910,32 @@ mod tests {
             QuoteSpec::default(),
         ]);
 
+        // A transport-layer RPC failure (no body for /bad-rpc) now surfaces
+        // per-target as `CorruptReturnData` (the OZ multicall path never fails
+        // at the batch level for transport/revert errors — it bubbles them
+        // into per-target results via bisection).
         let bad_rpc_url = rpc_server.url("/bad-rpc").to_string();
-        let err = batch_quote_targets_specifiers
+        let result = batch_quote_targets_specifiers
             .do_quote(
                 rpc_server.url("/sg").as_str(),
                 vec![bad_rpc_url.clone()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await
-            .unwrap_err();
-
-        assert!(
-            matches!(
-                err,
-                Error::MulticallError(MulticallError::TransportError(TransportError::Transport(_)))
-            ),
-            "unexpected error: {err:?}"
-        );
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        for r in &result {
+            assert!(r.is_err(), "expected all targets to fail: {r:?}");
+        }
 
         let result = batch_quote_targets_specifiers
             .do_quote(
                 rpc_server.url("/sg").as_str(),
                 vec![rpc_server.url("/rpc").to_string()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await
@@ -987,20 +968,18 @@ mod tests {
             orderbook,
         };
 
-        // build response data
+        // OZ Multicall returns `bytes[]`; each element is the ABI-encoded
+        // return of one inner `quote2` call.
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
 
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: quote2Call::abi_encode_returns(&quote2Return {
-                exists: true,
-                outputMax: one.get_inner(),
-                ioRatio: two.get_inner(),
-            })
-            .into(),
-        }]
-        .abi_encode();
+        let inner_return: Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: one.get_inner(),
+            ioRatio: two.get_inner(),
+        })
+        .into();
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![inner_return]);
 
         // mock rpc with call data and response data
         rpc_server.mock(|when, then| {
@@ -1013,7 +992,12 @@ mod tests {
         });
 
         let result = quote_target
-            .do_quote(vec![rpc_server.url("/rpc").to_string()], None, None, None)
+            .do_quote(
+                vec![rpc_server.url("/rpc").to_string()],
+                None,
+                Address::ZERO,
+                None,
+            )
             .await
             .unwrap()
             .unwrap();
@@ -1035,13 +1019,12 @@ mod tests {
             orderbook,
         };
 
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: "corrupt data".into(),
-        }]
-        .abi_encode();
+        // Outer multicall decodes fine (one `bytes` element) but that inner
+        // bytes is not a valid `quote2Return`, so the per-target decode fails
+        // and we get `FailedQuote::CorruptReturnData` — not a top-level Error.
+        let corrupt_inner: Bytes = Bytes::from_static(b"corrupt data");
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![corrupt_inner]);
 
-        // mock rpc with call data and response data
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
             then.json_body_obj(&json!({
@@ -1051,14 +1034,19 @@ mod tests {
             }));
         });
 
-        let err = quote_target
-            .do_quote(vec![rpc_server.url("/rpc").to_string()], None, None, None)
+        let result = quote_target
+            .do_quote(
+                vec![rpc_server.url("/rpc").to_string()],
+                None,
+                Address::ZERO,
+                None,
+            )
             .await
-            .unwrap_err();
+            .unwrap();
 
         assert!(
-            matches!(err, Error::MulticallError(MulticallError::DecodeError(_))),
-            "unexpected error: {err:?}"
+            matches!(result, Err(FailedQuote::CorruptReturnData(_))),
+            "unexpected result: {result:?}"
         );
     }
 
@@ -1075,22 +1063,18 @@ mod tests {
             orderbook,
         }]);
 
-        // build response data
+        // OZ Multicall returns `bytes[]`; one element per inner `quote2`.
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
 
-        let response_data = vec![MulticallResult {
-            success: true,
-            returnData: quote2Call::abi_encode_returns(&quote2Return {
-                exists: true,
-                outputMax: one.get_inner(),
-                ioRatio: two.get_inner(),
-            })
-            .into(),
-        }]
-        .abi_encode();
+        let inner_return: Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: one.get_inner(),
+            ioRatio: two.get_inner(),
+        })
+        .into();
+        let response_data = <Vec<Bytes> as SolValue>::abi_encode(&vec![inner_return]);
 
-        // mock rpc with call data and response data
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
             then.json_body_obj(&json!({
@@ -1101,7 +1085,12 @@ mod tests {
         });
 
         let result = quote_targets
-            .do_quote(vec![rpc_server.url("/rpc").to_string()], None, None, None)
+            .do_quote(
+                vec![rpc_server.url("/rpc").to_string()],
+                None,
+                Address::ZERO,
+                None,
+            )
             .await
             .unwrap();
 
@@ -1129,51 +1118,27 @@ mod tests {
             orderbook,
         }]);
 
-        rpc_server.mock(|when, then| {
-            when.method(POST).path("/error-rpc");
-            then.status(500).json_body("internal server error");
-        });
-
+        // The orderbook's OZ Multicall bubbles the first inner revert up as
+        // the outer eth_call revert data. We simulate `TokenSelfTrade()`
+        // (selector 0x734bc71c) being bubbled up directly.
         rpc_server.mock(|when, then| {
             when.method(POST).path("/reverted-rpc");
-
-            let response_data = vec![MulticallResult {
-                success: false,
-                // 0x734bc71c is the selector for TokenSelfTrade
-                returnData: hex!("734bc71c").to_vec().into(),
-            }]
-            .abi_encode();
-
             then.json_body_obj(&json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": encode_prefixed(response_data).as_str(),
+                "error": {
+                    "code": 3,
+                    "message": "execution reverted",
+                    "data": "0x734bc71c",
+                }
             }));
         });
-
-        let err = quote_targets
-            .do_quote(
-                vec![rpc_server.url("/error-rpc").to_string()],
-                Some(1),
-                Some(1000000),
-                Some(address!("aaaaaaaaaabbbbbbbbbbccccccccccdddddddddd")),
-            )
-            .await
-            .unwrap_err();
-
-        assert!(
-            matches!(
-                err,
-                Error::MulticallError(MulticallError::TransportError(TransportError::Transport(_)))
-            ),
-            "unexpected error: {err:?}"
-        );
 
         let results = quote_targets
             .do_quote(
                 vec![rpc_server.url("/reverted-rpc").to_string()],
                 None,
-                None,
+                Address::ZERO,
                 None,
             )
             .await

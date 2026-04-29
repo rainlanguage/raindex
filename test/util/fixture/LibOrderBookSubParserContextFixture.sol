@@ -44,7 +44,7 @@ import {
     WORD_OUTPUT_VAULT_BALANCE_DECREASE,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_COLUMN
-} from "src/lib/LibOrderBookSubParser.sol";
+} from "../../../src/lib/LibOrderBookSubParser.sol";
 
 library LibOrderBookSubParserContextFixture {
     function hashedNamesContext() internal pure returns (bytes32[][] memory) {

@@ -7,6 +7,7 @@ pub mod erc20;
 pub mod fuzz;
 pub mod local_db;
 pub mod meta;
+pub mod oracle;
 pub mod parsed_meta;
 pub mod raindex_client;
 pub mod raindex_order_builder;

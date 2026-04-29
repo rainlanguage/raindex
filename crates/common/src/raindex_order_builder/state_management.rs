@@ -401,7 +401,7 @@ mod tests {
     };
     use std::str::FromStr;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZmOB-QXO6IdwGQ0tLkCNRZI3gskaWljpQpmduaoGvRVlRVZJJWZVpWE6lk5FHWkiOQV5YhWVQWlBgVkVYllelcVhwvqetOCwoUnNSk0t0wYbqpqQW5ORX5qbmlQAAdPUJnskBAAA=";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGZKYKlbVV5aVVJeUl5mYUlyQaJZcGVgVmmuhZNBVmSxQYRFortnaLmPsWGyrTgsLFJzUpNLdMGG6qakFuTkV-am5pUAADgqxtfKAQAA";
 
     fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -551,7 +551,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
-            version: 4
+            version: 5
             networks:
                 test:
                     rpcs:
@@ -563,7 +563,7 @@ mod tests {
                 token1:
                     network: test
                     address: 0xc2132d05d31c914a87c6611c10748aeb04b58e8f
-            deployers:
+            rainlangs:
                 test:
                     network: test
                     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -575,14 +575,14 @@ mod tests {
                     deployment-block: 12345
             scenarios:
                 test:
-                    deployer: test
+                    rainlang: test
             orders:
                 test:
                     inputs:
                         - token: token1
                     outputs:
                         - token: token1
-                    deployer: test
+                    rainlang: test
                     orderbook: test
             deployments:
                 select-token-deployment:
@@ -680,6 +680,7 @@ mod tests {
             label: Some("Replaced Token 3".to_string()),
             symbol: Some("NEW3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
 
         let dotrain_order = DotrainOrder::create(dotrain_with_existing_token.clone(), None)

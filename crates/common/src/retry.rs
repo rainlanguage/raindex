@@ -25,6 +25,7 @@ fn ensure_max_attempts<E>(max_attempts: usize) -> Result<(), RetryError<E>> {
     }
 }
 
+#[cfg(any(target_family = "wasm", test))]
 #[inline]
 fn compute_sleep_and_next_delay_ms(
     current_delay_ms: u64,

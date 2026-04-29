@@ -4,18 +4,18 @@ pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest, console2} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {
-    IOrderBookV6,
+    IRaindexV6,
     QuoteV2,
     OrderConfigV4,
     EvaluableV4,
     TaskV2,
     OrderV4,
     SignedContextV1
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {TokenSelfTrade} from "src/concrete/ob/OrderBookV6.sol";
+import {TokenSelfTrade} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
@@ -45,6 +45,28 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
         Float[] memory expectedMaxOutput,
         Float[] memory expectedIoRatio
     ) internal {
+        checkQuote(
+            owner,
+            config,
+            rainlang,
+            depositAmount,
+            expectedMaxOutput,
+            expectedIoRatio,
+            bytes32(uint256(0x01)),
+            bytes32(uint256(0x01))
+        );
+    }
+
+    function checkQuote(
+        address owner,
+        OrderConfigV4 memory config,
+        bytes[] memory rainlang,
+        Float depositAmount,
+        Float[] memory expectedMaxOutput,
+        Float[] memory expectedIoRatio,
+        bytes32 outputVaultId,
+        bytes32 inputVaultId
+    ) internal {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
 
         uint8 depositDecimals = 12;
@@ -58,15 +80,24 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
         config.validInputs[0].token = address(iToken1);
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(6));
 
-        vm.mockCall(
-            address(iToken0),
-            abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook), depositAmount18),
-            abi.encode(true)
-        );
-        vm.prank(owner);
-        iOrderbook.deposit4(
-            config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV2[](0)
-        );
+        if (outputVaultId == bytes32(0)) {
+            config.validOutputs[0].vaultId = bytes32(0);
+            mockVault0Output(address(iToken0), owner, depositAmount18);
+        } else {
+            vm.mockCall(
+                address(iToken0),
+                abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iOrderbook), depositAmount18),
+                abi.encode(true)
+            );
+            vm.prank(owner);
+            iOrderbook.deposit4(
+                config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV2[](0)
+            );
+        }
+        if (inputVaultId == bytes32(0)) {
+            config.validInputs[0].vaultId = bytes32(0);
+            mockVault0Input(address(iToken1), owner, 0);
+        }
 
         for (uint256 i = 0; i < rainlang.length; i++) {
             config.evaluable.bytecode = iParserV2.parse2(rainlang[i]);
@@ -234,5 +265,33 @@ contract OrderBookV6QuoteTest is OrderBookV6ExternalRealTest {
         expectedIoRatio[9] = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18 * 1e6, 18);
 
         checkQuote(owner, config, rainlang, depositAmount, expectedMaxOutput, expectedIoRatio);
+    }
+
+    /// forge-config: default.fuzz.runs = 100
+    function testQuoteSimpleBothVaultIdZero(address owner, OrderConfigV4 memory config, uint256 depositAmount18)
+        external
+    {
+        depositAmount18 = bound(depositAmount18, 1e18, uint256(int256(type(int224).max)) / 1e6);
+        Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 12);
+
+        bytes[] memory rainlangArray = new bytes[](1);
+        rainlangArray[0] = "_ _:1 2;";
+
+        Float[] memory expectedMaxOutputArray = new Float[](1);
+        expectedMaxOutputArray[0] = LibDecimalFloat.packLossless(1, 0);
+
+        Float[] memory expectedIoRatioArray = new Float[](1);
+        expectedIoRatioArray[0] = LibDecimalFloat.packLossless(2, 0);
+
+        checkQuote(
+            owner,
+            config,
+            rainlangArray,
+            depositAmount,
+            expectedMaxOutputArray,
+            expectedIoRatioArray,
+            bytes32(0),
+            bytes32(0)
+        );
     }
 }

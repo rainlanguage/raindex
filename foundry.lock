@@ -1,12 +1,12 @@
 {
+  "lib/rain.deploy": {
+    "rev": "43a6ed3a98f0141e1963b4b9136e8c80e2889bd1"
+  },
   "lib/rain.interpreter": {
-    "rev": "22479b75c0ff6101fcb20a184eb89b62388383f6"
+    "rev": "1ea41cd0ec4a8afd7dec9aeae0a65a55c95fac46"
   },
-  "lib/rain.orderbook.interface": {
-    "rev": "24bc3bdf9be3d4bdd4061dba862a29e3a9feaf1b"
-  },
-  "lib/rain.tofu.erc20-decimals": {
-    "rev": "db41950b70dae3c6ff38e50da96d04763a15c00a"
+  "lib/rain.raindex.interface": {
+    "rev": "ad4427dcb07e6df95def94999799470db89321b3"
   },
   "lib/sushixswap-v2": {
     "rev": "ca38c64cf7c3042f6427414d7bff61c54293da51"

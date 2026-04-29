@@ -142,7 +142,7 @@ async fn execute_take_orders(
     yaml_content: String,
     request: TakeOrdersRequest,
 ) -> Result<TakeOrdersApiResponse, ApiError> {
-    let client = RaindexClient::new(vec![yaml_content], None)?;
+    let client = RaindexClient::new(vec![yaml_content], None, None).await?;
 
     let result = client.get_take_orders_calldata(request).await?;
 

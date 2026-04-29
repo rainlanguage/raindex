@@ -1,4 +1,4 @@
-import { vi, describe } from 'vitest';
+import { vi, describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import Page from './+page.svelte';
 import { render, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
@@ -9,9 +9,66 @@ import {
 	type TransactionConfirmationProps
 } from '@rainlanguage/ui-components';
 import { readable, writable } from 'svelte/store';
-import { DotrainRegistry, type NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+import {
+	DotrainRegistry,
+	type RaindexOrderBuilder,
+	type NameAndDescriptionCfg
+} from '@rainlanguage/orderbook';
 import { REGISTRY_URL } from '$lib/constants';
+import { retry, DEFAULT_MAX_RETRIES } from '$lib/retry';
 import { handleTransactionConfirmationModal } from '$lib/services/modal';
+
+const ACCOUNT = '0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E';
+const TOKEN1_ADDRESS = '0x000000000000012def132e61759048be5b5c6033';
+const TOKEN2_ADDRESS = '0x00000000000007c8612ba63df8ddefd9e6077c97';
+
+async function createRegistry(): Promise<DotrainRegistry> {
+	return retry(async () => {
+		const result = await DotrainRegistry.new(REGISTRY_URL);
+		if (result.error) {
+			throw new Error('Failed to create registry: ' + result.error.msg);
+		}
+		return result.value;
+	});
+}
+
+async function getBuilder(
+	rl: DotrainRegistry,
+	serializedState?: string,
+	stateCallback?: (state: string) => void
+): Promise<RaindexOrderBuilder> {
+	return retry(async () => {
+		const result = await rl.getOrderBuilder(
+			'fixed-limit',
+			'base',
+			serializedState,
+			stateCallback ?? null
+		);
+		if (result.error) {
+			throw new Error(result.error.readableMsg ?? result.error.msg);
+		}
+		return result.value;
+	});
+}
+
+async function createConfiguredBuilder(
+	rl: DotrainRegistry,
+	stateCallback?: (state: string) => void
+): Promise<RaindexOrderBuilder> {
+	const builder = await getBuilder(rl, undefined, stateCallback);
+	const token1Result = await builder.setSelectToken('token1', TOKEN1_ADDRESS);
+	if (token1Result.error) {
+		throw new Error('setSelectToken token1: ' + token1Result.error.msg);
+	}
+	const token2Result = await builder.setSelectToken('token2', TOKEN2_ADDRESS);
+	if (token2Result.error) {
+		throw new Error('setSelectToken token2: ' + token2Result.error.msg);
+	}
+	builder.setVaultId('output', 'token2', '234');
+	builder.setVaultId('input', 'token1', '123');
+	builder.setFieldValue('fixed-io', '10');
+	return builder;
+}
 
 const { mockPageStore } = await vi.hoisted(() => import('@rainlanguage/ui-components'));
 
@@ -52,9 +109,97 @@ vi.mock('$lib/stores/wagmi', () => ({
 	wagmiConfig: mockWagmiConfigStore
 }));
 
-describe('Full Deployment Tests', () => {
-	let registry: DotrainRegistry | null = null;
+// Shared across all describe blocks to avoid duplicate HTTP fetches to the
+// remote registry/settings/token-list endpoints, which are rate-limited on CI.
+let registry: DotrainRegistry;
+beforeAll(async () => {
+	registry = await createRegistry();
+});
 
+describe('Builder deployment args isolation tests', () => {
+	it(
+		'standalone builder without callback produces deployment args',
+		async () => {
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.getDeploymentTransactionArgs(ACCOUNT);
+			expect(result.error).toBeUndefined();
+			const args = result.value!;
+			expect(args).toBeDefined();
+			expect(args.deploymentCalldata).toBeDefined();
+			expect(args.orderbookAddress).toBeDefined();
+			expect(args.chainId).toBeDefined();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+
+	it(
+		'standalone builder with noop state callback produces deployment args',
+		async () => {
+			const callback = vi.fn();
+			const builder = await createConfiguredBuilder(registry, callback);
+			const result = await builder.getDeploymentTransactionArgs(ACCOUNT);
+			expect(result.error).toBeUndefined();
+			const args = result.value!;
+			expect(args).toBeDefined();
+			expect(args.deploymentCalldata).toBeDefined();
+			expect(callback).toHaveBeenCalled();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+
+	it(
+		'generateAddOrderCalldata works standalone',
+		async () => {
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateAddOrderCalldata();
+			expect(result.error).toBeUndefined();
+			expect(result.value).toBeDefined();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+
+	it(
+		'generateApprovalCalldatas works standalone',
+		async () => {
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateApprovalCalldatas(ACCOUNT);
+			expect(result.error).toBeUndefined();
+			expect(result.value).toBeDefined();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+
+	it(
+		'generateDepositCalldatas works standalone',
+		async () => {
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateDepositCalldatas();
+			expect(result.error).toBeUndefined();
+			expect(result.value).toBeDefined();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+
+	it(
+		'serializeState and restore produce deployment args',
+		async () => {
+			const builder1 = await createConfiguredBuilder(registry);
+			const serialized = builder1.serializeState();
+			expect(serialized.error).toBeUndefined();
+
+			const builder2 = await getBuilder(registry, serialized.value);
+
+			const result = await builder2.getDeploymentTransactionArgs(ACCOUNT);
+			expect(result.error).toBeUndefined();
+			const args = result.value!;
+			expect(args).toBeDefined();
+			expect(args.deploymentCalldata).toBeDefined();
+		},
+		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
+	);
+});
+
+describe('Full Deployment Tests', () => {
 	function findLockRegion(a: string, b: string): { prefixEnd: number; suffixEnd: number } {
 		expect(a.length).toEqual(b.length);
 		const length = a.length;
@@ -70,14 +215,6 @@ describe('Full Deployment Tests', () => {
 		}
 		return { prefixEnd, suffixEnd };
 	}
-
-	beforeAll(async () => {
-		const registryResult = await DotrainRegistry.new(REGISTRY_URL);
-		if (registryResult.error) {
-			throw new Error('Failed to create registry');
-		}
-		registry = registryResult.value;
-	});
 
 	beforeEach(async () => {
 		vi.clearAllMocks();
@@ -110,10 +247,6 @@ describe('Full Deployment Tests', () => {
 	it(
 		'Fixed limit order',
 		async () => {
-			if (!registry) {
-				throw new Error('No registry available');
-			}
-
 			const fixedLimitDeploymentDetails = registry.getDeploymentDetails('fixed-limit');
 			if (fixedLimitDeploymentDetails.error) {
 				throw new Error('Failed to get deployment details');
@@ -167,10 +300,19 @@ describe('Full Deployment Tests', () => {
 				},
 				{ timeout: 30000 }
 			);
+			// Wait for field definitions to render after token selection
+			let customValueInput!: HTMLElement;
+			await waitFor(
+				() => {
+					customValueInput = screen.getAllByPlaceholderText('Enter custom value')[0];
+					expect(customValueInput).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			// Allow async WASM operations (getTokenInfo, getAccountBalance) to
+			// settle so their &self borrows are released before setFieldValue
+			// takes &mut self.
 			await new Promise((resolve) => setTimeout(resolve, 2000));
-
-			// Get the input component and write "10" into it
-			const customValueInput = screen.getAllByPlaceholderText('Enter custom value')[0];
 			await userEvent.clear(customValueInput);
 			await userEvent.type(customValueInput, '10');
 
@@ -196,7 +338,7 @@ describe('Full Deployment Tests', () => {
 					const disclaimerButton = screen.getByText('Deploy');
 					await userEvent.click(disclaimerButton);
 				},
-				{ timeout: 30000 }
+				{ timeout: 5000 }
 			);
 
 			const getDeploymentArgs = async () => {
@@ -219,11 +361,8 @@ describe('Full Deployment Tests', () => {
 				return args.value;
 			};
 			await new Promise((resolve) => setTimeout(resolve, 10000));
-			const args = await getDeploymentArgs().catch((error) => {
-				// eslint-disable-next-line no-console
-				console.log('Fixed limit order error', error);
-				return null;
-			});
+
+			const args = await getDeploymentArgs();
 
 			// @ts-expect-error mock is not typed
 			const callArgs = handleTransactionConfirmationModal.mock.calls.at(-1)?.[0] as
@@ -255,7 +394,7 @@ describe('Full Deployment Tests', () => {
 			expect(callArgs.args.toAddress).toEqual(args?.orderbookAddress);
 			expect(callArgs.args.chainId).toEqual(args?.chainId);
 		},
-		{ timeout: 30000 }
+		{ timeout: 60000, retry: DEFAULT_MAX_RETRIES }
 	);
 
 	// TODO: Issue #2037

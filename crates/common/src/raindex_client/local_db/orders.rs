@@ -1,26 +1,39 @@
-use super::super::orders::{GetOrdersFilters, OrdersDataSource, RaindexOrder};
+use super::super::orders::{
+    GetOrdersFilters, OrdersDataSource, RaindexOrder, RaindexOrdersListResult,
+};
 use super::super::trades::RaindexTrade;
+use super::super::RaindexError;
 use super::query::fetch_order_trades::fetch_order_trades;
 use super::query::fetch_order_trades_count::fetch_order_trades_count;
-use super::{LocalDb, RaindexError};
+use super::query::fetch_orders_count::fetch_orders_count;
+use super::LocalDb;
+use crate::local_db::query::fetch_orders::LocalDbOrder;
 use crate::local_db::query::fetch_vaults::LocalDbVault;
 use crate::local_db::query::LocalDbQueryError;
 use crate::local_db::{query::fetch_orders::FetchOrdersArgs, OrderbookIdentifier};
 use crate::raindex_client::local_db::query::fetch_orders::fetch_orders;
-use crate::raindex_client::RaindexClient;
+use crate::raindex_client::ClientRef;
 use alloy::primitives::{Address, B256};
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::from_str;
-use std::rc::Rc;
 
 pub struct LocalDbOrders<'a> {
     pub(crate) db: &'a LocalDb,
-    pub(crate) client: Rc<RaindexClient>,
+    pub(crate) client: ClientRef,
+}
+
+fn convert_local_db_order(
+    client: ClientRef,
+    local_db_order: LocalDbOrder,
+) -> Result<RaindexOrder, RaindexError> {
+    let inputs = parse_io_vaults("inputs", &local_db_order.inputs)?;
+    let outputs = parse_io_vaults("outputs", &local_db_order.outputs)?;
+    RaindexOrder::from_local_db_order(client, local_db_order, inputs, outputs)
 }
 
 impl<'a> LocalDbOrders<'a> {
-    pub(crate) fn new(db: &'a LocalDb, client: Rc<RaindexClient>) -> Self {
+    pub(crate) fn new(db: &'a LocalDb, client: ClientRef) -> Self {
         Self { db, client }
     }
 
@@ -38,22 +51,12 @@ impl<'a> LocalDbOrders<'a> {
         };
 
         let local_db_orders = fetch_orders(self.db, fetch_args).await?;
-        let client = Rc::clone(&self.client);
+        let client = ClientRef::clone(&self.client);
 
-        let mut orders: Vec<RaindexOrder> = Vec::with_capacity(local_db_orders.len());
-        for local_db_order in local_db_orders {
-            let inputs = parse_io_vaults("inputs", &local_db_order.inputs)?;
-            let outputs = parse_io_vaults("outputs", &local_db_order.outputs)?;
-            let order = RaindexOrder::from_local_db_order(
-                Rc::clone(&client),
-                local_db_order,
-                inputs,
-                outputs,
-            )?;
-            orders.push(order);
-        }
-
-        Ok(orders)
+        local_db_orders
+            .into_iter()
+            .map(|order| convert_local_db_order(ClientRef::clone(&client), order))
+            .collect()
     }
 }
 
@@ -89,14 +92,16 @@ pub(crate) fn parse_io_vaults(
     Ok(ios.into_iter().map(|io| io.vault).collect())
 }
 
-#[async_trait(?Send)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 impl OrdersDataSource for LocalDbOrders<'_> {
     async fn list(
         &self,
         chain_ids: Option<Vec<u32>>,
         filters: &GetOrdersFilters,
-        _page: Option<u16>,
-    ) -> Result<Vec<RaindexOrder>, RaindexError> {
+        page: Option<u16>,
+        page_size: Option<u16>,
+    ) -> Result<RaindexOrdersListResult, RaindexError> {
         let mut fetch_args = FetchOrdersArgs::from(filters.clone());
         if let Some(ids) = chain_ids {
             if !ids.is_empty() {
@@ -104,23 +109,32 @@ impl OrdersDataSource for LocalDbOrders<'_> {
             }
         }
 
+        let total_count = if page.is_some() {
+            let count_args = FetchOrdersArgs {
+                page: None,
+                page_size: None,
+                ..fetch_args.clone()
+            };
+            fetch_orders_count(self.db, count_args).await?
+        } else {
+            0
+        };
+
+        fetch_args.page = page;
+        fetch_args.page_size = page_size;
+
         let local_db_orders = fetch_orders(self.db, fetch_args).await?;
-        let mut orders: Vec<RaindexOrder> = Vec::with_capacity(local_db_orders.len());
-        let client = Rc::clone(&self.client);
+        let client = ClientRef::clone(&self.client);
 
-        for local_db_order in local_db_orders {
-            let inputs = parse_io_vaults("inputs", &local_db_order.inputs)?;
-            let outputs = parse_io_vaults("outputs", &local_db_order.outputs)?;
-            let order = RaindexOrder::from_local_db_order(
-                Rc::clone(&client),
-                local_db_order,
-                inputs,
-                outputs,
-            )?;
-            orders.push(order);
-        }
+        let orders: Vec<RaindexOrder> = local_db_orders
+            .into_iter()
+            .map(|order| convert_local_db_order(ClientRef::clone(&client), order))
+            .collect::<Result<_, _>>()?;
 
-        Ok(orders)
+        Ok(RaindexOrdersListResult {
+            orders,
+            total_count,
+        })
     }
 
     async fn get_by_hash(
@@ -136,17 +150,13 @@ impl OrdersDataSource for LocalDbOrders<'_> {
         };
 
         let local_db_orders = fetch_orders(self.db, fetch_args).await?;
-        let client = Rc::clone(&self.client);
+        let client = ClientRef::clone(&self.client);
 
-        if let Some(local_db_order) = local_db_orders.into_iter().next() {
-            let inputs = parse_io_vaults("inputs", &local_db_order.inputs)?;
-            let outputs = parse_io_vaults("outputs", &local_db_order.outputs)?;
-            let order = RaindexOrder::from_local_db_order(client, local_db_order, inputs, outputs)?;
-
-            return Ok(Some(order));
-        }
-
-        Ok(None)
+        local_db_orders
+            .into_iter()
+            .next()
+            .map(|order| convert_local_db_order(client, order))
+            .transpose()
     }
 
     async fn get_added_by_tx_hash(
@@ -221,6 +231,7 @@ mod tests {
         use wasm_bindgen_utils::prelude::*;
 
         fn make_local_db_callback(orders: Vec<LocalDbOrder>) -> js_sys::Function {
+            let order_count = orders.len();
             let orders_json = serde_json::to_string(&orders).unwrap();
             let orders_result = WasmEncodedResult::Success::<String> {
                 value: orders_json,
@@ -228,6 +239,17 @@ mod tests {
             };
             let orders_payload =
                 js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&orders_result).unwrap())
+                    .unwrap()
+                    .as_string()
+                    .unwrap();
+
+            let count_json = format!("[{{\"orders_count\":{}}}]", order_count);
+            let count_result = WasmEncodedResult::Success::<String> {
+                value: count_json,
+                error: None,
+            };
+            let count_payload =
+                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&count_result).unwrap())
                     .unwrap()
                     .as_string()
                     .unwrap();
@@ -244,6 +266,9 @@ mod tests {
 
             let callback =
                 Closure::wrap(Box::new(move |sql: String, _params: JsValue| -> JsValue {
+                    if sql.contains("orders_count") {
+                        return js_sys::JSON::parse(&count_payload).unwrap();
+                    }
                     if sql.contains("FROM order_events") && sql.contains("json_group_array") {
                         return js_sys::JSON::parse(&orders_payload).unwrap();
                     }
@@ -356,16 +381,21 @@ mod tests {
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
 
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161],
+            );
 
-            let orders = client
-                .get_orders(Some(ChainIds(vec![42161])), None, None)
+            let result = client
+                .get_orders(Some(ChainIds(vec![42161])), None, None, None)
                 .await
                 .expect("local db query should succeed");
 
-            assert_eq!(orders.len(), 1);
+            assert_eq!(result.orders().len(), 1);
+            assert_eq!(result.total_count(), 1);
 
-            let order = &orders[0];
+            let order = &result.orders()[0];
             assert_eq!(order.chain_id(), 42161);
             assert_eq!(order.order_hash(), order_hash_str);
             assert_eq!(order.order_bytes(), order_bytes_str);
@@ -533,7 +563,11 @@ mod tests {
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
 
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161],
+            );
 
             let order = client
                 .get_order_by_hash(
@@ -584,7 +618,11 @@ mod tests {
             };
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161, 137],
+            );
 
             let orders = client
                 .get_add_orders_for_transaction_wasm_binding(
@@ -637,7 +675,11 @@ mod tests {
             };
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
-            let client = new_test_client_with_db_callback(vec![get_local_db_test_yaml()], callback);
+            let client = new_test_client_with_db_callback(
+                vec![get_local_db_test_yaml()],
+                callback,
+                vec![42161, 137],
+            );
 
             let orders = client
                 .get_remove_orders_for_transaction_wasm_binding(

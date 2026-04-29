@@ -2,7 +2,7 @@
 members = ["crates/*"]
 exclude = [
     "lib/rain.interpreter",
-    "lib/rain.orderbook.interface",
+    "lib/rain.raindex.interface",
 ]
 resolver = "2"
 
@@ -10,7 +10,7 @@ resolver = "2"
 edition = "2021"
 license = "LicenseRef-DCL-1.0"
 version = "0.0.0-alpha.0"
-homepage = "https://github.com/rainprotocol/rain.orderbook"
+homepage = "https://github.com/rainlanguage/raindex"
 
 [workspace.dependencies]
 foundry-block-explorers = "0.2.6"
@@ -42,10 +42,10 @@ dotrain-lsp = "6.0.1-alpha.24"
 rain-metadata = { path = "lib/rain.interpreter/lib/rain.metadata/crates/cli" }
 rain-metadata-bindings = { path = "lib/rain.interpreter/lib/rain.metadata/crates/bindings" }
 rain-metaboard-subgraph = { path = "lib/rain.interpreter/lib/rain.metadata/crates/metaboard" }
-rain_interpreter_bindings = { path = "lib/rain.interpreter/crates/bindings" }
-rain_interpreter_dispair = { path = "lib/rain.interpreter/crates/dispair" }
-rain_interpreter_parser = { path = "lib/rain.interpreter/crates/parser" }
-rain-interpreter-eval = { path = "lib/rain.interpreter/crates/eval" }
+rain_interpreter_bindings = { package = "rainlang_bindings", path = "lib/rain.interpreter/crates/bindings" }
+rain_interpreter_dispair = { package = "rainlang_dispair", path = "lib/rain.interpreter/crates/dispair" }
+rain_interpreter_parser = { package = "rainlang_parser", path = "lib/rain.interpreter/crates/parser" }
+rain-interpreter-eval = { package = "rainlang-eval", path = "lib/rain.interpreter/crates/eval" }
 csv = "1.3.0"
 insta = { version = "1.34.0" }
 proptest = "1.4.0"

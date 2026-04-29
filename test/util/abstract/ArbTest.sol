@@ -3,10 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std/Test.sol";
-import {Clones} from "openzeppelin-contracts/contracts/proxy/Clones.sol";
 
-import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
-import {IExpressionDeployerV3} from "rain.interpreter.interface/interface/deprecated/IExpressionDeployerV3.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Refundoor} from "test/util/concrete/Refundoor.sol";
 import {
@@ -17,11 +14,9 @@ import {
     SignedContextV1,
     EvaluableV4
 } from "test/util/concrete/FlashLendingMockOrderBook.sol";
-import {OrderBookV6ArbConfig} from "src/concrete/arb/GenericPoolOrderBookV6ArbOrderTaker.sol";
-import {TaskV2} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
-import {IInterpreterV4} from "rain.interpreter.interface/interface/unstable/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/unstable/IInterpreterStoreV3.sol";
-import {TOFUTokenDecimals, LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/concrete/TOFUTokenDecimals.sol";
+import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
+import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
 
 contract Token is ERC20 {
     constructor() ERC20("Token", "TKN") {}
@@ -32,33 +27,17 @@ contract Token is ERC20 {
 }
 
 abstract contract ArbTest is Test {
-    IInterpreterV4 immutable iInterpreter;
-    IInterpreterStoreV3 immutable iInterpreterStore;
-
     Token immutable iTakerInput;
     Token immutable iTakerOutput;
     address immutable iRefundoor;
     FlashLendingMockOrderBook immutable iOrderBook;
-    address immutable iArb;
+    address payable immutable iArb;
 
-    /// Mimics the `Construct` event from `OrderBookV6ArbCommon`.
-    event Construct(address sender, OrderBookV6ArbConfig config);
-
-    function expression() internal virtual returns (bytes memory) {
-        return "";
-    }
-
-    function buildArb(OrderBookV6ArbConfig memory config) internal virtual returns (address);
+    function buildArb() internal virtual returns (address payable);
 
     constructor() {
-        // Put the TOFU decimals contract in place so that any calls to it
-        // succeed. This is because we don't have zoltu here.
-        vm.etch(address(LibTOFUTokenDecimals.TOFU_DECIMALS_DEPLOYMENT), type(TOFUTokenDecimals).runtimeCode);
-
-        iInterpreter = IInterpreterV4(address(uint160(uint256(keccak256("interpreter.rain.test")))));
-        vm.label(address(iInterpreter), "iInterpreter");
-        iInterpreterStore = IInterpreterStoreV3(address(uint160(uint256(keccak256("interpreter.store.rain.test")))));
-        vm.label(address(iInterpreterStore), "iInterpreterStore");
+        LibRainDeploy.etchZoltuFactory(vm);
+        LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
 
         iTakerInput = new Token();
         vm.label(address(iTakerInput), "iTakerInput");
@@ -66,21 +45,14 @@ abstract contract ArbTest is Test {
         vm.label(address(iTakerOutput), "iTakerOutput");
         iRefundoor = address(new Refundoor());
         vm.label(iRefundoor, "iRefundoor");
-        iOrderBook = new FlashLendingMockOrderBook();
+        // Deploy the mock then etch its code at the deterministic orderbook
+        // address so that onFlashLoan's BadLender check passes.
+        FlashLendingMockOrderBook mockOb = new FlashLendingMockOrderBook();
+        vm.etch(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, address(mockOb).code);
+        iOrderBook = FlashLendingMockOrderBook(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
         vm.label(address(iOrderBook), "iOrderBook");
 
-        OrderBookV6ArbConfig memory config = OrderBookV6ArbConfig(
-            address(iOrderBook),
-            TaskV2({
-                evaluable: EvaluableV4(iInterpreter, iInterpreterStore, expression()),
-                signedContext: new SignedContextV1[](0)
-            }),
-            abi.encode(iRefundoor)
-        );
-
-        vm.expectEmit();
-        emit Construct(address(this), config);
-        iArb = buildArb(config);
+        iArb = buildArb();
         vm.label(iArb, "iArb");
     }
 

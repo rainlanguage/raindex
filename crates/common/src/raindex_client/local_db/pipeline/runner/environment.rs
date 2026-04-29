@@ -7,9 +7,15 @@ use crate::local_db::pipeline::runner::environment::{
 };
 use crate::local_db::pipeline::runner::utils::RunnerTarget;
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
-use crate::raindex_client::local_db::pipeline::status::ClientStatusBus;
 use std::sync::Arc;
 
+#[cfg(target_family = "wasm")]
+use crate::raindex_client::local_db::pipeline::status::ClientStatusBus;
+
+#[cfg(not(target_family = "wasm"))]
+use crate::raindex_client::local_db::pipeline::status::TracingStatusBus;
+
+#[cfg(target_family = "wasm")]
 pub fn default_environment() -> RunnerEnvironment<
     ClientBootstrapAdapter,
     DefaultWindowPipeline,
@@ -27,6 +33,37 @@ pub fn default_environment() -> RunnerEnvironment<
             let tokens = DefaultTokensPipeline::new(target.inputs.metadata_rpcs.clone())?;
 
             let status_bus = ClientStatusBus::with_ob_id(target.inputs.ob_id.clone());
+
+            Ok(EnginePipelines::new(
+                ClientBootstrapAdapter::new(),
+                DefaultWindowPipeline::new(),
+                events,
+                tokens,
+                DefaultApplyPipeline::new(),
+                status_bus,
+            ))
+        }),
+    )
+}
+
+#[cfg(not(target_family = "wasm"))]
+pub fn default_environment() -> RunnerEnvironment<
+    ClientBootstrapAdapter,
+    DefaultWindowPipeline,
+    DefaultEventsPipeline,
+    DefaultTokensPipeline,
+    DefaultApplyPipeline,
+    TracingStatusBus,
+> {
+    RunnerEnvironment::new(
+        default_manifest_fetcher(),
+        default_dump_downloader(),
+        Arc::new(|target: &RunnerTarget| {
+            let events =
+                DefaultEventsPipeline::with_regular_rpcs(target.inputs.metadata_rpcs.clone())?;
+            let tokens = DefaultTokensPipeline::new(target.inputs.metadata_rpcs.clone())?;
+
+            let status_bus = TracingStatusBus::with_ob_id(target.inputs.ob_id.clone());
 
             Ok(EnginePipelines::new(
                 ClientBootstrapAdapter::new(),

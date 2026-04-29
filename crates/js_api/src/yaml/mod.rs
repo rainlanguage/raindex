@@ -35,7 +35,7 @@ impl OrderbookYaml {
     /// ```javascript
     /// // Basic usage with single YAML source
     /// const yamlConfig = `
-    /// version: "4"
+    /// version: "5"
     /// networks:
     ///   mainnet:
     ///     rpc: https://mainnet.infura.io
@@ -248,7 +248,7 @@ pub(crate) mod tests {
             decimals: 18
             label: Wrapped Ether
             symbol: WETH
-    deployers:
+    rainlangs:
         deployer1:
             address: 0x0000000000000000000000000000000000000002
             network: mainnet

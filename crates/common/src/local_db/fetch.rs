@@ -443,7 +443,7 @@ mod tests {
         use alloy::rpc::types::FilterBlockError;
         use alloy::sol_types::SolEvent;
         use httpmock::prelude::*;
-        use rain_orderbook_bindings::{IInterpreterStoreV3::Set, IOrderBookV6::AddOrderV3};
+        use rain_orderbook_bindings::{IInterpreterStoreV3::Set, IRaindexV6::AddOrderV3};
         use serde_json::json;
         use std::str::FromStr;
         use std::sync::atomic::{AtomicUsize, Ordering};

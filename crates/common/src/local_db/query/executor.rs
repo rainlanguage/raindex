@@ -7,7 +7,8 @@ use super::{FromDbJson, LocalDbQueryError, SqlStatement, SqlStatementBatch};
 /// Implementations provide text and JSON query methods that map backend
 /// errors into `LocalDbQueryError` and deserialize JSON into target types
 /// via the `FromDbJson` bound.
-#[async_trait(?Send)]
+#[cfg_attr(target_family = "wasm", async_trait(?Send))]
+#[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait LocalDbQueryExecutor {
     async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError>;
 

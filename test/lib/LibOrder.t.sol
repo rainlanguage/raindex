@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 
-import {LibOrder, OrderV4} from "src/lib/LibOrder.sol";
+import {LibOrder, OrderV4} from "../../src/lib/LibOrder.sol";
 
 /// @title LibOrderTest
 /// Exercises the LibOrder library.

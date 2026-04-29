@@ -22,8 +22,7 @@
 	import TransactionProviderWrapper from '$lib/components/TransactionProviderWrapper.svelte';
 	import { initWallet } from '$lib/services/handleWalletInitialization';
 	import { REGISTRY_URL } from '$lib/constants';
-	import { onDestroy, onMount } from 'svelte';
-	import { updateStatus } from '$lib/stores/localDbStatus';
+	import { onMount } from 'svelte';
 	import type { RaindexClient } from '@rainlanguage/orderbook';
 
 	const { errorMessage, localDb, raindexClient, registry } = $page.data;
@@ -40,18 +39,13 @@
 	let walletInitError: string | null = null;
 
 	onMount(() => {
-		if (!browser || !raindexClient || !localDb || !registry) return;
+		if (!browser || !raindexClient || !registry) return;
 		let client = raindexClient as RaindexClient;
-		client.startLocalDbScheduler(registry.settings as string, updateStatus);
 
 		const uniqueChainIds = client.getUniqueChainIds();
 		if (!uniqueChainIds.error) {
 			validChainIds.set(uniqueChainIds.value);
 		}
-	});
-	onDestroy(() => {
-		if (!raindexClient) return;
-		raindexClient.stopLocalDbScheduler();
 	});
 
 	$: if (browser && window.navigator) {

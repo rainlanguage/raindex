@@ -16,6 +16,9 @@ packages/orderbook/esm.js
 packages/orderbook/esm.d.ts
 .direnv/
 
+# Audit proposed fixes
+.fixes/
+
 # AI Docs
 .claude/
 .ai_docs/

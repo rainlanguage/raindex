@@ -3,16 +3,16 @@
 pragma solidity =0.8.25;
 
 import {Vm} from "forge-std/Test.sol";
-import {LibOrder} from "src/lib/LibOrder.sol";
+import {LibOrder} from "../../../src/lib/LibOrder.sol";
+import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {
     OrderV4,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
-    SignedContextV1,
-    EvaluableV4
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+    SignedContextV1
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -26,14 +26,7 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
     /// Take orders makes no sense without any orders in the input array and the
     /// caller has full control over this so we error.
     function testTakeOrderNoopZeroOrders() external {
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
-            minimumIO: LibDecimalFloat.packLossless(0, 0),
-            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
-            maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
-            IOIsInput: true,
-            orders: new TakeOrderConfigV4[](0),
-            data: ""
-        });
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(new TakeOrderConfigV4[](0));
         vm.expectRevert(NoOrders.selector);
         (Float totalTakerInput, Float totalTakerOutput) = iOrderbook.takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
@@ -66,14 +59,7 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
         TakeOrderConfigV4 memory orderConfig = TakeOrderConfigV4(order, inputIOIndex, outputIOIndex, signedContexts);
         TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
         orders[0] = orderConfig;
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
-            minimumIO: LibDecimalFloat.packLossless(0, 0),
-            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
-            maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
-            IOIsInput: true,
-            orders: orders,
-            data: ""
-        });
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         vm.expectEmit(address(iOrderbook));
         emit OrderNotFound(address(this), order.owner, order.hash());
         vm.recordLogs();
@@ -135,14 +121,7 @@ contract OrderBookV6TakeOrderNoopTest is OrderBookV6ExternalRealTest {
                 orders[1] = orderConfig2;
             }
 
-            config = TakeOrdersConfigV5({
-                minimumIO: LibDecimalFloat.packLossless(0, 0),
-                maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
-                maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
-                IOIsInput: true,
-                orders: orders,
-                data: ""
-            });
+            config = LibTestTakeOrder.defaultTakeConfig(orders);
         }
 
         vm.recordLogs();

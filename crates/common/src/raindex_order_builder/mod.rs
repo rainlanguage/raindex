@@ -557,7 +557,7 @@ subgraphs:
     some-sg: https://www.some-sg.com
 metaboards:
     some-network: https://metaboard.com
-deployers:
+rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -583,7 +583,7 @@ tokens:
         symbol: T2
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
         bindings:
             test-binding: 5
         scenarios:
@@ -598,14 +598,14 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
     other-order:
       inputs:
         - token: token1
       outputs:
         - token: token1
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
 deployments:
     some-deployment:
@@ -760,7 +760,7 @@ networks:
         currency: ETH
 subgraphs:
     test-sg: https://test.subgraph.com
-deployers:
+rainlangs:
     test-deployer:
         network: test-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -810,7 +810,7 @@ tokens:
         symbol: T6
 scenarios:
     test-scenario:
-        deployer: test-deployer
+        rainlang: test-deployer
         bindings:
             test: 1
 orders:
@@ -821,7 +821,7 @@ orders:
       outputs:
         - token: token1
           vault-id: 1
-      deployer: test-deployer
+      rainlang: test-deployer
       orderbook: test-orderbook
 deployments:
     validation-deployment:
@@ -1023,7 +1023,7 @@ subgraphs:
     some-sg: https://www.some-sg.com
 metaboards:
     some-network: https://metaboard.com
-deployers:
+rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -1035,7 +1035,7 @@ orderbooks:
         deployment-block: 12345
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
         bindings:
             test-binding: 5
         scenarios:
@@ -1044,7 +1044,7 @@ scenarios:
                     another-binding: 300
 orders:
     some-order:
-        deployer: some-deployer
+        rainlang: some-deployer
         inputs:
             - token: token3
         outputs:

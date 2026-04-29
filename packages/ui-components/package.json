@@ -1,12 +1,12 @@
 {
 	"name": "@rainlanguage/ui-components",
-	"version": "0.0.1-alpha.214",
+	"version": "0.0.1-alpha.231",
 	"description": "A component library for building Svelte applications to be used with Raindex.",
 	"license": "LicenseRef-DCL-1.0",
 	"author": "Rain Open Source Software Ltd",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/rainlanguage/rain.orderbook.git"
+		"url": "https://github.com/rainlanguage/raindex.git"
 	},
 	"main": "dist/index.js",
 	"module": "dist/index.js",
@@ -57,7 +57,7 @@
 		"@fontsource/dm-sans": "5.1.0",
 		"@imask/svelte": "7.6.1",
 		"@observablehq/plot": "0.6.16",
-		"@rainlanguage/orderbook": "0.0.1-alpha.214",
+		"@rainlanguage/orderbook": "0.0.1-alpha.232",
 		"@reown/appkit": "1.6.4",
 		"@reown/appkit-adapter-wagmi": "1.6.4",
 		"@sentry/sveltekit": "7.120.0",

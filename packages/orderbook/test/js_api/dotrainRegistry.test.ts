@@ -34,6 +34,13 @@ subgraphs:
 metaboards:
   flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn
   base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-base-0x59401C93/0.1/gn
+rainlangs:
+  flare:
+    address: 0x1111111111111111111111111111111111111111
+    network: flare
+  base:
+    address: 0x2222222222222222222222222222222222222222
+    network: base
 orderbooks:
   flare:
     address: 0xCEe8Cd002F151A536394E564b84076c41bBBcD4d
@@ -47,7 +54,7 @@ orderbooks:
     subgraph: base
     local-db-remote: remote
     deployment-block: 12345
-deployers:
+registrys:
   flare:
     address: 0xE3989Ea7486c0F418C764e6c511e86f6E8830FAb
     network: flare
@@ -100,19 +107,21 @@ builder:
           default: 10
 scenarios:
   flare:
-    deployer: flare
+    rainlang: flare
     runs: 1
   base:
-    deployer: base
+    rainlang: base
     runs: 1
 orders:
   flare:
+    rainlang: flare
     orderbook: flare
     inputs:
       - token: token1
     outputs:
       - token: token1
   base:
+    rainlang: base
     orderbook: base
     inputs:
       - token: token2
@@ -129,6 +138,7 @@ deployments:
 const FIRST_DOTRAIN_CONTENT = `
 ${MOCK_DOTRAIN_PREFIX}
 ---
+#test-binding !
 #calculate-io
 _ _: 0 0;
 #handle-io
@@ -139,6 +149,7 @@ _ _: 0 0;
 const SECOND_DOTRAIN_CONTENT = `
 ${MOCK_DOTRAIN_PREFIX}
 ---
+#test-binding !
 #calculate-io
 _ _: 1 1;
 #handle-io
@@ -410,11 +421,15 @@ tokens:
     decimals: 6
     label: USD Coin
     symbol: USDC
+rainlangs:
+  mainnet:
+    address: 0x1111111111111111111111111111111111111111
+    network: mainnet
 orderbooks:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
-deployers:
+registrys:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
@@ -439,10 +454,11 @@ builder:
             - value: "0xbeef"
 scenarios:
   mainnet:
-    deployer: mainnet
+    rainlang: mainnet
     runs: 1
 orders:
   mainnet:
+    rainlang: mainnet
     orderbook: mainnet
     inputs:
       - token: weth
@@ -453,6 +469,7 @@ deployments:
     scenario: mainnet
     order: mainnet
 ---
+#test-binding !
 #calculate-io
 _ _: 0 0;
 #handle-io
@@ -494,7 +511,7 @@ test-order http://localhost:8231/order.rain`;
 				await DotrainRegistry.new('http://localhost:8231/registry.txt')
 			);
 
-			const raindexClientResult = registry.getRaindexClient();
+			const raindexClientResult = await registry.getRaindexClient();
 			const raindexClient = extractWasmEncodedData(raindexClientResult);
 
 			assert.ok(raindexClient, 'RaindexClient instance should be returned');

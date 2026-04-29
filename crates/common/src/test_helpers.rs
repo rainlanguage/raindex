@@ -41,11 +41,11 @@ tokens:
         decimals: 6
         label: USD Coin
         symbol: USDC
-deployers:
+rainlangs:
     scenario1:
         address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
         network: mainnet
-    deployer2:
+    rainlang2:
         address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
         network: testnet
 sentry: true
@@ -54,7 +54,7 @@ accounts:
     account2: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 orders:
     order1:
-        deployer: scenario1
+        rainlang: scenario1
         orderbook: mainnet
         inputs:
             - token: token1
@@ -478,7 +478,7 @@ pub mod local_evm {
 
 pub mod orders {
     use alloy::primitives::{Address, U256};
-    use rain_orderbook_bindings::IOrderBookV6::{EvaluableV4, OrderV4, IOV2};
+    use rain_orderbook_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
 
     pub fn make_basic_order(input_token: Address, output_token: Address) -> OrderV4 {
         OrderV4 {
@@ -531,7 +531,7 @@ pub mod orders {
         }
 
         use super::super::local_evm::MultiOrderbookTestSetup;
-        use rain_orderbook_bindings::IOrderBookV6::OrderV4;
+        use rain_orderbook_bindings::IRaindexV6::OrderV4;
 
         pub async fn deploy_order_to_orderbook(
             setup: &MultiOrderbookTestSetup,
@@ -608,6 +608,7 @@ pub mod candidates {
             output_io_index: 0,
             max_output,
             ratio,
+            signed_context: vec![],
         }
     }
 
@@ -653,6 +654,7 @@ pub mod quotes {
             block_number: 1,
             data,
             success,
+            signed_context: vec![],
             error: if success {
                 None
             } else {
@@ -671,7 +673,7 @@ pub mod dotrain {
 
     pub struct DotrainBuilder {
         rpc_url: String,
-        deployer: Address,
+        rainlang: Address,
         orderbook: Address,
         token1: Address,
         token2: Address,
@@ -686,7 +688,7 @@ pub mod dotrain {
         pub fn new(setup: &TestSetup) -> Self {
             Self {
                 rpc_url: setup.local_evm.url(),
-                deployer: *setup.local_evm.deployer.address(),
+                rainlang: setup.local_evm.rainlang,
                 orderbook: setup.orderbook,
                 token1: setup.token1,
                 token2: setup.token2,
@@ -704,7 +706,7 @@ pub mod dotrain {
         pub fn from_multi_orderbook_setup(setup: &MultiOrderbookTestSetup) -> Self {
             Self {
                 rpc_url: setup.local_evm.url(),
-                deployer: *setup.local_evm.deployer.address(),
+                rainlang: setup.local_evm.rainlang,
                 orderbook: setup.orderbook_a,
                 token1: setup.token1,
                 token2: setup.token2,
@@ -798,10 +800,10 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
-    test-deployer:
+rainlangs:
+    test-rainlang:
         network: test-network
-        address: {deployer}
+        address: {rainlang}
 tokens:
     t1:
         network: test-network
@@ -826,7 +828,7 @@ orders:
 {outputs}
 scenarios:
     test-scenario:
-        deployer: test-deployer
+        rainlang: test-rainlang
         bindings:
             max-amount: 1000
 deployments:
@@ -844,7 +846,7 @@ amount price: {max_output} {ratio};
 "#,
                 rpc_url = self.rpc_url,
                 orderbook = self.orderbook,
-                deployer = self.deployer,
+                rainlang = self.rainlang,
                 token1 = self.token1,
                 token2 = self.token2,
                 spec_version = SpecVersion::current(),
@@ -1063,8 +1065,8 @@ orderbooks:
         subgraph: test-sg
         local-db-remote: remote
         deployment-block: 0
-deployers:
-    test-deployer:
+rainlangs:
+    test-rainlang:
         network: test-network
         address: 0x1111111111111111111111111111111111111111
 tokens:
@@ -1117,8 +1119,8 @@ orderbooks:
         subgraph: test-sg
         local-db-remote: remote
         deployment-block: 0
-deployers:
-    test-deployer:
+rainlangs:
+    test-rainlang:
         network: test-network
         address: 0x1111111111111111111111111111111111111111
 tokens:

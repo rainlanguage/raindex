@@ -533,4 +533,121 @@ describe('OrderDetail', () => {
 			).not.toBeInTheDocument();
 		});
 	});
+
+	describe('Oracle URL functionality', () => {
+		it('renders Oracle section when oracleUrl is present', async () => {
+			const oracleUrl = 'https://oracle.example.com/api';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				expect(screen.getByText('Oracle')).toBeInTheDocument();
+			});
+		});
+
+		it('does not render Oracle section when oracleUrl is not present', async () => {
+			resolveOrder({ oracleUrl: undefined });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				expect(screen.queryByText('Oracle')).not.toBeInTheDocument();
+			});
+		});
+
+		it('renders Oracle URL as clickable link when URL is https', async () => {
+			const oracleUrl = 'https://oracle.example.com/api';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				const oracleLink = screen.getByRole('link', { name: oracleUrl });
+				expect(oracleLink).toBeInTheDocument();
+				expect(oracleLink).toHaveAttribute('href', oracleUrl);
+				expect(oracleLink).toHaveAttribute('target', '_blank');
+				expect(oracleLink).toHaveAttribute('rel', 'noopener noreferrer');
+				expect(oracleLink).toHaveClass('text-blue-500', 'hover:underline');
+			});
+		});
+
+		it('renders Oracle URL as clickable link when URL is http', async () => {
+			const oracleUrl = 'http://localhost:8080/oracle';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				const oracleLink = screen.getByRole('link', { name: oracleUrl });
+				expect(oracleLink).toBeInTheDocument();
+				expect(oracleLink).toHaveAttribute('href', oracleUrl);
+				expect(oracleLink).toHaveAttribute('target', '_blank');
+				expect(oracleLink).toHaveAttribute('rel', 'noopener noreferrer');
+			});
+		});
+
+		it('renders Oracle URL as plain text when URL does not start with http/https', async () => {
+			const oracleUrl = 'ftp://oracle.example.com/api';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				expect(screen.getByText(oracleUrl)).toBeInTheDocument();
+				expect(screen.queryByRole('link', { name: oracleUrl })).not.toBeInTheDocument();
+			});
+		});
+
+		it('renders Oracle URL as plain text with gray styling for non-http URLs', async () => {
+			const oracleUrl = 'javascript:alert(1)';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				const textElement = screen.getByText(oracleUrl);
+				expect(textElement).toBeInTheDocument();
+				expect(textElement.tagName).toBe('SPAN');
+				expect(textElement).toHaveClass('text-gray-500');
+				// Should not be a link itself (but other links may exist on page)
+				expect(screen.queryByRole('link', { name: oracleUrl })).not.toBeInTheDocument();
+			});
+		});
+
+		it('displays Oracle section with info icon when URL is present', async () => {
+			const oracleUrl = 'https://oracle.example.com/api';
+			resolveOrder({ oracleUrl });
+
+			render(OrderDetail, {
+				props: defaultProps,
+				context: new Map([['$$_queryClient', queryClient]])
+			});
+
+			await waitFor(() => {
+				// Check that Oracle section is present
+				expect(screen.getByText('Oracle')).toBeInTheDocument();
+				// Check that the Oracle URL is displayed
+				expect(screen.getByText(oracleUrl)).toBeInTheDocument();
+			});
+		});
+	});
 });

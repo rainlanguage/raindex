@@ -182,11 +182,11 @@
         "nixpkgs": "nixpkgs_5"
       },
       "locked": {
-        "lastModified": 1758705030,
-        "narHash": "sha256-zYM8PiEXANNrtjfyGUc7w37/D/kCynp0cQS+wCQ77GI=",
+        "lastModified": 1773213477,
+        "narHash": "sha256-Pv1Z3QqGkSGEUV+9pM5vYIiI7VJo7Tfm6ZmR+JSp1zo=",
         "owner": "shazow",
         "repo": "foundry.nix",
-        "rev": "b59a55014050110170023e3e1c277c1d4a2f055b",
+        "rev": "3c73daa86c823d706824fd9bbcb85aa23fd0f668",
         "type": "github"
       },
       "original": {
@@ -288,11 +288,11 @@
     },
     "nixpkgs_6": {
       "locked": {
-        "lastModified": 1758711836,
-        "narHash": "sha256-uBqPg7wNX2v6YUdTswH7wWU8wqb60cFZx0tHaWTGF30=",
+        "lastModified": 1773260212,
+        "narHash": "sha256-lYbvufol78/ziIlZm043NT2byudb6NQpGHhYhVSlkVY=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "46f97b78e825ae762c0224e3983c47687436a498",
+        "rev": "37e1923adb6229cea0d12a5921b75c976017ccfe",
         "type": "github"
       },
       "original": {
@@ -319,11 +319,11 @@
     },
     "nixpkgs_8": {
       "locked": {
-        "lastModified": 1748662220,
-        "narHash": "sha256-7gGa49iB9nCnFk4h/g9zwjlQAyjtpgcFkODjcOQS0Es=",
+        "lastModified": 1771923393,
+        "narHash": "sha256-Fy0+UXELv9hOE8WjYhJt8fMDLYTU2Dqn3cX4BwoGBos=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "59138c7667b7970d205d6a05a8bfa2d78caa3643",
+        "rev": "ea7f1f06811ce7fcc81d6c6fd4213150c23edcf2",
         "type": "github"
       },
       "original": {
@@ -384,11 +384,11 @@
         "solc": "solc_2"
       },
       "locked": {
-        "lastModified": 1765371510,
-        "narHash": "sha256-VePuikXRg4rZGK0av4bmC/J0exj8BlgoRHvoxFz1PKo=",
+        "lastModified": 1774123997,
+        "narHash": "sha256-cEFLNMBxtHVlHQhZnNB2atnrpyd9xhHdXkAyAhy7EaU=",
         "owner": "rainlanguage",
         "repo": "rainix",
-        "rev": "b074f64cc366016d5d4fa99f585f9f5b0661a92b",
+        "rev": "25c2c14681aaa648c87bd242ff3ccaf5e8e37c18",
         "type": "github"
       },
       "original": {
@@ -428,11 +428,11 @@
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
-        "lastModified": 1758681214,
-        "narHash": "sha256-8cW731vev6kfr58cILO2ZsjHwaPhm88dQ8Q6nTSjP9I=",
+        "lastModified": 1773216618,
+        "narHash": "sha256-iZlowevS+xKLGOXtZwpIrz3SWe7PtoGUfEeVZNib+WE=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "b12ed88d8d33d4f3cbc842bf29fad93bb1437299",
+        "rev": "07d7dc6fcc5eae76b4fb0e19d4afd939437bec97",
         "type": "github"
       },
       "original": {
@@ -463,13 +463,13 @@
     "solc-macos-amd64-list-json": {
       "flake": false,
       "locked": {
-        "narHash": "sha256-AvITkfpNYgCypXuLJyqco0li+unVw39BAfdOZvd/SPE=",
+        "narHash": "sha256-oEiXc95EghuYCudzkPA9XBFOnMdgWFfTO2/4XUfSTpc=",
         "type": "file",
-        "url": "https://github.com/argotorg/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/83cb756/macosx-amd64/list.json"
       },
       "original": {
         "type": "file",
-        "url": "https://github.com/argotorg/solc-bin/raw/26fc3fd/macosx-amd64/list.json"
+        "url": "https://github.com/argotorg/solc-bin/raw/83cb756/macosx-amd64/list.json"
       }
     },
     "solc_2": {
@@ -479,11 +479,11 @@
         "solc-macos-amd64-list-json": "solc-macos-amd64-list-json"
       },
       "locked": {
-        "lastModified": 1756368702,
-        "narHash": "sha256-cqEHv7uCV0LibmQphyiXZ1+jYtGjMNb9Pae4tfcAcF8=",
+        "lastModified": 1772085240,
+        "narHash": "sha256-+NEcuhT2A0QQumVx9Ze6g2iuNicyuW028Jq/HUJHGh4=",
         "owner": "hellwolf",
         "repo": "solc.nix",
-        "rev": "d83e90df2fa8359a690f6baabf76099432193c3f",
+        "rev": "d3cc119973e484ea366f4b997b404bb00d7829ca",
         "type": "github"
       },
       "original": {

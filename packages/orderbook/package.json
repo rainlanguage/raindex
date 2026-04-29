@@ -1,18 +1,18 @@
 {
     "name": "@rainlanguage/orderbook",
     "description": "Provides RainLanguage Orderbook rust crates' functionalities in typescript through wasm bindgen",
-    "version": "0.0.1-alpha.214",
+    "version": "0.0.1-alpha.232",
     "license": "LicenseRef-DCL-1.0",
     "author": "Rain Open Source Software Ltd",
     "repository": {
         "type": "git",
-        "url": "https://github.com/rainlanguage/rain.orderbook.git"
+        "url": "https://github.com/rainlanguage/raindex.git"
     },
     "keywords": [],
     "bugs": {
-        "url": "https://github.com/rainlanguage/rain.orderbook/issues"
+        "url": "https://github.com/rainlanguage/raindex/issues"
     },
-    "homepage": "https://github.com/rainlanguage/rain.orderbook#readme",
+    "homepage": "https://github.com/rainlanguage/raindex#readme",
     "main": "./dist/cjs/index.js",
     "module": "./dist/esm/index.js",
     "browser": {

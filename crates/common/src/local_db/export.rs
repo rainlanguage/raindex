@@ -210,8 +210,8 @@ mod tests {
     use futures::executor;
     use rusqlite::{params, types::ValueRef, Connection};
     use serde_json::{json, Map};
-    use std::cell::RefCell;
     use std::str::FromStr;
+    use std::sync::Mutex;
 
     fn column(name: &str) -> TableInfoRow {
         TableInfoRow {
@@ -220,7 +220,7 @@ mod tests {
     }
 
     struct TestExecutor {
-        conn: RefCell<Connection>,
+        conn: Mutex<Connection>,
     }
 
     impl TestExecutor {
@@ -232,7 +232,7 @@ mod tests {
             seed_tables(&conn);
 
             Self {
-                conn: RefCell::new(conn),
+                conn: Mutex::new(conn),
             }
         }
     }
@@ -246,10 +246,11 @@ mod tests {
         }
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for TestExecutor {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
-            let conn = self.conn.borrow();
+            let conn = self.conn.lock().unwrap();
             for stmt in batch {
                 if stmt.params().is_empty() {
                     conn.execute_batch(stmt.sql()).map_err(|e| {
@@ -274,7 +275,7 @@ mod tests {
         where
             T: crate::local_db::query::FromDbJson,
         {
-            let conn = self.conn.borrow();
+            let conn = self.conn.lock().unwrap();
             let mut prepared = conn.prepare(stmt.sql()).map_err(|e| {
                 LocalDbQueryError::database(format!("Failed to prepare query: {e}"))
             })?;
@@ -324,7 +325,7 @@ mod tests {
         }
 
         async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
-            let conn = self.conn.borrow();
+            let conn = self.conn.lock().unwrap();
             if stmt.params().is_empty() {
                 conn.execute_batch(stmt.sql()).map_err(|e| {
                     LocalDbQueryError::database(format!("SQL execution failed: {e}"))
@@ -1020,7 +1021,7 @@ mod tests {
         let orderbook = encode_prefixed(ob_id.orderbook_address);
 
         {
-            let conn = executor.conn.borrow();
+            let conn = executor.conn.lock().unwrap();
             conn.execute(
                 "INSERT INTO db_metadata (id, db_schema_version) VALUES (?1, ?2);",
                 params![1, 999],

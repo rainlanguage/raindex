@@ -1,25 +1,6 @@
 name: Deploy subgraph
 on:
   workflow_dispatch:
-    inputs:
-      network:
-        description: "Network to deploy to"
-        required: true
-        type: choice
-        options:
-          - arbitrum-one
-          - arbitrum_sepolia
-          - avalanche
-          - base
-          - bsc
-          - mainnet
-          - flare
-          - mumbai
-          - oasis_sapphire
-          - matic
-          - sepolia
-          - songbird
-          - linea
 
 jobs:
   deploy:
@@ -27,6 +8,9 @@ jobs:
       id-token: write
       contents: read
     runs-on: ubuntu-latest
+    env:
+      GOLDSKY_TOKEN: ${{ secrets.CI_GOLDSKY_TOKEN }}
+      GOLDSKY_SUBGRAPH_NAME: ob4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,31 +28,11 @@ jobs:
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
-          # restore and save a cache using this key
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          # if there's no cache hit, restore a cache by this prefix
           restore-prefixes-first-match: nix-${{ runner.os }}-
-          # collect garbage until the Nix store size (in bytes) is at most this number
-          # before trying to save a new cache
-          # 1G = 1073741824
           gc-max-store-size-linux: 1G
 
-      - run: >
-          (cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && nix develop -c rainix-sol-prelude)
-
-      - run: nix develop -c bash -c rainix-sol-prelude
-
-      - run: nix develop -c graph codegen
-        working-directory: subgraph
-      - run: nix develop -c graph build --network ${{ inputs.network }}
-        working-directory: subgraph
-      - run: nix develop -c goldsky login --token ${{ secrets.CI_GOLDSKY_TOKEN }}
-
-      # Check if the repo is clean before deploying.
-      - run: git diff --exit-code -- . ':(exclude)subgraph/subgraph.yaml'
-      - run: >
-          nix develop -c goldsky subgraph deploy "ob4-${{ inputs.network }}/$(date -Idate)-$(openssl rand -hex 2)"
-        working-directory: subgraph
+      - run: nix develop -c subgraph-deploy
 
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status

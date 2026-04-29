@@ -6,7 +6,7 @@ dataSources:
     name: OrderBook
     network: sepolia
     source:
-      address: "0x0000000000000000000000000000000000000000"
+      address: "0x7242ce1ffe34297921c54cD7f9343c411E1E7759"
       abi: OrderBook
       startBlock: 0
     mapping:
@@ -23,7 +23,7 @@ dataSources:
         - name: ERC20
           file: ../out/ERC20.sol/ERC20.json
         - name: DecimalFloat
-          file: ../lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float/out/DecimalFloat.sol/DecimalFloat.json
+          file: ../out/DecimalFloat.sol/DecimalFloat.json
       eventHandlers:
         - event: DepositV2(address,address,bytes32,uint256)
           handler: handleDeposit

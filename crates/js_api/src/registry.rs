@@ -546,16 +546,21 @@ impl DotrainRegistry {
         let yaml = OrderbookYaml::new(vec![self.settings.clone()], None)?;
         Ok(yaml)
     }
+}
 
+#[cfg(target_family = "wasm")]
+#[wasm_export]
+impl DotrainRegistry {
     /// Creates a RaindexClient instance from the registry's shared settings.
-    ///
-    /// This method provides access to the RaindexClient SDK, allowing you to query
-    /// orders, vaults, and other onchain data from the shared settings YAML.
     ///
     /// ## Examples
     ///
     /// ```javascript
-    /// const clientResult = registry.getRaindexClient();
+    /// const clientResult = await registry.getRaindexClient(
+    ///   localDb.query.bind(localDb),
+    ///   localDb.wipeAndRecreate.bind(localDb),
+    ///   updateStatus,
+    /// );
     /// if (clientResult.error) {
     ///   console.error("Failed to get RaindexClient:", clientResult.error.readableMsg);
     ///   return;
@@ -568,8 +573,43 @@ impl DotrainRegistry {
         unchecked_return_type = "RaindexClient",
         return_description = "RaindexClient instance from registry settings"
     )]
-    pub fn get_raindex_client(&self) -> Result<RaindexClient, DotrainRegistryError> {
-        let client = RaindexClient::new(vec![self.settings.clone()], None)?;
+    pub async fn get_raindex_client(
+        &self,
+        #[wasm_export(
+            js_name = "queryCallback",
+            param_description = "Optional JavaScript function to execute local database queries"
+        )]
+        query_callback: Option<js_sys::Function>,
+        #[wasm_export(
+            js_name = "wipeCallback",
+            param_description = "Optional JavaScript function to wipe and recreate the database"
+        )]
+        wipe_callback: Option<js_sys::Function>,
+        #[wasm_export(
+            js_name = "statusCallback",
+            param_description = "Optional callback invoked with the current local DB sync status"
+        )]
+        status_callback: Option<js_sys::Function>,
+    ) -> Result<RaindexClient, DotrainRegistryError> {
+        let client = RaindexClient::new(
+            vec![self.settings.clone()],
+            None,
+            query_callback,
+            wipe_callback,
+            status_callback,
+        )
+        .await?;
+        Ok(client)
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl DotrainRegistry {
+    pub async fn get_raindex_client(
+        &self,
+        db_path: Option<std::path::PathBuf>,
+    ) -> Result<RaindexClient, DotrainRegistryError> {
+        let client = RaindexClient::new(vec![self.settings.clone()], None, db_path).await?;
         Ok(client)
     }
 }
@@ -719,6 +759,13 @@ subgraphs:
 metaboards:
   flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn
   base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-base-0x59401C93/0.1/gn
+rainlangs:
+  flare:
+    address: 0x1111111111111111111111111111111111111111
+    network: flare
+  base:
+    address: 0x2222222222222222222222222222222222222222
+    network: base
 orderbooks:
   flare:
     address: 0xCEe8Cd002F151A536394E564b84076c41bBBcD4d
@@ -730,7 +777,7 @@ orderbooks:
     network: base
     subgraph: base
     deployment-block: 0
-deployers:
+registrys:
   flare:
     address: 0xE3989Ea7486c0F418C764e6c511e86f6E8830FAb
     network: flare
@@ -792,19 +839,21 @@ builder:"#,
           default: 10
 scenarios:
   flare:
-    deployer: flare
+    rainlang: flare
     runs: 1
   base:
-    deployer: base
+    rainlang: base
     runs: 1
 orders:
   flare:
+    rainlang: flare
     orderbook: flare
     inputs:
       - token: token1
     outputs:
       - token: token1
   base:
+    rainlang: base
     orderbook: base
     inputs:
       - token: token2
@@ -823,6 +872,7 @@ deployments:
         format!(
             r#"{prefix}{body}
 ----
+#test-binding !
 #calculate-io
 _ _: 0 0;
 #handle-io
@@ -838,6 +888,7 @@ _ _: 0 0;
         format!(
             r#"{prefix}{body}
 ----
+#test-binding !
 #calculate-io
 _ _: 1 1;
 #handle-io
@@ -1519,11 +1570,15 @@ tokens:
     decimals: 6
     label: USD Coin
     symbol: USDC
+rainlangs:
+  mainnet:
+    address: 0x1111111111111111111111111111111111111111
+    network: mainnet
 orderbooks:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
-deployers:
+registrys:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
@@ -1550,10 +1605,11 @@ deployers:
             - value: "0xbeef"
 scenarios:
   mainnet:
-    deployer: mainnet
+    rainlang: mainnet
     runs: 1
 orders:
   mainnet:
+    rainlang: mainnet
     orderbook: mainnet
     inputs:
       - token: weth
@@ -1564,6 +1620,7 @@ deployments:
     scenario: mainnet
     order: mainnet
 ---
+#test-binding !
 #calculate-io
 _ _: 0 0;
 #handle-io
@@ -1632,7 +1689,7 @@ _ _: 0 0;
                 .await
                 .unwrap();
 
-            let raindex_client = registry.get_raindex_client();
+            let raindex_client = registry.get_raindex_client(None).await;
             assert!(raindex_client.is_ok());
         }
     }

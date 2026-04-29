@@ -1,5 +1,8 @@
 use rain_metadata::{
-    types::dotrain::{order_builder_state_v1::OrderBuilderStateV1, source_v1::DotrainSourceV1},
+    types::{
+        dotrain::{order_builder_state_v1::OrderBuilderStateV1, source_v1::DotrainSourceV1},
+        raindex_signed_context_oracle::RaindexSignedContextOracleV1,
+    },
     KnownMagic, RainMetaDocumentV1Item,
 };
 use serde::{Deserialize, Serialize};
@@ -13,6 +16,7 @@ use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 pub enum ParsedMeta {
     OrderBuilderStateV1(OrderBuilderStateV1),
     DotrainSourceV1(DotrainSourceV1),
+    RaindexSignedContextOracleV1(RaindexSignedContextOracleV1),
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(ParsedMeta);
@@ -33,6 +37,10 @@ impl ParsedMeta {
             KnownMagic::DotrainSourceV1 => {
                 let source = DotrainSourceV1::try_from(item.clone())?;
                 Ok(Some(ParsedMeta::DotrainSourceV1(source)))
+            }
+            KnownMagic::RaindexSignedContextOracleV1 => {
+                let oracle = RaindexSignedContextOracleV1::try_from(item.clone())?;
+                Ok(Some(ParsedMeta::RaindexSignedContextOracleV1(oracle)))
             }
             // Filter out all other metadata types - they're not needed for the frontend
             _ => Ok(None),
@@ -197,5 +205,68 @@ mod tests {
         // Assert
         assert!(matches!(&parsed[0], ParsedMeta::DotrainSourceV1(s) if s.0 == source.0));
         assert!(matches!(&parsed[1], ParsedMeta::OrderBuilderStateV1(g) if g == &builder));
+    }
+
+    #[test]
+    fn test_from_meta_item_raindex_signed_context_oracle_v1() {
+        let oracle =
+            RaindexSignedContextOracleV1::parse("https://oracle.example.com/prices/eth-usd")
+                .unwrap();
+        let item = oracle.to_meta_item();
+        let result = ParsedMeta::from_meta_item(&item).unwrap();
+        match result.unwrap() {
+            ParsedMeta::RaindexSignedContextOracleV1(parsed_oracle) => {
+                assert_eq!(
+                    parsed_oracle.url(),
+                    "https://oracle.example.com/prices/eth-usd"
+                );
+            }
+            _ => panic!("Expected RaindexSignedContextOracleV1"),
+        }
+    }
+
+    #[test]
+    fn test_parse_multiple_with_oracle() {
+        let source = get_default_dotrain_source();
+        let oracle =
+            RaindexSignedContextOracleV1::parse("https://oracle.example.com/feed").unwrap();
+
+        let items = vec![
+            RainMetaDocumentV1Item::from(source.clone()),
+            oracle.to_meta_item(),
+        ];
+
+        let results = ParsedMeta::parse_multiple(&items).unwrap();
+        assert_eq!(results.len(), 2);
+
+        match &results[0] {
+            ParsedMeta::DotrainSourceV1(parsed_source) => {
+                assert_eq!(parsed_source.0, source.0);
+            }
+            _ => panic!("Expected DotrainSourceV1"),
+        }
+
+        match &results[1] {
+            ParsedMeta::RaindexSignedContextOracleV1(parsed_oracle) => {
+                assert_eq!(parsed_oracle.url(), "https://oracle.example.com/feed");
+            }
+            _ => panic!("Expected RaindexSignedContextOracleV1"),
+        }
+    }
+
+    #[test]
+    fn test_parse_from_bytes_with_oracle() {
+        let oracle =
+            RaindexSignedContextOracleV1::parse("https://oracle.example.com/prices/eth-usd")
+                .unwrap();
+        let items = vec![oracle.to_meta_item()];
+        let bytes = RainMetaDocumentV1Item::cbor_encode_seq(&items, KnownMagic::RainMetaDocumentV1)
+            .unwrap();
+
+        let parsed = ParsedMeta::parse_from_bytes(&bytes).unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert!(
+            matches!(&parsed[0], ParsedMeta::RaindexSignedContextOracleV1(o) if o.url() == "https://oracle.example.com/prices/eth-usd")
+        );
     }
 }

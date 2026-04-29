@@ -2,25 +2,22 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std/Vm.sol";
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
-    IOrderBookV6,
+    IRaindexV6,
     OrderConfigV4,
     OrderV4,
-    TakeOrderConfigV4,
     TakeOrdersConfigV5,
     ClearConfigV2,
     TaskV2
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
-import {IParserV2} from "rain.interpreter.interface/interface/IParserV2.sol";
-import {IERC3156FlashBorrower} from "rain.orderbook.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {IERC3156FlashBorrower} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {EvaluableV4, SignedContextV1} from "rain.interpreter.interface/interface/unstable/IInterpreterCallerV4.sol";
+import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
+import {EvaluableV4, SignedContextV1} from "rain.interpreter.interface/interface/IInterpreterCallerV4.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 /// @title OrderBookV6FlashLenderReentrant
 /// Test that flash borrowers can reenter the orderbook, which is necessary for
@@ -51,11 +48,12 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
     /// Can reenter and read vault balances from within a flash loan.
     /// forge-config: default.fuzz.runs = 100
     function testReenterReadVaultBalances(uint256 vaultId, uint256 loanAmount) external {
+        vm.assume(vaultId != 0);
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
             borrower,
-            abi.encodeWithSelector(IOrderBookV6.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
+            abi.encodeWithSelector(IRaindexV6.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
             loanAmount
         );
     }
@@ -66,14 +64,17 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IOrderBookV6.orderExists.selector, orderHash), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV6.orderExists.selector, orderHash), loanAmount
         );
     }
 
     /// Can reenter and deposit from within a flash loan.
     /// forge-config: default.fuzz.runs = 100
     function testReenterDeposit(uint256 vaultId, uint256 loanAmount, uint256 depositAmount18) external {
+        vm.assume(vaultId != 0);
         depositAmount18 = bound(depositAmount18, 1, uint256(int256(type(int224).max)));
+        // depositAmount18 is bound above so safe to typecast.
+        // forge-lint: disable-next-line(unsafe-typecast)
         Float depositAmount = LibDecimalFloat.packLossless(int256(depositAmount18), -18);
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
@@ -85,7 +86,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IOrderBookV6.deposit4.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
+                IRaindexV6.deposit4.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
             ),
             loanAmount
         );
@@ -94,7 +95,10 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
     /// Can reenter and withdraw from within a flash loan.
     /// forge-config: default.fuzz.runs = 100
     function testReenterWithdraw(uint256 vaultId, uint256 loanAmount, uint256 withdrawAmount18) external {
+        vm.assume(vaultId != 0);
         withdrawAmount18 = bound(withdrawAmount18, 1, uint256(int256(type(int224).max)));
+        // withdrawAmount18 is bound above so safe to typecast.
+        // forge-lint: disable-next-line(unsafe-typecast)
         Float withdrawAmount = LibDecimalFloat.packLossless(int256(withdrawAmount18), 0);
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
@@ -106,7 +110,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IOrderBookV6.withdraw4.selector, address(iToken0), vaultId, withdrawAmount, new TaskV2[](0)
+                IRaindexV6.withdraw4.selector, address(iToken0), vaultId, withdrawAmount, new TaskV2[](0)
             ),
             loanAmount
         );
@@ -121,7 +125,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IOrderBookV6.addOrder4.selector, config, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV6.addOrder4.selector, config, new TaskV2[](0)), loanAmount
         );
     }
 
@@ -132,7 +136,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         order.owner = address(borrower);
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IOrderBookV6.removeOrder3.selector, order, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV6.removeOrder3.selector, order, new TaskV2[](0)), loanAmount
         );
     }
 
@@ -146,24 +150,15 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
 
         vm.recordLogs();
         iOrderbook.addOrder4(config, new TaskV2[](0));
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-        (,, OrderV4 memory order) = abi.decode(entries[0].data, (address, bytes32, OrderV4));
+        OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory takeOrdersConfig = TakeOrdersConfigV5({
-            minimumIO: LibDecimalFloat.packLossless(0, 0),
-            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
-            maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
-            IOIsInput: true,
-            orders: orders,
-            data: ""
-        });
+        TakeOrdersConfigV5 memory takeOrdersConfig =
+            LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IOrderBookV6.takeOrders4.selector, takeOrdersConfig), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, takeOrdersConfig), loanAmount
         );
     }
 
@@ -193,14 +188,12 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         vm.recordLogs();
         vm.prank(alice);
         iOrderbook.addOrder4(aliceConfig, new TaskV2[](0));
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-        (,, OrderV4 memory aliceOrder) = abi.decode(entries[0].data, (address, bytes32, OrderV4));
+        OrderV4 memory aliceOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         vm.recordLogs();
         vm.prank(bob);
         iOrderbook.addOrder4(bobConfig, new TaskV2[](0));
-        entries = vm.getRecordedLogs();
-        (,, OrderV4 memory bobOrder) = abi.decode(entries[0].data, (address, bytes32, OrderV4));
+        OrderV4 memory bobOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         ClearConfigV2 memory clearConfig = ClearConfigV2(0, 0, 0, 0, 0, 0);
 
@@ -226,7 +219,7 @@ contract OrderBookV6FlashLenderReentrant is OrderBookV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IOrderBookV6.clear3.selector,
+                IRaindexV6.clear3.selector,
                 aliceOrder,
                 bobOrder,
                 clearConfig,

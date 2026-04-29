@@ -14,14 +14,17 @@ jobs:
       contents: write
     env:
       DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
-      DEPLOY_METABOARD_ADDRESS: ${{ vars.CI_DEPLOY_SEPOLIA_METABOARD_ADDRESS }}
+
       CI_FORK_SEPOLIA_BLOCK_NUMBER: ${{ vars.CI_FORK_SEPOLIA_BLOCK_NUMBER }}
       CI_FORK_SEPOLIA_DEPLOYER_ADDRESS: ${{ vars.CI_FORK_SEPOLIA_DEPLOYER_ADDRESS }}
       CI_DEPLOY_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_SEPOLIA_RPC_URL || vars.CI_DEPLOY_SEPOLIA_RPC_URL }}
       CI_SEPOLIA_METABOARD_URL: ${{ vars.CI_SEPOLIA_METABOARD_URL }}
+      CI_DEPLOY_ARBITRUM_RPC_URL: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL }}
+      CI_DEPLOY_BASE_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL }}
+      CI_DEPLOY_BASE_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_RPC_URL }}
       CI_DEPLOY_POLYGON_RPC_URL: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL }}
-      RPC_URL_ETHEREUM_FORK: ${{ secrets.RPC_URL_ETHEREUM_FORK }}
       CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL }}
+      RPC_URL_ETHEREUM_FORK: ${{ secrets.RPC_URL_ETHEREUM_FORK }}
       COMMIT_SHA: ${{ github.sha }}
     outputs:
       version: ${{ env.NEW_VERSION }}
@@ -169,16 +172,23 @@ jobs:
 
       # from here on, we'll skip if OLD_HASH and NEW_HASH are the same (ie no publish)
       # this means we need to skip every step by using an if statement.
-      # set npm version
+      # set npm package versions independently
       - name: Set Version
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
           npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/orderbook
-          NEW_VERSION=$(jq -r '.version' ./packages/orderbook/package.json)
-          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-          jq --arg v "$NEW_VERSION" '.dependencies."@rainlanguage/orderbook" = $v' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
+          OB_NEW_VERSION=$(jq -r '.version' ./packages/orderbook/package.json)
+          echo "OB_NEW_VERSION=$OB_NEW_VERSION" >> $GITHUB_ENV
+          jq --arg ob "$OB_NEW_VERSION" '.dependencies."@rainlanguage/orderbook" = $ob' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
           npx prettier --write ./packages/ui-components/package.json
           npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/ui-components
+          UC_NEW_VERSION=$(jq -r '.version' ./packages/ui-components/package.json)
+          echo "UC_NEW_VERSION=$UC_NEW_VERSION" >> $GITHUB_ENV
+          jq --indent 4 --arg ob "$OB_NEW_VERSION" --arg uc "$UC_NEW_VERSION" '
+            .packages."packages/orderbook".version = $ob |
+            .packages."packages/ui-components".version = $uc |
+            .packages."packages/ui-components".dependencies."@rainlanguage/orderbook" = $ob
+          ' ./package-lock.json > tmp.json && mv tmp.json ./package-lock.json
 
       # Create orderbook npm package tarball
       - name: Create orderbook NPM Package Tarball
@@ -187,13 +197,13 @@ jobs:
 
       - name: Rename orderbook NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: mv ${{ env.OB_NPM_PACKAGE }} orderbook_npm_package_${{ env.NEW_VERSION }}.tgz
+        run: mv ${{ env.OB_NPM_PACKAGE }} orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
 
       # publish orderbook pkg to npm
       - name: Publish orderbook pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm publish orderbook_npm_package_${{ env.NEW_VERSION }}.tgz \
+          npm publish orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz \
             --access public \
             --tag latest \
             --verbose
@@ -205,13 +215,13 @@ jobs:
 
       - name: Rename ui-components NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.NEW_VERSION }}.tgz
+        run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
 
       # publish ui-components to npm
       - name: Publish ui-components To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm publish ui_components_npm_package_${{ env.NEW_VERSION }}.tgz \
+          npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
             --access public \
             --tag latest \
             --verbose
@@ -223,15 +233,15 @@ jobs:
           git add "packages/orderbook/package.json"
           git add "packages/ui-components/package.json"
           git add "package-lock.json"
-          git commit -m "NPM Package Release v${{ env.NEW_VERSION }}"
-          git tag npm-v${{ env.NEW_VERSION }}
+          git commit -m "NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
+          git tag "npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
 
       # Push the commit to remote
       - name: Push Changes To Remote
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
           git push origin
-          git push -u origin npm-v${{ env.NEW_VERSION }}
+          git push -u origin "npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -241,11 +251,11 @@ jobs:
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: npm-v${{ env.NEW_VERSION }}
-          name: NPM Package Release v${{ env.NEW_VERSION }}
+          tag_name: npm-ob-v${{ env.OB_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}
+          name: NPM Package Release orderbook v${{ env.OB_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
           files: |
-            orderbook_npm_package_${{ env.NEW_VERSION }}.tgz
-            ui_components_npm_package_${{ env.NEW_VERSION }}.tgz
+            orderbook_npm_package_${{ env.OB_NEW_VERSION }}.tgz
+            ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

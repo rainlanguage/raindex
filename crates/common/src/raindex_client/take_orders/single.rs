@@ -9,7 +9,7 @@ use crate::take_orders::{
 use alloy::primitives::Address;
 use rain_math_float::Float;
 use rain_orderbook_bindings::provider::mk_read_provider;
-use rain_orderbook_bindings::IOrderBookV6::OrderV4;
+use rain_orderbook_bindings::IRaindexV6::OrderV4;
 use std::ops::{Div, Mul};
 #[cfg(target_family = "wasm")]
 use std::str::FromStr;
@@ -17,6 +17,22 @@ use url::Url;
 
 use super::approval::{check_approval_needed, ApprovalCheckParams};
 use super::result::{build_calldata_result, TakeOrderEstimate, TakeOrdersCalldataResult};
+
+/// Parameters for executing a take order.
+#[derive(Debug, Clone)]
+pub struct TakeOrderExecutionParams {
+    pub mode: ParsedTakeOrdersMode,
+    pub price_cap: Float,
+    pub taker: Address,
+    pub sell_token: Address,
+}
+
+/// RPC context for blockchain interactions.
+#[derive(Debug, Clone)]
+pub struct RpcContext<'a> {
+    pub rpc_urls: &'a [Url],
+    pub block_number: Option<u64>,
+}
 
 pub fn build_candidate_from_quote(
     order: &RaindexOrder,
@@ -54,6 +70,12 @@ pub fn build_candidate_from_quote(
         output_io_index,
         max_output: data.max_output,
         ratio: data.ratio,
+        // Inherit the composed signed context that the quote pipeline
+        // attached (oracle entries first, then any injector-contributed
+        // entries). Dropping it here was a regression: gated orders whose
+        // `calculate-io` asserted on signed context during quoting would
+        // then be executed without the same context at `takeOrders4` time.
+        signed_context: quote.signed_context.clone(),
     }))
 }
 
@@ -104,36 +126,35 @@ pub fn estimate_take_order(
 
 pub async fn execute_single_take(
     candidate: TakeOrderCandidate,
-    mode: ParsedTakeOrdersMode,
-    price_cap: Float,
-    taker: Address,
-    rpc_urls: &[Url],
-    block_number: Option<u64>,
-    sell_token: Address,
+    execution_params: TakeOrderExecutionParams,
+    rpc_context: RpcContext<'_>,
 ) -> Result<TakeOrdersCalldataResult, RaindexError> {
     let zero = Float::zero()?;
 
-    if candidate.ratio.gt(price_cap)? {
+    if candidate.ratio.gt(execution_params.price_cap)? {
         return Err(RaindexError::NoLiquidity);
     }
 
     let orderbook = candidate.orderbook;
 
     let approval_params = ApprovalCheckParams {
-        rpc_urls: rpc_urls.to_vec(),
-        sell_token,
-        taker,
+        rpc_urls: rpc_context.rpc_urls.to_vec(),
+        sell_token: execution_params.sell_token,
+        taker: execution_params.taker,
         orderbook,
-        mode,
-        price_cap,
+        mode: execution_params.mode,
+        price_cap: execution_params.price_cap,
     };
 
     if let Some(approval_result) = check_approval_needed(&approval_params).await? {
         return Ok(approval_result);
     }
 
-    let target = mode.target_amount();
-    let is_buy_mode = mode.is_buy_mode();
+    // Signed context (oracle + injector) is already attached to the
+    // candidate by `build_candidate_from_quote`, which inherits it from
+    // the quote. No extra fetch is needed at execute time.
+    let target = execution_params.mode.target_amount();
+    let is_buy_mode = execution_params.mode.is_buy_mode();
 
     let (output, input) = if is_buy_mode {
         let output = if candidate.max_output.lte(target)? {
@@ -172,26 +193,46 @@ pub async fn execute_single_take(
         total_output: output,
     };
 
-    let built = build_take_orders_config_from_simulation(sim, mode, price_cap)?
-        .ok_or(RaindexError::NoLiquidity)?;
+    let built = build_take_orders_config_from_simulation(
+        sim,
+        execution_params.mode,
+        execution_params.price_cap,
+    )?
+    .ok_or(RaindexError::NoLiquidity)?;
 
-    let provider =
-        mk_read_provider(rpc_urls).map_err(|e| RaindexError::PreflightError(e.to_string()))?;
+    let provider = mk_read_provider(rpc_context.rpc_urls)
+        .map_err(|e| RaindexError::PreflightError(e.to_string()))?;
 
-    let sim_result =
-        simulate_take_orders(&provider, orderbook, taker, &built.config, block_number).await;
+    let sim_result = simulate_take_orders(
+        &provider,
+        orderbook,
+        execution_params.taker,
+        &built.config,
+        rpc_context.block_number,
+    )
+    .await;
 
     match sim_result {
-        Ok(()) => build_calldata_result(orderbook, built, mode, price_cap),
+        Ok(()) => build_calldata_result(
+            orderbook,
+            built,
+            execution_params.mode,
+            execution_params.price_cap,
+        ),
         Err(sim_error) => {
             if built.config.orders.len() == 1 {
                 Err(RaindexError::PreflightError(format!(
                     "Order failed simulation: {}",
                     sim_error
                 )))
-            } else if let Some(_failing_idx) =
-                find_failing_order_index(&provider, orderbook, taker, &built.config, block_number)
-                    .await
+            } else if let Some(_failing_idx) = find_failing_order_index(
+                &provider,
+                orderbook,
+                execution_params.taker,
+                &built.config,
+                rpc_context.block_number,
+            )
+            .await
             {
                 Err(RaindexError::PreflightError(format!(
                     "Order failed simulation: {}",
@@ -245,6 +286,7 @@ mod tests {
             block_number: 1,
             data,
             success,
+            signed_context: vec![],
             error: if success {
                 None
             } else {
@@ -372,7 +414,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let order = raindex_client
@@ -471,7 +515,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let order = raindex_client
@@ -572,7 +618,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let order = raindex_client
@@ -590,6 +638,143 @@ mod tests {
             assert!(
                 result.is_none(),
                 "Quote with zero capacity should return None"
+            );
+        });
+    }
+
+    /// Regression: a quote whose `signed_context` is populated (as produced
+    /// by the injector-aware quote pipeline) must propagate that context into
+    /// the candidate verbatim. Dropping it here previously caused gated
+    /// single-takes to execute `takeOrders4` without the context that
+    /// `calculate-io` saw at quote time.
+    #[test]
+    fn test_build_candidate_inherits_signed_context_from_quote() {
+        use crate::local_db::OrderbookIdentifier;
+        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+        use alloy::primitives::{b256, Address, Bytes, FixedBytes, U256};
+        use httpmock::MockServer;
+        use rain_orderbook_bindings::IRaindexV6::SignedContextV1;
+        use rain_orderbook_subgraph_client::utils::float::F1;
+        use serde_json::json;
+        use std::str::FromStr;
+
+        let max_output = Float::parse("100".to_string()).unwrap();
+        let ratio = Float::parse("1".to_string()).unwrap();
+
+        let oracle_entry = SignedContextV1 {
+            signer: Address::from([0xAAu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(1u64).to_be_bytes::<32>())],
+            signature: Bytes::from(vec![0x01]),
+        };
+        let injected_entry = SignedContextV1 {
+            signer: Address::from([0xBBu8; 20]),
+            context: vec![FixedBytes::<32>::from(U256::from(2u64).to_be_bytes::<32>())],
+            signature: Bytes::from(vec![0x02]),
+        };
+
+        let mut quote = make_quote(0, 0, Some(make_quote_value(max_output, ratio)), true);
+        quote.signed_context = vec![oracle_entry.clone(), injected_entry.clone()];
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let server = MockServer::start_async().await;
+            server.mock(|when, then| {
+                when.path("/sg");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "orders": [{
+                            "id": "0x46891c626a8a188610b902ee4a0ce8a7e81915e1b922584f8168d14525899dfb",
+                            "orderBytes": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000005f6c104ca9812ef91fe2e26a2e7187b92d3b0e800000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000000000000000000000000000000000000000022009cd210f509c66e18fab61fd30f76fb17c6c6cd09f0972ce0815b5b7630a1b050000000000000000000000005fb33d710f8b58de4c9fdec703b5c2487a5219d600000000000000000000000084c6e7f5a1e5dd89594cc25bef4722a1b8871ae600000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000075000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000015020000000c02020002011000000110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000001d80c49bbbcd1c0911346656b529df9e5c2f783d0000000000000000000000000000000000000000000000000000000000000012f5bb1bfe104d351d99dcce1ccfb041ff244a2d3aaf83bd5c4f3fe20b3fceb372000000000000000000000000000000000000000000000000000000000000000100000000000000000000000012e605bc104e93b45e1ad99f9e555f659051c2bb0000000000000000000000000000000000000000000000000000000000000012f5bb1bfe104d351d99dcce1ccfb041ff244a2d3aaf83bd5c4f3fe20b3fceb372",
+                            "orderHash": "0x283508c8f56f4de2f21ee91749d64ec3948c16bc6b4bfe4f8d11e4e67d76f4e0",
+                            "owner": "0x0000000000000000000000000000000000000000",
+                            "outputs": [{
+                                "id": "0x0000000000000000000000000000000000000000",
+                                "owner": "0xf08bcbce72f62c95dcb7c07dcb5ed26acfcfbc11",
+                                "vaultId": "75486334982066122983501547829219246999490818941767825330875804445439814023987",
+                                "balance": F1,
+                                "token": {
+                                    "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                                    "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                                    "name": "sFLR",
+                                    "symbol": "sFLR",
+                                    "decimals": "18"
+                                },
+                                "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                                "ordersAsOutput": [],
+                                "ordersAsInput": [],
+                                "balanceChanges": []
+                            }],
+                            "inputs": [{
+                                "id": "0x0000000000000000000000000000000000000000",
+                                "owner": "0xf08bcbce72f62c95dcb7c07dcb5ed26acfcfbc11",
+                                "vaultId": "75486334982066122983501547829219246999490818941767825330875804445439814023987",
+                                "balance": F1,
+                                "token": {
+                                    "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                                    "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                                    "name": "WFLR",
+                                    "symbol": "WFLR",
+                                    "decimals": "18"
+                                },
+                                "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                                "ordersAsOutput": [],
+                                "ordersAsInput": [],
+                                "balanceChanges": []
+                            }],
+                            "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                            "active": true,
+                            "timestampAdded": "1739448802",
+                            "meta": null,
+                            "addEvents": [],
+                            "trades": [],
+                            "removeEvents": []
+                        }]
+                    }
+                }));
+            });
+
+            let raindex_client = crate::raindex_client::RaindexClient::new(
+                vec![get_test_yaml(
+                    &server.url("/sg"),
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let order = raindex_client
+                .get_order_by_hash(
+                    &OrderbookIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+
+            let candidate = build_candidate_from_quote(&order, &quote)
+                .unwrap()
+                .expect("candidate should be built");
+
+            assert_eq!(
+                candidate.signed_context.len(),
+                2,
+                "candidate must inherit both oracle and injected context entries"
+            );
+            assert_eq!(candidate.signed_context[0].signer, oracle_entry.signer);
+            assert_eq!(candidate.signed_context[1].signer, injected_entry.signer);
+            assert_eq!(
+                candidate.signed_context[0].signature,
+                oracle_entry.signature
+            );
+            assert_eq!(
+                candidate.signed_context[1].signature,
+                injected_entry.signature
             );
         });
     }

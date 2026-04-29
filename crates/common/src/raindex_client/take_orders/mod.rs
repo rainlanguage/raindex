@@ -18,6 +18,7 @@ use super::{RaindexClient, RaindexError};
 use crate::rpc_client::RpcClient;
 use crate::take_orders::{
     build_take_orders_config_from_simulation, find_failing_order_index, simulate_take_orders,
+    NoopInjector, SignedContextInjector,
 };
 use approval::{check_approval_needed, ApprovalCheckParams};
 use rain_orderbook_bindings::provider::mk_read_provider;
@@ -26,7 +27,7 @@ use wasm_bindgen_utils::wasm_export;
 
 #[wasm_export]
 impl RaindexClient {
-    /// Generates calldata for `IOrderBookV6.takeOrders4` using a mode + price-cap policy.
+    /// Generates calldata for `IRaindexV6.takeOrders4` using a mode + price-cap policy.
     ///
     /// This method includes preflight simulation to validate the transaction will succeed
     /// and automatically removes failing orders from the config.
@@ -78,6 +79,21 @@ impl RaindexClient {
         )]
         request: TakeOrdersRequest,
     ) -> Result<TakeOrdersCalldataResult, RaindexError> {
+        self.get_take_orders_calldata_with_injector(request, &NoopInjector)
+            .await
+    }
+}
+
+impl RaindexClient {
+    /// Non-wasm variant of [`Self::get_take_orders_calldata`] that accepts a
+    /// caller-supplied [`SignedContextInjector`]. The injector contributes
+    /// additional `SignedContextV1` entries appended after any oracle-fetched
+    /// contexts for each candidate (composition order: `[oracle..., injected...]`).
+    pub async fn get_take_orders_calldata_with_injector(
+        &self,
+        request: TakeOrdersRequest,
+        injector: &dyn SignedContextInjector,
+    ) -> Result<TakeOrdersCalldataResult, RaindexError> {
         let req = request::parse_request(&request)?;
 
         let orders = self
@@ -93,6 +109,9 @@ impl RaindexClient {
             req.sell_token,
             req.buy_token,
             Some(block_number),
+            None,
+            req.taker,
+            injector,
         )
         .await?;
 

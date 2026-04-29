@@ -155,7 +155,7 @@ metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
 
-deployers:
+rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -183,7 +183,7 @@ tokens:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
         bindings:
             test-binding: 5
         scenarios:
@@ -199,7 +199,7 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
 
 deployments:
@@ -235,7 +235,7 @@ metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
 
-deployers:
+rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -263,7 +263,7 @@ tokens:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
         bindings:
             test-binding: 5
 
@@ -273,7 +273,7 @@ orders:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
 
 deployments:
@@ -307,7 +307,7 @@ subgraphs:
 metaboards:
     test: http://localhost:8085/metaboard
 
-deployers:
+rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -321,7 +321,7 @@ orderbooks:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
         bindings:
             test-binding: 5
 
@@ -331,7 +331,7 @@ orders:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
 
 deployments:
@@ -395,7 +395,7 @@ subgraphs:
 metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
-deployers:
+rainlangs:
     some-deployer:
         network: remote-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -438,23 +438,23 @@ tokens:
         symbol: T3
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-deployer
     other-scenario:
-        deployer: other-deployer
+        rainlang: other-deployer
 orders:
     some-order:
       inputs:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-deployer
       orderbook: some-orderbook
     other-order:
       inputs:
         - token: token3
       outputs:
         - token: token3
-      deployer: other-deployer
+      rainlang: other-deployer
       orderbook: other-orderbook
 deployments:
     test-deployment:
@@ -495,6 +495,25 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Builder', async function
 		}
 
 		return result.value;
+	};
+
+	const mockRainlangRegistryCalls = async () => {
+		await mockServer
+			.forPost('/rpc-url')
+			.withBodyIncluding('0x10762802')
+			.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
+		await mockServer
+			.forPost('/rpc-url')
+			.withBodyIncluding('0x4501e517')
+			.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
+		await mockServer
+			.forPost('/rpc-url')
+			.withBodyIncluding('0xf2c4da93')
+			.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+		await mockServer
+			.forPost('/rpc-url')
+			.withBodyIncluding('0x0c1916a4')
+			.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
 	};
 
 	const metaBoardAbi = [
@@ -1020,7 +1039,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Builder', async function
 
 	describe('state management tests', async () => {
 		let serializedState =
-			'H4sIAAAAAAAA_21QsU7DMBCNAwIJMSDEioTESojrKKZUZSlC6oDUFFJEJlRSQ0JcO3IcKsRHMLLyAxVfwMrG9yA2FHEORPQNfud77853RtYP1oE1K7RznYpJKm4R5LC19le9H_OS2ZBZMYrMmGhZBsvAPt6nDQupLUvALYzRomakeTMDFnLKHMH0TKrM1G0DJ1rnHdflMh7zRBa608Zt31V57JSKP1YOVJ3IPH0S9rcgfOp-znc_uvO3Z__169Imh-8vMdpEqyCH1Qw7BJm1Q2LZ1i-av1D3p5Sif2vVqud5exCeMXLRK9kxjvzhaZrdBeomD6gOzpXoD6PB1YiMBgfeLEp62dEG1EidMOVMWM7lw5QJ_Q1JvIo1ygEAAA==';
+			'H4sIAAAAAAAA_21QvU7DMBCOAwIJMSDEioTESoibKD9UZWAAyo-KgEhtWVBJTRPVtYPtgAoPwcjKC1Q8ASsbz4PYIOIciOgN_s73fee7z8j4iUVARaSyrlLWT9kAQQ0bC3_Z2x7NiQmVOc3wIWE1Q8csoIc3_YrEKSUzgDWM0bTHnOpNLyj5iFiMqDsuhrpvFTBRKqvbNuVxjyZcqnqIQ88WWWzlgj4UClScSI_ejZorkD42Pibr743J65P38tkxna235xgto3mgo2KHNQdp29G3D9P4jeo3lAN830f_fJWs67obkO5c3ByceYftIBgfHwXxvsB5ilsn7cu9827zujOQXfc-DFhLeqfbS9DDVUKE1ScZ5eMRYeoLJmrdMssBAAA=';
 		let dotrain3: string;
 		let builder: RaindexOrderBuilder;
 		beforeAll(async () => {
@@ -1397,6 +1416,7 @@ ${dotrain}`;
 		});
 
 		it('generates add order calldata', async () => {
+			await mockRainlangRegistryCalls();
 			await mockServer
 				.forPost('/rpc-url')
 				.withBodyIncluding('0x56fb83e9')
@@ -1436,6 +1456,7 @@ ${dotrain}`;
 		});
 
 		it('generates add order calldata without entering field value', async () => {
+			await mockRainlangRegistryCalls();
 			await mockServer
 				.forPost('/rpc-url')
 				.withBodyIncluding('0x56fb83e9')
@@ -1473,6 +1494,7 @@ ${dotrain}`;
 		});
 
 		it('should generate multicalldata for deposit and add order with existing vault ids', async () => {
+			await mockRainlangRegistryCalls();
 			await mockServer
 				.forPost('/rpc-url')
 				.withBodyIncluding('0x56fb83e9')
@@ -1515,6 +1537,7 @@ ${dotrain}`;
 		});
 
 		it('should generate multicalldata for deposit and add order with missing field value', async () => {
+			await mockRainlangRegistryCalls();
 			await mockServer
 				.forPost('/rpc-url')
 				.withBodyIncluding('0x56fb83e9')
@@ -1583,6 +1606,7 @@ ${dotrainWithoutVaultIds}`;
 			);
 			const builder = extractWasmEncodedData(result);
 
+			await mockRainlangRegistryCalls();
 			await mockServer
 				.forPost('/rpc-url')
 				.withBodyIncluding('0x56fb83e9')

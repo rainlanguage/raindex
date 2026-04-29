@@ -175,6 +175,10 @@ test('setOptions is called correctly', async () => {
 });
 
 test('setTimeScale is called correctly', async () => {
+	const fakeNow = new Date('2025-06-15T12:00:00Z');
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	vi.setSystemTime(fakeNow);
+
 	const title = 'test title';
 	const emptyMessage = 'empty message';
 	const loading = false;
@@ -212,7 +216,7 @@ test('setTimeScale is called correctly', async () => {
 	});
 
 	const timeDelta = 60 * 60 * 24 * 30; // 30 days in seconds
-	const timeTo = Math.floor(new Date().getTime() / 1000) as UTCTimestamp;
+	const timeTo = Math.floor(fakeNow.getTime() / 1000) as UTCTimestamp;
 	const timeFrom = (timeTo - timeDelta) as UTCTimestamp;
 
 	await waitFor(() => {
@@ -221,6 +225,8 @@ test('setTimeScale is called correctly', async () => {
 			to: timeTo
 		});
 	});
+
+	vi.useRealTimers();
 });
 
 test('setupChart is called correctly', async () => {

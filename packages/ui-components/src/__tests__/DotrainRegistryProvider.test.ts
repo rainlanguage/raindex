@@ -31,7 +31,7 @@ describe('DotrainRegistryProvider', () => {
 			getDeploymentDetails: vi.fn(() => wasmErrorResult),
 			getOrderBuilder: vi.fn(async () => wasmErrorResult),
 			getOrderbookYaml: vi.fn(() => wasmErrorResult),
-			getRaindexClient: vi.fn(() => wasmErrorResult),
+			getRaindexClient: vi.fn(async () => wasmErrorResult),
 			registryUrl,
 			registry: 'registry-content',
 			settingsUrl: 'https://example.com/settings.yaml',

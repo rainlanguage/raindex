@@ -234,7 +234,8 @@ using-tokens-from:
             "name": "Token1",
             "symbol": "T1",
             "decimals": 18,
-            "logoURI": "https://example.com/token1-logo.png"
+            "logoURI": "https://example.com/token1-logo.png",
+            "extensions": {"isStablecoin": true}
         },
         {
             "chainId": 234,
@@ -301,6 +302,11 @@ using-tokens-from:
             token.logo_uri,
             Some(Url::parse("https://example.com/token1-logo.png").unwrap())
         );
+        let ext = token.extensions.as_ref().unwrap();
+        assert_eq!(
+            ext.get("isStablecoin"),
+            Some(&serde_json::Value::Bool(true))
+        );
 
         let token2_key = "remote2-network-Token2-0x0000000000000000000000000000000000000002";
         let token = tokens.get(token2_key).unwrap();
@@ -312,6 +318,7 @@ using-tokens-from:
         assert_eq!(token.network.key, "remote2-network");
         assert_eq!(token.network.chain_id, 234);
         assert_eq!(token.logo_uri, None);
+        assert_eq!(token.extensions, None);
     }
 
     #[tokio::test]

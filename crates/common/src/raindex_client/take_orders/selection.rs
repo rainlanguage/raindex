@@ -2,7 +2,8 @@ use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::RaindexError;
 use crate::take_orders::{
     build_take_order_candidates_for_pair, simulate_buy_over_candidates,
-    simulate_spend_over_candidates, ParsedTakeOrdersMode, SimulationResult, TakeOrderCandidate,
+    simulate_spend_over_candidates, ParsedTakeOrdersMode, SignedContextInjector, SimulationResult,
+    TakeOrderCandidate,
 };
 use crate::utils::float::cmp_float;
 use alloy::primitives::Address;
@@ -14,10 +15,20 @@ pub(crate) async fn build_candidates_for_chain(
     sell_token: Address,
     buy_token: Address,
     block_number: Option<u64>,
+    chunk_size: Option<u32>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let candidates =
-        build_take_order_candidates_for_pair(orders, sell_token, buy_token, block_number, None)
-            .await?;
+    let candidates = build_take_order_candidates_for_pair(
+        orders,
+        sell_token,
+        buy_token,
+        block_number,
+        chunk_size,
+        counterparty,
+        injector,
+    )
+    .await?;
     if candidates.is_empty() {
         return Err(RaindexError::NoLiquidity);
     }

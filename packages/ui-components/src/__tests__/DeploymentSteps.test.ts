@@ -55,7 +55,7 @@ const mockDeployment = {
 				label: 'Flare',
 				currency: 'FLR'
 			},
-			deployer: {
+			rainlang: {
 				key: 'flare',
 				bindings: {}
 			} as ScenarioCfg,
