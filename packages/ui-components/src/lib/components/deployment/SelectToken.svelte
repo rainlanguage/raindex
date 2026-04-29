@@ -1,16 +1,16 @@
 <script lang="ts">
 	import { Input } from 'flowbite-svelte';
-	import type { GuiSelectTokensCfg, ExtendedTokenInfo } from '@rainlanguage/orderbook';
+	import type { OrderBuilderSelectTokensCfg, ExtendedTokenInfo } from '@rainlanguage/orderbook';
 	import { CheckCircleSolid, CloseCircleSolid } from 'flowbite-svelte-icons';
 	import { Spinner } from 'flowbite-svelte';
 	import { onMount } from 'svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import TokenSelectionModal from './TokenSelectionModal.svelte';
 	import TokenBalanceComponent from './TokenBalance.svelte';
 	import type { TokenBalance } from '$lib/types/tokenBalance';
 
-	export let token: GuiSelectTokensCfg;
+	export let token: OrderBuilderSelectTokensCfg;
 	export let onSelectTokenSelect: (key: string) => void;
 	export let tokenBalances: Map<string, TokenBalance> = new Map();
 
@@ -21,11 +21,11 @@
 	let selectionMode: 'dropdown' | 'custom' = 'dropdown';
 	let selectedToken: ExtendedTokenInfo | null = null;
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	onMount(async () => {
 		try {
-			let result = await gui.getTokenInfo(token.key);
+			let result = await builder.getTokenInfo(token.key);
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}
@@ -66,7 +66,7 @@
 		checking = true;
 		error = '';
 		try {
-			await gui.setSelectToken(token.key, address);
+			await builder.setSelectToken(token.key, address);
 			await getInfoForSelectedToken();
 		} catch (e) {
 			const errorMessage = (e as Error).message || 'Invalid token address.';
@@ -78,14 +78,14 @@
 	}
 
 	function clearTokenSelection() {
-		gui.unsetSelectToken(token.key);
+		builder.unsetSelectToken(token.key);
 		onSelectTokenSelect(token.key);
 	}
 
 	async function getInfoForSelectedToken() {
 		error = '';
 		try {
-			let result = await gui.getTokenInfo(token.key);
+			let result = await builder.getTokenInfo(token.key);
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}

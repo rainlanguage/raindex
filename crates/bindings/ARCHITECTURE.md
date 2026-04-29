@@ -8,7 +8,7 @@ File Layout
 - Cargo.toml: Declares the crate `rain_orderbook_bindings`. Key deps: `alloy` (codegen + types + RPC), `serde` (Serialize/Deserialize), `tower` (layers), `url`, `thiserror`. For WASM builds it uses `wasm-bindgen-utils` and `wasm-bindgen-test` for tests.
 - src/lib.rs: Declares contract bindings using Alloy’s `sol!` macro and re‑exports internal modules. Conditionally includes WASM modules.
 - src/provider.rs: Builds a read‑only provider with multi‑RPC fallback and sensible default request fillers.
-- src/js_api.rs (wasm only): JS/WASM interop. Implements wasm conversion traits and custom TypeScript interfaces for selected ABI types used in the GUI.
+- src/js_api.rs (wasm only): JS/WASM interop. Implements wasm conversion traits and custom TypeScript interfaces for selected ABI types used in the order builder.
 - src/wasm_traits.rs (wasm only): Utility trait to convert JS `BigInt` to `U256` with negative/overflow handling plus tests.
 
 Generated Solidity Bindings (Alloy `sol!`)
@@ -34,7 +34,7 @@ Generated Solidity Bindings (Alloy `sol!`)
 
 - Derives and defaults:
   - `all_derives = true` enables useful traits on generated types, including `Clone`, `Debug`, `Default`, `Eq`, `PartialEq`, and more, which the codebase relies on (e.g., `OrderV4::default()`).
-  - `extra_derives(serde::Serialize, serde::Deserialize)` ensures all ABI types can be serialized to/from JSON, which is critical for CLI/GUI I/O and WASM interop.
+  - `extra_derives(serde::Serialize, serde::Deserialize)` ensures all ABI types can be serialized to/from JSON, which is critical for CLI/builder I/O and WASM interop.
 
 ABI Source of Truth
 - The referenced JSON files under `out/` are produced by Foundry (`forge build`). If ABIs change, re‑build the contracts so `out/.../*.json` stays in sync. The `sol!` macro reads these on compile.
@@ -59,7 +59,7 @@ Provider Utilities (`src/provider.rs`)
 WASM and JS Interop
 - Conditional compilation: `src/js_api.rs` and `src/wasm_traits.rs` are compiled only for `target_family = "wasm"`.
 
-- `src/js_api.rs` bridges key ABI types to predictable TypeScript shapes for the GUI, using the workspace’s `wasm-bindgen-utils` macros:
+- `src/js_api.rs` bridges key ABI types to predictable TypeScript shapes for the order builder, using the workspace’s `wasm-bindgen-utils` macros:
   - `impl_wasm_traits!(T)` implements glue code to convert between Rust and JS values (e.g., Serde + wasm-bindgen interop) for the given type.
   - `impl_custom_tsify!(T, "…TS interface…")` pins the exact TypeScript surface for WASM consumers. This avoids relying on auto‑generated typings that may drift with upstream changes.
 
@@ -93,7 +93,7 @@ How This Crate Is Used Elsewhere
 - Common utilities (`crates/common`):
   - Uses ABI‑generated call structs (e.g., `deposit3Call`, `withdraw3Call`, `removeOrder3Call`, `IERC20::approveCall`) to build calldata for transactions.
 - JS API (`crates/js_api`):
-  - Builds GUI calldata for approvals/deposits/add‑order and uses call structs like `OrderBook::multicallCall` without needing on‑chain RPC instance helpers.
+  - Builds order builder calldata for approvals/deposits/add‑order and uses call structs like `OrderBook::multicallCall` without needing on‑chain RPC instance helpers.
 - CLI (`crates/cli`):
   - Consumes ABI struct types such as `OrderV4` and `IOV2` to construct orders from user inputs.
 
@@ -132,5 +132,5 @@ Limitations and Notes
 - `AnyNetwork` provider: Consumers are responsible for ensuring the supplied RPCs point to the intended chain.
 
 Updating Bindings
-- Modify the Solidity contracts as needed, run `nix develop -c forge build`, then rebuild Rust. If new structs/functions are added to the ABIs, they will appear under the corresponding Rust modules after recompilation. Add/update WASM TS interfaces in `src/js_api.rs` as needed for GUI usage.
+- Modify the Solidity contracts as needed, run `nix develop -c forge build`, then rebuild Rust. If new structs/functions are added to the ABIs, they will appear under the corresponding Rust modules after recompilation. Add/update WASM TS interfaces in `src/js_api.rs` as needed for order builder usage.
 

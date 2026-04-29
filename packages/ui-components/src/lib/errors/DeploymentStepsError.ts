@@ -1,8 +1,8 @@
 import { writable } from 'svelte/store';
 
 export enum DeploymentStepsErrorCode {
-	NO_GUI_PROVIDER = 'No GUI provider found.',
-	NO_GUI = 'Error loading GUI.',
+	NO_BUILDER_PROVIDER = 'No builder provider found.',
+	NO_BUILDER = 'Error loading builder.',
 	NO_LOCAL_DB_PROVIDER = 'No Local DB provider found.',
 	NO_STRATEGY = 'No valid order exists at this URL',
 	NO_SELECT_TOKENS = 'Error loading tokens',
@@ -11,14 +11,14 @@ export enum DeploymentStepsErrorCode {
 	NO_DEPOSITS = 'Error loading deposits',
 	NO_TOKEN_INPUTS = 'Error loading token inputs',
 	NO_TOKEN_OUTPUTS = 'Error loading token outputs',
-	NO_GUI_DETAILS = 'Error getting GUI details',
+	NO_BUILDER_DETAILS = 'Error getting builder details',
 	NO_CHAIN = 'Unsupported chain ID',
 	NO_NETWORK_KEY = 'No network key found',
 	NO_AVAILABLE_TOKENS = 'Error loading available tokens',
 	SERIALIZE_ERROR = 'Error serializing state',
 	ADD_ORDER_FAILED = 'Failed to add order',
 	NO_WALLET = 'No account address found',
-	NO_GUI_CONFIG = 'Error getting GUI configuration',
+	NO_BUILDER_CONFIG = 'Error getting builder configuration',
 	NO_RAINDEX_CLIENT_PROVIDER = 'No Raindex client provider found'
 }
 

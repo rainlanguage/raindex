@@ -13,7 +13,7 @@ const ALLOWED_ORDER_KEYS: [&str; 5] = ["inputs", "oracle-url", "orderbook", "out
 const ALLOWED_ORDER_IO_KEYS: [&str; 2] = ["token", "vault-id"];
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 use yaml::{
-    context::{Context, GuiContextTrait, SelectTokensContext},
+    context::{Context, OrderBuilderContextTrait, SelectTokensContext},
     default_document, optional_string, require_hash, require_string, require_vec, YamlError,
     YamlParsableHash,
 };

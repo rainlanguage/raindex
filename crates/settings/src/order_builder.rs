@@ -1,6 +1,6 @@
 use crate::{
     yaml::{
-        context::{Context, GuiContextTrait},
+        context::{Context, OrderBuilderContextTrait},
         default_document, get_hash_value, get_hash_value_as_option, optional_hash, optional_string,
         optional_vec, require_string, require_vec, FieldErrorKind, YamlError, YamlParsableHash,
         YamlParseableValue,
@@ -15,8 +15,9 @@ use std::{
 };
 use strict_yaml_rust::{strict_yaml::Hash, StrictYaml};
 
-const ALLOWED_GUI_KEYS: [&str; 4] = ["name", "description", "short-description", "deployments"];
-const ALLOWED_GUI_DEPLOYMENT_KEYS: [&str; 6] = [
+const ALLOWED_ORDER_BUILDER_KEYS: [&str; 4] =
+    ["name", "description", "short-description", "deployments"];
+const ALLOWED_ORDER_BUILDER_DEPLOYMENT_KEYS: [&str; 6] = [
     "name",
     "description",
     "short-description",
@@ -70,22 +71,22 @@ pub struct DepositValidationCfg {
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(DepositValidationCfg);
 
-// Config source for Gui
+// Config source for OrderBuilder
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "kebab-case")]
-pub struct GuiPresetSourceCfg {
+pub struct OrderBuilderPresetSourceCfg {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub value: String,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiPresetSourceCfg);
+impl_wasm_traits!(OrderBuilderPresetSourceCfg);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "kebab-case")]
-pub struct GuiDepositSourceCfg {
+pub struct OrderBuilderDepositSourceCfg {
     pub token: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub presets: Option<Vec<String>>,
@@ -96,13 +97,13 @@ pub struct GuiDepositSourceCfg {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "kebab-case")]
-pub struct GuiFieldDefinitionSourceCfg {
+pub struct OrderBuilderFieldDefinitionSourceCfg {
     pub binding: String,
     pub name: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub description: Option<String>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub presets: Option<Vec<GuiPresetSourceCfg>>,
+    pub presets: Option<Vec<OrderBuilderPresetSourceCfg>>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub default: Option<String>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
@@ -114,43 +115,43 @@ pub struct GuiFieldDefinitionSourceCfg {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "kebab-case")]
-pub struct GuiDeploymentSourceCfg {
+pub struct OrderBuilderDeploymentSourceCfg {
     pub name: String,
     pub description: String,
     pub short_description: Option<String>,
-    pub deposits: Vec<GuiDepositSourceCfg>,
-    pub fields: Vec<GuiFieldDefinitionSourceCfg>,
+    pub deposits: Vec<OrderBuilderDepositSourceCfg>,
+    pub fields: Vec<OrderBuilderFieldDefinitionSourceCfg>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub select_tokens: Option<Vec<GuiSelectTokensCfg>>,
+    pub select_tokens: Option<Vec<OrderBuilderSelectTokensCfg>>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "kebab-case")]
-pub struct GuiConfigSourceCfg {
+pub struct OrderBuilderConfigSourceCfg {
     pub name: String,
     pub description: String,
     pub short_description: Option<String>,
     #[cfg_attr(
         target_family = "wasm",
         serde(serialize_with = "serialize_hashmap_as_object"),
-        tsify(optional, type = "Record<string, GuiDeploymentSourceCfg>")
+        tsify(optional, type = "Record<string, OrderBuilderDeploymentSourceCfg>")
     )]
-    pub deployments: HashMap<String, GuiDeploymentSourceCfg>,
+    pub deployments: HashMap<String, OrderBuilderDeploymentSourceCfg>,
 }
-impl GuiConfigSourceCfg {
-    pub fn try_into_gui(
+impl OrderBuilderConfigSourceCfg {
+    pub fn try_into_order_builder(
         self,
         deployments: &HashMap<String, Arc<DeploymentCfg>>,
         tokens: &HashMap<String, Arc<TokenCfg>>,
-    ) -> Result<GuiCfg, ParseGuiConfigSourceError> {
-        let gui_deployments = self
+    ) -> Result<OrderBuilderCfg, ParseOrderBuilderConfigSourceError> {
+        let order_builder_deployments = self
             .deployments
             .iter()
             .map(|(deployment_name, deployment_source)| {
                 let deployment = deployments
                     .get(deployment_name)
-                    .ok_or(ParseGuiConfigSourceError::DeploymentNotFoundError(
+                    .ok_or(ParseOrderBuilderConfigSourceError::DeploymentNotFoundError(
                         deployment_name.clone(),
                     ))
                     .map(Arc::clone)?;
@@ -161,25 +162,25 @@ impl GuiConfigSourceCfg {
                     .map(|deposit_source| {
                         let token = tokens
                             .get(&deposit_source.token)
-                            .ok_or(ParseGuiConfigSourceError::TokenNotFoundError(
+                            .ok_or(ParseOrderBuilderConfigSourceError::TokenNotFoundError(
                                 deposit_source.token.clone(),
                             ))
                             .map(Arc::clone)?;
 
-                        Ok(GuiDepositCfg {
+                        Ok(OrderBuilderDepositCfg {
                             token_key: deposit_source.token.clone(),
                             token: Some(token.clone()),
                             presets: deposit_source.presets.clone(),
                             validation: deposit_source.validation.clone(),
                         })
                     })
-                    .collect::<Result<Vec<_>, ParseGuiConfigSourceError>>()?;
+                    .collect::<Result<Vec<_>, ParseOrderBuilderConfigSourceError>>()?;
 
                 let fields = deployment_source
                     .fields
                     .iter()
                     .map(|field_source| {
-                        Ok(GuiFieldDefinitionCfg {
+                        Ok(OrderBuilderFieldDefinitionCfg {
                             binding: field_source.binding.clone(),
                             name: field_source.name.clone(),
                             description: field_source.description.clone(),
@@ -188,16 +189,20 @@ impl GuiConfigSourceCfg {
                                 .as_ref()
                                 .map(|presets| {
                                     presets
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(i, preset)| {
-                                            Ok(GuiPresetCfg {
-                                                id: i.to_string(),
-                                                name: preset.name.clone(),
-                                                value: preset.value.clone(),
-                                            })
-                                        })
-                                        .collect::<Result<Vec<_>, ParseGuiConfigSourceError>>()
+                                                    .iter()
+                                                    .enumerate()
+                                                    .map(|(i, preset)| {
+                                                        Ok(OrderBuilderPresetCfg {
+                                                            id: i.to_string(),
+                                                            name: preset.name.clone(),
+                                                            value: preset.value.clone(),
+                                                        })
+                                                    })
+                                                    .collect::<Result<
+                                                        Vec<_>,
+                                                        ParseOrderBuilderConfigSourceError,
+                                                    >>(
+                                                    )
                                 })
                                 .transpose()?,
                             default: field_source.default.clone(),
@@ -205,11 +210,11 @@ impl GuiConfigSourceCfg {
                             validation: field_source.validation.clone(),
                         })
                     })
-                    .collect::<Result<Vec<_>, ParseGuiConfigSourceError>>()?;
+                    .collect::<Result<Vec<_>, ParseOrderBuilderConfigSourceError>>()?;
 
                 Ok((
                     deployment_name.clone(),
-                    GuiDeploymentCfg {
+                    OrderBuilderDeploymentCfg {
                         document: default_document(),
                         key: deployment_name.to_string(),
                         deployment,
@@ -222,19 +227,19 @@ impl GuiConfigSourceCfg {
                     },
                 ))
             })
-            .collect::<Result<HashMap<_, _>, ParseGuiConfigSourceError>>()?;
+            .collect::<Result<HashMap<_, _>, ParseOrderBuilderConfigSourceError>>()?;
 
-        Ok(GuiCfg {
+        Ok(OrderBuilderCfg {
             name: self.name,
             description: self.description,
             short_description: self.short_description,
-            deployments: gui_deployments,
+            deployments: order_builder_deployments,
         })
     }
 }
 
 #[derive(Error, Debug)]
-pub enum ParseGuiConfigSourceError {
+pub enum ParseOrderBuilderConfigSourceError {
     #[error("Deployment not found: {0}")]
     DeploymentNotFoundError(String),
     #[error("Token not found: {0}")]
@@ -245,22 +250,22 @@ pub enum ParseGuiConfigSourceError {
     UnitsError(#[from] UnitsError),
 }
 
-// Config for Gui
+// Config for OrderBuilder
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct GuiPresetCfg {
+pub struct OrderBuilderPresetCfg {
     pub id: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub name: Option<String>,
     pub value: String,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiPresetCfg);
+impl_wasm_traits!(OrderBuilderPresetCfg);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct GuiDepositCfg {
+pub struct OrderBuilderDepositCfg {
     pub token_key: String,
     pub token: Option<Arc<TokenCfg>>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
@@ -269,11 +274,11 @@ pub struct GuiDepositCfg {
     pub validation: Option<DepositValidationCfg>,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiDepositCfg);
+impl_wasm_traits!(OrderBuilderDepositCfg);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct GuiSelectTokensCfg {
+pub struct OrderBuilderSelectTokensCfg {
     pub key: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub name: Option<String>,
@@ -283,7 +288,7 @@ pub struct GuiSelectTokensCfg {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct GuiDeploymentCfg {
+pub struct OrderBuilderDeploymentCfg {
     #[serde(skip, default = "default_document")]
     pub document: Arc<RwLock<StrictYaml>>,
     pub key: String,
@@ -291,15 +296,15 @@ pub struct GuiDeploymentCfg {
     pub name: String,
     pub description: String,
     pub short_description: Option<String>,
-    pub deposits: Vec<GuiDepositCfg>,
-    pub fields: Vec<GuiFieldDefinitionCfg>,
+    pub deposits: Vec<OrderBuilderDepositCfg>,
+    pub fields: Vec<OrderBuilderFieldDefinitionCfg>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub select_tokens: Option<Vec<GuiSelectTokensCfg>>,
+    pub select_tokens: Option<Vec<OrderBuilderSelectTokensCfg>>,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiDeploymentCfg);
+impl_wasm_traits!(OrderBuilderDeploymentCfg);
 
-impl PartialEq for GuiDeploymentCfg {
+impl PartialEq for OrderBuilderDeploymentCfg {
     fn eq(&self, other: &Self) -> bool {
         self.key == other.key
             && self.deployment == other.deployment
@@ -314,13 +319,13 @@ impl PartialEq for GuiDeploymentCfg {
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "camelCase")]
-pub struct GuiFieldDefinitionCfg {
+pub struct OrderBuilderFieldDefinitionCfg {
     pub binding: String,
     pub name: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub description: Option<String>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub presets: Option<Vec<GuiPresetCfg>>,
+    pub presets: Option<Vec<OrderBuilderPresetCfg>>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub default: Option<String>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
@@ -329,23 +334,23 @@ pub struct GuiFieldDefinitionCfg {
     pub validation: Option<FieldValueValidationCfg>,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiFieldDefinitionCfg);
+impl_wasm_traits!(OrderBuilderFieldDefinitionCfg);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct GuiCfg {
+pub struct OrderBuilderCfg {
     pub name: String,
     pub description: String,
     pub short_description: Option<String>,
     #[cfg_attr(
         target_family = "wasm",
         serde(serialize_with = "serialize_hashmap_as_object"),
-        tsify(optional, type = "Record<string, GuiDeploymentCfg>")
+        tsify(optional, type = "Record<string, OrderBuilderDeploymentCfg>")
     )]
-    pub deployments: HashMap<String, GuiDeploymentCfg>,
+    pub deployments: HashMap<String, OrderBuilderDeploymentCfg>,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(GuiCfg);
+impl_wasm_traits!(OrderBuilderCfg);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
@@ -358,13 +363,13 @@ pub struct NameAndDescriptionCfg {
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(NameAndDescriptionCfg);
 
-impl GuiCfg {
-    pub fn check_gui_key_exists(
+impl OrderBuilderCfg {
+    pub fn check_builder_key_exists(
         documents: Vec<Arc<RwLock<StrictYaml>>>,
     ) -> Result<bool, YamlError> {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
-            if optional_hash(&document_read, "gui").is_some() {
+            if optional_hash(&document_read, "builder").is_some() {
                 return Ok(true);
             }
         }
@@ -379,12 +384,12 @@ impl GuiCfg {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
-                let deployments = gui
+            if let Some(builder) = optional_hash(&document_read, "builder") {
+                let deployments = builder
                     .get(&StrictYaml::String("deployments".to_string()))
                     .ok_or(YamlError::Field {
                         kind: FieldErrorKind::Missing("deployments".to_string()),
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?;
 
                 if let StrictYaml::Hash(deployments_hash) = deployments {
@@ -399,7 +404,7 @@ impl GuiCfg {
                             field: "deployments".to_string(),
                             expected: "a map".to_string(),
                         },
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     });
                 }
             }
@@ -411,13 +416,13 @@ impl GuiCfg {
     pub fn parse_select_tokens(
         documents: Vec<Arc<RwLock<StrictYaml>>>,
         deployment_key: &str,
-    ) -> Result<Option<Vec<GuiSelectTokensCfg>>, YamlError> {
+    ) -> Result<Option<Vec<OrderBuilderSelectTokensCfg>>, YamlError> {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
+            if let Some(builder) = optional_hash(&document_read, "builder") {
                 if let Some(StrictYaml::Hash(deployments_hash)) =
-                    gui.get(&StrictYaml::String("deployments".to_string()))
+                    builder.get(&StrictYaml::String("deployments".to_string()))
                 {
                     if let Some(StrictYaml::Hash(deployment_hash)) =
                         deployments_hash.get(&StrictYaml::String(deployment_key.to_string()))
@@ -428,9 +433,9 @@ impl GuiCfg {
                             let mut result = Vec::new();
                             for (index, token) in tokens.iter().enumerate() {
                                 if let StrictYaml::Hash(token_hash) = token {
-                                    let key = get_hash_value(token_hash, "key", Some(format!("key string missing for select-token index: {index} in gui deployment: {deployment_key}")))?.as_str().ok_or(YamlError::Field {
+                                    let key = get_hash_value(token_hash, "key", Some(format!("key string missing for select-token index: {index} in builder deployment: {deployment_key}")))?.as_str().ok_or(YamlError::Field {
                                         kind: FieldErrorKind::Missing("key".to_string()),
-                                        location: format!("select-token index: {index} in gui deployment: {deployment_key}"),
+                                        location: format!("select-token index: {index} in builder deployment: {deployment_key}"),
                                     })?;
                                     let name = get_hash_value_as_option(token_hash, "name")
                                         .map(|s| s.as_str())
@@ -439,7 +444,7 @@ impl GuiCfg {
                                         get_hash_value_as_option(token_hash, "description")
                                             .map(|s| s.as_str())
                                             .unwrap_or_default();
-                                    result.push(GuiSelectTokensCfg {
+                                    result.push(OrderBuilderSelectTokensCfg {
                                         key: key.to_string(),
                                         name: name.map(|s| s.to_string()),
                                         description: description.map(|s| s.to_string()),
@@ -452,7 +457,7 @@ impl GuiCfg {
                 } else {
                     return Err(YamlError::Field {
                         kind: FieldErrorKind::Missing("deployments".to_string()),
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     });
                 }
             }
@@ -466,23 +471,23 @@ impl GuiCfg {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
+            if let Some(builder) = optional_hash(&document_read, "builder") {
                 let name = require_string(
-                    get_hash_value(gui, "name", Some("gui".to_string()))?,
+                    get_hash_value(builder, "name", Some("builder".to_string()))?,
                     None,
-                    Some("gui".to_string()),
+                    Some("builder".to_string()),
                 )?;
 
                 let description = require_string(
-                    get_hash_value(gui, "description", Some("gui".to_string()))?,
+                    get_hash_value(builder, "description", Some("builder".to_string()))?,
                     None,
-                    Some("gui".to_string()),
+                    Some("builder".to_string()),
                 )?;
 
                 let short_description = require_string(
-                    get_hash_value(gui, "short-description", Some("gui".to_string()))?,
+                    get_hash_value(builder, "short-description", Some("builder".to_string()))?,
                     None,
-                    Some("gui".to_string()),
+                    Some("builder".to_string()),
                 )?;
 
                 return Ok(NameAndDescriptionCfg {
@@ -494,7 +499,7 @@ impl GuiCfg {
         }
         Err(YamlError::Field {
             kind: FieldErrorKind::Missing("name/description".to_string()),
-            location: "gui".to_string(),
+            location: "builder".to_string(),
         })
     }
 
@@ -506,12 +511,12 @@ impl GuiCfg {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
-                let deployments = gui
+            if let Some(builder) = optional_hash(&document_read, "builder") {
+                let deployments = builder
                     .get(&StrictYaml::String("deployments".to_string()))
                     .ok_or(YamlError::Field {
                         kind: FieldErrorKind::Missing("deployments".to_string()),
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?
                     .as_hash()
                     .ok_or(YamlError::Field {
@@ -519,12 +524,12 @@ impl GuiCfg {
                             field: "deployments".to_string(),
                             expected: "a map".to_string(),
                         },
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?;
 
                 for (key_yaml, deployment_yaml) in deployments {
                     let deployment_key = key_yaml.as_str().unwrap_or_default().to_string();
-                    let location = format!("gui deployment '{deployment_key}'");
+                    let location = format!("builder deployment '{deployment_key}'");
 
                     let name =
                         require_string(deployment_yaml, Some("name"), Some(location.clone()))?;
@@ -556,13 +561,13 @@ impl GuiCfg {
         documents: Vec<Arc<RwLock<StrictYaml>>>,
         deployment_key: &str,
         field_binding: &str,
-    ) -> Result<Option<Vec<GuiPresetCfg>>, YamlError> {
+    ) -> Result<Option<Vec<OrderBuilderPresetCfg>>, YamlError> {
         for document in documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
+            if let Some(builder) = optional_hash(&document_read, "builder") {
                 if let Some(StrictYaml::Hash(deployments_hash)) =
-                    gui.get(&StrictYaml::String("deployments".to_string()))
+                    builder.get(&StrictYaml::String("deployments".to_string()))
                 {
                     if let Some(StrictYaml::Hash(deployment_hash)) =
                         deployments_hash.get(&StrictYaml::String(deployment_key.to_string()))
@@ -585,11 +590,11 @@ impl GuiCfg {
                                                                 preset_yaml,
                                                                 Some("value"),
                                                                 Some(format!(
-                                                                    "preset index '{preset_index}' for field index '{field_index}' in gui deployment '{deployment_key}'",
+                                                                    "preset index '{preset_index}' for field index '{field_index}' in builder deployment '{deployment_key}'",
                                                                 ))
                                                             )?;
 
-                                                            Ok(GuiPresetCfg {
+                                                            Ok(OrderBuilderPresetCfg {
                                                                 id: preset_index.to_string(),
                                                                 name,
                                                                 value,
@@ -604,7 +609,7 @@ impl GuiCfg {
                                     } else {
                                         return Err(YamlError::Field {
                                             kind: FieldErrorKind::Missing("binding".to_string()),
-                                            location: format!("field index: {field_index} in gui deployment '{deployment_key}'"),
+                                            location: format!("field index: {field_index} in builder deployment '{deployment_key}'"),
                                         });
                                     }
                                 }
@@ -612,7 +617,7 @@ impl GuiCfg {
                         } else {
                             return Err(YamlError::Field {
                                 kind: FieldErrorKind::Missing("fields".to_string()),
-                                location: format!("gui deployment '{deployment_key}'"),
+                                location: format!("builder deployment '{deployment_key}'"),
                             });
                         }
                     }
@@ -622,7 +627,7 @@ impl GuiCfg {
                             field: "deployments".to_string(),
                             expected: "a map".to_string(),
                         },
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     });
                 }
             }
@@ -637,18 +642,18 @@ impl GuiCfg {
                 continue;
             };
 
-            let gui_key = StrictYaml::String("gui".to_string());
-            let Some(gui_value) = root_hash.get(&gui_key) else {
+            let builder_key = StrictYaml::String("builder".to_string());
+            let Some(builder_value) = root_hash.get(&builder_key) else {
                 continue;
             };
-            let StrictYaml::Hash(ref gui_hash) = gui_value.clone() else {
+            let StrictYaml::Hash(ref builder_hash) = builder_value.clone() else {
                 continue;
             };
 
-            let mut sanitized_gui = Hash::new();
-            for allowed_key in ALLOWED_GUI_KEYS.iter() {
+            let mut sanitized_builder = Hash::new();
+            for allowed_key in ALLOWED_ORDER_BUILDER_KEYS.iter() {
                 let key_yaml = StrictYaml::String(allowed_key.to_string());
-                if let Some(v) = gui_hash.get(&key_yaml) {
+                if let Some(v) = builder_hash.get(&key_yaml) {
                     if *allowed_key == "deployments" {
                         if let StrictYaml::Hash(ref deployments_hash) = *v {
                             let mut sanitized_deployments: Vec<(String, StrictYaml)> = Vec::new();
@@ -663,7 +668,8 @@ impl GuiCfg {
                                 };
 
                                 let mut sanitized_deployment = Hash::new();
-                                for allowed_dep_key in ALLOWED_GUI_DEPLOYMENT_KEYS.iter() {
+                                for allowed_dep_key in ALLOWED_ORDER_BUILDER_DEPLOYMENT_KEYS.iter()
+                                {
                                     let dep_key_yaml =
                                         StrictYaml::String(allowed_dep_key.to_string());
                                     if let Some(dep_v) = deployment_hash.get(&dep_key_yaml) {
@@ -683,24 +689,25 @@ impl GuiCfg {
                                 new_deployments_hash.insert(StrictYaml::String(key), value);
                             }
 
-                            sanitized_gui.insert(key_yaml, StrictYaml::Hash(new_deployments_hash));
+                            sanitized_builder
+                                .insert(key_yaml, StrictYaml::Hash(new_deployments_hash));
                         } else {
-                            sanitized_gui.insert(key_yaml, v.clone());
+                            sanitized_builder.insert(key_yaml, v.clone());
                         }
                     } else {
-                        sanitized_gui.insert(key_yaml, v.clone());
+                        sanitized_builder.insert(key_yaml, v.clone());
                     }
                 }
             }
 
-            root_hash.insert(gui_key, StrictYaml::Hash(sanitized_gui));
+            root_hash.insert(builder_key, StrictYaml::Hash(sanitized_builder));
         }
 
         Ok(())
     }
 }
 
-impl YamlParseableValue for GuiCfg {
+impl YamlParseableValue for OrderBuilderCfg {
     fn parse_from_yaml(
         _: Vec<Arc<RwLock<StrictYaml>>>,
         _: Option<&Context>,
@@ -712,61 +719,63 @@ impl YamlParseableValue for GuiCfg {
         documents: Vec<Arc<RwLock<StrictYaml>>>,
         context: Option<&Context>,
     ) -> Result<Option<Self>, YamlError> {
-        let mut gui_res: Option<GuiCfg> = None;
-        let mut gui_deployments_res: HashMap<String, GuiDeploymentCfg> = HashMap::new();
+        let mut order_builder_res: Option<OrderBuilderCfg> = None;
+        let mut order_builder_deployments_res: HashMap<String, OrderBuilderDeploymentCfg> =
+            HashMap::new();
 
         let tokens = TokenCfg::parse_all_from_yaml(documents.clone(), context);
 
         for document in &documents {
             let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
 
-            if let Some(gui) = optional_hash(&document_read, "gui") {
-                let name = get_hash_value(gui, "name", Some("gui".to_string()))?
+            if let Some(builder) = optional_hash(&document_read, "builder") {
+                let name = get_hash_value(builder, "name", Some("builder".to_string()))?
                     .as_str()
                     .ok_or(YamlError::Field {
                         kind: FieldErrorKind::InvalidType {
                             field: "name".to_string(),
                             expected: "a string".to_string(),
                         },
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?;
 
-                let description = get_hash_value(gui, "description", Some("gui".to_string()))?
-                    .as_str()
-                    .ok_or(YamlError::Field {
-                        kind: FieldErrorKind::InvalidType {
-                            field: "description".to_string(),
-                            expected: "a string".to_string(),
-                        },
-                        location: "gui".to_string(),
-                    })?;
+                let description =
+                    get_hash_value(builder, "description", Some("builder".to_string()))?
+                        .as_str()
+                        .ok_or(YamlError::Field {
+                            kind: FieldErrorKind::InvalidType {
+                                field: "description".to_string(),
+                                expected: "a string".to_string(),
+                            },
+                            location: "builder".to_string(),
+                        })?;
 
-                let short_description = get_hash_value_as_option(gui, "short-description")
+                let short_description = get_hash_value_as_option(builder, "short-description")
                     .map(|v| {
                         v.as_str().ok_or(YamlError::Field {
                             kind: FieldErrorKind::InvalidType {
                                 field: "short-description".to_string(),
                                 expected: "a string".to_string(),
                             },
-                            location: "gui".to_string(),
+                            location: "builder".to_string(),
                         })
                     })
                     .transpose()?;
 
-                if gui_res.is_none() {
-                    gui_res = Some(GuiCfg {
+                if order_builder_res.is_none() {
+                    order_builder_res = Some(OrderBuilderCfg {
                         name: name.to_string(),
                         description: description.to_string(),
                         short_description: short_description.map(|d| d.to_string()),
-                        deployments: gui_deployments_res.clone(),
+                        deployments: order_builder_deployments_res.clone(),
                     });
                 }
 
-                let deployments = gui
+                let deployments = builder
                     .get(&StrictYaml::String("deployments".to_string()))
                     .ok_or(YamlError::Field {
                         kind: FieldErrorKind::Missing("deployments".to_string()),
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?
                     .as_hash()
                     .ok_or(YamlError::Field {
@@ -774,12 +783,12 @@ impl YamlParseableValue for GuiCfg {
                             field: "deployments".to_string(),
                             expected: "a map".to_string(),
                         },
-                        location: "gui".to_string(),
+                        location: "builder".to_string(),
                     })?;
 
                 for (deployment_name, deployment_yaml) in deployments {
                     let deployment_name = deployment_name.as_str().unwrap_or_default().to_string();
-                    let location = format!("gui deployment '{deployment_name}'");
+                    let location = format!("builder deployment '{deployment_name}'");
 
                     if let Some(context) = context {
                         if let Some(current_deployment) = context.get_current_deployment() {
@@ -797,7 +806,7 @@ impl YamlParseableValue for GuiCfg {
                                     .iter()
                                     .enumerate()
                                     .map(|(select_token_index, select_token_value)| {
-                                        let location = format!("select-token index '{select_token_index}' in gui deployment '{deployment_name}'");
+                                        let location = format!("select-token index '{select_token_index}' in builder deployment '{deployment_name}'");
 
                                         select_token_value.as_hash().ok_or(YamlError::Field{
                                             kind: FieldErrorKind::InvalidType {
@@ -807,7 +816,7 @@ impl YamlParseableValue for GuiCfg {
                                             location: location.clone(),
                                         })?;
 
-                                        Ok(GuiSelectTokensCfg {
+                                        Ok(OrderBuilderSelectTokensCfg {
                                             key: require_string(select_token_value, Some("key"), Some(location.clone()))?,
                                             name: optional_string(select_token_value, "name"),
                                             description: optional_string(select_token_value, "description"),
@@ -886,13 +895,13 @@ impl YamlParseableValue for GuiCfg {
                             parse_deposit_validation(validation_yaml)
                         }).transpose()?;
 
-                        let gui_deposit = GuiDepositCfg {
+                        let order_builder_deposit = OrderBuilderDepositCfg {
                             token_key,
                             token: deposit_token,
                             presets,
                             validation,
                         };
-                        Ok(gui_deposit)
+                        Ok(order_builder_deposit)
                     })
                     .collect::<Result<Vec<_>, YamlError>>()?;
 
@@ -932,12 +941,12 @@ impl YamlParseableValue for GuiCfg {
                                     ))
                                 )?;
 
-                                let gui_preset = GuiPresetCfg {
+                                let order_builder_preset = OrderBuilderPresetCfg {
                                     id: preset_index.to_string(),
                                     name,
                                     value,
                                 };
-                                Ok(gui_preset)
+                                Ok(order_builder_preset)
                             })
                             .collect::<Result<Vec<_>, YamlError>>()?),
                             None => None,
@@ -952,7 +961,7 @@ impl YamlParseableValue for GuiCfg {
                             ))
                         }).transpose()?;
 
-                        let gui_field_definition = GuiFieldDefinitionCfg {
+                        let order_builder_field_definition = OrderBuilderFieldDefinitionCfg {
                             binding,
                             name: interpolated_name,
                             description: interpolated_description,
@@ -961,11 +970,11 @@ impl YamlParseableValue for GuiCfg {
                             show_custom_field,
                             validation,
                         };
-                        Ok(gui_field_definition)
+                        Ok(order_builder_field_definition)
                     })
                     .collect::<Result<Vec<_>, YamlError>>()?;
 
-                    let gui_deployment = GuiDeploymentCfg {
+                    let order_builder_deployment = OrderBuilderDeploymentCfg {
                         document: document.clone(),
                         key: deployment_name.clone(),
                         deployment: Arc::new(deployment),
@@ -977,21 +986,23 @@ impl YamlParseableValue for GuiCfg {
                         select_tokens,
                     };
 
-                    if gui_deployments_res.contains_key(&deployment_name) {
+                    if order_builder_deployments_res.contains_key(&deployment_name) {
                         return Err(YamlError::KeyShadowing(
                             deployment_name.clone(),
-                            "gui deployment".to_string(),
+                            "builder deployment".to_string(),
                         ));
                     }
-                    gui_deployments_res.insert(deployment_name, gui_deployment);
+                    order_builder_deployments_res.insert(deployment_name, order_builder_deployment);
                 }
-                if let Some(gui) = &mut gui_res {
-                    gui.deployments.clone_from(&gui_deployments_res);
+                if let Some(builder) = &mut order_builder_res {
+                    builder
+                        .deployments
+                        .clone_from(&order_builder_deployments_res);
                 }
             }
         }
 
-        Ok(gui_res)
+        Ok(order_builder_res)
     }
 }
 
@@ -1094,34 +1105,34 @@ mod tests {
     use strict_yaml_rust::StrictYaml;
 
     #[test]
-    fn test_gui_creation_success() {
-        let gui_config_source = GuiConfigSourceCfg {
-            name: "test-gui".to_string(),
-            description: "test-gui-description".to_string(),
+    fn test_order_builder_creation_success() {
+        let order_builder_config_source = OrderBuilderConfigSourceCfg {
+            name: "test-builder".to_string(),
+            description: "test-builder-description".to_string(),
             short_description: None,
             deployments: HashMap::from([(
                 "test-deployment".to_string(),
-                GuiDeploymentSourceCfg {
+                OrderBuilderDeploymentSourceCfg {
                     name: "test-deployment".to_string(),
                     description: "test-deployment-description".to_string(),
 
                     short_description: None,
-                    deposits: vec![GuiDepositSourceCfg {
+                    deposits: vec![OrderBuilderDepositSourceCfg {
                         token: "test-token".to_string(),
                         presets: Some(vec!["1.3".to_string(), "2.7".to_string()]),
                         validation: None,
                     }],
                     fields: vec![
-                        GuiFieldDefinitionSourceCfg {
+                        OrderBuilderFieldDefinitionSourceCfg {
                             binding: "test-binding".to_string(),
                             name: "test-name".to_string(),
                             description: Some("test-description".to_string()),
                             presets: Some(vec![
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: Some("test-preset".to_string()),
                                     value: "0.015".to_string(),
                                 },
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: Some("test-preset-2".to_string()),
                                     value: "0.3".to_string(),
                                 },
@@ -1130,16 +1141,16 @@ mod tests {
                             show_custom_field: None,
                             validation: None,
                         },
-                        GuiFieldDefinitionSourceCfg {
+                        OrderBuilderFieldDefinitionSourceCfg {
                             binding: "test-binding-2".to_string(),
                             name: "test-name-2".to_string(),
                             description: Some("test-description-2".to_string()),
                             presets: Some(vec![
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: None,
                                     value: "3.2".to_string(),
                                 },
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: None,
                                     value: "4.8".to_string(),
                                 },
@@ -1148,20 +1159,20 @@ mod tests {
                             show_custom_field: Some(true),
                             validation: None,
                         },
-                        GuiFieldDefinitionSourceCfg {
+                        OrderBuilderFieldDefinitionSourceCfg {
                             binding: "test-binding-3".to_string(),
                             name: "test-name-3".to_string(),
                             description: Some("test-description-3".to_string()),
                             presets: Some(vec![
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: None,
                                     value: Address::default().to_string(),
                                 },
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: None,
                                     value: "some-value".to_string(),
                                 },
-                                GuiPresetSourceCfg {
+                                OrderBuilderPresetSourceCfg {
                                     name: None,
                                     value: "true".to_string(),
                                 },
@@ -1171,7 +1182,7 @@ mod tests {
                             validation: None,
                         },
                     ],
-                    select_tokens: Some(vec![GuiSelectTokensCfg {
+                    select_tokens: Some(vec![OrderBuilderSelectTokensCfg {
                         key: "test-token".to_string(),
                         name: Some("Test name".to_string()),
                         description: Some("Test description".to_string()),
@@ -1207,14 +1218,14 @@ mod tests {
         let deployments = HashMap::from([("test-deployment".to_string(), Arc::new(deployment))]);
         let tokens = HashMap::from([("test-token".to_string(), mock_token("test-token"))]);
 
-        let gui = gui_config_source
-            .try_into_gui(&deployments, &tokens)
+        let order_builder = order_builder_config_source
+            .try_into_order_builder(&deployments, &tokens)
             .unwrap();
 
-        assert_eq!(gui.name, "test-gui");
-        assert_eq!(gui.description, "test-gui-description");
-        assert_eq!(gui.deployments.len(), 1);
-        let deployment = &gui.deployments.get("test-deployment").unwrap();
+        assert_eq!(order_builder.name, "test-builder");
+        assert_eq!(order_builder.description, "test-builder-description");
+        assert_eq!(order_builder.deployments.len(), 1);
+        let deployment = &order_builder.deployments.get("test-deployment").unwrap();
         assert_eq!(deployment.name, "test-deployment");
         assert_eq!(deployment.description, "test-deployment-description");
         assert_eq!(deployment.deposits.len(), 1);
@@ -1264,7 +1275,7 @@ mod tests {
         assert_eq!(presets[2].value, "true".to_string());
         assert_eq!(
             deployment.select_tokens,
-            Some(vec![GuiSelectTokensCfg {
+            Some(vec![OrderBuilderSelectTokensCfg {
                 key: "test-token".to_string(),
                 name: Some("Test name".to_string()),
                 description: Some("Test description".to_string()),
@@ -1273,7 +1284,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_gui_from_yaml() {
+    fn test_parse_order_builder_from_yaml() {
         let yaml = r#"
 networks:
     network1:
@@ -1287,15 +1298,16 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("name".to_string()),
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1311,11 +1323,12 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name:
       - test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1323,7 +1336,7 @@ gui:
                     field: "name".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1339,11 +1352,12 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name:
       - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1351,7 +1365,7 @@ gui:
                     field: "name".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -1368,15 +1382,16 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("description".to_string()),
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1392,12 +1407,13 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description:
       - test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1405,7 +1421,7 @@ gui:
                     field: "description".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1421,12 +1437,13 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description:
       - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1434,7 +1451,7 @@ gui:
                     field: "description".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -1451,16 +1468,17 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("deployments".to_string()),
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1476,12 +1494,13 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1489,7 +1508,7 @@ gui:
                     field: "deployments".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
         let yaml = r#"
@@ -1505,13 +1524,14 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments:
         - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1519,7 +1539,7 @@ gui:
                     field: "deployments".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -1552,14 +1572,15 @@ orders:
         outputs:
             - token: token2
         rainlang: registry1
-gui:
+builder:
     name: test
     description: test
     deployments:
         deployment1:
             test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
+        let error =
+            OrderBuilderCfg::parse_from_yaml_optional(vec![get_document(yaml)], None).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -1604,14 +1625,14 @@ deployments:
 "#;
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
         deployment1:
             test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1620,19 +1641,19 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("name".to_string()),
-                location: "gui deployment 'deployment1'".to_string(),
+                location: "builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
         deployment1:
             name: deployment1
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1641,12 +1662,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("description".to_string()),
-                location: "gui deployment 'deployment1'".to_string(),
+                location: "builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1654,7 +1675,7 @@ gui:
             name: some name
             description: some description
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1663,12 +1684,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("deposits".to_string()),
-                location: "gui deployment 'deployment1'".to_string(),
+                location: "builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1678,7 +1699,7 @@ gui:
             deposits:
                 - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1687,12 +1708,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("token".to_string()),
-                location: "deposit index '0' in gui deployment 'deployment1'".to_string(),
+                location: "deposit index '0' in builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1704,7 +1725,7 @@ gui:
                   presets:
                     - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1717,13 +1738,13 @@ gui:
                     expected: "a string".to_string()
                 },
                 location:
-                    "presets list index '0' for deposit index '0' in gui deployment 'deployment1'"
+                    "presets list index '0' for deposit index '0' in builder deployment 'deployment1'"
                         .to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1735,7 +1756,7 @@ gui:
                   presets:
                     - "1"
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1744,12 +1765,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("fields".to_string()),
-                location: "gui deployment 'deployment1'".to_string(),
+                location: "builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1763,7 +1784,7 @@ gui:
             fields:
                 - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1772,12 +1793,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("binding".to_string()),
-                location: "fields list index '0' in gui deployment 'deployment1'".to_string(),
+                location: "fields list index '0' in builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1791,7 +1812,7 @@ gui:
             fields:
                 - binding: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1800,12 +1821,12 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("name".to_string()),
-                location: "fields list index '0' in gui deployment 'deployment1'".to_string(),
+                location: "fields list index '0' in builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1823,7 +1844,7 @@ gui:
                     - value:
                         wrong: map
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1835,13 +1856,14 @@ gui:
                     field: "value".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "preset index '0' for field index '0' in gui deployment 'deployment1'"
-                    .to_string(),
+                location:
+                    "preset index '0' for field index '0' in builder deployment 'deployment1'"
+                        .to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1860,7 +1882,7 @@ gui:
             select-tokens:
                 - test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1872,12 +1894,12 @@ gui:
                     field: "select-token".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "select-token index '0' in gui deployment 'deployment1'".to_string(),
+                location: "select-token index '0' in builder deployment 'deployment1'".to_string(),
             }
         );
 
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1896,7 +1918,7 @@ gui:
             select-tokens:
                 - test: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -1905,13 +1927,13 @@ gui:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("key".to_string()),
-                location: "select-token index '0' in gui deployment 'deployment1'".to_string(),
+                location: "select-token index '0' in builder deployment 'deployment1'".to_string(),
             }
         );
     }
 
     #[test]
-    fn test_parse_gui_from_yaml_multiple_files() {
+    fn test_parse_order_builder_from_yaml_multiple_files() {
         let yaml_one = r#"
 networks:
     network1:
@@ -1948,7 +1970,7 @@ deployments:
     deployment2:
         scenario: scenario1
         order: order1
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1966,7 +1988,7 @@ gui:
                     - value: test
 "#;
         let yaml_two = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -1983,28 +2005,28 @@ gui:
                   presets:
                     - value: test
 "#;
-        let res = GuiCfg::parse_from_yaml_optional(
+        let res = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(yaml_one), get_document(yaml_two)],
             None,
         )
         .unwrap();
 
-        let gui = res.unwrap();
-        assert_eq!(gui.deployments.len(), 2);
+        let order_builder = res.unwrap();
+        assert_eq!(order_builder.deployments.len(), 2);
 
-        let deployment = gui.deployments.get("deployment1").unwrap();
+        let deployment = order_builder.deployments.get("deployment1").unwrap();
         assert_eq!(deployment.name, "test");
         assert_eq!(deployment.description, "test");
         assert_eq!(deployment.deposits[0].token.as_ref().unwrap().key, "token1");
 
-        let deployment = gui.deployments.get("deployment2").unwrap();
+        let deployment = order_builder.deployments.get("deployment2").unwrap();
         assert_eq!(deployment.name, "test another");
         assert_eq!(deployment.description, "test another");
         assert_eq!(deployment.deposits[0].token.as_ref().unwrap().key, "token2");
     }
 
     #[test]
-    fn test_parse_gui_from_yaml_duplicate_key() {
+    fn test_parse_order_builder_from_yaml_duplicate_key() {
         let yaml_one = r#"
 networks:
     network1:
@@ -2041,7 +2063,7 @@ deployments:
     deployment2:
         scenario: scenario1
         order: order1
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2059,7 +2081,7 @@ gui:
                     - value: test
 "#;
         let yaml_two = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2076,7 +2098,7 @@ gui:
                   presets:
                     - value: test
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(yaml_one), get_document(yaml_two)],
             None,
         )
@@ -2084,7 +2106,7 @@ gui:
 
         assert_eq!(
             error,
-            YamlError::KeyShadowing("deployment1".to_string(), "gui deployment".to_string())
+            YamlError::KeyShadowing("deployment1".to_string(), "builder deployment".to_string())
         );
     }
 
@@ -2103,17 +2125,17 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
 "#;
 
-        let error = GuiCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
+        let error = OrderBuilderCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
                 kind: FieldErrorKind::Missing("deployments".to_string()),
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -2130,13 +2152,13 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments: test
 "#;
 
-        let error = GuiCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
+        let error = OrderBuilderCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -2144,7 +2166,7 @@ gui:
                     field: "deployments".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -2161,14 +2183,14 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments:
       - test
 "#;
 
-        let error = GuiCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
+        let error = OrderBuilderCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -2176,7 +2198,7 @@ gui:
                     field: "deployments".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -2193,14 +2215,14 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments:
       - test: test
 "#;
 
-        let error = GuiCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
+        let error = OrderBuilderCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap_err();
         assert_eq!(
             error,
             YamlError::Field {
@@ -2208,7 +2230,7 @@ gui:
                     field: "deployments".to_string(),
                     expected: "a map".to_string()
                 },
-                location: "gui".to_string(),
+                location: "builder".to_string(),
             }
         );
 
@@ -2225,7 +2247,7 @@ tokens:
     token2:
         address: 0x0000000000000000000000000000000000000002
         network: network1
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2233,24 +2255,24 @@ gui:
       test2: test2
 "#;
 
-        let keys = GuiCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap();
+        let keys = OrderBuilderCfg::parse_deployment_keys(vec![get_document(yaml)]).unwrap();
         assert_eq!(keys, vec!["test".to_string(), "test2".to_string()]);
     }
 
     #[test]
-    fn test_check_gui_key_exists() {
+    fn test_check_builder_key_exists() {
         let yaml = r#"
-        gui:
+        builder:
             name: test
             description: test
         "#;
-        let res = GuiCfg::check_gui_key_exists(vec![get_document(yaml)]).unwrap();
+        let res = OrderBuilderCfg::check_builder_key_exists(vec![get_document(yaml)]).unwrap();
         assert!(res);
 
         let yaml = r#"
         test: test
         "#;
-        let res = GuiCfg::check_gui_key_exists(vec![get_document(yaml)]).unwrap();
+        let res = OrderBuilderCfg::check_builder_key_exists(vec![get_document(yaml)]).unwrap();
         assert!(!res);
     }
 
@@ -2290,7 +2312,7 @@ deployments:
 
         // Test deposit validation with all fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2308,14 +2330,14 @@ gui:
                 - binding: test
                   name: test
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let deployment = gui.deployments.get("deployment1").unwrap();
+        let deployment = order_builder.deployments.get("deployment1").unwrap();
         let deposit = &deployment.deposits[0];
         let validation = deposit.validation.as_ref().unwrap();
 
@@ -2326,7 +2348,7 @@ gui:
 
         // Test deposit validation with partial fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2342,14 +2364,18 @@ gui:
                 - binding: test
                   name: test
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let deposit = &gui.deployments.get("deployment1").unwrap().deposits[0];
+        let deposit = &order_builder
+            .deployments
+            .get("deployment1")
+            .unwrap()
+            .deposits[0];
         let validation = deposit.validation.as_ref().unwrap();
 
         assert_eq!(validation.minimum, Some("100".to_string()));
@@ -2359,7 +2385,7 @@ gui:
 
         // Test deposit without validation
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2372,14 +2398,18 @@ gui:
                 - binding: test
                   name: test
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let deposit = &gui.deployments.get("deployment1").unwrap().deposits[0];
+        let deposit = &order_builder
+            .deployments
+            .get("deployment1")
+            .unwrap()
+            .deposits[0];
         assert!(deposit.validation.is_none());
     }
 
@@ -2419,7 +2449,7 @@ deployments:
 
         // Test number validation with all fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2438,14 +2468,14 @@ gui:
                     maximum: "100"
                     exclusive-maximum: "101"
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::Number {
             minimum,
             exclusive_minimum,
@@ -2463,7 +2493,7 @@ gui:
 
         // Test number validation with partial fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2480,14 +2510,14 @@ gui:
                     minimum: "0"
                     maximum: "100"
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::Number {
             minimum,
             exclusive_minimum,
@@ -2540,7 +2570,7 @@ deployments:
 
         // Test string validation with all fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2557,14 +2587,14 @@ gui:
                     min-length: 5
                     max-length: 50
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::String {
             min_length,
             max_length,
@@ -2578,7 +2608,7 @@ gui:
 
         // Test string validation with partial fields
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2594,14 +2624,14 @@ gui:
                     type: string
                     min-length: 1
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::String {
             min_length,
             max_length,
@@ -2615,7 +2645,7 @@ gui:
 
         // Test string validation with no length constraints
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2630,14 +2660,14 @@ gui:
                   validation:
                     type: string
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::String {
             min_length,
             max_length,
@@ -2686,7 +2716,7 @@ deployments:
 
         // Test boolean validation
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2701,14 +2731,14 @@ gui:
                   validation:
                     type: boolean
 "#;
-        let gui = GuiCfg::parse_from_yaml_optional(
+        let order_builder = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
         .unwrap()
         .unwrap();
 
-        let field = &gui.deployments.get("deployment1").unwrap().fields[0];
+        let field = &order_builder.deployments.get("deployment1").unwrap().fields[0];
         if let Some(FieldValueValidationCfg::Boolean) = &field.validation {
             // Boolean validation type correctly parsed
         } else {
@@ -2752,7 +2782,7 @@ deployments:
 
         // Test missing type field
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2767,7 +2797,7 @@ gui:
                   validation:
                     minimum: "0"
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -2780,14 +2810,14 @@ gui:
                     field: "type".to_string(),
                     expected: "a string".to_string()
                 },
-                location: "validation for field index '0' in gui deployment 'deployment1'"
+                location: "validation for field index '0' in builder deployment 'deployment1'"
                     .to_string(),
             }
         );
 
         // Test invalid type value
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2802,7 +2832,7 @@ gui:
                   validation:
                     type: invalid-type
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -2815,14 +2845,14 @@ gui:
                     field: "type".to_string(),
                     expected: "one of: number, string, boolean".to_string()
                 },
-                location: "validation for field index '0' in gui deployment 'deployment1'"
+                location: "validation for field index '0' in builder deployment 'deployment1'"
                     .to_string(),
             }
         );
 
         // Test invalid min-length value for string
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2838,7 +2868,7 @@ gui:
                     type: string
                     min-length: invalid
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -2851,14 +2881,14 @@ gui:
                     field: "min-length".to_string(),
                     expected: "a valid number".to_string()
                 },
-                location: "validation for field index '0' in gui deployment 'deployment1'"
+                location: "validation for field index '0' in builder deployment 'deployment1'"
                     .to_string(),
             }
         );
 
         // Test invalid max-length value for string
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -2874,7 +2904,7 @@ gui:
                     type: string
                     max-length: invalid
 "#;
-        let error = GuiCfg::parse_from_yaml_optional(
+        let error = OrderBuilderCfg::parse_from_yaml_optional(
             vec![get_document(&format!("{yaml_prefix}{yaml}"))],
             None,
         )
@@ -2887,17 +2917,17 @@ gui:
                     field: "max-length".to_string(),
                     expected: "a valid number".to_string()
                 },
-                location: "validation for field index '0' in gui deployment 'deployment1'"
+                location: "validation for field index '0' in builder deployment 'deployment1'"
                     .to_string(),
             }
         );
     }
 
     #[test]
-    fn test_sanitize_documents_drops_unknown_gui_keys() {
+    fn test_sanitize_documents_drops_unknown_builder_keys() {
         let yaml = r#"
-gui:
-    name: test-gui
+builder:
+    name: test-builder
     description: test description
     short-description: short desc
     unknown-key: should-be-dropped
@@ -2910,24 +2940,26 @@ gui:
             unknown-deployment-key: also-dropped
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        let gui = root.get(&StrictYaml::String("gui".to_string())).unwrap();
-        let StrictYaml::Hash(ref gui_hash) = *gui else {
-            panic!("expected gui hash");
+        let builder = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .unwrap();
+        let StrictYaml::Hash(ref builder_hash) = *builder else {
+            panic!("expected builder hash");
         };
 
-        assert!(gui_hash.contains_key(&StrictYaml::String("name".to_string())));
-        assert!(gui_hash.contains_key(&StrictYaml::String("description".to_string())));
-        assert!(gui_hash.contains_key(&StrictYaml::String("short-description".to_string())));
-        assert!(gui_hash.contains_key(&StrictYaml::String("deployments".to_string())));
-        assert!(!gui_hash.contains_key(&StrictYaml::String("unknown-key".to_string())));
+        assert!(builder_hash.contains_key(&StrictYaml::String("name".to_string())));
+        assert!(builder_hash.contains_key(&StrictYaml::String("description".to_string())));
+        assert!(builder_hash.contains_key(&StrictYaml::String("short-description".to_string())));
+        assert!(builder_hash.contains_key(&StrictYaml::String("deployments".to_string())));
+        assert!(!builder_hash.contains_key(&StrictYaml::String("unknown-key".to_string())));
 
-        let deployments = gui_hash
+        let deployments = builder_hash
             .get(&StrictYaml::String("deployments".to_string()))
             .unwrap();
         let StrictYaml::Hash(ref deployments_hash) = *deployments else {
@@ -2949,9 +2981,9 @@ gui:
     }
 
     #[test]
-    fn test_sanitize_documents_preserves_allowed_gui_key_order() {
+    fn test_sanitize_documents_preserves_allowed_builder_key_order() {
         let yaml = r#"
-gui:
+builder:
     deployments:
         deployment1:
             fields: []
@@ -2963,18 +2995,20 @@ gui:
     name: name
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        let gui = root.get(&StrictYaml::String("gui".to_string())).unwrap();
-        let StrictYaml::Hash(ref gui_hash) = *gui else {
-            panic!("expected gui hash");
+        let builder = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .unwrap();
+        let StrictYaml::Hash(ref builder_hash) = *builder else {
+            panic!("expected builder hash");
         };
 
-        let keys: Vec<String> = gui_hash
+        let keys: Vec<String> = builder_hash
             .keys()
             .filter_map(|k| k.as_str().map(String::from))
             .collect();
@@ -2983,7 +3017,7 @@ gui:
             vec!["name", "description", "short-description", "deployments"]
         );
 
-        let deployments = gui_hash
+        let deployments = builder_hash
             .get(&StrictYaml::String("deployments".to_string()))
             .unwrap();
         let StrictYaml::Hash(ref deployments_hash) = *deployments else {
@@ -3006,7 +3040,7 @@ gui:
     #[test]
     fn test_sanitize_documents_deployments_lexicographic_order() {
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -3027,17 +3061,19 @@ gui:
             fields: []
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        let gui = root.get(&StrictYaml::String("gui".to_string())).unwrap();
-        let StrictYaml::Hash(ref gui_hash) = *gui else {
-            panic!("expected gui hash");
+        let builder = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .unwrap();
+        let StrictYaml::Hash(ref builder_hash) = *builder else {
+            panic!("expected builder hash");
         };
-        let deployments = gui_hash
+        let deployments = builder_hash
             .get(&StrictYaml::String("deployments".to_string()))
             .unwrap();
         let StrictYaml::Hash(ref deployments_hash) = *deployments else {
@@ -3052,47 +3088,49 @@ gui:
     }
 
     #[test]
-    fn test_sanitize_documents_handles_missing_gui_section() {
+    fn test_sanitize_documents_handles_missing_builder_section() {
         let yaml = r#"
 other: value
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        assert!(!root.contains_key(&StrictYaml::String("gui".to_string())));
+        assert!(!root.contains_key(&StrictYaml::String("builder".to_string())));
     }
 
     #[test]
     fn test_sanitize_documents_handles_non_hash_root() {
         let yaml = r#"just a string"#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
     }
 
     #[test]
-    fn test_sanitize_documents_skips_non_hash_gui() {
+    fn test_sanitize_documents_skips_non_hash_builder() {
         let yaml = r#"
-gui: not-a-hash
+builder: not-a-hash
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        let gui = root.get(&StrictYaml::String("gui".to_string())).unwrap();
-        assert_eq!(gui.as_str(), Some("not-a-hash"));
+        let builder = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .unwrap();
+        assert_eq!(builder.as_str(), Some("not-a-hash"));
     }
 
     #[test]
     fn test_sanitize_documents_drops_non_hash_deployments() {
         let yaml = r#"
-gui:
+builder:
     name: test
     description: test
     deployments:
@@ -3104,17 +3142,19 @@ gui:
         invalid: not-a-hash
 "#;
         let document = get_document(yaml);
-        GuiCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
+        OrderBuilderCfg::sanitize_documents(std::slice::from_ref(&document)).unwrap();
 
         let doc_read = document.read().unwrap();
         let StrictYaml::Hash(ref root) = *doc_read else {
             panic!("expected root hash");
         };
-        let gui = root.get(&StrictYaml::String("gui".to_string())).unwrap();
-        let StrictYaml::Hash(ref gui_hash) = *gui else {
-            panic!("expected gui hash");
+        let builder = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .unwrap();
+        let StrictYaml::Hash(ref builder_hash) = *builder else {
+            panic!("expected builder hash");
         };
-        let deployments = gui_hash
+        let deployments = builder_hash
             .get(&StrictYaml::String("deployments".to_string()))
             .unwrap();
         let StrictYaml::Hash(ref deployments_hash) = *deployments else {

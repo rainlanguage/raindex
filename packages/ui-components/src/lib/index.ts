@@ -136,7 +136,7 @@ export { default as logoLight } from './assets/logo-light.svg';
 export { default as logoDark } from './assets/logo-dark.svg';
 
 // Providers
-export { default as GuiProvider } from './providers/GuiProvider.svelte';
+export { default as RaindexOrderBuilderProvider } from './providers/RaindexOrderBuilderProvider.svelte';
 export { default as RaindexClientProvider } from './providers/RaindexClientProvider.svelte';
 export { default as WalletProvider } from './providers/wallet/WalletProvider.svelte';
 export { default as RegistryProvider } from './providers/registry/RegistryProvider.svelte';
@@ -146,7 +146,7 @@ export { default as LocalDbProvider } from './providers/LocalDbProvider.svelte';
 export { default as DotrainRegistryProvider } from './providers/dotrainRegistry/DotrainRegistryProvider.svelte';
 
 // Hooks
-export { useGui } from './hooks/useGui';
+export { useRaindexOrderBuilder } from './hooks/useRaindexOrderBuilder';
 export { useRaindexClient, RAINDEX_CLIENT_CONTEXT_KEY } from './hooks/useRaindexClient';
 export { useLocalDb } from './hooks/useLocalDb';
 export { useAccount } from './providers/wallet/useAccount';

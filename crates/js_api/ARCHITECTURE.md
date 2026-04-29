@@ -1,16 +1,16 @@
 **Overview**
 - Purpose: `rain_orderbook_js_api` exposes a single, browser-friendly WebAssembly surface for the Rain Orderbook application. It bridges YAML-based “dotrain” order configuration, on-chain ERC‑20/token metadata, and contract call generation into a typed JavaScript/TypeScript API.
 - Target: Compiles as a `cdylib` for wasm and is designed to be consumed from JS environments (webapps). All public APIs are exported via `wasm_bindgen_utils` macros and return ergonomic results with rich, user‑readable errors.
-- Scope: Includes high-level GUI helpers for interactive order building, a fetchable registry of orders, and low-level helpers for hashing and ABI calldata generation. It re-exports certain sibling crates so their wasm bindings are reachable from a single import.
+- Scope: Includes high-level order builder helpers for interactive order building, a fetchable registry of orders, and low-level helpers for hashing and ABI calldata generation. It re-exports certain sibling crates so their wasm bindings are reachable from a single import.
 
 **Build & Targets**
-- Crate type: `cdylib` (WASM output). Most modules are `#[cfg(target_family = "wasm")]` as they are JS/GUI facing.
+- Crate type: `cdylib` (WASM output). Most modules are `#[cfg(target_family = "wasm")]` as they are JS facing.
 - Key dependencies: `wasm-bindgen-utils`, `alloy` (ABI/primitives), `rain_orderbook_*` crates for app models + on-chain helpers, `tokio` (async), `reqwest` (HTTP, registry), `flate2`/`base64`/`bincode`/`sha2` (state serialization), `strict-yaml-rust` (YAML AST).
 - TypeScript support: Adds TS definitions for `Address` and `Hex` template literal types and uses `tsify` to describe return/param types of exported structs.
 
 **Top-Level Layout**
 - `src/lib.rs`
-  - Exposes modules only when targeting wasm: `bindings`, `gui`, `registry`, `yaml`.
+  - Exposes modules only when targeting wasm: `bindings`, `raindex_order_builder`, `registry`, `yaml`.
   - Re-exports crates so their wasm bindings are available from this single module: `rain_orderbook_app_settings`, `rain_orderbook_common`, `rain_orderbook_subgraph_client`.
   - Appends a small TS section defining `Address` and `Hex` template literal types for better typing on the JS side.
 
@@ -24,7 +24,7 @@
 **Modules**
 
 - `bindings` (src/bindings/mod.rs)
-  - Purpose: Low-level helpers exposed to JS for hashing and ABI encoding independent of the GUI flow.
+  - Purpose: Low-level helpers exposed to JS for hashing and ABI encoding independent of the order builder flow.
   - Key types and exports:
     - `TakeOrdersCalldata(Bytes)` as an opaque JS type for encoded calldata.
     - `getOrderHash(order: OrderV4) -> string`: ABI-encodes `OrderV4` and returns `keccak256` with `0x` prefix.
@@ -32,15 +32,15 @@
     - `keccak256(bytes: Uint8Array) -> string` and `keccak256HexString(hex: string) -> string`.
   - Errors: `Error::FromHexError` mapped to JS with human-readable message.
 
-- `gui` (src/gui/…)
+- `raindex_order_builder` (src/raindex_order_builder/…)
   - Purpose: High-level, stateful orchestrator for interactive order creation from a dotrain (YAML + Rainlang) configuration. Encapsulates reading config, managing user inputs, querying token metadata, validating fields, and generating contract call data for deployment.
-  - Core type: `DotrainOrderGui`
+  - Core type: `RaindexOrderBuilder`
     - Fields: `dotrain_order` (parsed configuration), `selected_deployment`, `field_values` and `deposits` (with preset tracking), and an optional `state_update_callback` JS function.
     - Construction:
-      - `DotrainOrderGui.getDeploymentKeys(dotrain: string) -> string[]` parses `gui.deployments`.
-      - `DotrainOrderGui.newWithDeployment(dotrain, selectedDeployment, stateUpdateCallback?) -> DotrainOrderGui` validates the deployment and bootstraps a GUI instance.
+      - `RaindexOrderBuilder.getDeploymentKeys(dotrain: string) -> string[]` parses `builder.deployments`.
+      - `RaindexOrderBuilder.newWithDeployment(dotrain, selectedDeployment, stateUpdateCallback?) -> RaindexOrderBuilder` validates the deployment and bootstraps an order builder instance.
     - Config accessors:
-      - `getGuiConfig() -> GuiCfg`, `getCurrentDeployment() -> GuiDeploymentCfg` (filtered for the active deployment).
+      - `getBuilderConfig() -> OrderBuilderCfg`, `getCurrentDeployment() -> OrderBuilderDeploymentCfg` (filtered for the active deployment).
       - `getOrderDetails(dotrain) -> NameAndDescriptionCfg` (static), `getDeploymentDetails(dotrain) -> Map<string, NameAndDescriptionCfg>`, `getDeploymentDetail(dotrain, key) -> NameAndDescriptionCfg`.
       - `getCurrentDeploymentDetails() -> NameAndDescriptionCfg`.
     - Token metadata:
@@ -52,18 +52,18 @@
 
   - Submodules
     - `field_values.rs`
-      - User-controlled inputs declared under `gui.deployments[*].fields`.
+      - User-controlled inputs declared under `builder.deployments[*].fields`.
       - Setters and getters:
         - `setFieldValue(binding, value)`: validates (if rules exist), detects preset matches, stores as either preset index or custom value, and triggers the state callback.
         - `setFieldValues([{field, value}, …])`: batch equivalent.
         - `unsetFieldValue(binding)`.
         - `getFieldValue(binding) -> { field, value, isPreset }` expands presets to actual values for display.
         - `getAllFieldValues() -> FieldValue[]`.
-        - `getFieldDefinition(binding) -> GuiFieldDefinitionCfg` and `getAllFieldDefinitions(filterDefaults?)` (filter by has default/no default), `getMissingFieldValues()`.
+        - `getFieldDefinition(binding) -> OrderBuilderFieldDefinitionCfg` and `getAllFieldDefinitions(filterDefaults?)` (filter by has default/no default), `getMissingFieldValues()`.
       - Validation: delegated to `validation.rs` using YAML-provided rules (Number min/max/exclusive bounds, String min/max length, Boolean exact `"true"|"false"`). Uses `rain_math_float::Float` for precise numeric comparisons.
 
     - `deposits.rs`
-      - User deposit amounts declared under `gui.deployments[*].deposits`.
+      - User deposit amounts declared under `builder.deployments[*].deposits`.
       - Helpers:
         - `getDeposits() -> TokenDeposit[]` expanding presets to actual values and pairing with token addresses.
         - `setDeposit(tokenKey, amount)` validates per-token rules (min/max/exclusive), detects presets, stores, and triggers state callback.
@@ -73,7 +73,7 @@
     - `select_tokens.rs`
       - For deployments that declare `select-tokens`, users supply token contracts at runtime.
       - Features:
-        - `getSelectTokens() -> GuiSelectTokensCfg[]` and `checkSelectTokens()`.
+        - `getSelectTokens() -> OrderBuilderSelectTokensCfg[]` and `checkSelectTokens()`.
         - `isSelectTokenSet(key) -> boolean`.
         - `setSelectToken(key, address)` fetches ERC‑20 metadata via RPC (derived from the deployment’s network) and writes token records back into the dotrain YAML; triggers state callback.
         - `unsetSelectToken(key)` removes previously selected token records.
@@ -104,24 +104,24 @@
     - `state_management.rs`
       - End-to-end state persistence and restoration:
         - `serializeState() -> string`: bincode-serializes a compact state (field values and deposit presets, selected tokens, vault IDs, selected deployment) then gzips and base64-encodes. Also embeds a SHA‑256 of the full dotrain to prevent mismatched restores.
-        - `DotrainOrderGui.newFromState(dotrain, serialized, callback?) -> DotrainOrderGui`: validates the hash against the provided dotrain, rebuilds internal maps, replays selected tokens and vault IDs back into the YAML/documents, and returns a fully restored instance.
+        - `RaindexOrderBuilder.newFromState(dotrain, serialized, callback?) -> RaindexOrderBuilder`: validates the hash against the provided dotrain, rebuilds internal maps, replays selected tokens and vault IDs back into the YAML/documents, and returns a fully restored instance.
         - `executeStateUpdateCallback()`: manually triggers the callback by passing the latest `serializeState()` string. Most mutating methods call this automatically.
-        - `getAllGuiConfig() -> AllGuiConfig`: returns all front-end relevant config slices grouped for progressive UI building (fields by required/optional, deposits, order inputs/outputs).
+        - `getAllBuilderConfig() -> AllBuilderConfig`: returns all front-end relevant config slices grouped for progressive UI building (fields by required/optional, deposits, order inputs/outputs).
 
     - `validation.rs`
       - Uniform validation library used by `field_values` and `deposits`:
         - Numbers: `minimum`, `exclusive-minimum`, `maximum`, `exclusive-maximum`; rejects negatives; precise decimal support via `Float`.
         - Strings: `min-length`, `max-length` (length measured on trimmed strings).
         - Booleans: accepts only `"true"` or `"false"`.
-      - Errors (`GuiValidationError`) carry contextual, user-readable messages; surfaced to JS via `GuiError::ValidationError`.
+      - Errors (`BuilderValidationError`) carry contextual, user-readable messages; surfaced to JS via `BuilderError::ValidationError`.
 
-  - Error type for the GUI: `GuiError`
+  - Error type for the builder: `BuilderError`
     - Captures configuration, selection, validation, I/O, chain, and serialization errors.
     - Provides `to_readable_msg()` with end-user friendly explanations.
     - Implements conversions to `JsValue` and `WasmEncodedError` for FFI.
 
 - `registry` (src/registry.rs)
-  - Purpose: Fetches a remote registry file that lists one shared settings YAML followed by one or more `.rain` order files. Produces merged dotrain content per order and can directly construct a `DotrainOrderGui` instance.
+  - Purpose: Fetches a remote registry file that lists one shared settings YAML followed by one or more `.rain` order files. Produces merged dotrain content per order and can directly construct an `RaindexOrderBuilder` instance.
   - Registry format:
     - First non-empty line: settings YAML URL (no key)
     - Subsequent lines: `"<orderKey> <url-to-order.rain>"`
@@ -131,8 +131,8 @@
     - `getOrderKeys()` → keys from `order_urls`.
     - `getDeploymentDetails(orderKey)` → deployment name/description map for a specific order.
     - `getOrderbookYaml() -> OrderbookYaml` → returns an `OrderbookYaml` instance from the registry's shared settings YAML for querying tokens, networks, orderbooks, etc.
-  - `getGui(orderKey, deploymentKey, serializedState?, stateCallback?)` → merge `settings + order`, optionally restore serialized state, and produce a `DotrainOrderGui` instance.
-  - Errors: `DotrainRegistryError` covers fetch/parse/HTTP/URL issues and wraps `GuiError`. Also returns human-readable messages.
+  - `getOrderBuilder(orderKey, deploymentKey, serializedState?, stateCallback?)` → merge `settings + order`, optionally restore serialized state, and produce a `RaindexOrderBuilder` instance.
+  - Errors: `DotrainRegistryError` covers fetch/parse/HTTP/URL issues and wraps `BuilderError`. Also returns human-readable messages.
 
 - `yaml` (src/yaml/mod.rs)
   - Purpose: Wasm-friendly wrapper around orderbook YAML parsing to retrieve configuration objects by address or query token metadata.
@@ -143,16 +143,16 @@
   - Errors: `OrderbookYamlError` with readable messaging, converted to JS.
 
 **External Crates & Interactions**
-- `rain_orderbook_app_settings`: typed config model + YAML parsing helpers for GUI sections, deployments, networks, orders, select-tokens, and validation rules.
+- `rain_orderbook_app_settings`: typed config model + YAML parsing helpers for order builder sections, deployments, networks, orders, select-tokens, and validation rules.
 - `rain_orderbook_common`: higher-level order manipulation (compose Rainlang, add order args), ERC‑20 RPC client, transaction helpers, and formatting utilities.
 - `rain_orderbook_bindings`: generated Solidity bindings for `IOrderBookV5` (e.g., `deposit3`, `multicall`, `takeOrders3`).
 - `alloy`: ABI encoding/decoding, primitives (`Address`, `Bytes`, `U256`, keccak256), and Solidity type utilities.
 - `wasm-bindgen-utils`: export macro, JS bridging, `WasmEncodedError` packaging.
 
 **Data Flow & Typical Lifecycle**
-- From dotrain → GUI → calldata:
+- From dotrain → order builder → calldata:
   - Parse dotrain (frontmatter YAML + Rainlang body) with `DotrainOrder::create`.
-  - Initialize GUI with a deployment key.
+  - Initialize order builder with a deployment key.
   - Optional: select tokens via on-chain metadata, set field values (with validation), set deposit amounts (with validation), and set vault IDs.
   - Generate approvals if needed, deposits, add order calldata, or a combined multicall. Transaction args include orderbook address and chain ID.
 - State persistence:
@@ -178,17 +178,17 @@
 **Edge Cases & Notes**
 - If YAML is missing token metadata, the crate queries the chain; callers should expect async RPC usage and potential network failures in those code paths.
 - `WithdrawCalldataResult` exists as a type placeholder; no public generator currently uses it.
-- Many GUI methods error if `select-tokens` is configured but tokens are not yet selected, or if required field values/deposits are missing. These error cases surface clear `readable_msg`s.
+- Many order builder methods error if `select-tokens` is configured but tokens are not yet selected, or if required field values/deposits are missing. These error cases surface clear `readable_msg`s.
 - When decimals are absent in YAML, they are fetched on demand before encoding deposits.
 
 **How To Use (High-Level)**
 - Single order flow:
-  - `const gui = await DotrainOrderGui.newWithDeployment(dotrain, deploymentKey, onStateChanged?)`
+  - `const builder = await RaindexOrderBuilder.newWithDeployment(dotrain, deploymentKey, onStateChanged?)`
   - Fill inputs: `setFieldValue`, `setDeposit`, optionally `setSelectToken`, `setVaultId`.
   - Generate data: `generateAddOrderCalldata` or `generateDepositAndAddOrderCalldatas`; or get the full package from `getDeploymentTransactionArgs(owner)`.
-  - Persist UI state: read `serializeState()`; restore later with `DotrainOrderGui.newFromState(dotrain, serialized, callback?)`.
+  - Persist UI state: read `serializeState()`; restore later with `RaindexOrderBuilder.newFromState(dotrain, serialized, callback?)`.
 - Multiple orders via registry:
-  - `const registry = await DotrainRegistry.new(registryUrl)` → inspect orders/deployments → `await registry.getGui(orderKey, deploymentKey, serializedState?, onStateChanged?)`.
+  - `const registry = await DotrainRegistry.new(registryUrl)` → inspect orders/deployments → `await registry.getOrderBuilder(orderKey, deploymentKey, serializedState?, onStateChanged?)`.
 
 **Summary**
 - `rain_orderbook_js_api` is the JS/WASM gateway for building, validating, and deploying Rain Orderbook orders from YAML+Rainlang definitions. It centralizes: YAML parsing and validation, user input state, token selection and metadata, field and deposit validation, vault ID management, transaction calldata generation (approvals, deposits, add order, multicall), registry-driven content fetching, and robust error handling—exposed as a typed, ergonomic TypeScript surface.

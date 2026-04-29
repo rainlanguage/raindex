@@ -1,6 +1,6 @@
 #[cfg(target_family = "wasm")]
 pub mod bindings;
-pub mod gui;
+pub mod raindex_order_builder;
 pub mod registry;
 pub mod yaml;
 

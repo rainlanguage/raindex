@@ -727,9 +727,10 @@ impl DotrainOrder {
             StrictYaml::Hash(deployments_hash),
         );
 
-        if let Some(gui_yaml) = Self::clone_gui_for_deployment(&documents, deployment_key.as_str())?
+        if let Some(builder_yaml) =
+            Self::clone_builder_config_for_deployment(&documents, deployment_key.as_str())?
         {
-            root_hash.insert(StrictYaml::String("gui".to_string()), gui_yaml);
+            root_hash.insert(StrictYaml::String("builder".to_string()), builder_yaml);
         }
         let scenario_yaml = Self::scenario_to_yaml(&scenario_cfg)?;
         let mut scenarios_hash = StrictYamlHash::new();
@@ -753,32 +754,32 @@ impl DotrainOrder {
         Ok(dotrain)
     }
 
-    fn clone_gui_for_deployment(
+    fn clone_builder_config_for_deployment(
         documents: &[Arc<RwLock<StrictYaml>>],
         deployment_key: &str,
     ) -> Result<Option<StrictYaml>, DotrainOrderError> {
-        let mut gui_value: Option<StrictYaml> = None;
+        let mut builder_value: Option<StrictYaml> = None;
 
         for document in documents {
             let document_read = document.read().map_err(|_| {
                 DotrainOrderError::CleanUnusedFrontmatterError(
-                    "Failed to read YAML document while cloning gui section".to_string(),
+                    "Failed to read YAML document while cloning builder config section".to_string(),
                 )
             })?;
 
             if let StrictYaml::Hash(root_hash) = &*document_read {
-                if let Some(gui) = root_hash.get(&StrictYaml::String("gui".to_string())) {
-                    gui_value = Some(gui.clone());
+                if let Some(builder) = root_hash.get(&StrictYaml::String("builder".to_string())) {
+                    builder_value = Some(builder.clone());
                     break;
                 }
             }
         }
 
-        let Some(StrictYaml::Hash(mut gui_hash)) = gui_value else {
+        let Some(StrictYaml::Hash(mut builder_hash)) = builder_value else {
             return Ok(None);
         };
 
-        let Some(deployments_yaml) = gui_hash
+        let Some(deployments_yaml) = builder_hash
             .get(&StrictYaml::String("deployments".to_string()))
             .cloned()
         else {
@@ -787,7 +788,7 @@ impl DotrainOrder {
 
         let StrictYaml::Hash(deployments_hash) = deployments_yaml else {
             return Err(DotrainOrderError::CleanUnusedFrontmatterError(
-                "Gui deployments section is not a map".to_string(),
+                "Builder config deployments section is not a map".to_string(),
             ));
         };
 
@@ -804,12 +805,12 @@ impl DotrainOrder {
             deployment_yaml,
         );
 
-        gui_hash.insert(
+        builder_hash.insert(
             StrictYaml::String("deployments".to_string()),
             StrictYaml::Hash(filtered_deployments),
         );
 
-        Ok(Some(StrictYaml::Hash(gui_hash)))
+        Ok(Some(StrictYaml::Hash(builder_hash)))
     }
 
     fn strip_vault_ids_from_order(order_yaml: &mut StrictYaml) {
@@ -1177,7 +1178,7 @@ deployments:
 scenarios:
   polygon:
     rainlang: polygon
-gui:
+builder:
   deployments:
     polygon-deployment:
       name: Used deployment
@@ -1224,19 +1225,19 @@ _ _: 0 0;
         assert!(subgraphs.contains_key(&StrictYaml::String("sg-primary".to_string())));
         assert!(!subgraphs.contains_key(&StrictYaml::String("sg-unused".to_string())));
 
-        let StrictYaml::Hash(gui) = root
-            .get(&StrictYaml::String("gui".to_string()))
-            .expect("gui present")
+        let StrictYaml::Hash(builder_config) = root
+            .get(&StrictYaml::String("builder".to_string()))
+            .expect("builder config present")
             .clone()
         else {
-            panic!("gui not a hash");
+            panic!("builder config not a hash");
         };
-        let StrictYaml::Hash(deployments) = gui
+        let StrictYaml::Hash(deployments) = builder_config
             .get(&StrictYaml::String("deployments".to_string()))
-            .expect("gui deployments present")
+            .expect("builder config deployments present")
             .clone()
         else {
-            panic!("gui deployments not a hash");
+            panic!("builder config deployments not a hash");
         };
         assert!(deployments.contains_key(&StrictYaml::String("polygon-deployment".to_string())));
         assert!(!deployments.contains_key(&StrictYaml::String("unused-deployment".to_string())));

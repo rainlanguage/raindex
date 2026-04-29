@@ -27,7 +27,7 @@ use rain_interpreter_eval::{
 };
 use rain_interpreter_parser::{Parser2, ParserError, ParserV2};
 use rain_metadata::{
-    types::dotrain::gui_state_v1::DotrainGuiStateV1,
+    types::dotrain::order_builder_state_v1::OrderBuilderStateV1,
     types::raindex_signed_context_oracle::RaindexSignedContextOracleV1, ContentEncoding,
     ContentLanguage, ContentType, Error as RainMetaError, KnownMagic, RainMetaDocumentV1Item,
 };
@@ -327,11 +327,11 @@ impl AddOrderArgs {
             Some(meta_docs) => {
                 match meta_docs
                     .iter()
-                    .find(|document| document.magic == KnownMagic::DotrainGuiStateV1)
+                    .find(|document| document.magic == KnownMagic::OrderBuilderStateV1)
                 {
                     Some(doc) => {
-                        let gui_state = DotrainGuiStateV1::try_from(doc.clone())?;
-                        let subject_hash = gui_state.dotrain_hash();
+                        let builder_state = OrderBuilderStateV1::try_from(doc.clone())?;
+                        let subject_hash = builder_state.dotrain_hash();
                         let meta_document = RainMetaDocumentV1Item {
                             payload: ByteBuf::from(self.dotrain.as_bytes()),
                             magic: KnownMagic::DotrainSourceV1,
@@ -532,7 +532,7 @@ price: 2e18;
     fn test_try_generate_meta_with_additional_meta_filters_reserved() {
         let dotrain_body = "/* test */".to_string();
         let dotrain_hash = DotrainSourceV1(dotrain_body.clone()).hash();
-        let gui_state = DotrainGuiStateV1 {
+        let builder_state = OrderBuilderStateV1 {
             dotrain_hash,
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
@@ -552,7 +552,7 @@ price: 2e18;
             // Should be filtered out
             RainMetaDocumentV1Item::from(DotrainSourceV1("ignored-dotrain".to_string())),
             // Should be retained
-            RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+            RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
         ];
 
         let args = AddOrderArgs {
@@ -570,23 +570,23 @@ price: 2e18;
         // Rainlang meta is always present and should match the composed rainlang payload
         assert_eq!(decoded[0].magic, KnownMagic::RainlangSourceV1);
         assert_eq!(decoded[0].payload.as_ref(), "rainlang-body".as_bytes());
-        // Only the GUI state from additional meta should remain (reserved magics filtered)
+        // Only the builder state from additional meta should remain (reserved magics filtered)
         assert_eq!(decoded.len(), 2);
-        let gui_meta = decoded
+        let builder_meta = decoded
             .iter()
-            .find(|item| item.magic == KnownMagic::DotrainGuiStateV1)
-            .expect("gui state meta not found");
+            .find(|item| item.magic == KnownMagic::OrderBuilderStateV1)
+            .expect("builder state meta not found");
         assert_eq!(
-            DotrainGuiStateV1::try_from(gui_meta.clone()).unwrap(),
-            gui_state
+            OrderBuilderStateV1::try_from(builder_meta.clone()).unwrap(),
+            builder_state
         );
     }
 
     #[test]
-    fn test_try_into_emit_meta_call_with_gui_state() {
+    fn test_try_into_emit_meta_call_with_builder_state() {
         let dotrain_body = "/* dotrain template */".to_string();
         let dotrain_source = DotrainSourceV1(dotrain_body.clone());
-        let gui_state = DotrainGuiStateV1 {
+        let builder_state = OrderBuilderStateV1 {
             dotrain_hash: dotrain_source.hash(),
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
@@ -600,7 +600,9 @@ price: 2e18;
             outputs: vec![],
             bindings: HashMap::new(),
             rainlang: Address::default(),
-            additional_meta: Some(vec![RainMetaDocumentV1Item::try_from(gui_state).unwrap()]),
+            additional_meta: Some(vec![
+                RainMetaDocumentV1Item::try_from(builder_state).unwrap()
+            ]),
         };
 
         let emit_call = args
@@ -616,10 +618,10 @@ price: 2e18;
     }
 
     #[test]
-    fn test_try_into_emit_meta_call_invalid_gui_state_payload() {
-        let invalid_gui_state = RainMetaDocumentV1Item {
+    fn test_try_into_emit_meta_call_invalid_builder_state_payload() {
+        let invalid_builder_state = RainMetaDocumentV1Item {
             payload: ByteBuf::from(vec![1, 2, 3]),
-            magic: KnownMagic::DotrainGuiStateV1,
+            magic: KnownMagic::OrderBuilderStateV1,
             content_type: ContentType::OctetStream,
             content_encoding: ContentEncoding::None,
             content_language: ContentLanguage::None,
@@ -630,7 +632,7 @@ price: 2e18;
             outputs: vec![],
             bindings: HashMap::new(),
             rainlang: Address::default(),
-            additional_meta: Some(vec![invalid_gui_state]),
+            additional_meta: Some(vec![invalid_builder_state]),
         };
 
         let err = args.try_into_emit_meta_call().unwrap_err();

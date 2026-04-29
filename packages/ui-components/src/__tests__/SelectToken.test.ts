@@ -3,13 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import SelectToken from '../lib/components/deployment/SelectToken.svelte';
 import type { ComponentProps } from 'svelte';
-import { Float, type AccountBalance, type DotrainOrderGui } from '@rainlanguage/orderbook';
-import { useGui } from '$lib/hooks/useGui';
+import { Float, type AccountBalance, type RaindexOrderBuilder } from '@rainlanguage/orderbook';
+import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 import type { TokenBalance } from '$lib/types/tokenBalance';
 
 type SelectTokenComponentProps = ComponentProps<SelectToken>;
 
-const mockGui: DotrainOrderGui = {
+const mockBuilder: RaindexOrderBuilder = {
 	setSelectToken: vi.fn(),
 	isSelectTokenSet: vi.fn(),
 	unsetSelectToken: vi.fn(),
@@ -39,7 +39,7 @@ const mockGui: DotrainOrderGui = {
 			}
 		]
 	})
-} as unknown as DotrainOrderGui;
+} as unknown as RaindexOrderBuilder;
 
 vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
 	return {
@@ -47,8 +47,8 @@ vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
 	};
 });
 
-vi.mock('../lib/hooks/useGui', () => ({
-	useGui: vi.fn()
+vi.mock('../lib/hooks/useRaindexOrderBuilder', () => ({
+	useRaindexOrderBuilder: vi.fn()
 }));
 
 describe('SelectToken', () => {
@@ -66,11 +66,11 @@ describe('SelectToken', () => {
 
 	beforeEach(() => {
 		mockStateUpdateCallback = vi.fn();
-		mockGui.setSelectToken = vi.fn().mockImplementation(() => {
+		mockBuilder.setSelectToken = vi.fn().mockImplementation(() => {
 			mockStateUpdateCallback();
 			return Promise.resolve();
 		});
-		(useGui as Mock).mockReturnValue(mockGui);
+		(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilder);
 		vi.clearAllMocks();
 	});
 
@@ -86,12 +86,12 @@ describe('SelectToken', () => {
 
 	it('calls setSelectToken and updates token info when input changes', async () => {
 		const user = userEvent.setup();
-		const mockGuiWithNoToken = {
-			...mockGui,
+		const mockBuilderWithNoToken = {
+			...mockBuilder,
 			getTokenInfo: vi.fn().mockResolvedValue({ value: null })
-		} as unknown as DotrainOrderGui;
+		} as unknown as RaindexOrderBuilder;
 
-		(useGui as Mock).mockReturnValue(mockGuiWithNoToken);
+		(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilderWithNoToken);
 
 		const { getByTestId, getByRole } = render(SelectToken, {
 			...mockProps
@@ -106,19 +106,19 @@ describe('SelectToken', () => {
 		await user.paste('0x456');
 
 		await waitFor(() => {
-			expect(mockGuiWithNoToken.setSelectToken).toHaveBeenCalledWith('input', '0x456');
+			expect(mockBuilderWithNoToken.setSelectToken).toHaveBeenCalledWith('input', '0x456');
 		});
 		expect(mockStateUpdateCallback).toHaveBeenCalledTimes(1);
 	});
 
 	it('shows error message for invalid address, and removes the selectToken', async () => {
 		const user = userEvent.setup();
-		const mockGuiWithError = {
-			...mockGui,
+		const mockBuilderWithError = {
+			...mockBuilder,
 			setSelectToken: vi.fn().mockRejectedValue(new Error('Invalid address'))
-		} as unknown as DotrainOrderGui;
+		} as unknown as RaindexOrderBuilder;
 
-		(useGui as Mock).mockReturnValue(mockGuiWithError);
+		(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilderWithError);
 
 		const screen = render(SelectToken, {
 			...mockProps
@@ -136,12 +136,12 @@ describe('SelectToken', () => {
 	});
 
 	it('replaces the token and triggers state update twice if the token is already set', async () => {
-		const mockGuiWithTokenSet = {
-			...mockGui,
+		const mockBuilderWithTokenSet = {
+			...mockBuilder,
 			isSelectTokenSet: vi.fn().mockResolvedValue(true)
-		} as unknown as DotrainOrderGui;
+		} as unknown as RaindexOrderBuilder;
 
-		(useGui as Mock).mockReturnValue(mockGuiWithTokenSet);
+		(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilderWithTokenSet);
 
 		const user = userEvent.setup();
 
@@ -156,7 +156,7 @@ describe('SelectToken', () => {
 		await userEvent.clear(input);
 		await user.paste('invalid');
 		await waitFor(() => {
-			expect(mockGuiWithTokenSet.setSelectToken).toHaveBeenCalled();
+			expect(mockBuilderWithTokenSet.setSelectToken).toHaveBeenCalled();
 			expect(mockStateUpdateCallback).toHaveBeenCalledTimes(1);
 		});
 	});
@@ -180,7 +180,7 @@ describe('SelectToken', () => {
 
 	describe('Dropdown Mode', () => {
 		beforeEach(() => {
-			(useGui as Mock).mockReturnValue(mockGui);
+			(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilder);
 		});
 
 		it('shows dropdown and custom mode buttons when tokens are available', () => {
@@ -229,12 +229,12 @@ describe('SelectToken', () => {
 
 		it('clears state when switching from dropdown to custom mode', async () => {
 			const user = userEvent.setup();
-			const mockGuiNoToken = {
-				...mockGui,
+			const mockBuilderNoToken = {
+				...mockBuilder,
 				getTokenInfo: vi.fn().mockResolvedValue({ value: null })
-			} as unknown as DotrainOrderGui;
+			} as unknown as RaindexOrderBuilder;
 
-			(useGui as Mock).mockReturnValue(mockGuiNoToken);
+			(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilderNoToken);
 
 			render(SelectToken, {
 				...mockProps
@@ -252,7 +252,7 @@ describe('SelectToken', () => {
 			const customInput = screen.getByPlaceholderText('Enter token address (0x...)');
 			expect(customInput).toHaveValue('');
 
-			expect(mockGuiNoToken.unsetSelectToken).toHaveBeenCalledWith('input');
+			expect(mockBuilderNoToken.unsetSelectToken).toHaveBeenCalledWith('input');
 		});
 
 		it('clears state when switching from custom to dropdown mode', async () => {
@@ -268,17 +268,17 @@ describe('SelectToken', () => {
 			const dropdownButton = screen.getByTestId('dropdown-mode-button');
 			await user.click(dropdownButton);
 
-			expect(mockGui.unsetSelectToken).toHaveBeenCalledWith('input');
+			expect(mockBuilder.unsetSelectToken).toHaveBeenCalledWith('input');
 		});
 
 		it('handles token selection from dropdown', async () => {
 			const user = userEvent.setup();
-			const mockGuiNoToken = {
-				...mockGui,
+			const mockBuilderNoToken = {
+				...mockBuilder,
 				getTokenInfo: vi.fn().mockResolvedValue({ value: null })
-			} as unknown as DotrainOrderGui;
+			} as unknown as RaindexOrderBuilder;
 
-			(useGui as Mock).mockReturnValue(mockGuiNoToken);
+			(useRaindexOrderBuilder as Mock).mockReturnValue(mockBuilderNoToken);
 
 			render(SelectToken, {
 				...mockProps
@@ -290,14 +290,14 @@ describe('SelectToken', () => {
 			const secondToken = screen.getByText('Another Token');
 			await user.click(secondToken);
 
-			expect(mockGuiNoToken.setSelectToken).toHaveBeenCalledWith(
+			expect(mockBuilderNoToken.setSelectToken).toHaveBeenCalledWith(
 				'input',
 				'0x0987654321098765432109876543210987654321'
 			);
 		});
 
 		it('displays selected token info when token is selected', async () => {
-			mockGui.getTokenInfo = vi.fn().mockResolvedValue({
+			mockBuilder.getTokenInfo = vi.fn().mockResolvedValue({
 				value: {
 					name: 'Test Token 1',
 					symbol: 'TEST1',
@@ -318,7 +318,7 @@ describe('SelectToken', () => {
 
 	describe('Balance Display', () => {
 		it('displays balance when token is selected and balance is provided', async () => {
-			mockGui.getTokenInfo = vi.fn().mockResolvedValue({
+			mockBuilder.getTokenInfo = vi.fn().mockResolvedValue({
 				value: {
 					name: 'Test Token',
 					symbol: 'TEST',
@@ -353,7 +353,7 @@ describe('SelectToken', () => {
 		});
 
 		it('shows loading spinner when balance is loading', async () => {
-			mockGui.getTokenInfo = vi.fn().mockResolvedValue({
+			mockBuilder.getTokenInfo = vi.fn().mockResolvedValue({
 				value: {
 					name: 'Test Token',
 					symbol: 'TEST',
@@ -388,7 +388,7 @@ describe('SelectToken', () => {
 		});
 
 		it('shows error message when balance fetch fails', async () => {
-			mockGui.getTokenInfo = vi.fn().mockResolvedValue({
+			mockBuilder.getTokenInfo = vi.fn().mockResolvedValue({
 				value: {
 					name: 'Test Token',
 					symbol: 'TEST',
@@ -423,7 +423,7 @@ describe('SelectToken', () => {
 		});
 
 		it('formats balance correctly with token decimals', async () => {
-			mockGui.getTokenInfo = vi.fn().mockResolvedValue({
+			mockBuilder.getTokenInfo = vi.fn().mockResolvedValue({
 				value: {
 					name: 'USDC',
 					symbol: 'USDC',

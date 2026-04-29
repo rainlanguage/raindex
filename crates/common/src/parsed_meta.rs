@@ -1,6 +1,6 @@
 use rain_metadata::{
     types::{
-        dotrain::{gui_state_v1::DotrainGuiStateV1, source_v1::DotrainSourceV1},
+        dotrain::{order_builder_state_v1::OrderBuilderStateV1, source_v1::DotrainSourceV1},
         raindex_signed_context_oracle::RaindexSignedContextOracleV1,
     },
     KnownMagic, RainMetaDocumentV1Item,
@@ -14,7 +14,7 @@ use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 pub enum ParsedMeta {
-    DotrainGuiStateV1(DotrainGuiStateV1),
+    OrderBuilderStateV1(OrderBuilderStateV1),
     DotrainSourceV1(DotrainSourceV1),
     RaindexSignedContextOracleV1(RaindexSignedContextOracleV1),
 }
@@ -30,9 +30,9 @@ impl ParsedMeta {
         item: &RainMetaDocumentV1Item,
     ) -> Result<Option<Self>, rain_metadata::Error> {
         match item.magic {
-            KnownMagic::DotrainGuiStateV1 => {
-                let gui_state = DotrainGuiStateV1::try_from(item.clone())?;
-                Ok(Some(ParsedMeta::DotrainGuiStateV1(gui_state)))
+            KnownMagic::OrderBuilderStateV1 => {
+                let builder_state = OrderBuilderStateV1::try_from(item.clone())?;
+                Ok(Some(ParsedMeta::OrderBuilderStateV1(builder_state)))
             }
             KnownMagic::DotrainSourceV1 => {
                 let source = DotrainSourceV1::try_from(item.clone())?;
@@ -70,7 +70,7 @@ impl ParsedMeta {
 #[cfg(test)]
 mod tests {
     use alloy::{hex::FromHex, primitives::Address};
-    use rain_metadata::types::dotrain::gui_state_v1::{ShortenedTokenCfg, ValueCfg};
+    use rain_metadata::types::dotrain::order_builder_state_v1::{ShortenedTokenCfg, ValueCfg};
 
     use super::*;
     use std::collections::BTreeMap;
@@ -78,8 +78,8 @@ mod tests {
     fn get_default_dotrain_source() -> DotrainSourceV1 {
         DotrainSourceV1("default source".to_string())
     }
-    fn get_default_dotrain_gui_state() -> DotrainGuiStateV1 {
-        DotrainGuiStateV1 {
+    fn get_default_dotrain_builder_state() -> OrderBuilderStateV1 {
+        OrderBuilderStateV1 {
             dotrain_hash: get_default_dotrain_source().hash(),
             field_values: BTreeMap::from([(
                 "field1".to_string(),
@@ -111,15 +111,15 @@ mod tests {
     }
 
     #[test]
-    fn test_from_meta_item_gui_state_v1() {
-        let gui_state = get_default_dotrain_gui_state();
-        let item = RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap();
+    fn test_from_meta_item_order_builder_state_v1() {
+        let builder_state = get_default_dotrain_builder_state();
+        let item = RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap();
         let result = ParsedMeta::from_meta_item(&item).unwrap();
         match result.unwrap() {
-            ParsedMeta::DotrainGuiStateV1(parsed_gui_state) => {
-                assert_eq!(parsed_gui_state, gui_state);
+            ParsedMeta::OrderBuilderStateV1(parsed_builder_state) => {
+                assert_eq!(parsed_builder_state, builder_state);
             }
-            _ => panic!("Expected DotrainGuiStateV1"),
+            _ => panic!("Expected OrderBuilderStateV1"),
         }
     }
 
@@ -140,11 +140,11 @@ mod tests {
 
     #[test]
     fn test_parse_multiple_items() {
-        let gui_state = get_default_dotrain_gui_state();
+        let builder_state = get_default_dotrain_builder_state();
         let source = get_default_dotrain_source();
 
         let items = vec![
-            RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+            RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
             RainMetaDocumentV1Item::from(source.clone()),
         ];
 
@@ -152,10 +152,10 @@ mod tests {
         assert_eq!(results.len(), 2);
 
         match &results[0] {
-            ParsedMeta::DotrainGuiStateV1(parsed_gui_state) => {
-                assert_eq!(*parsed_gui_state, gui_state);
+            ParsedMeta::OrderBuilderStateV1(parsed_builder_state) => {
+                assert_eq!(*parsed_builder_state, builder_state);
             }
-            _ => panic!("Expected DotrainGuiStateV1"),
+            _ => panic!("Expected OrderBuilderStateV1"),
         }
 
         match &results[1] {
@@ -184,7 +184,7 @@ mod tests {
     fn test_parse_from_bytes_valid() {
         // Arrange two items
         let source = DotrainSourceV1("hello".to_string());
-        let gui = DotrainGuiStateV1 {
+        let builder = OrderBuilderStateV1 {
             dotrain_hash: source.hash(),
             field_values: std::collections::BTreeMap::new(),
             deposits: std::collections::BTreeMap::new(),
@@ -194,7 +194,7 @@ mod tests {
         };
         let items = vec![
             RainMetaDocumentV1Item::from(source.clone()),
-            RainMetaDocumentV1Item::try_from(gui.clone()).unwrap(),
+            RainMetaDocumentV1Item::try_from(builder.clone()).unwrap(),
         ];
         let bytes = RainMetaDocumentV1Item::cbor_encode_seq(&items, KnownMagic::RainMetaDocumentV1)
             .unwrap();
@@ -204,7 +204,7 @@ mod tests {
 
         // Assert
         assert!(matches!(&parsed[0], ParsedMeta::DotrainSourceV1(s) if s.0 == source.0));
-        assert!(matches!(&parsed[1], ParsedMeta::DotrainGuiStateV1(g) if g == &gui));
+        assert!(matches!(&parsed[1], ParsedMeta::OrderBuilderStateV1(g) if g == &builder));
     }
 
     #[test]

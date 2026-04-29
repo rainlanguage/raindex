@@ -2,7 +2,7 @@
 	import { Input, Button, Modal } from 'flowbite-svelte';
 	import { SearchOutline, CheckCircleSolid, ChevronDownSolid } from 'flowbite-svelte-icons';
 	import type { ExtendedTokenInfo } from '@rainlanguage/orderbook';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 	import { onMount, tick } from 'svelte';
 
 	export let selectedToken: ExtendedTokenInfo | null = null;
@@ -14,12 +14,12 @@
 	let isSearching = false;
 	let failedImages: Set<string> = new Set();
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	async function loadTokens(search?: string) {
 		isSearching = true;
 
-		const result = await gui.getAllTokens(search);
+		const result = await builder.getAllTokens(search);
 		if (result.error) {
 			tokens = [];
 		} else {

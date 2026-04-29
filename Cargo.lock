@@ -6718,22 +6718,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rain-interpreter-eval"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "eyre",
- "foundry-evm",
- "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
- "rain_interpreter_bindings",
- "revm 24.0.1",
- "revm 25.0.0",
- "serde",
- "thiserror 1.0.69",
- "wasm-bindgen-utils 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "rain-math-float"
 version = "0.1.0"
 dependencies = [
@@ -6831,40 +6815,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rain_interpreter_bindings"
-version = "0.1.0"
-dependencies = [
- "alloy",
-]
-
-[[package]]
-name = "rain_interpreter_dispair"
-version = "0.1.0"
-dependencies = [
- "alloy",
-]
-
-[[package]]
-name = "rain_interpreter_parser"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
- "rain_interpreter_bindings",
- "rain_interpreter_dispair",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "rain_interpreter_test_fixtures"
-version = "0.0.0"
-dependencies = [
- "alloy",
- "getrandom 0.2.16",
-]
-
-[[package]]
 name = "rain_orderbook_app_settings"
 version = "0.0.0-alpha.0"
 dependencies = [
@@ -6916,13 +6866,13 @@ dependencies = [
  "itertools 0.14.0",
  "rain-math-float",
  "rain-metadata 0.0.2-alpha.6",
- "rain_interpreter_bindings",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_common",
  "rain_orderbook_quote",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
+ "rainlang_bindings",
  "rusqlite",
  "rust-bigint",
  "serde",
@@ -6943,6 +6893,8 @@ dependencies = [
  "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
  "async-trait",
  "backon",
+ "base64 0.22.1",
+ "bincode",
  "chrono",
  "csv",
  "dotrain",
@@ -6957,19 +6909,19 @@ dependencies = [
  "once_cell",
  "proptest",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
- "rain-interpreter-eval",
  "rain-math-float",
  "rain-metaboard-subgraph",
  "rain-metadata 0.0.2-alpha.6",
  "rain-metadata-bindings",
- "rain_interpreter_bindings",
- "rain_interpreter_dispair",
- "rain_interpreter_parser",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_quote",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
+ "rainlang-eval",
+ "rainlang_bindings",
+ "rainlang_dispair",
+ "rainlang_parser",
  "reqwest 0.12.20",
  "rusqlite",
  "serde",
@@ -6977,6 +6929,7 @@ dependencies = [
  "serde_bytes",
  "serde_json",
  "serde_yaml",
+ "sha2 0.10.9",
  "strict-yaml-rust",
  "tempfile",
  "thiserror 1.0.69",
@@ -7059,7 +7012,6 @@ dependencies = [
  "httpmock",
  "once_cell",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
- "rain-interpreter-eval",
  "rain-math-float",
  "rain-metadata 0.0.2-alpha.6",
  "rain_orderbook_app_settings",
@@ -7067,6 +7019,7 @@ dependencies = [
  "rain_orderbook_common",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
+ "rainlang-eval",
  "reqwest 0.12.20",
  "serde",
  "serde_json",
@@ -7128,8 +7081,58 @@ dependencies = [
  "alloy",
  "getrandom 0.2.16",
  "rain-math-float",
- "rain_interpreter_test_fixtures",
+ "rainlang_test_fixtures",
  "serde_json",
+]
+
+[[package]]
+name = "rainlang-eval"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "eyre",
+ "foundry-evm",
+ "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
+ "rainlang_bindings",
+ "revm 24.0.1",
+ "revm 25.0.0",
+ "serde",
+ "thiserror 1.0.69",
+ "wasm-bindgen-utils 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rainlang_bindings"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+]
+
+[[package]]
+name = "rainlang_dispair"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+]
+
+[[package]]
+name = "rainlang_parser"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
+ "rainlang_bindings",
+ "rainlang_dispair",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "rainlang_test_fixtures"
+version = "0.0.0"
+dependencies = [
+ "alloy",
+ "getrandom 0.2.16",
 ]
 
 [[package]]

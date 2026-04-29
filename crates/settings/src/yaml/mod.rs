@@ -548,7 +548,7 @@ pub fn sanitize_all_documents(documents: &[Arc<RwLock<StrictYaml>>]) -> Result<(
     crate::ChartCfg::sanitize_documents(documents)?;
     crate::RainlangCfg::sanitize_documents(documents)?;
     crate::DeploymentCfg::sanitize_documents(documents)?;
-    crate::GuiCfg::sanitize_documents(documents)?;
+    crate::OrderBuilderCfg::sanitize_documents(documents)?;
     crate::LocalDbSyncCfg::sanitize_documents(documents)?;
     crate::NetworkCfg::sanitize_documents(documents)?;
     crate::OrderCfg::sanitize_documents(documents)?;

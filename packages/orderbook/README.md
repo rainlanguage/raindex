@@ -123,7 +123,7 @@ deployments:
 using-tokens-from:
   - https://tokens.coingecko.com/base/all.json
 
-gui:
+builder:
   name: Fixed limit
   description: Deploy a USDC -> WETH limit order on Base.
   short-description: Deploy a USDC -> WETH limit order on Base.
@@ -501,7 +501,7 @@ const ordersResult = await client.getOrders([137], filters, 1);
 
 ### Load remote strategies with `DotrainRegistry`
 
-If you maintain a hosted registry, instantiate the helper, inspect what it exposes, and pull down any dotrain/GUI definitions you need:
+If you maintain a hosted registry, instantiate the helper, inspect what it exposes, and pull down any dotrain/builder definitions you need:
 
 ```ts
 import { DotrainRegistry } from '@rainlanguage/orderbook';
@@ -528,7 +528,7 @@ fixed-limit https://example.com/orders/fixed-limit.rain
 dca https://example.com/orders/dca.rain
 ```
 
-The SDK merges the shared settings YAML with each order's `.rain` content before you ever build a GUI.
+The SDK merges the shared settings YAML with each order's `.rain` content before you ever build an order builder.
 
 #### Access tokens from registry settings
 
@@ -557,16 +557,16 @@ const client = clientResult.value;
 const ordersResult = await client.getOrders([8453]);
 ```
 
-### Build a deployment GUI
+### Build a deployment order builder
 
-Any dotrain file that includes a `gui:` block plus the usual settings YAML is enough to drive `DotrainOrderGui`. The `FIXED_LIMIT_SOURCE` constant declared earlier already includes the required networks/tokens/rainlangs plus a full `gui` definition, so you can reference it directly (or trim it to your own bindings) instead of copying pieces of `settings.yaml` inline in this guide. Always cross-check the source you feed in with the latest definitions in [rainlanguage/rain.strategies](https://github.com/rainlanguage/rain.strategies); that repository tracks the real configurations our UI ships with.
+Any dotrain file that includes a `builder:` block plus the usual settings YAML is enough to drive `RaindexOrderBuilder`. The `FIXED_LIMIT_SOURCE` constant declared earlier already includes the required networks/tokens/deployers plus a full `builder` definition, so you can reference it directly (or trim it to your own bindings) instead of copying pieces of `settings.yaml` inline in this guide. Always cross-check the source you feed in with the latest definitions in [rainlanguage/rain.strategies](https://github.com/rainlanguage/rain.strategies); that repository tracks the real configurations our UI ships with.
 
-With that single source string (read from disk or built dynamically) you can drive the full GUI workflow:
+With that single source string (read from disk or built dynamically) you can drive the full order builder workflow:
 
 ```ts
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { RaindexOrderBuilder } from '@rainlanguage/orderbook';
 
-const dotrainWithGui = FIXED_LIMIT_SOURCE;
+const dotrainWithBuilder = FIXED_LIMIT_SOURCE;
 const SAMPLE_YAML = `
 ...
 rainlangs:
@@ -581,72 +581,72 @@ orderbooks:
 `
 const additionalSettings = [SAMPLE_YAML]; // optional extra YAML strings
 
-const deploymentsResult = await DotrainOrderGui.getDeploymentKeys(
-  dotrainWithGui,
+const deploymentsResult = await RaindexOrderBuilder.getDeploymentKeys(
+  dotrainWithBuilder,
   additionalSettings
 );
 if (deploymentsResult.error) throw new Error(deploymentsResult.error.readableMsg);
 const [firstDeployment] = deploymentsResult.value;
 
-const guiResult = await DotrainOrderGui.newWithDeployment(
-  dotrainWithGui,
+const builderResult = await RaindexOrderBuilder.newWithDeployment(
+  dotrainWithBuilder,
   additionalSettings,
   firstDeployment
 );
-if (guiResult.error) throw new Error(guiResult.error.readableMsg);
-const gui = guiResult.value;
+if (builderResult.error) throw new Error(builderResult.error.readableMsg);
+const builder = builderResult.value;
 
-const configResult = gui.getAllGuiConfig();
+const configResult = builder.getAllBuilderConfig();
 if (configResult.error) throw new Error(configResult.error.readableMsg);
 const config = configResult.value;
 
-const selectTokensResult = gui.getSelectTokens();
+const selectTokensResult = builder.getSelectTokens();
 if (selectTokensResult.error) throw new Error(selectTokensResult.error.readableMsg);
 const selectTokens = selectTokensResult.value;
 
-const depositsResult = gui.getDeposits();
+const depositsResult = builder.getDeposits();
 if (depositsResult.error) throw new Error(depositsResult.error.readableMsg);
 const deposits = depositsResult.value;
 
-await gui.setSelectToken('input-token', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'); // USDC
-await gui.setSelectToken('output-token', '0x4200000000000000000000000000000000000006'); // WETH
-const fieldResult = gui.setFieldValue('fixed-io', '1850');
+await builder.setSelectToken('input-token', '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'); // USDC
+await builder.setSelectToken('output-token', '0x4200000000000000000000000000000000000006'); // WETH
+const fieldResult = builder.setFieldValue('fixed-io', '1850');
 if (fieldResult.error) throw new Error(fieldResult.error.readableMsg);
-const amountResult = gui.setFieldValue('amount-per-trade', '250');
+const amountResult = builder.setFieldValue('amount-per-trade', '250');
 if (amountResult.error) throw new Error(amountResult.error.readableMsg);
-await gui.setDeposit('usdc', '5000');
-const vaultIdResult = gui.setVaultId('input', 'usdc', '42');
+await builder.setDeposit('usdc', '5000');
+const vaultIdResult = builder.setVaultId('input', 'usdc', '42');
 if (vaultIdResult.error) throw new Error(vaultIdResult.error.readableMsg);
 
-const allowancesResult = await gui.checkAllowances('0xOwner');
+const allowancesResult = await builder.checkAllowances('0xOwner');
 if (allowancesResult.error) throw new Error(allowancesResult.error.readableMsg);
 const allowances = allowancesResult.value;
 
-const approvalCalldatasResult = await gui.generateApprovalCalldatas('0xOwner');
+const approvalCalldatasResult = await builder.generateApprovalCalldatas('0xOwner');
 if (approvalCalldatasResult.error) throw new Error(approvalCalldatasResult.error.readableMsg);
 
-const depositCalldatasResult = await gui.generateDepositCalldatas();
+const depositCalldatasResult = await builder.generateDepositCalldatas();
 if (depositCalldatasResult.error) throw new Error(depositCalldatasResult.error.readableMsg);
 
-const deploymentArgsResult = await gui.getDeploymentTransactionArgs('0xOwner');
+const deploymentArgsResult = await builder.getDeploymentTransactionArgs('0xOwner');
 if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 const { approvals, deploymentCalldata, orderbookAddress, chainId } = deploymentArgsResult.value;
 
-const rainlangResult = await gui.getComposedRainlang();
+const rainlangResult = await builder.getComposedRainlang();
 if (rainlangResult.error) throw new Error(rainlangResult.error.readableMsg);
 const composedRainlang = rainlangResult.value;
 
-const serializedStateResult = gui.serializeState();
+const serializedStateResult = builder.serializeState();
 if (!serializedStateResult.error) {
   localStorage.setItem('fixed-limit-state', serializedStateResult.value);
 }
 ```
 
-Serialize the GUI state and later revive it with `DotrainOrderGui.newFromState(dotrainText, additionalSettings, serializedState, callback)` if you want to skip re-entering form choices.
+Serialize the builder state and later revive it with `RaindexOrderBuilder.newFromState(dotrainText, additionalSettings, serializedState, callback)` if you want to skip re-entering form choices.
 
 #### Deploy with wallet + fetch your order
 
-`gui.getDeploymentTransactionArgs(owner)` returns a `DeploymentTransactionArgs` struct with:
+`builder.getDeploymentTransactionArgs(owner)` returns a `DeploymentTransactionArgs` struct with:
 
 - `approvals: ExtendedApprovalCalldata[]` (each item contains `token`, `calldata`, and the token `symbol` for UX)
 - `deploymentCalldata: Hex` – a multicall that performs deposits (if required) and adds the order in one transaction
@@ -663,7 +663,7 @@ A typical deployment flow is:
 ```ts
 import type { RaindexClient } from '@rainlanguage/orderbook';
 
-const deploymentArgsResult = await gui.getDeploymentTransactionArgs(owner);
+const deploymentArgsResult = await builder.getDeploymentTransactionArgs(owner);
 if (deploymentArgsResult.error) throw new Error(deploymentArgsResult.error.readableMsg);
 const { approvals, deploymentCalldata, orderbookAddress, chainId } = deploymentArgsResult.value;
 
@@ -683,7 +683,7 @@ const raindexOrder = await waitForOrderFromTx(client as RaindexClient, {
 });
 ```
 
-After you have a local GUI-aware dotrain source, you can also fetch equivalent sources from a registry and run the same flow:
+After you have a local dotrain source, you can also fetch equivalent sources from a registry and run the same flow:
 
 ```ts
 import { DotrainRegistry } from '@rainlanguage/orderbook';
@@ -692,17 +692,17 @@ const registryResult = await DotrainRegistry.new('https://example.com/registry.t
 if (registryResult.error) throw new Error(registryResult.error.readableMsg);
 const registry = registryResult.value;
 
-const guiSourceResult = await registry.getGui('fixed-limit', 'base');
-if (guiSourceResult.error) throw new Error(guiSourceResult.error.readableMsg);
-const guiFromRegistry = guiSourceResult.value;
+const builderResult = await registry.getOrderBuilder('fixed-limit', 'base');
+if (builderResult.error) throw new Error(builderResult.error.readableMsg);
+const builderFromRegistry = builderResult.value;
 
-// guiFromRegistry is already a DotrainOrderGui instance, so you can reuse
-// the same GUI helper steps shown above (select tokens, deposits, calldata, etc.).
+// builderFromRegistry is already a RaindexOrderBuilder instance, so you can reuse
+// the same builder helper steps shown above (select tokens, deposits, calldata, etc.).
 ```
 
 ### Work directly with dotrain files
 
-If you just need Rainlang composition (no GUI state), read the dotrain text plus shared settings yourself, instantiate a `DotrainOrder`, and then ask it to compose scenario/deployment/post-task Rainlang. The example below reuses `FIXED_LIMIT_SOURCE`, but you can replace it with the contents of any `.rain` file.
+If you just need Rainlang composition (no builder state), read the dotrain text plus shared settings yourself, instantiate a `DotrainOrder`, and then ask it to compose scenario/deployment/post-task Rainlang. The example below reuses `FIXED_LIMIT_SOURCE`, but you can replace it with the contents of any `.rain` file.
 
 ```ts
 import { DotrainOrder } from '@rainlanguage/orderbook';

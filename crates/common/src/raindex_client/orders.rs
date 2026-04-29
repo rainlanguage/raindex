@@ -303,10 +303,10 @@ impl RaindexOrder {
             _ => None,
         })
     }
-    #[wasm_bindgen(getter = dotrainGuiState)]
-    pub fn dotrain_gui_state(&self) -> Option<String> {
+    #[wasm_bindgen(getter = orderBuilderState)]
+    pub fn order_builder_state(&self) -> Option<String> {
         self.parsed_meta().into_iter().find_map(|meta| match meta {
-            ParsedMeta::DotrainGuiStateV1(state) => serde_json::to_string(&state).ok(),
+            ParsedMeta::OrderBuilderStateV1(state) => serde_json::to_string(&state).ok(),
             _ => None,
         })
     }
@@ -388,9 +388,9 @@ impl RaindexOrder {
             _ => None,
         })
     }
-    pub fn dotrain_gui_state(&self) -> Option<String> {
+    pub fn order_builder_state(&self) -> Option<String> {
         self.parsed_meta().into_iter().find_map(|meta| match meta {
-            ParsedMeta::DotrainGuiStateV1(state) => serde_json::to_string(&state).ok(),
+            ParsedMeta::OrderBuilderStateV1(state) => serde_json::to_string(&state).ok(),
             _ => None,
         })
     }
@@ -1434,8 +1434,8 @@ impl RaindexOrder {
             return Ok(());
         }
 
-        let dotrain_gui_state = match self.parsed_meta.iter().find_map(|meta| {
-            if let ParsedMeta::DotrainGuiStateV1(state) = meta {
+        let order_builder_state = match self.parsed_meta.iter().find_map(|meta| {
+            if let ParsedMeta::OrderBuilderStateV1(state) = meta {
                 Some(state.clone())
             } else {
                 None
@@ -1450,7 +1450,7 @@ impl RaindexOrder {
             None => return Ok(()),
         };
 
-        let subject_hash = dotrain_gui_state.dotrain_hash();
+        let subject_hash = order_builder_state.dotrain_hash();
 
         let metabytes = match client
             .get_metabytes_by_subject(&MetaBigInt(alloy::hex::encode_prefixed(subject_hash)))
@@ -1614,7 +1614,7 @@ mod tests {
         use httpmock::MockServer;
         use rain_math_float::Float;
         use rain_metadata::types::dotrain::{
-            gui_state_v1::DotrainGuiStateV1, source_v1::DotrainSourceV1,
+            order_builder_state_v1::OrderBuilderStateV1, source_v1::DotrainSourceV1,
         };
         use rain_metadata::{
             ContentEncoding, ContentLanguage, ContentType, KnownMagic, RainMetaDocumentV1Item,
@@ -1633,8 +1633,8 @@ mod tests {
             DotrainSourceV1("sample dotrain source".to_string())
         }
 
-        fn sample_dotrain_gui_state(source: &DotrainSourceV1) -> DotrainGuiStateV1 {
-            DotrainGuiStateV1 {
+        fn sample_order_builder_state(source: &DotrainSourceV1) -> OrderBuilderStateV1 {
+            OrderBuilderStateV1 {
                 dotrain_hash: source.hash(),
                 field_values: BTreeMap::new(),
                 deposits: BTreeMap::new(),
@@ -1674,10 +1674,10 @@ mod tests {
         #[tokio::test]
         async fn try_from_sg_order_populates_parsed_meta() {
             let source = sample_dotrain_source();
-            let gui_state = sample_dotrain_gui_state(&source);
+            let builder_state = sample_order_builder_state(&source);
             let meta_hex = encode_meta_items_hex(vec![
                 RainMetaDocumentV1Item::from(source.clone()),
-                RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+                RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
             ]);
 
             let mut sg_order = get_order1();
@@ -1701,18 +1701,18 @@ mod tests {
 
             assert_eq!(order.parsed_meta().len(), 2);
             assert_eq!(order.dotrain_source(), Some(source.0));
-            let parsed_gui_state: DotrainGuiStateV1 =
-                serde_json::from_str(&order.dotrain_gui_state().unwrap()).unwrap();
-            assert_eq!(parsed_gui_state, gui_state);
+            let parsed_builder_state: OrderBuilderStateV1 =
+                serde_json::from_str(&order.order_builder_state().unwrap()).unwrap();
+            assert_eq!(parsed_builder_state, builder_state);
         }
 
         #[tokio::test]
         async fn from_local_db_order_populates_parsed_meta() {
             let source = sample_dotrain_source();
-            let gui_state = sample_dotrain_gui_state(&source);
+            let builder_state = sample_order_builder_state(&source);
             let meta_hex = encode_meta_items_hex(vec![
                 RainMetaDocumentV1Item::from(source.clone()),
-                RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+                RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
             ]);
             let meta_bytes =
                 alloy::hex::decode(meta_hex.strip_prefix("0x").unwrap_or(&meta_hex)).unwrap();
@@ -1756,18 +1756,18 @@ mod tests {
 
             assert_eq!(order.parsed_meta().len(), 2);
             assert_eq!(order.dotrain_source(), Some(source.0));
-            let parsed_gui_state: DotrainGuiStateV1 =
-                serde_json::from_str(&order.dotrain_gui_state().unwrap()).unwrap();
-            assert_eq!(parsed_gui_state, gui_state);
+            let parsed_builder_state: OrderBuilderStateV1 =
+                serde_json::from_str(&order.order_builder_state().unwrap()).unwrap();
+            assert_eq!(parsed_builder_state, builder_state);
         }
 
         #[tokio::test]
         async fn fetch_dotrain_source_skips_when_source_already_present() {
             let source = sample_dotrain_source();
-            let gui_state = sample_dotrain_gui_state(&source);
+            let builder_state = sample_order_builder_state(&source);
             let meta_hex = encode_meta_items_hex(vec![
                 RainMetaDocumentV1Item::from(source.clone()),
-                RainMetaDocumentV1Item::try_from(gui_state).unwrap(),
+                RainMetaDocumentV1Item::try_from(builder_state).unwrap(),
             ]);
 
             let mut sg_order = get_order1();
@@ -1793,7 +1793,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn fetch_dotrain_source_returns_ok_without_gui_state() {
+        async fn fetch_dotrain_source_returns_ok_without_builder_state() {
             let mut sg_order = get_order1();
             sg_order.meta = None;
 
@@ -1819,7 +1819,7 @@ mod tests {
         #[tokio::test]
         async fn fetch_dotrain_source_adds_source_from_metaboard() {
             let source = sample_dotrain_source();
-            let gui_state = sample_dotrain_gui_state(&source);
+            let builder_state = sample_order_builder_state(&source);
             let rainlang_meta = RainMetaDocumentV1Item {
                 payload: ByteBuf::from("sample rainlang source".as_bytes()),
                 magic: KnownMagic::RainlangSourceV1,
@@ -1829,7 +1829,7 @@ mod tests {
             };
             let order_meta_hex = encode_meta_items_hex(vec![
                 rainlang_meta,
-                RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+                RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
             ]);
 
             let server = MockServer::start_async().await;
@@ -1851,7 +1851,7 @@ mod tests {
                                 "sender": "0x0000000000000000000000000000000000000000",
                                 "id": "0x01",
                                 "metaBoard": { "address": "0x0000000000000000000000000000000000000000" },
-                                "subject": gui_state.dotrain_hash().to_string()
+                                "subject": builder_state.dotrain_hash().to_string()
                             }
                         ]
                     }
@@ -1871,15 +1871,15 @@ mod tests {
 
             assert_eq!(order.parsed_meta().len(), 2);
             assert_eq!(order.dotrain_source(), Some(source.0));
-            let parsed_gui_state: DotrainGuiStateV1 =
-                serde_json::from_str(&order.dotrain_gui_state().unwrap()).unwrap();
-            assert_eq!(parsed_gui_state, gui_state);
+            let parsed_builder_state: OrderBuilderStateV1 =
+                serde_json::from_str(&order.order_builder_state().unwrap()).unwrap();
+            assert_eq!(parsed_builder_state, builder_state);
         }
 
         #[tokio::test]
         async fn fetch_dotrain_source_handles_invalid_meta_bytes() {
             let source = sample_dotrain_source();
-            let gui_state = sample_dotrain_gui_state(&source);
+            let builder_state = sample_order_builder_state(&source);
             let rainlang_meta = RainMetaDocumentV1Item {
                 payload: ByteBuf::from("sample rainlang source".as_bytes()),
                 magic: KnownMagic::RainlangSourceV1,
@@ -1889,7 +1889,7 @@ mod tests {
             };
             let meta_hex = encode_meta_items_hex(vec![
                 rainlang_meta,
-                RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+                RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
             ]);
 
             let server = MockServer::start_async().await;
@@ -1905,7 +1905,7 @@ mod tests {
                                 "sender": "0x0000000000000000000000000000000000000000",
                                 "id": "0x01",
                                 "metaBoard": { "address": "0x0000000000000000000000000000000000000000" },
-                                "subject": gui_state.dotrain_hash().to_string()
+                                "subject": builder_state.dotrain_hash().to_string()
                             }
                         ]
                     }
@@ -1924,9 +1924,9 @@ mod tests {
             order.fetch_dotrain_source().await.unwrap();
 
             assert_eq!(order.parsed_meta().len(), 1);
-            let parsed_gui_state: DotrainGuiStateV1 =
-                serde_json::from_str(&order.dotrain_gui_state().unwrap()).unwrap();
-            assert_eq!(parsed_gui_state, gui_state);
+            let parsed_builder_state: OrderBuilderStateV1 =
+                serde_json::from_str(&order.order_builder_state().unwrap()).unwrap();
+            assert_eq!(parsed_builder_state, builder_state);
         }
 
         #[derive(Clone)]

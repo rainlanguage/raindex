@@ -118,11 +118,11 @@
 		}
 	] as const;
 
-	const formatGuiState = (guiState: string) => {
+	const formatBuilderState = (builderState: string) => {
 		try {
-			return JSON.stringify(JSON.parse(guiState), null, 2);
+			return JSON.stringify(JSON.parse(builderState), null, 2);
 		} catch {
-			return 'Invalid GUI state';
+			return 'Invalid builder state';
 		}
 	};
 </script>
@@ -339,12 +339,12 @@
 					></CodeMirrorRainlang>
 				</div>
 			</TabItem>
-			{#if data.dotrainGuiState}
-				<TabItem title="Gui State">
+			{#if data.orderBuilderState}
+				<TabItem title="Builder State">
 					<div class="mb-4">
 						<div class="overflow-auto rounded-lg border bg-gray-50 p-4 dark:bg-gray-800">
-							<pre class="text-sm" data-testid="gui-state-json">
-								{formatGuiState(data.dotrainGuiState)}
+							<pre class="text-sm" data-testid="builder-state-json">
+								{formatBuilderState(data.orderBuilderState)}
 							</pre>
 						</div>
 					</div>

@@ -50,6 +50,9 @@ eyre.workspace = true
 rain-math-float.workspace = true
 tower.workspace = true
 flate2 = "1.0.34"
+base64 = "0.22.1"
+bincode = "1.3.3"
+sha2 = "0.10.8"
 itertools = { workspace = true }
 async-trait = { workspace = true }
 web-sys = { version = "0.3", features = ["Window", "Navigator", "console"] }

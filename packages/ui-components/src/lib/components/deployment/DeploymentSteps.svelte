@@ -3,13 +3,13 @@
 	import TokenIOInput from './TokenIOInput.svelte';
 	import ComposedRainlangModal from './ComposedRainlangModal.svelte';
 	import {
-		type GuiSelectTokensCfg,
+		type OrderBuilderSelectTokensCfg,
 		type ExtendedTokenInfo,
-		type GuiDepositCfg,
-		type GuiFieldDefinitionCfg,
+		type OrderBuilderDepositCfg,
+		type OrderBuilderFieldDefinitionCfg,
 		type NameAndDescriptionCfg,
 		type OrderIOCfg,
-		DotrainOrderGui,
+		RaindexOrderBuilder,
 		RaindexClient,
 		AccountBalance,
 		Float
@@ -24,7 +24,7 @@
 	import DepositInput from './DepositInput.svelte';
 	import SelectToken from './SelectToken.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 	import { fade } from 'svelte/transition';
 	import ShareChoicesButton from './ShareChoicesButton.svelte';
 	import { useRegistry } from '$lib/providers/registry/useRegistry';
@@ -43,31 +43,31 @@
 	/** Strategy details containing name and description configuration */
 	export let orderDetail: NameAndDescriptionCfg;
 	/** Handlers for deployment modals */
-	export let onDeploy: (raindexClient: RaindexClient, gui: DotrainOrderGui) => void;
+	export let onDeploy: (raindexClient: RaindexClient, builder: RaindexOrderBuilder) => void;
 	export let wagmiConnected: Writable<boolean>;
 	export let appKitModal: Writable<AppKit>;
 	export let account: Account;
 
-	let allDepositFields: GuiDepositCfg[] = [];
+	let allDepositFields: OrderBuilderDepositCfg[] = [];
 	let allTokenOutputs: OrderIOCfg[] = [];
 	let allTokenInputs: OrderIOCfg[] = [];
-	let allFieldDefinitionsWithoutDefaults: GuiFieldDefinitionCfg[] = [];
-	let allFieldDefinitionsWithDefaults: GuiFieldDefinitionCfg[] = [];
+	let allFieldDefinitionsWithoutDefaults: OrderBuilderFieldDefinitionCfg[] = [];
+	let allFieldDefinitionsWithDefaults: OrderBuilderFieldDefinitionCfg[] = [];
 	let allTokensSelected: boolean = false;
 	let showAdvancedOptions: boolean = false;
 	let allTokenInfos: ExtendedTokenInfo[] = [];
-	let selectTokens: GuiSelectTokensCfg[] | undefined = undefined;
+	let selectTokens: OrderBuilderSelectTokensCfg[] | undefined = undefined;
 	let checkingDeployment: boolean = false;
 	let tokenBalances: Map<string, TokenBalance> = new Map();
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 	const registry = useRegistry();
 	const raindexClient = useRaindexClient();
 
 	let deploymentStepsError = DeploymentStepsError.error;
 
 	onMount(async () => {
-		const selectTokensResult = gui.getSelectTokens();
+		const selectTokensResult = builder.getSelectTokens();
 		if (selectTokensResult.error) {
 			throw new Error(selectTokensResult.error.msg);
 		}
@@ -96,9 +96,9 @@
 		unsubscribeAccount();
 	});
 
-	function getAllGuiConfig() {
+	function getAllBuilderConfig() {
 		try {
-			let result = gui.getAllGuiConfig();
+			let result = builder.getAllBuilderConfig();
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}
@@ -108,21 +108,21 @@
 			allTokenOutputs = result.value.orderOutputs;
 			allTokenInputs = result.value.orderInputs;
 		} catch (e) {
-			DeploymentStepsError.catch(e, DeploymentStepsErrorCode.NO_GUI_CONFIG);
+			DeploymentStepsError.catch(e, DeploymentStepsErrorCode.NO_BUILDER_CONFIG);
 		}
 	}
 
 	function updateFields() {
 		try {
 			DeploymentStepsError.clear();
-			getAllGuiConfig();
+			getAllBuilderConfig();
 		} catch (e) {
-			DeploymentStepsError.catch(e, DeploymentStepsErrorCode.NO_GUI);
+			DeploymentStepsError.catch(e, DeploymentStepsErrorCode.NO_BUILDER);
 		}
 	}
 
 	async function _handleShareChoices() {
-		await handleShareChoices(gui, registry.getCurrentRegistry());
+		await handleShareChoices(builder, registry.getCurrentRegistry());
 	}
 
 	async function fetchTokenBalance(tokenInfo: ExtendedTokenInfo) {
@@ -135,7 +135,7 @@
 			error: ''
 		});
 
-		const { value: accountBalance, error } = await gui.getAccountBalance(
+		const { value: accountBalance, error } = await builder.getAccountBalance(
 			tokenInfo.address,
 			$account
 		);
@@ -157,7 +157,7 @@
 	}
 
 	async function getTokenInfoAndFetchBalance(key: string) {
-		const tokenInfoResult = await gui.getTokenInfo(key);
+		const tokenInfoResult = await builder.getTokenInfo(key);
 		if (tokenInfoResult.error) {
 			throw new Error(tokenInfoResult.error.msg);
 		}
@@ -174,39 +174,39 @@
 		await getTokenInfoAndFetchBalance(key);
 
 		if (allTokensSelected) {
-			let result = await gui.getAllTokenInfos();
+			let result = await builder.getAllTokenInfos();
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}
 			let newAllTokenInfos = result.value;
 			if (allTokenInfos !== newAllTokenInfos) {
 				allTokenInfos = newAllTokenInfos;
-				getAllGuiConfig();
+				getAllBuilderConfig();
 			}
 		}
 	}
 
 	const areAllTokensSelected = async () => {
 		try {
-			const areAllTokensSelectedResult = gui.areAllTokensSelected();
+			const areAllTokensSelectedResult = builder.areAllTokensSelected();
 			if (areAllTokensSelectedResult.error) {
 				throw new Error(areAllTokensSelectedResult.error.msg);
 			}
 			allTokensSelected = areAllTokensSelectedResult.value;
 			if (!allTokensSelected) return;
 
-			const getAllTokenInfosResult = await gui.getAllTokenInfos();
+			const getAllTokenInfosResult = await builder.getAllTokenInfos();
 			if (getAllTokenInfosResult.error) {
 				throw new Error(getAllTokenInfosResult.error.msg);
 			}
 			allTokenInfos = getAllTokenInfosResult.value;
 
 			// if we have deposits or vault ids set, show advanced options
-			const hasDepositsResult = gui.hasAnyDeposit();
+			const hasDepositsResult = builder.hasAnyDeposit();
 			if (hasDepositsResult.error) {
 				throw new Error(hasDepositsResult.error.msg);
 			}
-			const hasVaultIdsResult = gui.hasAnyVaultId();
+			const hasVaultIdsResult = builder.hasAnyVaultId();
 			if (hasVaultIdsResult.error) {
 				throw new Error(hasVaultIdsResult.error.msg);
 			}
@@ -233,7 +233,7 @@
 			}
 			DeploymentStepsError.clear();
 
-			return onDeploy(raindexClient, gui);
+			return onDeploy(raindexClient, builder);
 		} catch (e) {
 			DeploymentStepsError.catch(e, DeploymentStepsErrorCode.ADD_ORDER_FAILED);
 		} finally {
@@ -243,7 +243,7 @@
 </script>
 
 <div>
-	{#if gui}
+	{#if builder}
 		<div class="flex max-w-3xl flex-col gap-12" in:fade>
 			{#if deployment}
 				<div class="flex max-w-2xl flex-col gap-4 text-start">

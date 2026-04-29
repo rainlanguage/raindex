@@ -9,7 +9,7 @@ use thiserror::Error;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 use yaml::{
-    context::{Context, GuiContextTrait},
+    context::{Context, OrderBuilderContextTrait},
     default_document, require_hash, require_string, FieldErrorKind, YamlError, YamlParsableHash,
 };
 

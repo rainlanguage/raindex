@@ -5,10 +5,10 @@ This crate defines the configuration model, parsing, validation and update utili
 At a glance:
 
 - Input format: one or more YAML documents (via `StrictYaml` from `strict_yaml_rust`).
-- Output types: `NetworkCfg`, `TokenCfg`, `OrderbookCfg`, `SubgraphCfg`, `DeployerCfg`, `OrderCfg`, `ScenarioCfg`, `DeploymentCfg`, `GuiCfg`, `ChartCfg`, `MetaboardCfg`, `AccountCfg`, plus helpers.
+- Output types: `NetworkCfg`, `TokenCfg`, `OrderbookCfg`, `SubgraphCfg`, `DeployerCfg`, `OrderCfg`, `ScenarioCfg`, `DeploymentCfg`, `OrderBuilderCfg`, `ChartCfg`, `MetaboardCfg`, `AccountCfg`, plus helpers.
 - Cross‑document merge: parse operations accept a vector of YAML documents and merge sections across them, rejecting duplicate keys deterministically.
 - Remote sources: optional “using‑*” sections enable fetching networks/tokens from external endpoints and merging them into the local model.
-- Context: a runtime context carries selected deployment/order, token selection for GUI flows, remote caches, and supports string interpolation from order paths.
+- Context: a runtime context carries selected deployment/order, token selection for order builder flows, remote caches, and supports string interpolation from order paths.
 - WASM/TypeScript: many types derive `Tsify` and implement WASM trait helpers for interop with the webapp.
 
 
@@ -22,13 +22,13 @@ Core traits and helpers live under `src/yaml` and are used by all config types:
   - `YamlParsableHash`: for map‑shaped sections (e.g. `networks`, `tokens`, `orders`). Provides `parse_all_from_yaml` and `parse_from_yaml(key)`.
   - `YamlParsableVector`: for vector‑shaped items if needed.
   - `YamlParsableString`: for single string fields with optionality (e.g. `SpecVersion`, `Sentry`).
-  - `YamlParseableValue`: for single logical objects that are not a map (e.g. `GuiCfg`, `RemoteTokensCfg`).
+  - `YamlParseableValue`: for single logical objects that are not a map (e.g. `OrderBuilderCfg`, `RemoteTokensCfg`).
 
 - Context and caching
   - `Context` holds:
     - `order: Option<Arc<OrderCfg>>` – the current order for interpolation.
-    - `select_tokens: Option<Vec<String>>` – allow GUI to reference tokens by key without YAML definitions.
-    - `gui_context`: current deployment/order selection.
+    - `select_tokens: Option<Vec<String>>` – allow order builder to reference tokens by key without YAML definitions.
+    - `builder_context`: current deployment/order selection.
     - `yaml_cache`: remote networks/tokens cache injected by providers.
   - Interpolation: `Context::interpolate("... ${order.inputs.0.token.symbol} ...")` resolves values from the current order (inputs/outputs, token address/symbol/label/decimals, vault IDs).
   - Path resolution helpers and errors: `ContextError::{NoOrder, InvalidPath, InvalidIndex, PropertyNotFound}` with human‑readable messages.
@@ -68,10 +68,10 @@ Two top‑level providers wrap one or more YAML documents and expose a convenien
   - Also wraps `documents` and a `Cache`.
   - `new(sources, validation)` selectively validates orders, scenarios, deployments.
   - Accessors:
-    - Orders: `get_order_keys`, `get_orders`, `get_order(key)`, `get_order_for_gui_deployment(order_key, deployment_key)`.
+    - Orders: `get_order_keys`, `get_orders`, `get_order(key)`, `get_order_for_builder_deployment(order_key, deployment_key)`.
     - Scenarios: `get_scenario_keys`, `get_scenarios`, `get_scenario(key)`.
     - Deployments: `get_deployment_keys`, `get_deployments`, `get_deployment(key)`.
-    - GUI: `get_gui(current_deployment)` parses optional GUI section with deployment‑scoped overrides and select‑tokens.
+    - Order Builder: `get_order_builder(current_deployment)` parses optional builder section with deployment‑scoped overrides and select‑tokens.
     - Charts: `get_chart_keys`, `get_charts`, `get_chart(key)`.
   - Serde mirrors `OrderbookYaml`.
 
@@ -163,7 +163,7 @@ These three model how orders are defined, how they are executed (bindings, block
 - `OrderCfg { key, inputs: Vec<OrderIOCfg>, outputs: Vec<OrderIOCfg>, network: Arc<NetworkCfg>, deployer?: Arc<DeployerCfg>, orderbook?: Arc<OrderbookCfg> }`.
 - `OrderIOCfg { token_key: String, token?: Arc<TokenCfg>, vault_id?: U256 }` – `token_key` preserves the declared token name even when the token is unresolved for select‑tokens; vault IDs are arbitrary U256 strings.
 - Validation and network unification
-  - Inputs/outputs must each contain `token` (unless permitted by GUI select‑tokens through context) and optional `vault-id`.
+  - Inputs/outputs must each contain `token` (unless permitted by builder select‑tokens through context) and optional `vault-id`.
   - The order’s effective `network` is inferred from first matching component (deployer/orderbook/token), and all references must match. Mismatch yields detailed errors (`DeployerNetworkDoesNotMatch`, `OrderbookNetworkDoesNotMatch`, `InputTokenNetworkDoesNotMatch`, `OutputTokenNetworkDoesNotMatch`). If no network can be determined, `NetworkNotFoundError` is raised.
   - Vault IDs are validated via `U256::from_str`.
 - Mutations
@@ -199,21 +199,21 @@ These three model how orders are defined, how they are executed (bindings, block
 
 - `DeploymentCfg { key, scenario: Arc<ScenarioCfg>, order: Arc<OrderCfg> }`.
 - Parsing
-  - Respects optional GUI context for “current deployment” to allow per‑deployment scoping when documents contain many deployments.
+  - Respects optional order builder context for “current deployment” to allow per‑deployment scoping when documents contain many deployments.
   - Ensures the selected order and scenario share the same deployer; otherwise returns `ParseDeploymentConfigSourceError::NoMatch`.
   - Helper `parse_order_key(docs, deployment_key)` extracts the order name for a deployment.
 
 
-## GUI Configuration (`gui.rs`)
+## Order Builder Configuration (`order_builder.rs`)
 
-The GUI DSL configures per‑deployment user inputs (fields), deposit presets/validation, and “select tokens” behavior for orders rendered in the UI.
+The order builder DSL configures per‑deployment user inputs (fields), deposit presets/validation, and “select tokens” behavior for orders rendered in the UI.
 
 - Source types (pure data) to transform into runtime types:
-  - `GuiConfigSourceCfg { name, description, deployments: Map<deployment_name, GuiDeploymentSourceCfg> }`.
-  - `GuiDeploymentSourceCfg { name, description, deposits: [GuiDepositSourceCfg], fields: [GuiFieldDefinitionSourceCfg], select_tokens?: [GuiSelectTokensCfg] }`.
-  - `GuiDepositSourceCfg { token: String, presets?: [String], validation?: DepositValidationCfg }`.
-  - `GuiFieldDefinitionSourceCfg { binding, name, description?, presets?: [GuiPresetSourceCfg], default?, show_custom_field?, validation? }`.
-  - `GuiPresetSourceCfg { name?, value }`.
+  - `OrderBuilderConfigSourceCfg { name, description, deployments: Map<deployment_name, OrderBuilderDeploymentSourceCfg> }`.
+  - `OrderBuilderDeploymentSourceCfg { name, description, deposits: [OrderBuilderDepositSourceCfg], fields: [OrderBuilderFieldDefinitionSourceCfg], select_tokens?: [OrderBuilderSelectTokensCfg] }`.
+  - `OrderBuilderDepositSourceCfg { token: String, presets?: [String], validation?: DepositValidationCfg }`.
+  - `OrderBuilderFieldDefinitionSourceCfg { binding, name, description?, presets?: [OrderBuilderPresetSourceCfg], default?, show_custom_field?, validation? }`.
+  - `OrderBuilderPresetSourceCfg { name?, value }`.
   - Validation enums:
     - `FieldValueValidationCfg::Number { minimum?, exclusive_minimum?, maximum?, exclusive_maximum? }`.
     - `FieldValueValidationCfg::String { min_length?, max_length? }`.
@@ -221,15 +221,15 @@ The GUI DSL configures per‑deployment user inputs (fields), deposit presets/va
     - `DepositValidationCfg { minimum?, exclusive_minimum?, maximum?, exclusive_maximum? }`.
 
 - Runtime types (used by app/wasm):
-  - `GuiCfg { name, description, deployments: Map<deployment_name, GuiDeploymentCfg> }`.
-  - `GuiDeploymentCfg { key, deployment: Arc<DeploymentCfg>, name, description, deposits: [GuiDepositCfg], fields: [GuiFieldDefinitionCfg], select_tokens? }`.
-  - `GuiDepositCfg { token?: Arc<TokenCfg>, presets?, validation? }`.
-  - `GuiFieldDefinitionCfg { binding, name, description?, presets?: [GuiPresetCfg], default?, show_custom_field?, validation? }`.
-  - `GuiPresetCfg { id, name?, value }`.
+  - `OrderBuilderCfg { name, description, deployments: Map<deployment_name, OrderBuilderDeploymentCfg> }`.
+  - `OrderBuilderDeploymentCfg { key, deployment: Arc<DeploymentCfg>, name, description, deposits: [OrderBuilderDepositCfg], fields: [OrderBuilderFieldDefinitionCfg], select_tokens? }`.
+  - `OrderBuilderDepositCfg { token?: Arc<TokenCfg>, presets?, validation? }`.
+  - `OrderBuilderFieldDefinitionCfg { binding, name, description?, presets?: [OrderBuilderPresetCfg], default?, show_custom_field?, validation? }`.
+  - `OrderBuilderPresetCfg { id, name?, value }`.
 
 - Parsing
-  - `GuiCfg::parse_from_yaml_optional(documents, context)` traverses a `gui:` map, applying deployment scoping from GUI context and order/deployment context, and builds a `GuiCfg` if present.
-  - Helper queries: `check_gui_key_exists`, `parse_deployment_keys`, `parse_order_details`, `parse_deployment_details`, `parse_field_presets`, `parse_select_tokens`.
+  - `OrderBuilderCfg::parse_from_yaml_optional(documents, context)` traverses a `builder:` map, applying deployment scoping from order builder context and order/deployment context, and builds an `OrderBuilderCfg` if present.
+  - Helper queries: `check_builder_key_exists`, `parse_deployment_keys`, `parse_order_details`, `parse_deployment_details`, `parse_field_presets`, `parse_select_tokens`.
   - Integrates tokens (if present) to resolve deposit token references to `Arc<TokenCfg>`. With “select‑tokens”, the context is seeded with allowed token keys so orders may omit YAML token entries.
 
 
@@ -302,7 +302,7 @@ For map‑shaped sections parsed across multiple documents, the crate enforces u
 
 ## Error Reporting Philosophy
 
-All parser and validator errors convert to `YamlError` or module‑specific `*Parse*Error` enums with a `to_readable_msg()` that is safe to show to end users. `FieldErrorKind::{Missing, InvalidType, InvalidValue}` always include a precise human‑readable location (e.g., "order 'MyOrder'", "output index '0' in order 'MyOrder'", "gui deployment 'MyDeployment'").
+All parser and validator errors convert to `YamlError` or module‑specific `*Parse*Error` enums with a `to_readable_msg()` that is safe to show to end users. `FieldErrorKind::{Missing, InvalidType, InvalidValue}` always include a precise human‑readable location (e.g., "order 'MyOrder'", "output index '0' in order 'MyOrder'", "order builder deployment 'MyDeployment'").
 
 
 ## WASM/TypeScript Interop
@@ -320,7 +320,7 @@ When building for `wasm32`, many types derive `Tsify` and implement WASM trait h
 - Validate dotrain YAML and build a deployment plan:
   1. Load strings into `DotrainYaml::new([...], DotrainYamlValidation::full())`.
   2. Resolve `OrderCfg`, `ScenarioCfg`, and `DeploymentCfg`; ensure network/deployer invariants hold.
-  3. Optional GUI: parse `GuiCfg` scoped to a specific deployment and seed context with `select-tokens`.
+  3. Optional Order Builder: parse `OrderBuilderCfg` scoped to a specific deployment and seed context with `select-tokens`.
   4. Optional Charts: parse `ChartCfg` for visualization.
 
 
@@ -340,16 +340,16 @@ When building for `wasm32`, many types derive `Tsify` and implement WASM trait h
   - `orders: { key: { inputs: [{ token, vault-id? }, ...], outputs: [...], deployer?, orderbook? } }`
   - `scenarios: { key: { bindings: {k:v}, runs?, blocks?, deployer?, scenarios?: {...} } }`
   - `deployments: { key: { scenario, order } }`
-  - `gui: { name, description, deployments: { key: { name, description, deposits: [...], fields: [...], select-tokens?: [...] } } }`
+  - `builder: { name, description, deployments: { key: { name, description, deposits: [...], fields: [...], select-tokens?: [...] } } }`
   - `charts: { key: { scenario?, plots?: {...}, metrics?: [...] } }`
   - `sentry: true|false|1|0`
 
 
 ## Testing
 
-The crate ships extensive unit tests for every parser and update path, including error paths with precise messages. Test helpers in `src/test.rs` construct mock networks/deployers/tokens/orderbooks; parser modules provide happy‑path and negative test cases (duplicate keys, missing/invalid fields, range validation for blocks, GUI validation, remote fetch flows with http mocks, etc.).
+The crate ships extensive unit tests for every parser and update path, including error paths with precise messages. Test helpers in `src/test.rs` construct mock networks/deployers/tokens/orderbooks; parser modules provide happy‑path and negative test cases (duplicate keys, missing/invalid fields, range validation for blocks, builder validation, remote fetch flows with http mocks, etc.).
 
 
 ## Summary
 
-The settings crate provides a single, well‑typed interface over YAML configuration for the Rain Orderbook ecosystem: robust parsing across multiple files, strict validation with user‑friendly errors, safe in‑place updates, optional remote augmentation, contextual interpolation, GUI and chart DSLs, and WASM interop. Other crates consume these types to build CLIs, runtimes, and UIs without re‑implementing YAML logic.
+The settings crate provides a single, well‑typed interface over YAML configuration for the Rain Orderbook ecosystem: robust parsing across multiple files, strict validation with user‑friendly errors, safe in‑place updates, optional remote augmentation, contextual interpolation, builder and chart DSLs, and WASM interop. Other crates consume these types to build CLIs, runtimes, and UIs without re‑implementing YAML logic.

@@ -56,36 +56,36 @@ vi.mock('$app/stores', async () => {
 });
 
 vi.mock('@rainlanguage/orderbook', () => {
-	const DotrainOrderGui = vi.fn();
+	const RaindexOrderBuilder = vi.fn();
 	// @ts-expect-error - static method
-	DotrainOrderGui.getOrderDetails = vi.fn();
+	RaindexOrderBuilder.getOrderDetails = vi.fn();
 	// @ts-expect-error - static method
-	DotrainOrderGui.getDeploymentDetails = vi.fn();
-	DotrainOrderGui.prototype.newWithDeployment = vi.fn();
-	DotrainOrderGui.prototype.getOrderDetails = vi.fn();
-	DotrainOrderGui.prototype.setVaultId = vi.fn();
-	DotrainOrderGui.prototype.getTokenInfo = vi.fn();
-	DotrainOrderGui.prototype.getCurrentDeployment = vi.fn();
-	DotrainOrderGui.prototype.getVaultIds = vi.fn();
-	DotrainOrderGui.prototype.setDeposit = vi.fn();
-	DotrainOrderGui.prototype.getDeposits = vi.fn();
-	DotrainOrderGui.prototype.setFieldValue = vi.fn();
-	DotrainOrderGui.prototype.getFieldValue = vi.fn();
-	DotrainOrderGui.prototype.getSelectTokens = vi.fn();
-	DotrainOrderGui.prototype.getAllTokenInfos = vi.fn();
-	DotrainOrderGui.prototype.getAllFieldDefinitions = vi.fn();
-	DotrainOrderGui.prototype.isSelectTokenSet = vi.fn();
-	DotrainOrderGui.prototype.setSelectToken = vi.fn();
-	DotrainOrderGui.prototype.unsetSelectToken = vi.fn();
-	DotrainOrderGui.prototype.hasAnyDeposit = vi.fn();
-	DotrainOrderGui.prototype.hasAnyVaultId = vi.fn();
-	DotrainOrderGui.prototype.areAllTokensSelected = vi.fn();
-	DotrainOrderGui.prototype.getDeploymentTransactionArgs = vi.fn();
-	DotrainOrderGui.prototype.generateApprovalCalldatas = vi.fn();
-	DotrainOrderGui.prototype.serializeState = vi.fn();
-	DotrainOrderGui.prototype.getAllGuiConfig = vi.fn();
-	DotrainOrderGui.prototype.getCurrentDeploymentDetails = vi.fn();
+	RaindexOrderBuilder.getDeploymentDetails = vi.fn();
+	RaindexOrderBuilder.prototype.newWithDeployment = vi.fn();
+	RaindexOrderBuilder.prototype.getOrderDetails = vi.fn();
+	RaindexOrderBuilder.prototype.setVaultId = vi.fn();
+	RaindexOrderBuilder.prototype.getTokenInfo = vi.fn();
+	RaindexOrderBuilder.prototype.getCurrentDeployment = vi.fn();
+	RaindexOrderBuilder.prototype.getVaultIds = vi.fn();
+	RaindexOrderBuilder.prototype.setDeposit = vi.fn();
+	RaindexOrderBuilder.prototype.getDeposits = vi.fn();
+	RaindexOrderBuilder.prototype.setFieldValue = vi.fn();
+	RaindexOrderBuilder.prototype.getFieldValue = vi.fn();
+	RaindexOrderBuilder.prototype.getSelectTokens = vi.fn();
+	RaindexOrderBuilder.prototype.getAllTokenInfos = vi.fn();
+	RaindexOrderBuilder.prototype.getAllFieldDefinitions = vi.fn();
+	RaindexOrderBuilder.prototype.isSelectTokenSet = vi.fn();
+	RaindexOrderBuilder.prototype.setSelectToken = vi.fn();
+	RaindexOrderBuilder.prototype.unsetSelectToken = vi.fn();
+	RaindexOrderBuilder.prototype.hasAnyDeposit = vi.fn();
+	RaindexOrderBuilder.prototype.hasAnyVaultId = vi.fn();
+	RaindexOrderBuilder.prototype.areAllTokensSelected = vi.fn();
+	RaindexOrderBuilder.prototype.getDeploymentTransactionArgs = vi.fn();
+	RaindexOrderBuilder.prototype.generateApprovalCalldatas = vi.fn();
+	RaindexOrderBuilder.prototype.serializeState = vi.fn();
+	RaindexOrderBuilder.prototype.getAllBuilderConfig = vi.fn();
+	RaindexOrderBuilder.prototype.getCurrentDeploymentDetails = vi.fn();
 	return {
-		DotrainOrderGui
+		RaindexOrderBuilder
 	};
 });

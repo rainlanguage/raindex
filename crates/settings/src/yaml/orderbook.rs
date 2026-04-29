@@ -576,12 +576,12 @@ mod tests {
         let ob = OrderbookYaml::new_with_profile(
             sources.clone(),
             OrderbookYamlValidation::default(),
-            ContextProfile::Gui {
+            ContextProfile::Builder {
                 current_deployment: "deployment1".to_string(),
             },
         )
         .unwrap();
-        assert!(matches!(ob.profile, ContextProfile::Gui { .. }));
+        assert!(matches!(ob.profile, ContextProfile::Builder { .. }));
 
         let ob_default = OrderbookYaml::new(sources, OrderbookYamlValidation::default()).unwrap();
         assert!(matches!(ob_default.profile, ContextProfile::Strict));
@@ -595,7 +595,7 @@ mod tests {
         let ob = OrderbookYaml::new_with_profile(
             vec![full_yaml()],
             OrderbookYamlValidation::default(),
-            ContextProfile::Gui {
+            ContextProfile::Builder {
                 current_deployment: "deployment1".to_string(),
             },
         )
@@ -604,10 +604,10 @@ mod tests {
         let serialized = serde_json::to_string(&ob).unwrap();
         let round_tripped: OrderbookYaml = serde_json::from_str(&serialized).unwrap();
         match round_tripped.profile {
-            ContextProfile::Gui { current_deployment } => {
+            ContextProfile::Builder { current_deployment } => {
                 assert_eq!(current_deployment, "deployment1");
             }
-            _ => panic!("expected gui profile"),
+            _ => panic!("expected builder profile"),
         }
     }
 

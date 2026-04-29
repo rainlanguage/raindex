@@ -107,4 +107,4 @@ What to return
 
 Notes
 - This repo uses a macro named `wasm_export` in `crates/js_api` to define JS-visible APIs and attach TypeScript-specific metadata (`js_name`, `unchecked_return_type`, `param_description`, `return_description`, `preserve_js_class`). Treat those attributes as the contract for the generated TypeScript surface.
-- Some examples in README demonstrate end-to-end flows (e.g., GUI setup via `DotrainOrderGui`, order hash/calldata helpers). Prefer aligning those with current tests under `packages/orderbook/test/js_api` to avoid drift.
+- Some examples in README demonstrate end-to-end flows (e.g., builder setup via `RaindexOrderBuilder`, order hash/calldata helpers). Prefer aligning those with current tests under `packages/orderbook/test/js_api` to avoid drift.

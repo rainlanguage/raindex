@@ -1,6 +1,6 @@
 import type {
 	Address,
-	DotrainOrderGui,
+	RaindexOrderBuilder,
 	RaindexClient,
 	RaindexVault,
 	RaindexVaultToken
@@ -14,7 +14,7 @@ import { type Hex } from 'viem';
 
 export enum AddOrderErrors {
 	ADD_ORDER_FAILED = 'Failed to add order',
-	MISSING_GUI = 'Order GUI is required',
+	MISSING_BUILDER = 'Order builder is required',
 	MISSING_CONFIG = 'Wagmi config is required',
 	NO_ACCOUNT_CONNECTED = 'No wallet address found',
 	ERROR_GETTING_ARGS = 'Error getting deployment transaction args',
@@ -25,19 +25,19 @@ export type HandleAddOrderDependencies = {
 	handleTransactionConfirmationModal: HandleTransactionConfirmationModal;
 	errToast: (message: string) => void;
 	manager: TransactionManager;
-	gui: DotrainOrderGui;
+	builder: RaindexOrderBuilder;
 	raindexClient: RaindexClient;
 	account: Hex | null;
 };
 
 export const handleAddOrder = async (deps: HandleAddOrderDependencies) => {
-	const { gui, account, errToast, raindexClient } = deps;
+	const { builder, account, errToast, raindexClient } = deps;
 
 	if (!account) {
 		return errToast('Could not deploy: ' + AddOrderErrors.NO_ACCOUNT_CONNECTED);
 	}
 
-	const result = await gui.getDeploymentTransactionArgs(account);
+	const result = await builder.getDeploymentTransactionArgs(account);
 
 	if (result.error) {
 		return errToast('Could not deploy: ' + result.error.msg);
