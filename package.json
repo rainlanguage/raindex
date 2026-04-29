@@ -17,7 +17,7 @@
     },
     "scripts": {
         "build": "npm run build --workspaces",
-        "build:orderbook": "npm run build -w @rainlanguage/orderbook",
+        "build:raindex": "npm run build -w @rainlanguage/raindex",
         "build:ui": "npm run build -w @rainlanguage/ui-components && npm run build -w @rainlanguage/webapp",
         "dev": "npm run dev --workspaces",
         "test": "npm run test --workspaces",
@@ -74,7 +74,7 @@
     ],
     "dependencies": {
         "@fast-check/vitest": "0.2.0",
-        "@rainlanguage/orderbook": "workspace:*",
+        "@rainlanguage/raindex": "workspace:*",
         "@rainlanguage/sqlite-web": "^0.0.2",
         "@rainlanguage/ui-components": "workspace:*",
         "@reown/appkit": "1.6.4",

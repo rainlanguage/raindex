@@ -14,8 +14,8 @@ import {
   MetaV1_2,
   RemoveOrderV3,
   TakeOrderV3,
-} from "../generated/OrderBook/OrderBook";
-import { WithdrawV2 } from "../generated/OrderBook/OrderBook";
+} from "../generated/Raindex/Raindex";
+import { WithdrawV2 } from "../generated/Raindex/Raindex";
 import { createTransactionEntity } from "../src/transaction";
 import { Float } from "../src/float";
 

@@ -1,17 +1,17 @@
 **Overview**
-- Purpose: `rain_orderbook_js_api` exposes a single, browser-friendly WebAssembly surface for the Rain Orderbook application. It bridges YAML-based “dotrain” order configuration, on-chain ERC‑20/token metadata, and contract call generation into a typed JavaScript/TypeScript API.
+- Purpose: `raindex_js_api` exposes a single, browser-friendly WebAssembly surface for the Raindex application. It bridges YAML-based “dotrain” order configuration, on-chain ERC‑20/token metadata, and contract call generation into a typed JavaScript/TypeScript API.
 - Target: Compiles as a `cdylib` for wasm and is designed to be consumed from JS environments (webapps). All public APIs are exported via `wasm_bindgen_utils` macros and return ergonomic results with rich, user‑readable errors.
 - Scope: Includes high-level GUI helpers for interactive order building, a fetchable registry of orders, and low-level helpers for hashing and ABI calldata generation. It re-exports certain sibling crates so their wasm bindings are reachable from a single import.
 
 **Build & Targets**
 - Crate type: `cdylib` (WASM output). Most modules are `#[cfg(target_family = "wasm")]` as they are JS/GUI facing.
-- Key dependencies: `wasm-bindgen-utils`, `alloy` (ABI/primitives), `rain_orderbook_*` crates for app models + on-chain helpers, `tokio` (async), `reqwest` (HTTP, registry), `flate2`/`base64`/`bincode`/`sha2` (state serialization), `strict-yaml-rust` (YAML AST).
+- Key dependencies: `wasm-bindgen-utils`, `alloy` (ABI/primitives), `raindex_*` crates for app models + on-chain helpers, `tokio` (async), `reqwest` (HTTP, registry), `flate2`/`base64`/`bincode`/`sha2` (state serialization), `strict-yaml-rust` (YAML AST).
 - TypeScript support: Adds TS definitions for `Address` and `Hex` template literal types and uses `tsify` to describe return/param types of exported structs.
 
 **Top-Level Layout**
 - `src/lib.rs`
   - Exposes modules only when targeting wasm: `bindings`, `gui`, `registry`, `yaml`.
-  - Re-exports crates so their wasm bindings are available from this single module: `rain_orderbook_app_settings`, `rain_orderbook_common`, `rain_orderbook_subgraph_client`.
+  - Re-exports crates so their wasm bindings are available from this single module: `raindex_app_settings`, `raindex_common`, `raindex_subgraph_client`.
   - Appends a small TS section defining `Address` and `Hex` template literal types for better typing on the JS side.
 
 **FFI & Error Conventions**
@@ -28,7 +28,7 @@
   - Key types and exports:
     - `TakeOrdersCalldata(Bytes)` as an opaque JS type for encoded calldata.
     - `getOrderHash(order: OrderV4) -> string`: ABI-encodes `OrderV4` and returns `keccak256` with `0x` prefix.
-    - `getTakeOrders4Calldata(config: TakeOrdersConfigV5) -> TakeOrdersCalldata`: ABI-encodes a `takeOrders4` call for the on-chain OrderBook.
+    - `getTakeOrders4Calldata(config: TakeOrdersConfigV5) -> TakeOrdersCalldata`: ABI-encodes a `takeOrders4` call for the on-chain Raindex.
     - `keccak256(bytes: Uint8Array) -> string` and `keccak256HexString(hex: string) -> string`.
   - Errors: `Error::FromHexError` mapped to JS with human-readable message.
 
@@ -85,10 +85,10 @@
       - Generates all calldata required to deploy orders and related flows.
       - Internal preparation:
         - `prepare_calldata_generation` validates select-tokens, ensures field values exist as needed, populates vault IDs, and updates scenario bindings before generating any calldata.
-        - `get_orderbook()` and `get_transaction_args()` collect the orderbook address and RPCs for downstream calls.
+        - `get_raindex()` and `get_transaction_args()` collect the raindex address and RPCs for downstream calls.
         - `get_deposits_as_map()` and `get_vaults_and_deposits()` resolve deposit amounts by token/address and match them to order outputs + vaults.
       - Allowance/approvals:
-        - `checkAllowances(owner) -> AllowancesResult`: queries current allowances for each deposit token against the orderbook.
+        - `checkAllowances(owner) -> AllowancesResult`: queries current allowances for each deposit token against the raindex.
         - `generateApprovalCalldatas(owner) -> ApprovalCalldataResult`: compares allowances to desired deposit amounts and, when they differ, emits ERC‑20 `approve` calldatas that set the allowance to the exact target value.
       - Deposits:
         - `generateDepositCalldatas() -> DepositCalldataResult`: builds `deposit3` calldatas for non-zero deposits using vault IDs (fetches decimals on-chain if missing in YAML).
@@ -96,7 +96,7 @@
         - `generateAddOrderCalldata() -> AddOrderCalldataResult`: composes Rainlang, builds an `AddOrderArgs` from the deployment, and returns the ABI-encoded call.
       - Combined deployment:
         - `generateDepositAndAddOrderCalldatas() -> DepositAndAddOrderCalldataResult`: constructs a `multicall` that first performs `addOrder`, then all deposits.
-        - `getDeploymentTransactionArgs(owner) -> DeploymentTransactionArgs`: packages approval calldatas (with token symbol for UX), multicall calldata, orderbook address, and chain ID for a one-shot deployment flow.
+        - `getDeploymentTransactionArgs(owner) -> DeploymentTransactionArgs`: packages approval calldatas (with token symbol for UX), multicall calldata, raindex address, and chain ID for a one-shot deployment flow.
       - Vault IDs:
         - `setVaultId(type: 'input'|'output', tokenKey, vaultId?: string)`, `getVaultIds() -> IOVaultIds`, and `hasAnyVaultId() -> boolean`.
       - Types exposed for JS: `AllowancesResult`, `ApprovalCalldataResult|DepositCalldataResult|AddOrderCalldataResult|DepositAndAddOrderCalldataResult`, `ExtendedApprovalCalldata`, `DeploymentTransactionArgs`, `IOVaultIds`. A `WithdrawCalldataResult` type exists but no public generator yet.
@@ -130,22 +130,22 @@
     - `getAllOrderDetails()` → parse order-level metadata for every merged dotrain, returning both valid and invalid entries (with errors) keyed by order.
     - `getOrderKeys()` → keys from `order_urls`.
     - `getDeploymentDetails(orderKey)` → deployment name/description map for a specific order.
-    - `getOrderbookYaml() -> OrderbookYaml` → returns an `OrderbookYaml` instance from the registry's shared settings YAML for querying tokens, networks, orderbooks, etc.
+    - `getRaindexYaml() -> RaindexYaml` → returns a `RaindexYaml` instance from the registry's shared settings YAML for querying tokens, networks, raindexes, etc.
   - `getGui(orderKey, deploymentKey, serializedState?, stateCallback?)` → merge `settings + order`, optionally restore serialized state, and produce a `DotrainOrderGui` instance.
   - Errors: `DotrainRegistryError` covers fetch/parse/HTTP/URL issues and wraps `GuiError`. Also returns human-readable messages.
 
 - `yaml` (src/yaml/mod.rs)
-  - Purpose: Wasm-friendly wrapper around orderbook YAML parsing to retrieve configuration objects by address or query token metadata.
+  - Purpose: Wasm-friendly wrapper around raindex YAML parsing to retrieve configuration objects by address or query token metadata.
   - Exports:
-    - `OrderbookYaml.new([yamlSources], validate?) -> OrderbookYaml`: parse/merge/optionally validate sources.
-    - `OrderbookYaml.getOrderbookByAddress(address) -> OrderbookCfg`.
-    - `OrderbookYaml.getTokens() -> TokenInfo[]` (async): returns all tokens from YAML with `chain_id`, `address`, `decimals`, `symbol`, and `name`. Automatically fetches remote tokens from `using-tokens-from` URLs.
-  - Errors: `OrderbookYamlError` with readable messaging, converted to JS.
+    - `RaindexYaml.new([yamlSources], validate?) -> RaindexYaml`: parse/merge/optionally validate sources.
+    - `RaindexYaml.getRaindexByAddress(address) -> RaindexCfg`.
+    - `RaindexYaml.getTokens() -> TokenInfo[]` (async): returns all tokens from YAML with `chain_id`, `address`, `decimals`, `symbol`, and `name`. Automatically fetches remote tokens from `using-tokens-from` URLs.
+  - Errors: `RaindexYamlError` with readable messaging, converted to JS.
 
 **External Crates & Interactions**
-- `rain_orderbook_app_settings`: typed config model + YAML parsing helpers for GUI sections, deployments, networks, orders, select-tokens, and validation rules.
-- `rain_orderbook_common`: higher-level order manipulation (compose Rainlang, add order args), ERC‑20 RPC client, transaction helpers, and formatting utilities.
-- `rain_orderbook_bindings`: generated Solidity bindings for `IOrderBookV5` (e.g., `deposit3`, `multicall`, `takeOrders3`).
+- `raindex_app_settings`: typed config model + YAML parsing helpers for GUI sections, deployments, networks, orders, select-tokens, and validation rules.
+- `raindex_common`: higher-level order manipulation (compose Rainlang, add order args), ERC‑20 RPC client, transaction helpers, and formatting utilities.
+- `raindex_bindings`: generated Solidity bindings for `IRaindexV5` (e.g., `deposit3`, `multicall`, `takeOrders3`).
 - `alloy`: ABI encoding/decoding, primitives (`Address`, `Bytes`, `U256`, keccak256), and Solidity type utilities.
 - `wasm-bindgen-utils`: export macro, JS bridging, `WasmEncodedError` packaging.
 
@@ -154,7 +154,7 @@
   - Parse dotrain (frontmatter YAML + Rainlang body) with `DotrainOrder::create`.
   - Initialize GUI with a deployment key.
   - Optional: select tokens via on-chain metadata, set field values (with validation), set deposit amounts (with validation), and set vault IDs.
-  - Generate approvals if needed, deposits, add order calldata, or a combined multicall. Transaction args include orderbook address and chain ID.
+  - Generate approvals if needed, deposits, add order calldata, or a combined multicall. Transaction args include raindex address and chain ID.
 - State persistence:
   - Any setter triggers `executeStateUpdateCallback()` with a gzipped/base64 state snapshot that includes a dotrain content hash. `newFromState` restores and protects against mismatched content.
 - Token metadata:
@@ -191,4 +191,4 @@
   - `const registry = await DotrainRegistry.new(registryUrl)` → inspect orders/deployments → `await registry.getGui(orderKey, deploymentKey, serializedState?, onStateChanged?)`.
 
 **Summary**
-- `rain_orderbook_js_api` is the JS/WASM gateway for building, validating, and deploying Rain Orderbook orders from YAML+Rainlang definitions. It centralizes: YAML parsing and validation, user input state, token selection and metadata, field and deposit validation, vault ID management, transaction calldata generation (approvals, deposits, add order, multicall), registry-driven content fetching, and robust error handling—exposed as a typed, ergonomic TypeScript surface.
+- `raindex_js_api` is the JS/WASM gateway for building, validating, and deploying Raindex orders from YAML+Rainlang definitions. It centralizes: YAML parsing and validation, user input state, token selection and metadata, field and deposit validation, vault ID management, transaction calldata generation (approvals, deposits, add order, multicall), registry-driven content fetching, and robust error handling—exposed as a typed, ergonomic TypeScript surface.

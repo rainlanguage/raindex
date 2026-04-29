@@ -1,6 +1,6 @@
 use crate::local_db::pipeline::{StatusBus, SyncPhase};
-use crate::local_db::{LocalDbError, OrderbookIdentifier};
-use crate::raindex_client::local_db::{OrderbookSyncStatus, SchedulerState};
+use crate::local_db::{LocalDbError, RaindexIdentifier};
+use crate::raindex_client::local_db::{RaindexSyncStatus, SchedulerState};
 use js_sys::Function;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -27,7 +27,7 @@ pub fn get_scheduler_state() -> SchedulerState {
     SCHEDULER_STATE.with(|s| *s.borrow())
 }
 
-fn emit_to_callback(status: OrderbookSyncStatus) {
+fn emit_to_callback(status: RaindexSyncStatus) {
     STATUS_CALLBACK.with(|c| {
         if let Some(callback) = c.borrow().as_ref() {
             if let Ok(value) = serde_wasm_bindgen::to_value(&status) {
@@ -39,37 +39,42 @@ fn emit_to_callback(status: OrderbookSyncStatus) {
 
 #[derive(Debug, Clone, Default)]
 pub struct ClientStatusBus {
-    ob_id: Option<OrderbookIdentifier>,
+    raindex_id: Option<RaindexIdentifier>,
 }
 
 impl ClientStatusBus {
     pub fn new() -> Self {
-        Self { ob_id: None }
+        Self { raindex_id: None }
     }
 
-    pub fn with_ob_id(ob_id: OrderbookIdentifier) -> Self {
-        Self { ob_id: Some(ob_id) }
+    pub fn with_ob_id(raindex_id: RaindexIdentifier) -> Self {
+        Self {
+            raindex_id: Some(raindex_id),
+        }
     }
 
-    fn emit(&self, status: OrderbookSyncStatus) {
+    fn emit(&self, status: RaindexSyncStatus) {
         emit_to_callback(status);
     }
 
     pub fn emit_active(&self) {
-        let Some(ob_id) = &self.ob_id else {
+        let Some(raindex_id) = &self.raindex_id else {
             return;
         };
 
         let scheduler_state = get_scheduler_state();
-        self.emit(OrderbookSyncStatus::active(ob_id.clone(), scheduler_state));
+        self.emit(RaindexSyncStatus::active(
+            raindex_id.clone(),
+            scheduler_state,
+        ));
     }
 
     pub fn emit_failure(&self, error: String) {
-        let Some(ob_id) = &self.ob_id else {
+        let Some(raindex_id) = &self.raindex_id else {
             return;
         };
 
-        self.emit(OrderbookSyncStatus::failure(ob_id.clone(), error));
+        self.emit(RaindexSyncStatus::failure(raindex_id.clone(), error));
     }
 }
 
@@ -81,11 +86,11 @@ impl StatusBus for ClientStatusBus {
             return Ok(());
         }
 
-        let Some(ob_id) = &self.ob_id else {
+        let Some(raindex_id) = &self.raindex_id else {
             return Ok(());
         };
 
-        let status = OrderbookSyncStatus::syncing(ob_id.clone(), phase);
+        let status = RaindexSyncStatus::syncing(raindex_id.clone(), phase);
         self.emit(status);
 
         Ok(())
@@ -96,25 +101,25 @@ impl StatusBus for ClientStatusBus {
 mod tests {
     use super::*;
     use crate::local_db::pipeline::SyncPhase;
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use crate::raindex_client::local_db::SchedulerState;
     use alloy::primitives::address;
 
-    fn test_ob_id() -> OrderbookIdentifier {
-        OrderbookIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
+    fn test_ob_id() -> RaindexIdentifier {
+        RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
     #[test]
     fn client_status_bus_default_has_no_ob_id() {
         let bus = ClientStatusBus::new();
-        assert!(bus.ob_id.is_none());
+        assert!(bus.raindex_id.is_none());
     }
 
     #[test]
     fn client_status_bus_with_ob_id_stores_identifier() {
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id.clone());
-        assert_eq!(bus.ob_id, Some(ob_id));
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id.clone());
+        assert_eq!(bus.raindex_id, Some(raindex_id));
     }
 
     #[tokio::test]
@@ -126,9 +131,9 @@ mod tests {
 
     #[tokio::test]
     async fn send_skips_when_not_leader() {
-        let ob_id = test_ob_id();
+        let raindex_id = test_ob_id();
         set_scheduler_state(SchedulerState::NotLeader);
-        let bus = ClientStatusBus::with_ob_id(ob_id);
+        let bus = ClientStatusBus::with_ob_id(raindex_id);
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
         set_scheduler_state(SchedulerState::Leader);
@@ -137,8 +142,8 @@ mod tests {
     #[tokio::test]
     async fn send_returns_ok_when_leader_with_ob_id() {
         set_scheduler_state(SchedulerState::Leader);
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id);
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id);
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
     }
@@ -158,15 +163,15 @@ mod tests {
     #[test]
     fn emit_active_with_ob_id_does_not_panic() {
         set_scheduler_state(SchedulerState::Leader);
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id);
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id);
         bus.emit_active();
     }
 
     #[test]
     fn emit_failure_with_ob_id_does_not_panic() {
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id);
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id);
         bus.emit_failure("test error".to_string());
     }
 
@@ -187,9 +192,9 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use crate::local_db::pipeline::{StatusBus, SyncPhase};
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use crate::raindex_client::local_db::LocalDbStatus;
-    use crate::raindex_client::local_db::{OrderbookSyncStatus, SchedulerState};
+    use crate::raindex_client::local_db::{RaindexSyncStatus, SchedulerState};
     use alloy::primitives::address;
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -200,15 +205,15 @@ mod wasm_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    fn test_ob_id() -> OrderbookIdentifier {
-        OrderbookIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
+    fn test_ob_id() -> RaindexIdentifier {
+        RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
     fn create_recording_callback(
-        recorded: Rc<RefCell<Vec<OrderbookSyncStatus>>>,
+        recorded: Rc<RefCell<Vec<RaindexSyncStatus>>>,
     ) -> Rc<js_sys::Function> {
         let closure = Closure::wrap(Box::new(move |value: JsValue| {
-            if let Ok(status) = serde_wasm_bindgen::from_value::<OrderbookSyncStatus>(value) {
+            if let Ok(status) = serde_wasm_bindgen::from_value::<RaindexSyncStatus>(value) {
                 recorded.borrow_mut().push(status);
             }
         }) as Box<dyn FnMut(JsValue)>);
@@ -225,8 +230,8 @@ mod wasm_tests {
         set_status_callback(Some(callback));
         set_scheduler_state(SchedulerState::Leader);
 
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id.clone());
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id.clone());
         bus.send(SyncPhase::FetchingLatestBlock).await.unwrap();
 
         set_status_callback(None);
@@ -235,7 +240,7 @@ mod wasm_tests {
         assert_eq!(emissions.len(), 1, "expected exactly one emission");
 
         let emitted = &emissions[0];
-        assert_eq!(emitted.ob_id, ob_id);
+        assert_eq!(emitted.raindex_id, raindex_id);
         assert_eq!(emitted.status, LocalDbStatus::Syncing);
         assert_eq!(emitted.scheduler_state, SchedulerState::Leader);
         assert_eq!(
@@ -252,8 +257,8 @@ mod wasm_tests {
         set_status_callback(Some(callback));
         set_scheduler_state(SchedulerState::NotLeader);
 
-        let ob_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(ob_id);
+        let raindex_id = test_ob_id();
+        let bus = ClientStatusBus::with_ob_id(raindex_id);
         bus.send(SyncPhase::FetchingLatestBlock).await.unwrap();
 
         set_status_callback(None);

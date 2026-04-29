@@ -1,4 +1,4 @@
-version: 2
+version: 6
 networks:
   flare:
     rpc: https://rpc.ankr.com/flare
@@ -56,7 +56,7 @@ metaboards:
   bsc: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-bsc/0.1/gn
   linea: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-linea-0xed7d6156/1.0.0/gn
   ethereum: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-mainnet/2024-10-25-2857/gn
-orderbooks:
+raindexes:
   flare:
     address: 0xCEe8Cd002F151A536394E564b84076c41bBBcD4d
     network: flare

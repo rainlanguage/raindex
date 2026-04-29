@@ -11,12 +11,12 @@ pub use wasm::*;
 #[cfg(test)]
 mod tests {
     use crate::local_db::pipeline::SyncPhase;
-    use crate::local_db::OrderbookIdentifier;
-    use crate::raindex_client::local_db::{LocalDbStatus, OrderbookSyncStatus, SchedulerState};
+    use crate::local_db::RaindexIdentifier;
+    use crate::raindex_client::local_db::{LocalDbStatus, RaindexSyncStatus, SchedulerState};
     use alloy::primitives::address;
 
-    fn test_ob_id() -> OrderbookIdentifier {
-        OrderbookIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
+    fn test_raindex_id() -> RaindexIdentifier {
+        RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
     #[test]
@@ -34,12 +34,12 @@ mod tests {
             "Computing sync window"
         );
         assert_eq!(
-            SyncPhase::FetchingOrderbookLogs.to_message(),
-            "Fetching orderbook logs"
+            SyncPhase::FetchingRaindexLogs.to_message(),
+            "Fetching raindex logs"
         );
         assert_eq!(
-            SyncPhase::DecodingOrderbookLogs.to_message(),
-            "Decoding orderbook logs"
+            SyncPhase::DecodingRaindexLogs.to_message(),
+            "Decoding raindex logs"
         );
         assert_eq!(
             SyncPhase::FetchingStoreLogs.to_message(),
@@ -69,11 +69,11 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_syncing_sets_correct_fields() {
-        let ob_id = test_ob_id();
-        let status = OrderbookSyncStatus::syncing(ob_id.clone(), SyncPhase::FetchingLatestBlock);
+    fn raindex_sync_status_syncing_sets_correct_fields() {
+        let raindex_id = test_raindex_id();
+        let status = RaindexSyncStatus::syncing(raindex_id.clone(), SyncPhase::FetchingLatestBlock);
 
-        assert_eq!(status.ob_id, ob_id);
+        assert_eq!(status.raindex_id, raindex_id);
         assert_eq!(status.status, LocalDbStatus::Syncing);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert_eq!(
@@ -84,11 +84,11 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_active_with_leader_sets_correct_fields() {
-        let ob_id = test_ob_id();
-        let status = OrderbookSyncStatus::active(ob_id.clone(), SchedulerState::Leader);
+    fn raindex_sync_status_active_with_leader_sets_correct_fields() {
+        let raindex_id = test_raindex_id();
+        let status = RaindexSyncStatus::active(raindex_id.clone(), SchedulerState::Leader);
 
-        assert_eq!(status.ob_id, ob_id);
+        assert_eq!(status.raindex_id, raindex_id);
         assert_eq!(status.status, LocalDbStatus::Active);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert!(status.phase_message.is_none());
@@ -96,11 +96,11 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_active_with_not_leader_sets_correct_fields() {
-        let ob_id = test_ob_id();
-        let status = OrderbookSyncStatus::active(ob_id.clone(), SchedulerState::NotLeader);
+    fn raindex_sync_status_active_with_not_leader_sets_correct_fields() {
+        let raindex_id = test_raindex_id();
+        let status = RaindexSyncStatus::active(raindex_id.clone(), SchedulerState::NotLeader);
 
-        assert_eq!(status.ob_id, ob_id);
+        assert_eq!(status.raindex_id, raindex_id);
         assert_eq!(status.status, LocalDbStatus::Active);
         assert_eq!(status.scheduler_state, SchedulerState::NotLeader);
         assert!(status.phase_message.is_none());
@@ -108,12 +108,12 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_failure_sets_correct_fields() {
-        let ob_id = test_ob_id();
+    fn raindex_sync_status_failure_sets_correct_fields() {
+        let raindex_id = test_raindex_id();
         let error_msg = "RPC connection failed".to_string();
-        let status = OrderbookSyncStatus::failure(ob_id.clone(), error_msg.clone());
+        let status = RaindexSyncStatus::failure(raindex_id.clone(), error_msg.clone());
 
-        assert_eq!(status.ob_id, ob_id);
+        assert_eq!(status.raindex_id, raindex_id);
         assert_eq!(status.status, LocalDbStatus::Failure);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert!(status.phase_message.is_none());
@@ -121,17 +121,17 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_new_with_all_fields() {
-        let ob_id = test_ob_id();
-        let status = OrderbookSyncStatus::new(
-            ob_id.clone(),
+    fn raindex_sync_status_new_with_all_fields() {
+        let raindex_id = test_raindex_id();
+        let status = RaindexSyncStatus::new(
+            raindex_id.clone(),
             LocalDbStatus::Syncing,
             SchedulerState::Leader,
             Some("Custom phase".to_string()),
             Some("Custom error".to_string()),
         );
 
-        assert_eq!(status.ob_id, ob_id);
+        assert_eq!(status.raindex_id, raindex_id);
         assert_eq!(status.status, LocalDbStatus::Syncing);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert_eq!(status.phase_message, Some("Custom phase".to_string()));

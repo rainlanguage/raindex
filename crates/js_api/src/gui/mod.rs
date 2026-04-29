@@ -4,7 +4,7 @@ use base64::{engine::general_purpose::URL_SAFE, Engine};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use rain_math_float::FloatError;
 use rain_metaboard_subgraph::metaboard_client::MetaboardSubgraphClientError;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     deployment::DeploymentCfg,
     gui::{
         GuiCfg, GuiDeploymentCfg, GuiFieldDefinitionCfg, GuiPresetCfg, NameAndDescriptionCfg,
@@ -17,8 +17,8 @@ use rain_orderbook_app_settings::{
         emitter, YamlError, YamlParsable,
     },
 };
-pub use rain_orderbook_common::erc20::ExtendedTokenInfo;
-use rain_orderbook_common::{
+pub use raindex_common::erc20::ExtendedTokenInfo;
+use raindex_common::{
     dotrain::{types::patterns::FRONTMATTER_SEPARATOR, RainDocument},
     dotrain_order::{DotrainOrder, DotrainOrderError},
     erc20::ERC20,
@@ -298,7 +298,7 @@ impl DotrainOrderGui {
         #[wasm_export(param_description = "Token identifier from the YAML tokens section")]
         key: String,
     ) -> Result<ExtendedTokenInfo, GuiError> {
-        let token = self.dotrain_order.orderbook_yaml().get_token(&key)?;
+        let token = self.dotrain_order.raindex_yaml().get_token(&key)?;
         Ok(ExtendedTokenInfo::from_token_cfg(&token).await?)
     }
 
@@ -627,8 +627,8 @@ pub enum GuiError {
     MissingDepositToken(String),
     #[error("Deposit amount cannot be an empty string")]
     DepositAmountCannotBeEmpty,
-    #[error("Orderbook not found")]
-    OrderbookNotFound,
+    #[error("Raindex not found")]
+    RaindexNotFound,
     #[error("Order not found: {0}")]
     OrderNotFound(String),
     #[error("Deserialized dotrain mismatch")]
@@ -668,7 +668,7 @@ pub enum GuiError {
     #[error(transparent)]
     ReadableClientError(#[from] ReadableClientError),
     #[error(transparent)]
-    DepositError(#[from] rain_orderbook_common::deposit::DepositError),
+    DepositError(#[from] raindex_common::deposit::DepositError),
     #[error(transparent)]
     ParseError(#[from] alloy::primitives::ruint::ParseError),
     #[error(transparent)]
@@ -679,12 +679,12 @@ pub enum GuiError {
     UnitsError(#[from] alloy::primitives::utils::UnitsError),
     #[error(transparent)]
     WritableTransactionExecuteError(
-        #[from] rain_orderbook_common::transaction::WritableTransactionExecuteError,
+        #[from] raindex_common::transaction::WritableTransactionExecuteError,
     ),
     #[error(transparent)]
-    AddOrderArgsError(#[from] rain_orderbook_common::add_order::AddOrderArgsError),
+    AddOrderArgsError(#[from] raindex_common::add_order::AddOrderArgsError),
     #[error(transparent)]
-    ERC20Error(#[from] rain_orderbook_common::erc20::Error),
+    ERC20Error(#[from] raindex_common::erc20::Error),
     #[error(transparent)]
     SolTypesError(#[from] alloy::sol_types::Error),
     #[error(transparent)]
@@ -726,8 +726,8 @@ impl GuiError {
                 format!("A deposit for token is required but has not been set for deployment '{}'.", deployment),
             GuiError::DepositAmountCannotBeEmpty =>
                 "The deposit amount cannot be an empty string. Please set a valid amount.".to_string(),
-            GuiError::OrderbookNotFound =>
-                "The orderbook configuration could not be found. Please check your YAML configuration.".to_string(),
+            GuiError::RaindexNotFound =>
+                "The raindex configuration could not be found. Please check your YAML configuration.".to_string(),
             GuiError::OrderNotFound(order) =>
                 format!("The order '{}' could not be found in the YAML configuration.", order),
             GuiError::DotrainMismatch =>
@@ -820,8 +820,8 @@ impl From<GuiError> for WasmEncodedError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::FieldErrorKind;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::FieldErrorKind;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     pub fn get_yaml() -> String {
@@ -936,8 +936,8 @@ rainlangs:
     some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -974,14 +974,14 @@ orders:
         - token: token2
           vault-id: 1
       rainlang: some-rainlang
-      orderbook: some-orderbook
+      raindex: some-raindex
     other-order:
       inputs:
         - token: token1
       outputs:
         - token: token1
       rainlang: some-rainlang
-      orderbook: some-orderbook
+      raindex: some-raindex
 deployments:
     some-deployment:
         scenario: some-scenario
@@ -1165,8 +1165,8 @@ rainlangs:
     test-rainlang:
         network: test-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    test-orderbook:
+raindexes:
+    test-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: test-network
         subgraph: test-sg
@@ -1223,7 +1223,7 @@ orders:
         - token: token1
           vault-id: 1
       rainlang: test-rainlang
-      orderbook: test-orderbook
+      raindex: test-raindex
 deployments:
     validation-deployment:
         scenario: test-scenario
@@ -1998,8 +1998,8 @@ rainlangs:
     some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg

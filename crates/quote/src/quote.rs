@@ -13,11 +13,11 @@ use url::Url;
 use wasm_bindgen_utils::{add_ts_content, impl_wasm_traits, prelude::*};
 
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::{quote2Return, OrderV4, QuoteV2, SignedContextV1};
-use rain_orderbook_subgraph_client::{
+use raindex_bindings::IRaindexV6::{quote2Return, OrderV4, QuoteV2, SignedContextV1};
+use raindex_subgraph_client::{
     types::{common::SgBytes, Id},
     utils::make_order_id,
-    OrderbookSubgraphClient,
+    RaindexSubgraphClient,
 };
 
 pub type QuoteResult = Result<OrderQuoteValue, FailedQuote>;
@@ -52,7 +52,7 @@ impl From<quote2Return> for OrderQuoteValue {
 pub struct QuoteTarget {
     pub quote_config: QuoteV2,
     #[cfg_attr(target_family = "wasm", tsify(type = "string"))]
-    pub orderbook: Address,
+    pub raindex: Address,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(QuoteTarget);
@@ -64,9 +64,9 @@ impl QuoteTarget {
     }
 
     /// Get subgraph represented "order_id" of self
-    /// which is keccak256 of orderbook address concated with order hash
+    /// which is keccak256 of raindex address concated with order hash
     pub fn get_id(&self) -> B256 {
-        make_order_id(self.orderbook, self.get_order_hash().into())
+        make_order_id(self.raindex, self.get_order_hash().into())
     }
 
     /// Quotes the target on the given rpc urls
@@ -139,16 +139,16 @@ pub struct QuoteSpec {
     pub output_io_index: u8,
     pub signed_context: Vec<SignedContextV1>,
     #[cfg_attr(target_family = "wasm", tsify(type = "string"))]
-    pub orderbook: Address,
+    pub raindex: Address,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(QuoteSpec);
 
 impl QuoteSpec {
     /// Get subgraph represented "order_id" of self
-    /// which is keccak256 of orderbook address concated with order hash
+    /// which is keccak256 of raindex address concated with order hash
     pub fn get_id(&self) -> B256 {
-        make_order_id(self.orderbook, self.order_hash)
+        make_order_id(self.raindex, self.order_hash)
     }
 
     /// Given a subgraph will fetch the order details and returns the
@@ -158,13 +158,13 @@ impl QuoteSpec {
         subgraph_url: &str,
     ) -> Result<QuoteTarget, Error> {
         let url = Url::from_str(subgraph_url)?;
-        let sg_client = OrderbookSubgraphClient::new(url);
+        let sg_client = RaindexSubgraphClient::new(url);
         let order_detail = sg_client
             .order_detail(&Id::new(encode_prefixed(self.get_id())))
             .await?;
 
         Ok(QuoteTarget {
-            orderbook: self.orderbook,
+            raindex: self.raindex,
             quote_config: QuoteV2 {
                 inputIOIndex: U256::from(self.input_io_index),
                 outputIOIndex: U256::from(self.output_io_index),
@@ -218,7 +218,7 @@ impl BatchQuoteSpec {
         subgraph_url: &str,
     ) -> Result<Vec<Option<QuoteTarget>>, Error> {
         let url = Url::from_str(subgraph_url)?;
-        let sg_client = OrderbookSubgraphClient::new(url);
+        let sg_client = RaindexSubgraphClient::new(url);
         let orders_details = sg_client
             .batch_order_detail(
                 self.0
@@ -237,7 +237,7 @@ impl BatchQuoteSpec {
                     .find(|order_detail| order_detail.id.0 == encode_prefixed(target.get_id()))
                     .and_then(|order_detail| {
                         Some(QuoteTarget {
-                            orderbook: target.orderbook,
+                            raindex: target.raindex,
                             quote_config: QuoteV2 {
                                 inputIOIndex: U256::from(target.input_io_index),
                                 outputIOIndex: U256::from(target.output_io_index),
@@ -317,13 +317,13 @@ mod tests {
     use alloy::sol_types::{SolCall, SolValue};
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::AbiDecodedErrorType;
-    use rain_orderbook_bindings::IRaindexV6::{quote2Call, QuoteV2, IOV2};
-    use rain_orderbook_subgraph_client::OrderbookSubgraphClientError;
+    use raindex_bindings::IRaindexV6::{quote2Call, QuoteV2, IOV2};
+    use raindex_subgraph_client::RaindexSubgraphClientError;
     use serde_json::{json, Value};
 
     // helper fn to build some test data
     fn get_test_data(batch: bool) -> (Address, OrderV4, U256, Value) {
-        let orderbook = Address::random();
+        let raindex = Address::random();
         let order = OrderV4 {
             validInputs: vec![IOV2::default()],
             validOutputs: vec![IOV2::default()],
@@ -333,7 +333,7 @@ mod tests {
         let order_hash_u256 = U256::from_be_bytes(order_hash_bytes);
         let order_hash = encode_prefixed(order_hash_bytes);
         let mut id = vec![];
-        id.extend_from_slice(orderbook.as_ref());
+        id.extend_from_slice(raindex.as_ref());
         id.extend_from_slice(&order_hash_bytes);
         let order_id = encode_prefixed(keccak256(id));
         let order_json = json!({
@@ -353,7 +353,7 @@ mod tests {
                 },
                 "balance": "0",
                 "vaultId": order.validOutputs[0].vaultId.to_string(),
-                "orderbook": { "id": encode_prefixed(B256::random()) },
+                "raindex": { "id": encode_prefixed(B256::random()) },
                 "ordersAsOutput": [{
                     "id": encode_prefixed(B256::random()),
                     "orderHash": encode_prefixed(B256::random()),
@@ -388,7 +388,7 @@ mod tests {
                         "timestamp": "0",
                         "from": encode_prefixed(Address::random())
                     },
-                    "orderbook": { "id": encode_prefixed(B256::random()) }
+                    "raindex": { "id": encode_prefixed(B256::random()) }
                 }],
             }],
             "inputs": [{
@@ -403,7 +403,7 @@ mod tests {
                 },
                 "balance": "0",
                 "vaultId": order.validInputs[0].vaultId.to_string(),
-                "orderbook": { "id": encode_prefixed(B256::random()) },
+                "raindex": { "id": encode_prefixed(B256::random()) },
                 "ordersAsOutput": [{
                     "id": encode_prefixed(B256::random()),
                     "orderHash": encode_prefixed(B256::random()),
@@ -438,10 +438,10 @@ mod tests {
                         "timestamp": "0",
                         "from": encode_prefixed(Address::random())
                     },
-                    "orderbook": { "id": encode_prefixed(B256::random()) }
+                    "raindex": { "id": encode_prefixed(B256::random()) }
                 }],
             }],
-            "orderbook": { "id": encode_prefixed(B256::random()) },
+            "raindex": { "id": encode_prefixed(B256::random()) },
             "active": true,
             "addEvents": [{
                 "transaction": {
@@ -469,18 +469,18 @@ mod tests {
                 }
             })
         };
-        (orderbook, order, order_hash_u256, retrun_sg_data)
+        (raindex, order, order_hash_u256, retrun_sg_data)
     }
 
     #[test]
     fn test_quote_target_get_order_hash() {
-        let (orderbook, order, _, _) = get_test_data(false);
+        let (raindex, order, _, _) = get_test_data(false);
         let quote_target = QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         };
         let actual = quote_target.get_order_hash().encode_hex();
         let expected =
@@ -492,7 +492,7 @@ mod tests {
     fn test_quote_target_get_id() {
         let quote_target = QuoteTarget {
             quote_config: Default::default(),
-            orderbook: Address::ZERO,
+            raindex: Address::ZERO,
         };
         let actual = quote_target.get_id().encode_hex();
         let expected =
@@ -507,7 +507,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: Vec::new(),
-            orderbook: Address::ZERO,
+            raindex: Address::ZERO,
         };
         let actual = quote_spec.get_id().encode_hex();
         let expected =
@@ -517,13 +517,13 @@ mod tests {
 
     #[test]
     fn test_validate_ok() {
-        let (orderbook, order, _, _) = get_test_data(false);
+        let (raindex, order, _, _) = get_test_data(false);
         let quote_target = QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         };
         assert!(quote_target.validate().is_ok());
     }
@@ -536,7 +536,7 @@ mod tests {
                 outputIOIndex: U256::from(1_u16),
                 ..Default::default()
             },
-            orderbook: Address::ZERO,
+            raindex: Address::ZERO,
         };
         assert!(quote_target.validate().is_err());
 
@@ -546,7 +546,7 @@ mod tests {
                 inputIOIndex: U256::from(1_u16),
                 ..Default::default()
             },
-            orderbook: Address::ZERO,
+            raindex: Address::ZERO,
         };
         assert!(quote_target.validate().is_err());
     }
@@ -555,7 +555,7 @@ mod tests {
     async fn test_get_quote_spec_from_subgraph_ok() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, order_id_u256, retrun_sg_data) = get_test_data(false);
+        let (raindex, order, order_id_u256, retrun_sg_data) = get_test_data(false);
 
         // mock subgraph
         rpc_server.mock(|when, then| {
@@ -568,7 +568,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         };
         let result = quote_target_specifier
             .get_quote_target_from_subgraph(rpc_server.url("/").as_str())
@@ -576,7 +576,7 @@ mod tests {
             .unwrap();
 
         let expected = QuoteTarget {
-            orderbook,
+            raindex,
             quote_config: QuoteV2 {
                 order,
                 inputIOIndex: U256::from(quote_target_specifier.input_io_index),
@@ -590,14 +590,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_quote_spec_from_subgraph_err() {
-        let (orderbook, _, order_id_u256, _) = get_test_data(false);
+        let (raindex, _, order_id_u256, _) = get_test_data(false);
 
         let quote_target_specifier = QuoteSpec {
             order_hash: order_id_u256,
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         };
 
         let err = quote_target_specifier
@@ -624,7 +624,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            Error::SubgraphClientError(OrderbookSubgraphClientError::CynicClientError(_))
+            Error::SubgraphClientError(RaindexSubgraphClientError::CynicClientError(_))
         ));
     }
 
@@ -632,7 +632,7 @@ mod tests {
     async fn test_get_batch_quote_spec_from_subgraph_ok() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, order_id_u256, retrun_sg_data) = get_test_data(true);
+        let (raindex, order, order_id_u256, retrun_sg_data) = get_test_data(true);
 
         // mock subgraph
         rpc_server.mock(|when, then| {
@@ -645,7 +645,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         }]);
         let result = batch_quote_targets_specifiers
             .get_batch_quote_target_from_subgraph(rpc_server.url("/").as_str())
@@ -653,7 +653,7 @@ mod tests {
             .unwrap();
 
         let expected = vec![Some(QuoteTarget {
-            orderbook,
+            raindex,
             quote_config: QuoteV2 {
                 order,
                 inputIOIndex: U256::from(batch_quote_targets_specifiers.0[0].input_io_index),
@@ -669,7 +669,7 @@ mod tests {
     async fn test_get_batch_quote_spec_from_subgraph_err() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, order_id_u256, _) = get_test_data(true);
+        let (raindex, order, order_id_u256, _) = get_test_data(true);
 
         rpc_server.mock(|when, then| {
             when.method(POST).path("/sg");
@@ -679,7 +679,7 @@ mod tests {
                 "orderBytes": encode_prefixed(order.abi_encode()),
                 "orderHash": encode_prefixed(B256::random()),
                 "owner": encode_prefixed(order.owner),
-                "orderbook": { "id": encode_prefixed(B256::random()) },
+                "raindex": { "id": encode_prefixed(B256::random()) },
                 "active": true,
                 "addEvents": [],
                 "meta": null,
@@ -700,7 +700,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         }]);
 
         let err = batch_quote_targets_specifiers
@@ -710,7 +710,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            Error::SubgraphClientError(OrderbookSubgraphClientError::CynicClientError(cynic_err))
+            Error::SubgraphClientError(RaindexSubgraphClientError::CynicClientError(cynic_err))
             if cynic_err.to_string().contains("error decoding response body")
         ));
     }
@@ -719,7 +719,7 @@ mod tests {
     async fn test_quote_spec_do_quote_ok() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, _, order_id_u256, retrun_sg_data) = get_test_data(false);
+        let (raindex, _, order_id_u256, retrun_sg_data) = get_test_data(false);
 
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
@@ -754,7 +754,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         };
 
         let result = quote_target_specifier
@@ -781,7 +781,7 @@ mod tests {
     async fn test_quote_spec_do_quote_err() {
         let server = MockServer::start_async().await;
 
-        let (orderbook, _, order_id_u256, retrun_sg_data) = get_test_data(false);
+        let (raindex, _, order_id_u256, retrun_sg_data) = get_test_data(false);
 
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
@@ -827,7 +827,7 @@ mod tests {
             input_io_index: 0,
             output_io_index: 0,
             signed_context: vec![],
-            orderbook,
+            raindex,
         };
 
         // A malformed RPC body causes per-target `CorruptReturnData` (surfaced
@@ -857,7 +857,7 @@ mod tests {
 
         assert!(matches!(
             err,
-            Error::SubgraphClientError(OrderbookSubgraphClientError::CynicClientError(
+            Error::SubgraphClientError(RaindexSubgraphClientError::CynicClientError(
                 cynic_err,
             )) if cynic_err.to_string().contains("error decoding response body")
         ));
@@ -867,7 +867,7 @@ mod tests {
     async fn test_quote_batch_spec_do_quote_err() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, _, order_id_u256, retrun_sg_data) = get_test_data(true);
+        let (raindex, _, order_id_u256, retrun_sg_data) = get_test_data(true);
 
         // build response data
         let one = Float::parse("1".to_string()).unwrap();
@@ -903,7 +903,7 @@ mod tests {
                 input_io_index: 0,
                 output_io_index: 0,
                 signed_context: vec![],
-                orderbook,
+                raindex,
             },
             // should be Err in final result
             QuoteSpec::default(),
@@ -959,13 +959,13 @@ mod tests {
     async fn test_quote_target_do_quote_ok() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, _, _) = get_test_data(false);
+        let (raindex, order, _, _) = get_test_data(false);
         let quote_target = QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         };
 
         // OZ Multicall returns `bytes[]`; each element is the ABI-encoded
@@ -1010,13 +1010,13 @@ mod tests {
     async fn test_quote_target_do_quote_err() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, _, _) = get_test_data(false);
+        let (raindex, order, _, _) = get_test_data(false);
         let quote_target = QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         };
 
         // Outer multicall decodes fine (one `bytes` element) but that inner
@@ -1054,13 +1054,13 @@ mod tests {
     async fn test_batch_quote_target_do_quote_ok() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, _, _) = get_test_data(true);
+        let (raindex, order, _, _) = get_test_data(true);
         let quote_targets = BatchQuoteTarget(vec![QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         }]);
 
         // OZ Multicall returns `bytes[]`; one element per inner `quote2`.
@@ -1109,13 +1109,13 @@ mod tests {
     async fn test_batch_quote_target_do_quote_err() {
         let rpc_server = MockServer::start_async().await;
 
-        let (orderbook, order, _, _) = get_test_data(true);
+        let (raindex, order, _, _) = get_test_data(true);
         let quote_targets = BatchQuoteTarget(vec![QuoteTarget {
             quote_config: QuoteV2 {
                 order,
                 ..Default::default()
             },
-            orderbook,
+            raindex,
         }]);
 
         // The orderbook's OZ Multicall bubbles the first inner revert up as

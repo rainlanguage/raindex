@@ -1,7 +1,7 @@
 import { render, fireEvent } from '@testing-library/svelte';
 import { writable, get } from 'svelte/store';
 import InputOrderHash from '../lib/components/input/InputOrderHash.svelte';
-import type { Hex } from '@rainlanguage/orderbook';
+import type { Hex } from '@rainlanguage/raindex';
 
 describe('InputOrderHash', () => {
 	it('renders with initial value', () => {

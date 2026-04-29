@@ -3,7 +3,7 @@ pub mod remotes;
 pub mod utils;
 
 use crate::local_db::pipeline::SyncOutcome;
-use crate::local_db::{LocalDbError, OrderbookIdentifier};
+use crate::local_db::{LocalDbError, RaindexIdentifier};
 
 /// Stage at which a target can fail during a runner invocation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,8 +24,8 @@ pub struct TargetSuccess {
 /// Failure result for a single target.
 #[derive(Debug)]
 pub struct TargetFailure {
-    pub ob_id: OrderbookIdentifier,
-    pub orderbook_key: Option<String>,
+    pub raindex_id: RaindexIdentifier,
+    pub raindex_key: Option<String>,
     pub stage: TargetStage,
     pub error: LocalDbError,
 }

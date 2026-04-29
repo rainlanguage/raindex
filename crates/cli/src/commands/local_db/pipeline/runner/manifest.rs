@@ -1,10 +1,10 @@
 use super::export::ExportMetadata;
 use alloy::primitives::{Address, Bytes};
-use rain_orderbook_app_settings::local_db_manifest::{LocalDbManifest, ManifestOrderbook};
-use rain_orderbook_app_settings::remote::manifest::ManifestMap;
-use rain_orderbook_common::local_db::pipeline::runner::utils::RunnerTarget;
-use rain_orderbook_common::local_db::pipeline::runner::TargetSuccess;
-use rain_orderbook_common::local_db::{LocalDbError, OrderbookIdentifier};
+use raindex_app_settings::local_db_manifest::{LocalDbManifest, ManifestRaindex};
+use raindex_app_settings::remote::manifest::ManifestMap;
+use raindex_common::local_db::pipeline::runner::utils::RunnerTarget;
+use raindex_common::local_db::pipeline::runner::TargetSuccess;
+use raindex_common::local_db::{LocalDbError, RaindexIdentifier};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
@@ -16,33 +16,37 @@ use url::Url;
 /// targets keep their last known manifest entry when available.
 pub fn build_manifest(
     successes: &[TargetSuccess],
-    exports: &HashMap<OrderbookIdentifier, Option<ExportMetadata>>,
-    target_lookup: &HashMap<OrderbookIdentifier, RunnerTarget>,
+    exports: &HashMap<RaindexIdentifier, Option<ExportMetadata>>,
+    target_lookup: &HashMap<RaindexIdentifier, RunnerTarget>,
     release_base_url: &Url,
     previous_manifests: &ManifestMap,
 ) -> Result<LocalDbManifest, LocalDbError> {
-    let mut per_network: HashMap<String, (u32, Vec<ManifestOrderbook>)> = HashMap::new();
+    let mut per_network: HashMap<String, (u32, Vec<ManifestRaindex>)> = HashMap::new();
 
     // First, record the latest successful exports.
     for success in successes {
-        let ob_id = &success.outcome.ob_id;
-        let export = match exports.get(ob_id).and_then(|export| export.as_ref()) {
+        let raindex_id = &success.outcome.raindex_id;
+        let export = match exports.get(raindex_id).and_then(|export| export.as_ref()) {
             Some(export) => export,
             None => continue,
         };
         let runner_target =
             target_lookup
-                .get(ob_id)
+                .get(raindex_id)
                 .ok_or_else(|| LocalDbError::MissingRunnerTarget {
-                    chain_id: ob_id.chain_id,
-                    orderbook_address: ob_id.orderbook_address,
+                    chain_id: raindex_id.chain_id,
+                    raindex_address: raindex_id.raindex_address,
                 })?;
 
-        let dump_url = build_dump_url(release_base_url, ob_id.chain_id, ob_id.orderbook_address)?;
+        let dump_url = build_dump_url(
+            release_base_url,
+            raindex_id.chain_id,
+            raindex_id.raindex_address,
+        )?;
         let end_block_hash = Bytes::from_str(export.end_block_hash.as_str())?;
 
-        let manifest_orderbook = ManifestOrderbook {
-            address: ob_id.orderbook_address,
+        let manifest_raindex = ManifestRaindex {
+            address: raindex_id.raindex_address,
             dump_url,
             end_block: export.end_block,
             end_block_hash,
@@ -52,21 +56,21 @@ pub fn build_manifest(
         push_entry(
             &mut per_network,
             runner_target.network_key.clone(),
-            ob_id.chain_id,
-            manifest_orderbook,
+            raindex_id.chain_id,
+            manifest_raindex,
         )?;
     }
 
     // Then, carry forward any existing manifest entries for targets that did
     // not produce a new dump in this run.
-    for (ob_id, runner_target) in target_lookup {
+    for (raindex_id, runner_target) in target_lookup {
         let already_recorded =
             per_network
                 .get(&runner_target.network_key)
-                .is_some_and(|(_, orderbooks)| {
-                    orderbooks
+                .is_some_and(|(_, raindexes)| {
+                    raindexes
                         .iter()
-                        .any(|orderbook| orderbook.address == ob_id.orderbook_address)
+                        .any(|raindex| raindex.address == raindex_id.raindex_address)
                 });
         if already_recorded {
             continue;
@@ -74,15 +78,15 @@ pub fn build_manifest(
 
         let previous_entry = previous_manifests
             .get(&runner_target.manifest_url)
-            .and_then(|manifest| manifest.find(ob_id.chain_id, ob_id.orderbook_address))
+            .and_then(|manifest| manifest.find(raindex_id.chain_id, raindex_id.raindex_address))
             .cloned();
 
-        if let Some(orderbook) = previous_entry {
+        if let Some(raindex) = previous_entry {
             push_entry(
                 &mut per_network,
                 runner_target.network_key.clone(),
-                ob_id.chain_id,
-                orderbook,
+                raindex_id.chain_id,
+                raindex,
             )?;
         }
     }
@@ -92,11 +96,11 @@ pub fn build_manifest(
     network_keys.sort();
 
     for key in network_keys {
-        if let Some((chain_id, mut orderbooks)) = per_network.remove(&key) {
-            orderbooks.sort_by(|a, b| a.address.cmp(&b.address));
+        if let Some((chain_id, mut raindexes)) = per_network.remove(&key) {
+            raindexes.sort_by(|a, b| a.address.cmp(&b.address));
             manifest.add_network(&key, chain_id)?;
-            for orderbook in orderbooks {
-                manifest.push_orderbook(&key, orderbook)?;
+            for raindex in raindexes {
+                manifest.push_raindex(&key, raindex)?;
             }
         }
     }
@@ -105,10 +109,10 @@ pub fn build_manifest(
 }
 
 fn push_entry(
-    per_network: &mut HashMap<String, (u32, Vec<ManifestOrderbook>)>,
+    per_network: &mut HashMap<String, (u32, Vec<ManifestRaindex>)>,
     network_key: String,
     chain_id: u32,
-    orderbook: ManifestOrderbook,
+    raindex: ManifestRaindex,
 ) -> Result<(), LocalDbError> {
     let entry = per_network
         .entry(network_key.clone())
@@ -120,17 +124,17 @@ fn push_entry(
             found: chain_id,
         });
     }
-    entry.1.push(orderbook);
+    entry.1.push(raindex);
     Ok(())
 }
 
 fn build_dump_url(
     base_url: &Url,
     chain_id: u32,
-    orderbook_address: Address,
+    raindex_address: Address,
 ) -> Result<Url, LocalDbError> {
     let base = base_url.as_str().trim_end_matches('/');
-    let address_str = orderbook_address.to_string();
+    let address_str = raindex_address.to_string();
     let url_str = format!("{}/{}-{}.sql.gz", base, chain_id, address_str);
     Url::parse(&url_str).map_err(|source| LocalDbError::DumpUrlConstructionFailed {
         url: url_str,
@@ -156,27 +160,27 @@ mod tests {
     use super::*;
     use crate::commands::local_db::pipeline::runner::export::ExportMetadata;
     use alloy::primitives::address;
-    use rain_orderbook_app_settings::local_db_manifest::{
-        LocalDbManifest, ManifestNetwork, ManifestOrderbook, DB_SCHEMA_VERSION, MANIFEST_VERSION,
+    use raindex_app_settings::local_db_manifest::{
+        LocalDbManifest, ManifestNetwork, ManifestRaindex, DB_SCHEMA_VERSION, MANIFEST_VERSION,
     };
-    use rain_orderbook_common::local_db::pipeline::engine::SyncInputs;
-    use rain_orderbook_common::local_db::pipeline::{
+    use raindex_common::local_db::pipeline::engine::SyncInputs;
+    use raindex_common::local_db::pipeline::{
         FinalityConfig, SyncConfig, SyncOutcome, WindowOverrides,
     };
-    use rain_orderbook_common::local_db::{FetchConfig, OrderbookIdentifier};
+    use raindex_common::local_db::{FetchConfig, RaindexIdentifier};
     use std::collections::HashMap;
     use tempfile::TempDir;
 
     fn sample_runner_target(network_key: &str, chain_id: u32, address: Address) -> RunnerTarget {
         let fetch = FetchConfig::new(10, 5, 5, 1, 0, 0).unwrap();
         RunnerTarget {
-            orderbook_key: format!("{}-{}", network_key, address),
+            raindex_key: format!("{}-{}", network_key, address),
             manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),
             network_key: network_key.to_string(),
             inputs: SyncInputs {
-                ob_id: OrderbookIdentifier {
+                raindex_id: RaindexIdentifier {
                     chain_id,
-                    orderbook_address: address,
+                    raindex_address: address,
                 },
                 metadata_rpcs: Vec::new(),
                 cfg: SyncConfig {
@@ -193,13 +197,13 @@ mod tests {
     }
 
     fn sample_success(
-        target: &OrderbookIdentifier,
+        target: &RaindexIdentifier,
         dump_suffix: &str,
     ) -> (TargetSuccess, ExportMetadata) {
         (
             TargetSuccess {
                 outcome: SyncOutcome {
-                    ob_id: target.clone(),
+                    raindex_id: target.clone(),
                     start_block: 0,
                     target_block: 1234,
                     fetched_logs: 10,
@@ -217,22 +221,22 @@ mod tests {
 
     #[test]
     fn build_manifest_skips_missing_exported_dump() {
-        let target_included = OrderbookIdentifier {
+        let target_included = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
-        let target_skipped = OrderbookIdentifier {
+        let target_skipped = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: address!("0x0000000000000000000000000000000000000bb2"),
+            raindex_address: address!("0x0000000000000000000000000000000000000bb2"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_included.clone(),
             sample_runner_target(
                 "arbitrum",
                 target_included.chain_id,
-                target_included.orderbook_address,
+                target_included.raindex_address,
             ),
         );
         lookup.insert(
@@ -240,7 +244,7 @@ mod tests {
             sample_runner_target(
                 "optimism",
                 target_skipped.chain_id,
-                target_skipped.orderbook_address,
+                target_skipped.raindex_address,
             ),
         );
 
@@ -259,38 +263,38 @@ mod tests {
 
         assert!(
             !manifest.networks.contains_key("optimism"),
-            "orderbook without dump should be ignored"
+            "raindex without dump should be ignored"
         );
         let arbitrum = manifest
             .networks
             .get("arbitrum")
             .expect("network with dump should exist");
-        assert_eq!(arbitrum.orderbooks.len(), 1);
+        assert_eq!(arbitrum.raindexes.len(), 1);
         assert_eq!(
-            arbitrum.orderbooks[0].address,
-            target_included.orderbook_address
+            arbitrum.raindexes[0].address,
+            target_included.raindex_address
         );
     }
 
     #[test]
     fn build_manifest_happy_path_multiple_networks() {
-        let target_a = OrderbookIdentifier {
+        let target_a = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000Aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000Aa1"),
         };
-        let target_b = OrderbookIdentifier {
+        let target_b = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: address!("0x0000000000000000000000000000000000000Bb2"),
+            raindex_address: address!("0x0000000000000000000000000000000000000Bb2"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_a.clone(),
-            sample_runner_target("anvil", target_a.chain_id, target_a.orderbook_address),
+            sample_runner_target("anvil", target_a.chain_id, target_a.raindex_address),
         );
         lookup.insert(
             target_b.clone(),
-            sample_runner_target("optimism", target_b.chain_id, target_b.orderbook_address),
+            sample_runner_target("optimism", target_b.chain_id, target_b.raindex_address),
         );
 
         let (success_a, export_a) = sample_success(&target_a, "dump-a.sql.gz");
@@ -305,47 +309,47 @@ mod tests {
             .expect("manifest build succeeds");
 
         assert_eq!(manifest.manifest_version, 1);
-        assert_eq!(manifest.db_schema_version, 2);
+        assert_eq!(manifest.db_schema_version, 3);
         assert_eq!(manifest.networks.len(), 2);
 
         let anvil = manifest.networks.get("anvil").expect("anvil network");
         assert_eq!(anvil.chain_id, 42161);
-        assert_eq!(anvil.orderbooks.len(), 1);
+        assert_eq!(anvil.raindexes.len(), 1);
         let expected_anvil = format!(
             "https://releases.example.com/{}-{}.sql.gz",
-            target_a.chain_id, target_a.orderbook_address
+            target_a.chain_id, target_a.raindex_address
         );
-        assert_eq!(anvil.orderbooks[0].dump_url.as_str(), expected_anvil);
+        assert_eq!(anvil.raindexes[0].dump_url.as_str(), expected_anvil);
 
         let optimism = manifest.networks.get("optimism").expect("optimism network");
         assert_eq!(optimism.chain_id, 10);
-        assert_eq!(optimism.orderbooks.len(), 1);
+        assert_eq!(optimism.raindexes.len(), 1);
         let expected_optimism = format!(
             "https://releases.example.com/{}-{}.sql.gz",
-            target_b.chain_id, target_b.orderbook_address
+            target_b.chain_id, target_b.raindex_address
         );
-        assert_eq!(optimism.orderbooks[0].dump_url.as_str(), expected_optimism);
+        assert_eq!(optimism.raindexes[0].dump_url.as_str(), expected_optimism);
     }
 
     #[test]
     fn build_manifest_errors_on_chain_id_mismatch() {
-        let target_a = OrderbookIdentifier {
+        let target_a = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000cc1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000cc1"),
         };
-        let target_b = OrderbookIdentifier {
+        let target_b = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: address!("0x0000000000000000000000000000000000000cc2"),
+            raindex_address: address!("0x0000000000000000000000000000000000000cc2"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_a.clone(),
-            sample_runner_target("shared", target_a.chain_id, target_a.orderbook_address),
+            sample_runner_target("shared", target_a.chain_id, target_a.raindex_address),
         );
         lookup.insert(
             target_b.clone(),
-            sample_runner_target("shared", target_b.chain_id, target_b.orderbook_address),
+            sample_runner_target("shared", target_b.chain_id, target_b.raindex_address),
         );
 
         let (success_a, export_a) = sample_success(&target_a, "dump-a.sql.gz");
@@ -374,24 +378,24 @@ mod tests {
     }
 
     #[test]
-    fn build_manifest_sorts_orderbooks_within_network() {
-        let target_a = OrderbookIdentifier {
+    fn build_manifest_sorts_raindexes_within_network() {
+        let target_a = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa2"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa2"),
         };
-        let target_b = OrderbookIdentifier {
+        let target_b = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_a.clone(),
-            sample_runner_target("anvil", target_a.chain_id, target_a.orderbook_address),
+            sample_runner_target("anvil", target_a.chain_id, target_a.raindex_address),
         );
         lookup.insert(
             target_b.clone(),
-            sample_runner_target("anvil", target_b.chain_id, target_b.orderbook_address),
+            sample_runner_target("anvil", target_b.chain_id, target_b.raindex_address),
         );
 
         // Intentionally provide outcomes out of order to ensure sorting occurs.
@@ -406,7 +410,11 @@ mod tests {
         let manifest = build_manifest(&successes, &exports, &lookup, &base_url, &HashMap::new())
             .expect("manifest build succeeds");
         let anvil = manifest.networks.get("anvil").expect("anvil network");
-        let addresses: Vec<_> = anvil.orderbooks.iter().map(|ob| ob.address).collect();
+        let addresses: Vec<_> = anvil
+            .raindexes
+            .iter()
+            .map(|raindex_entry| raindex_entry.address)
+            .collect();
         assert_eq!(
             addresses,
             vec![
@@ -418,15 +426,15 @@ mod tests {
 
     #[test]
     fn build_manifest_errors_on_missing_target() {
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
-        let lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
-        let (success, export) = sample_success(&ob_id, "dump.sql.gz");
+        let lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
+        let (success, export) = sample_success(&raindex_id, "dump.sql.gz");
         let successes = vec![success];
         let mut exports = HashMap::new();
-        exports.insert(ob_id.clone(), Some(export));
+        exports.insert(raindex_id.clone(), Some(export));
 
         let base_url = Url::parse("https://releases.example.com").unwrap();
 
@@ -435,10 +443,10 @@ mod tests {
         match err {
             LocalDbError::MissingRunnerTarget {
                 chain_id,
-                orderbook_address,
+                raindex_address,
             } => {
-                assert_eq!(chain_id, ob_id.chain_id);
-                assert_eq!(orderbook_address, ob_id.orderbook_address);
+                assert_eq!(chain_id, raindex_id.chain_id);
+                assert_eq!(raindex_address, raindex_id.raindex_address);
             }
             other => panic!("unexpected error variant: {other:?}"),
         }
@@ -446,22 +454,22 @@ mod tests {
 
     #[test]
     fn build_manifest_errors_on_invalid_end_block_hash() {
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000dd1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000dd1"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
-            ob_id.clone(),
-            sample_runner_target("arbitrum", ob_id.chain_id, ob_id.orderbook_address),
+            raindex_id.clone(),
+            sample_runner_target("arbitrum", raindex_id.chain_id, raindex_id.raindex_address),
         );
 
-        let (success, mut export) = sample_success(&ob_id, "dump.sql.gz");
+        let (success, mut export) = sample_success(&raindex_id, "dump.sql.gz");
         export.end_block_hash = "not-a-hex-string".to_string();
         let successes = vec![success];
         let mut exports = HashMap::new();
-        exports.insert(ob_id.clone(), Some(export));
+        exports.insert(raindex_id.clone(), Some(export));
 
         let base_url = Url::parse("https://releases.example.com").unwrap();
         let err = build_manifest(&successes, &exports, &lookup, &base_url, &HashMap::new())
@@ -487,28 +495,28 @@ mod tests {
 
         assert!(manifest.networks.is_empty());
         assert_eq!(manifest.manifest_version, 1);
-        assert_eq!(manifest.db_schema_version, 2);
+        assert_eq!(manifest.db_schema_version, 3);
     }
 
     #[test]
     fn build_manifest_overlays_successes_and_reuses_previous_entries() {
-        let target_a = OrderbookIdentifier {
+        let target_a = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
-        let target_b = OrderbookIdentifier {
+        let target_b = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000bb2"),
+            raindex_address: address!("0x0000000000000000000000000000000000000bb2"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_a.clone(),
-            sample_runner_target("anvil", target_a.chain_id, target_a.orderbook_address),
+            sample_runner_target("anvil", target_a.chain_id, target_a.raindex_address),
         );
         lookup.insert(
             target_b.clone(),
-            sample_runner_target("anvil", target_b.chain_id, target_b.orderbook_address),
+            sample_runner_target("anvil", target_b.chain_id, target_b.raindex_address),
         );
 
         let (success_a, export_a) = sample_success(&target_a, "dump-a.sql.gz");
@@ -516,7 +524,7 @@ mod tests {
         let mut exports = HashMap::new();
         exports.insert(target_a.clone(), Some(export_a));
 
-        // Previous manifest contains both orderbooks; only A gets a fresh export.
+        // Previous manifest contains both raindexes; only A gets a fresh export.
         let previous_manifest = LocalDbManifest {
             manifest_version: MANIFEST_VERSION,
             db_schema_version: DB_SCHEMA_VERSION,
@@ -524,16 +532,16 @@ mod tests {
                 "anvil".to_string(),
                 ManifestNetwork {
                     chain_id: target_a.chain_id,
-                    orderbooks: vec![
-                        ManifestOrderbook {
-                            address: target_a.orderbook_address,
+                    raindexes: vec![
+                        ManifestRaindex {
+                            address: target_a.raindex_address,
                             dump_url: Url::parse("https://old.example/a.sql.gz").unwrap(),
                             end_block: 100,
                             end_block_hash: Bytes::from_str("0x0aaa").unwrap(),
                             end_block_time_ms: 1_700_000_000,
                         },
-                        ManifestOrderbook {
-                            address: target_b.orderbook_address,
+                        ManifestRaindex {
+                            address: target_b.raindex_address,
                             dump_url: Url::parse("https://old.example/b.sql.gz").unwrap(),
                             end_block: 200,
                             end_block_hash: Bytes::from_str("0x0bbb").unwrap(),
@@ -551,40 +559,40 @@ mod tests {
             .expect("manifest build succeeds");
 
         let anvil = manifest.networks.get("anvil").expect("anvil network");
-        assert_eq!(anvil.orderbooks.len(), 2);
+        assert_eq!(anvil.raindexes.len(), 2);
         // New dump for target A should use the release base URL, while target B
         // should keep its previous dump URL.
         assert_eq!(
-            anvil.orderbooks[0].dump_url.as_str(),
+            anvil.raindexes[0].dump_url.as_str(),
             format!(
                 "https://releases.example.com/{}-{}.sql.gz",
-                target_a.chain_id, target_a.orderbook_address
+                target_a.chain_id, target_a.raindex_address
             )
         );
         assert_eq!(
-            anvil.orderbooks[1].dump_url.as_str(),
+            anvil.raindexes[1].dump_url.as_str(),
             "https://old.example/b.sql.gz"
         );
     }
 
     #[test]
     fn build_manifest_orders_networks_alphabetically() {
-        let target_devnet = OrderbookIdentifier {
+        let target_devnet = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
-        let target_testnet = OrderbookIdentifier {
+        let target_testnet = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: address!("0x0000000000000000000000000000000000000bb1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000bb1"),
         };
 
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
             target_devnet.clone(),
             sample_runner_target(
                 "devnet",
                 target_devnet.chain_id,
-                target_devnet.orderbook_address,
+                target_devnet.raindex_address,
             ),
         );
         lookup.insert(
@@ -592,7 +600,7 @@ mod tests {
             sample_runner_target(
                 "testnet",
                 target_testnet.chain_id,
-                target_testnet.orderbook_address,
+                target_testnet.raindex_address,
             ),
         );
 
@@ -635,19 +643,19 @@ mod tests {
 
     #[tokio::test]
     async fn write_manifest_to_path_writes_yaml() {
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: address!("0x0000000000000000000000000000000000000aa1"),
+            raindex_address: address!("0x0000000000000000000000000000000000000aa1"),
         };
-        let mut lookup: HashMap<OrderbookIdentifier, RunnerTarget> = HashMap::new();
+        let mut lookup: HashMap<RaindexIdentifier, RunnerTarget> = HashMap::new();
         lookup.insert(
-            ob_id.clone(),
-            sample_runner_target("anvil", ob_id.chain_id, ob_id.orderbook_address),
+            raindex_id.clone(),
+            sample_runner_target("anvil", raindex_id.chain_id, raindex_id.raindex_address),
         );
-        let (success, export) = sample_success(&ob_id, "dump.sql.gz");
+        let (success, export) = sample_success(&raindex_id, "dump.sql.gz");
         let successes = vec![success];
         let mut exports = HashMap::new();
-        exports.insert(ob_id.clone(), Some(export));
+        exports.insert(raindex_id.clone(), Some(export));
 
         let base_url = Url::parse("https://releases.example.com").unwrap();
         let manifest = build_manifest(&successes, &exports, &lookup, &base_url, &HashMap::new())

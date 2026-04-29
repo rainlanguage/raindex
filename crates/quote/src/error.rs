@@ -4,9 +4,9 @@ use alloy::{
 };
 use alloy_ethers_typecast::ReadableClientError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
-use rain_orderbook_bindings::provider::ReadProviderError;
-use rain_orderbook_subgraph_client::{
-    types::order_detail_traits::OrderDetailError, OrderbookSubgraphClientError,
+use raindex_bindings::provider::ReadProviderError;
+use raindex_subgraph_client::{
+    types::order_detail_traits::OrderDetailError, RaindexSubgraphClientError,
 };
 use thiserror::Error;
 use url::ParseError;
@@ -35,7 +35,7 @@ pub enum Error {
     #[error(transparent)]
     UrlParseError(#[from] ParseError),
     #[error(transparent)]
-    SubgraphClientError(#[from] OrderbookSubgraphClientError),
+    SubgraphClientError(#[from] RaindexSubgraphClientError),
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
     #[error(transparent)]

@@ -2,7 +2,7 @@
 	import { createInfiniteQuery } from '@tanstack/svelte-query';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { QKEY_VAULTS_VOL_LIST } from '../../queries/keys';
-	import { type RaindexVaultVolume, type RaindexOrder } from '@rainlanguage/orderbook';
+	import { type RaindexVaultVolume, type RaindexOrder } from '@rainlanguage/raindex';
 	import { TableBodyCell, TableHeadCell } from 'flowbite-svelte';
 	import Hash, { HashType } from '../Hash.svelte';
 	import TableTimeFilters from '../charts/TableTimeFilters.svelte';

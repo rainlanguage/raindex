@@ -9,7 +9,7 @@
 	import { validateAmount } from '$lib/services/validateAmount';
 	import { fade } from 'svelte/transition';
 	import truncateEthAddress from 'truncate-eth-address';
-	import { Float, type AccountBalance } from '@rainlanguage/orderbook';
+	import { Float, type AccountBalance } from '@rainlanguage/raindex';
 
 	/**
 	 * Modal component for depositing tokens into a vault.

@@ -1,4 +1,4 @@
-import type { RaindexTrade, RaindexVaultToken } from '@rainlanguage/orderbook';
+import type { RaindexTrade, RaindexVaultToken } from '@rainlanguage/raindex';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { sortBy } from 'lodash';
 import { TIME_DELTA_24_HOURS, TIME_DELTA_7_DAYS, TIME_DELTA_30_DAYS } from './time';

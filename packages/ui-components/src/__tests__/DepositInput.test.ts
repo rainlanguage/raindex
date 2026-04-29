@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import DepositInput from '../lib/components/deployment/DepositInput.svelte';
-import type { GuiDepositCfg } from '@rainlanguage/orderbook';
+import type { GuiDepositCfg } from '@rainlanguage/raindex';
 import type { ComponentProps } from 'svelte';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { DotrainOrderGui } from '@rainlanguage/raindex';
 import { useGui } from '$lib/hooks/useGui';
 type DepositInputProps = ComponentProps<DepositInput>;
 
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	DotrainOrderGui: vi.fn()
 }));
 

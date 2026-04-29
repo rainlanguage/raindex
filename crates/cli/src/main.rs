@@ -1,13 +1,13 @@
 use anyhow::Result;
 use clap::Parser;
-use rain_orderbook_cli::Orderbook;
+use raindex_cli::Raindex;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
     #[command(subcommand)]
-    orderbook: Orderbook,
+    raindex: Raindex,
 }
 
 #[tokio::main]
@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
-    cli.orderbook.execute().await
+    cli.raindex.execute().await
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 <!-- TODO: Issue #1989 -->
 <script lang="ts">
 	// import { timestampSecondsToUTCTimestamp } from '../../services/time';
-	// 	import type { RaindexVault, RaindexVaultBalanceChange } from '@rainlanguage/orderbook';
+	// 	import type { RaindexVault, RaindexVaultBalanceChange } from '@rainlanguage/raindex';
 	// 	import { createQuery } from '@tanstack/svelte-query';
 	// 	import TanstackLightweightChartLine from '../charts/TanstackLightweightChartLine.svelte';
 	// 	import { QKEY_VAULT_CHANGES } from '../../queries/keys';

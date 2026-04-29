@@ -1,4 +1,4 @@
-use rain_orderbook_common::raindex_client::RaindexError;
+use raindex_common::raindex_client::RaindexError;
 use rocket::http::Status;
 use rocket::response::{self, Responder};
 use rocket::serde::json::Json;
@@ -51,7 +51,7 @@ impl ApiError {
                 }
 
                 RaindexError::ChainIdNotFound(_)
-                | RaindexError::OrderbookNotFound(_, _)
+                | RaindexError::RaindexNotFound(_, _)
                 | RaindexError::OrderNotFound(_, _, _)
                 | RaindexError::VaultNotFound(_, _, _)
                 | RaindexError::SubgraphNotFound(_, _)
@@ -138,7 +138,7 @@ mod tests {
     fn test_status_code_not_found_config_errors() {
         let not_found_errors = vec![
             ApiError::Raindex(RaindexError::ChainIdNotFound(1)),
-            ApiError::Raindex(RaindexError::OrderbookNotFound("0x123".to_string(), 1)),
+            ApiError::Raindex(RaindexError::RaindexNotFound("0x123".to_string(), 1)),
             ApiError::Raindex(RaindexError::OrderNotFound(
                 "0x123".to_string(),
                 1,

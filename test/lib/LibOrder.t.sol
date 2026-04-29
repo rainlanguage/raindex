@@ -18,6 +18,7 @@ contract LibOrderTest is Test {
     /// Hashing should always produce different results for different inputs.
     /// forge-config: default.fuzz.runs = 100
     function testHashNotEqual(OrderV4 memory a, OrderV4 memory b) public pure {
+        vm.assume(keccak256(abi.encode(a)) != keccak256(abi.encode(b)));
         assertTrue(LibOrder.hash(a) != LibOrder.hash(b));
     }
 }

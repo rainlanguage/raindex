@@ -2,11 +2,11 @@ import { render, screen } from '@testing-library/svelte';
 import { describe, it, expect } from 'vitest';
 import type { ComponentProps } from 'svelte';
 import VaultIdInformation from '$lib/components/deployment/VaultIdInformation.svelte';
-import { Float, type AccountBalance } from '@rainlanguage/orderbook';
+import { Float, type AccountBalance } from '@rainlanguage/raindex';
 
 export type VaultIdInformationComponentProps = ComponentProps<VaultIdInformation>;
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	return {
 		...(await importOriginal())
 	};

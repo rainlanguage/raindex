@@ -3,7 +3,7 @@ use super::orders::{OrdersDataSource, SubgraphOrders};
 use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use crate::raindex_client::QuerySource;
 use crate::raindex_client::{
     orders::RaindexOrder,
@@ -11,7 +11,7 @@ use crate::raindex_client::{
     vaults::{LocalTradeBalanceInfo, LocalTradeTokenInfo, RaindexVaultBalanceChange},
 };
 use alloy::primitives::{Address, Bytes, B256, U256};
-use rain_orderbook_subgraph_client::types::{common::SgTrade, Id};
+use raindex_subgraph_client::types::{common::SgTrade, Id};
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -26,7 +26,7 @@ pub struct RaindexTrade {
     input_vault_balance_change: RaindexVaultBalanceChange,
     output_vault_balance_change: RaindexVaultBalanceChange,
     timestamp: U256,
-    orderbook: Address,
+    raindex: Address,
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
@@ -57,8 +57,8 @@ impl RaindexTrade {
             .map_err(|e| RaindexError::JsError(e.to_string().into()))
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Address")]
-    pub fn orderbook(&self) -> String {
-        self.orderbook.to_string()
+    pub fn raindex(&self) -> String {
+        self.raindex.to_string()
     }
 }
 #[cfg(not(target_family = "wasm"))]
@@ -81,8 +81,8 @@ impl RaindexTrade {
     pub fn timestamp(&self) -> U256 {
         self.timestamp
     }
-    pub fn orderbook(&self) -> Address {
-        self.orderbook
+    pub fn raindex(&self) -> Address {
+        self.raindex
     }
 }
 
@@ -129,29 +129,41 @@ impl RaindexOrder {
     ) -> Result<Vec<RaindexTrade>, RaindexError> {
         let chain_id = self.chain_id();
         #[cfg(target_family = "wasm")]
-        let orderbook = Address::from_str(&self.orderbook())?;
+        let raindex_addr = Address::from_str(&self.raindex())?;
         #[cfg(not(target_family = "wasm"))]
-        let orderbook = self.orderbook();
+        let raindex_addr = self.raindex();
 
         #[cfg(target_family = "wasm")]
         let order_hash = B256::from_str(&self.order_hash())?;
         #[cfg(not(target_family = "wasm"))]
         let order_hash = B256::from_str(&self.order_hash().to_string())?;
 
-        let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
+        let raindex_id = RaindexIdentifier::new(chain_id, raindex_addr);
         let raindex_client = self.get_raindex_client();
 
         match raindex_client.query_source(chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
                 local_source
-                    .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
+                    .trades_list(
+                        &raindex_id,
+                        &order_hash,
+                        start_timestamp,
+                        end_timestamp,
+                        page,
+                    )
                     .await
             }
             QuerySource::Subgraph => {
                 let subgraph_source = SubgraphOrders::new(&raindex_client);
                 subgraph_source
-                    .trades_list(&ob_id, &order_hash, start_timestamp, end_timestamp, page)
+                    .trades_list(
+                        &raindex_id,
+                        &order_hash,
+                        start_timestamp,
+                        end_timestamp,
+                        page,
+                    )
                     .await
             }
         }
@@ -227,29 +239,29 @@ impl RaindexOrder {
     ) -> Result<u64, RaindexError> {
         let chain_id = self.chain_id();
         #[cfg(target_family = "wasm")]
-        let orderbook = Address::from_str(&self.orderbook())?;
+        let raindex_addr = Address::from_str(&self.raindex())?;
         #[cfg(not(target_family = "wasm"))]
-        let orderbook = self.orderbook();
+        let raindex_addr = self.raindex();
 
         #[cfg(target_family = "wasm")]
         let order_hash = B256::from_str(&self.order_hash())?;
         #[cfg(not(target_family = "wasm"))]
         let order_hash = self.order_hash();
 
-        let ob_id = OrderbookIdentifier::new(chain_id, orderbook);
+        let raindex_id = RaindexIdentifier::new(chain_id, raindex_addr);
         let raindex_client = self.get_raindex_client();
 
         match raindex_client.query_source(chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
                 local_source
-                    .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
+                    .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
                     .await
             }
             QuerySource::Subgraph => {
                 let subgraph_source = SubgraphOrders::new(&raindex_client);
                 subgraph_source
-                    .trades_count(&ob_id, &order_hash, start_timestamp, end_timestamp)
+                    .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
                     .await
             }
         }
@@ -257,7 +269,7 @@ impl RaindexOrder {
 }
 impl RaindexOrder {
     pub async fn get_trade_detail(&self, trade_id: Bytes) -> Result<RaindexTrade, RaindexError> {
-        let client = self.get_orderbook_client()?;
+        let client = self.get_raindex_subgraph_client()?;
         RaindexTrade::try_from_sg_trade(
             self.chain_id(),
             client
@@ -284,7 +296,7 @@ impl RaindexTrade {
                     trade.output_vault_balance_change,
                 )?,
             timestamp: U256::from_str(&trade.timestamp.0)?,
-            orderbook: Address::from_str(&trade.orderbook.id.0)?,
+            raindex: Address::from_str(&trade.raindex.id.0)?,
         })
     }
 
@@ -301,7 +313,7 @@ impl RaindexTrade {
 
         let input_change = RaindexVaultBalanceChange::try_from_local_trade_side(
             chain_id,
-            trade.orderbook,
+            trade.raindex,
             &transaction,
             trade.input_vault_id,
             LocalTradeTokenInfo {
@@ -320,7 +332,7 @@ impl RaindexTrade {
 
         let output_change = RaindexVaultBalanceChange::try_from_local_trade_side(
             chain_id,
-            trade.orderbook,
+            trade.raindex,
             &transaction,
             trade.output_vault_id,
             LocalTradeTokenInfo {
@@ -344,7 +356,7 @@ impl RaindexTrade {
             input_vault_balance_change: input_change,
             output_vault_balance_change: output_change,
             timestamp: U256::from(trade.block_timestamp),
-            orderbook: trade.orderbook,
+            raindex: trade.raindex,
         })
     }
 }
@@ -368,7 +380,7 @@ mod test_helpers {
         };
         use alloy::primitives::{address, b256, bytes, Address, Bytes, B256, U256};
         use js_sys::Array;
-        use rain_orderbook_subgraph_client::utils::float::{F1, F2, F3, NEG2};
+        use raindex_subgraph_client::utils::float::{F1, F2, F3, NEG2};
         use serde_json::{self, json};
         use std::collections::HashMap;
         use std::str::FromStr;
@@ -382,7 +394,7 @@ mod test_helpers {
             input_vault: LocalDbVault,
             output_vault: LocalDbVault,
             trade: LocalDbOrderTrade,
-            orderbook_address: Address,
+            raindex_address: Address,
             order_hash: B256,
             input_token: Address,
             output_token: Address,
@@ -394,7 +406,7 @@ mod test_helpers {
             trade_count: u64,
         ) -> LocalTradeFixture {
             const CHAIN_ID: u32 = 42161;
-            let orderbook_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
+            let raindex_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
             let order_hash =
                 b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
             let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
@@ -429,7 +441,7 @@ mod test_helpers {
                 vault_id: input_vault_id,
                 token: input_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token A".to_string(),
                 token_symbol: "TKNA".to_string(),
                 token_decimals: 18,
@@ -443,7 +455,7 @@ mod test_helpers {
                 vault_id: output_vault_id,
                 token: output_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token B".to_string(),
                 token_symbol: "TKNB".to_string(),
                 token_decimals: 6,
@@ -470,7 +482,7 @@ mod test_helpers {
                 owner,
                 block_timestamp: 1_700_000_010,
                 block_number: 123_456,
-                orderbook_address,
+                raindex_address,
                 order_bytes: order_bytes.clone(),
                 transaction_hash,
                 inputs: Some(order_inputs_payload),
@@ -482,7 +494,7 @@ mod test_helpers {
 
             let trade = LocalDbOrderTrade {
                 trade_kind: "take".into(),
-                orderbook: orderbook_address,
+                raindex: raindex_address,
                 order_hash: order_hash.clone(),
                 order_owner: owner,
                 order_nonce: "0".into(),
@@ -513,7 +525,7 @@ mod test_helpers {
                 input_vault,
                 output_vault,
                 trade,
-                orderbook_address,
+                raindex_address,
                 order_hash,
                 input_token,
                 output_token,
@@ -645,7 +657,7 @@ mod test_helpers {
 
             let order = client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(42161, fixture.orderbook_address),
+                    &RaindexIdentifier::new(42161, fixture.raindex_address),
                     fixture.order_hash.clone(),
                 )
                 .await
@@ -659,8 +671,8 @@ mod test_helpers {
             assert_eq!(trade.id(), trade_id);
             assert_eq!(trade.order_hash(), fixture.order_hash.to_string());
             assert_eq!(
-                trade.orderbook().to_lowercase(),
-                fixture.orderbook_address.to_string().to_lowercase()
+                trade.raindex().to_lowercase(),
+                fixture.raindex_address.to_string().to_lowercase()
             );
 
             let transaction = trade.transaction();
@@ -744,7 +756,7 @@ mod test_helpers {
 
             let order = client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(42161, fixture.orderbook_address),
+                    &RaindexIdentifier::new(42161, fixture.raindex_address),
                     fixture.order_hash.clone(),
                 )
                 .await
@@ -763,13 +775,13 @@ mod test_helpers {
     mod non_wasm {
         use super::*;
         use crate::{
-            local_db::OrderbookIdentifier,
-            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS},
+            local_db::RaindexIdentifier,
+            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS},
         };
         use alloy::primitives::{b256, Bytes};
         use httpmock::MockServer;
         use rain_math_float::Float;
-        use rain_orderbook_subgraph_client::utils::float::*;
+        use raindex_subgraph_client::utils::float::*;
         use serde_json::{json, Value};
 
         fn get_order1_json() -> Value {
@@ -791,7 +803,7 @@ mod test_helpers {
                     "symbol": "sFLR",
                     "decimals": "18"
                   },
-                  "orderbook": {
+                  "raindex": {
                     "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                   },
                   "ordersAsOutput": [
@@ -819,7 +831,7 @@ mod test_helpers {
                     "ordersAsOutput": [],
                     "ordersAsInput": [],
                     "balanceChanges": [],
-                    "orderbook": {
+                    "raindex": {
                       "id": "0x0000000000000000000000000000000000000000"
                     }
                   }
@@ -837,7 +849,7 @@ mod test_helpers {
                     "symbol": "WFLR",
                     "decimals": "18"
                   },
-                  "orderbook": {
+                  "raindex": {
                     "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                   },
                   "ordersAsOutput": [],
@@ -865,13 +877,13 @@ mod test_helpers {
                     "ordersAsOutput": [],
                     "ordersAsInput": [],
                     "balanceChanges": [],
-                    "orderbook": {
+                    "raindex": {
                       "id": "0x0000000000000000000000000000000000000000"
                     }
                   }
               ],
-              "orderbook": {
-                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+              "raindex": {
+                "id": CHAIN_ID_1_RAINDEX_ADDRESS
               },
               "active": true,
               "timestampAdded": "1739448802",
@@ -927,7 +939,7 @@ mod test_helpers {
                   "blockNumber": "0",
                   "timestamp": "1700000000"
                 },
-                "orderbook": {
+                "raindex": {
                   "id": "0x1234567890abcdef1234567890abcdef12345678"
                 },
                 "trade": {
@@ -964,7 +976,7 @@ mod test_helpers {
                   "blockNumber": "0",
                   "timestamp": "1700000000"
                 },
-                "orderbook": {
+                "raindex": {
                   "id": "0x1234567890abcdef1234567890abcdef12345678"
                 },
                 "trade": {
@@ -974,7 +986,7 @@ mod test_helpers {
                 }
               },
               "timestamp": "0",
-              "orderbook": {
+              "raindex": {
                 "id": "0x1234567890abcdef1234567890abcdef12345678"
               }
             })
@@ -1017,7 +1029,7 @@ mod test_helpers {
                     "blockNumber": "0",
                     "timestamp": "1700086400"
                   },
-                  "orderbook": {
+                  "raindex": {
                     "id": "0x1234567890abcdef1234567890abcdef12345679"
                   },
                   "trade": {
@@ -1054,7 +1066,7 @@ mod test_helpers {
                     "blockNumber": "0",
                     "timestamp": "1700086400"
                   },
-                  "orderbook": {
+                  "raindex": {
                     "id": "0x1234567890abcdef1234567890abcdef12345679"
                   },
                   "trade": {
@@ -1064,7 +1076,7 @@ mod test_helpers {
                   }
                 },
                 "timestamp": "1700086400",
-                "orderbook": {
+                "raindex": {
                   "id": "0x1234567890abcdef1234567890abcdef12345679"
                 }
               }
@@ -1113,9 +1125,9 @@ mod test_helpers {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -1258,7 +1270,7 @@ mod test_helpers {
             );
             assert_eq!(trade1.timestamp(), U256::ZERO);
             assert_eq!(
-                trade1.orderbook(),
+                trade1.raindex(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
             assert_eq!(trade1.order_hash(), Bytes::from_str("0x0123").unwrap());
@@ -1301,9 +1313,9 @@ mod test_helpers {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -1436,7 +1448,7 @@ mod test_helpers {
             );
             assert_eq!(trade.timestamp(), U256::ZERO);
             assert_eq!(
-                trade.orderbook(),
+                trade.raindex(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
             assert_eq!(trade.order_hash(), Bytes::from_str("0x0123").unwrap());
@@ -1486,9 +1498,9 @@ mod test_helpers {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )

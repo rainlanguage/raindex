@@ -1,4 +1,4 @@
-import type { Float, RaindexOrder, RaindexVault } from '@rainlanguage/orderbook';
+import type { Float, RaindexOrder, RaindexVault } from '@rainlanguage/raindex';
 import type { VaultActionArgs } from './transaction';
 import type { Hex } from 'viem';
 

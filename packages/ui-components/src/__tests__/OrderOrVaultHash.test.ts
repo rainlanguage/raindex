@@ -1,7 +1,7 @@
 import { render } from '@testing-library/svelte';
 import { describe, it, expect, vi } from 'vitest';
 import OrderOrVaultHash from '../lib/components/OrderOrVaultHash.svelte';
-import type { RaindexOrder, RaindexVault } from '@rainlanguage/orderbook';
+import type { RaindexOrder, RaindexVault } from '@rainlanguage/raindex';
 
 vi.mock('$app/navigation', () => ({
 	goto: vi.fn()
@@ -30,7 +30,7 @@ describe('OrderOrVaultHash', () => {
 					type: 'orders',
 					orderOrVault: mockOrder,
 					chainId: 1,
-					orderbookAddress: '0x234567'
+					raindexAddress: '0x234567'
 				}
 			});
 
@@ -53,7 +53,7 @@ describe('OrderOrVaultHash', () => {
 					type: 'orders',
 					orderOrVault: mockInactiveOrder,
 					chainId: 1,
-					orderbookAddress: '0x234567'
+					raindexAddress: '0x234567'
 				}
 			});
 
@@ -69,7 +69,7 @@ describe('OrderOrVaultHash', () => {
 					type: 'vaults',
 					orderOrVault: mockVault,
 					chainId: 1,
-					orderbookAddress: '0x234567'
+					raindexAddress: '0x234567'
 				}
 			});
 
@@ -89,7 +89,7 @@ describe('OrderOrVaultHash', () => {
 					type: 'orders',
 					orderOrVault: mockOrder as unknown as RaindexOrder,
 					chainId: 1,
-					orderbookAddress: '0x234567'
+					raindexAddress: '0x234567'
 				}
 			});
 
@@ -102,7 +102,7 @@ describe('OrderOrVaultHash', () => {
 					type: 'orders',
 					orderOrVault: mockInactiveOrder as unknown as RaindexOrder,
 					chainId: 1,
-					orderbookAddress: '0x234567'
+					raindexAddress: '0x234567'
 				}
 			});
 

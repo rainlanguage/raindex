@@ -2,14 +2,14 @@ use crate::local_db::query::fetch_vault_balance_changes::{
     build_fetch_balance_changes_stmt, LocalDbVaultBalanceChange,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use crate::raindex_client::vaults::VaultBalanceChangeFilter;
 use crate::types::VaultBalanceChangeKind;
 use alloy::primitives::{Address, U256};
 
 pub async fn fetch_vault_balance_changes<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     vault_id: U256,
     token: Address,
     owner: Address,
@@ -17,8 +17,13 @@ pub async fn fetch_vault_balance_changes<E: LocalDbQueryExecutor + ?Sized>(
 ) -> Result<Vec<LocalDbVaultBalanceChange>, LocalDbQueryError> {
     let filter_kinds: Option<Vec<VaultBalanceChangeKind>> =
         filter_types.map(|filters| filters.iter().map(|f| f.to_kind()).collect());
-    let stmt =
-        build_fetch_balance_changes_stmt(ob_id, vault_id, token, owner, filter_kinds.as_deref())?;
+    let stmt = build_fetch_balance_changes_stmt(
+        raindex_id,
+        vault_id,
+        token,
+        owner,
+        filter_kinds.as_deref(),
+    )?;
     exec.query_json(&stmt).await
 }
 
@@ -37,10 +42,10 @@ mod wasm_tests {
     async fn wrapper_uses_builder_sql_exactly() {
         let vault_id = U256::from(1);
         let token = address!("0x00000000000000000000000000000000000000aa");
-        let orderbook = Address::from([0x51; 20]);
+        let raindex = Address::from([0x51; 20]);
         let owner = address!("0x00000000000000000000000000000000000000f1");
         let expected_stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,
@@ -57,7 +62,7 @@ mod wasm_tests {
 
         let res = super::fetch_vault_balance_changes(
             &exec,
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,
@@ -72,10 +77,10 @@ mod wasm_tests {
     async fn wrapper_returns_rows_when_present() {
         let vault_id = U256::from(1);
         let token = address!("0x00000000000000000000000000000000000000bb");
-        let orderbook = Address::from([0x61; 20]);
+        let raindex = Address::from([0x61; 20]);
         let owner = address!("0x0000000000000000000000000000000000000011");
         let expected_stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,
@@ -105,7 +110,7 @@ mod wasm_tests {
 
         let res = super::fetch_vault_balance_changes(
             &exec,
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,
@@ -122,7 +127,7 @@ mod wasm_tests {
     async fn wrapper_uses_builder_sql_with_filter_types() {
         let vault_id = U256::from(1);
         let token = address!("0x00000000000000000000000000000000000000aa");
-        let orderbook = Address::from([0x51; 20]);
+        let raindex = Address::from([0x51; 20]);
         let owner = address!("0x00000000000000000000000000000000000000f1");
         let filter_types = vec![
             VaultBalanceChangeFilter::Deposit,
@@ -130,7 +135,7 @@ mod wasm_tests {
         ];
         let filter_kinds: Vec<_> = filter_types.iter().map(|f| f.to_kind()).collect();
         let expected_stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,
@@ -147,7 +152,7 @@ mod wasm_tests {
 
         let res = super::fetch_vault_balance_changes(
             &exec,
-            &OrderbookIdentifier::new(1, orderbook),
+            &RaindexIdentifier::new(1, raindex),
             vault_id,
             token,
             owner,

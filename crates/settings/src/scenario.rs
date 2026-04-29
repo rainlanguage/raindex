@@ -517,8 +517,8 @@ pub enum ParseScenarioConfigSourceError {
     ParentRainlangShadowedError(String),
     #[error("Rainlang not found: {0}")]
     RainlangNotFound(String),
-    #[error("Parent orderbook shadowed by child: {0}")]
-    ParentOrderbookShadowedError(String),
+    #[error("Parent raindex shadowed by child: {0}")]
+    ParentRaindexShadowedError(String),
     #[error("Failed to parse blocks: {0}")]
     BlocksParseError(String),
 }
@@ -534,8 +534,8 @@ impl ParseScenarioConfigSourceError {
                 format!("Rainlang conflict in your YAML configuration: The child scenario is trying to use rainlang '{}' which differs from the rainlang specified in the parent scenario. Child scenarios must use the same rainlang as their parent.", rainlang),
             ParseScenarioConfigSourceError::RainlangNotFound(scenario) =>
                 format!("No rainlang was found for scenario '{}' in your YAML configuration. Please specify a rainlang for this scenario or ensure it inherits one from a parent scenario.", scenario),
-            ParseScenarioConfigSourceError::ParentOrderbookShadowedError(orderbook) =>
-                format!("Orderbook conflict in your YAML configuration: The child scenario is trying to use orderbook '{}' which differs from the orderbook specified in the parent scenario. Child scenarios must use the same orderbook as their parent.", orderbook),
+            ParseScenarioConfigSourceError::ParentRaindexShadowedError(raindex) =>
+                format!("Raindex conflict in your YAML configuration: The child scenario is trying to use raindex '{}' which differs from the raindex specified in the parent scenario. Child scenarios must use the same raindex as their parent.", raindex),
             ParseScenarioConfigSourceError::BlocksParseError(blocks) =>
                 format!("Failed to parse the 'blocks' configuration in your YAML: {}. Please ensure it follows the correct format.", blocks),
         }

@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use crate::cynic_client::CynicClientError;
     use crate::types::common::{
-        SgBigInt, SgBytes, SgDeposit, SgErc20, SgOrderbook, SgPaginationWithIdQueryVariables,
+        SgBigInt, SgBytes, SgDeposit, SgErc20, SgPaginationWithIdQueryVariables, SgRaindex,
         SgTransaction, SgVaultBalanceChangeVault, SgWithdrawal,
     };
     use httpmock::prelude::*;
@@ -98,9 +98,9 @@ mod tests {
         }
     }
 
-    fn default_sg_orderbook() -> SgOrderbook {
-        SgOrderbook {
-            id: default_sg_bytes("0xOrderbookId"),
+    fn default_sg_raindex() -> SgRaindex {
+        SgRaindex {
+            id: default_sg_bytes("0xRaindexId"),
         }
     }
 
@@ -134,7 +134,7 @@ mod tests {
                 id: default_sg_bytes(&format!("0xTransactionId{}", id_suffix)),
                 ..default_sg_transaction()
             },
-            orderbook: default_sg_orderbook(),
+            raindex: default_sg_raindex(),
         })
     }
 
@@ -151,7 +151,7 @@ mod tests {
                 id: default_sg_bytes(&format!("0xTransactionId{}", id_suffix)),
                 ..default_sg_transaction()
             },
-            orderbook: default_sg_orderbook(),
+            raindex: default_sg_raindex(),
         })
     }
 

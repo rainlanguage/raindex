@@ -1,5 +1,5 @@
 use super::*;
-use rain_orderbook_app_settings::gui::GuiDepositCfg;
+use raindex_app_settings::gui::GuiDepositCfg;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 pub struct TokenDeposit {

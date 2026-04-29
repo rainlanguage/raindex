@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type GuiDepositCfg, type TokenDeposit, type TokenInfo } from '@rainlanguage/orderbook';
+	import { type GuiDepositCfg, type TokenDeposit, type TokenInfo } from '@rainlanguage/raindex';
 	import { Input } from 'flowbite-svelte';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';

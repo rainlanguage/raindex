@@ -1,5 +1,5 @@
 import type { InvalidOrderDetail, ValidOrderDetail } from '$lib/types/order';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { DotrainOrderGui } from '@rainlanguage/raindex';
 
 export type RegistryFile = {
 	name: string;

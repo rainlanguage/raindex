@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use url::Url;
 
 use crate::local_db::decode::{decode_events, DecodedEvent, DecodedEventData};
-use crate::local_db::fetch::{fetch_orderbook_events, fetch_store_events};
+use crate::local_db::fetch::{fetch_raindex_events, fetch_store_events};
 use crate::local_db::pipeline::EventsPipeline;
 use crate::local_db::{FetchConfig, LocalDbError};
 use crate::rpc_client::{LogEntryResponse, RpcClient};
@@ -51,21 +51,14 @@ impl EventsPipeline for DefaultEventsPipeline {
         Ok(block.hash)
     }
 
-    async fn fetch_orderbook(
+    async fn fetch_raindex(
         &self,
-        orderbook_address: Address,
+        raindex_address: Address,
         from_block: u64,
         to_block: u64,
         cfg: &FetchConfig,
     ) -> Result<Vec<LogEntryResponse>, LocalDbError> {
-        fetch_orderbook_events(
-            &self.rpc_client,
-            orderbook_address,
-            from_block,
-            to_block,
-            cfg,
-        )
-        .await
+        fetch_raindex_events(&self.rpc_client, raindex_address, from_block, to_block, cfg).await
     }
 
     async fn fetch_stores(
@@ -93,7 +86,7 @@ mod tests {
     use alloy::primitives::{b256, Bytes, U256};
     use alloy::sol_types::SolEvent;
     use httpmock::MockServer;
-    use rain_orderbook_bindings::OrderBook::MetaV1_2;
+    use raindex_bindings::Raindex::MetaV1_2;
     use serde_json::json;
     use std::str::FromStr;
 

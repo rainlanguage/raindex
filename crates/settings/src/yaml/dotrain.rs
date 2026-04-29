@@ -1,4 +1,4 @@
-use super::{cache::Cache, orderbook::OrderbookYaml, sanitize_all_documents, ValidationConfig, *};
+use super::{cache::Cache, raindex::RaindexYaml, sanitize_all_documents, ValidationConfig, *};
 use crate::{spec_version::SpecVersion, ChartCfg, DeploymentCfg, GuiCfg, OrderCfg, ScenarioCfg};
 use serde::{
     de::{self, IgnoredAny, MapAccess, SeqAccess, Visitor},
@@ -61,7 +61,7 @@ impl ValidationConfig for DotrainYamlValidation {
     fn should_validate_local_db_sync(&self) -> bool {
         false
     }
-    fn should_validate_orderbooks(&self) -> bool {
+    fn should_validate_raindexes(&self) -> bool {
         false
     }
     fn should_validate_metaboards(&self) -> bool {
@@ -134,10 +134,10 @@ impl YamlParsable for DotrainYaml {
         }
     }
 
-    fn from_orderbook_yaml(orderbook_yaml: OrderbookYaml) -> Self {
+    fn from_raindex_yaml(raindex_yaml: RaindexYaml) -> Self {
         DotrainYaml {
-            documents: orderbook_yaml.documents,
-            cache: orderbook_yaml.cache,
+            documents: raindex_yaml.documents,
+            cache: raindex_yaml.cache,
             profile: ContextProfile::Strict,
         }
     }
@@ -376,14 +376,14 @@ mod tests {
         test::*,
         yaml::{
             context::{ContextProfile, YamlCacheTrait},
-            orderbook::OrderbookYamlValidation,
+            raindex::RaindexYamlValidation,
         },
         BinXOptionsCfg, BinXTransformCfg, DotOptionsCfg, GuiSelectTokensCfg, HexBinOptionsCfg,
         HexBinTransformCfg, LineOptionsCfg, MarkCfg, RectYOptionsCfg, TransformCfg,
         TransformOutputsCfg, VaultType,
     };
     use alloy::primitives::U256;
-    use orderbook::OrderbookYaml;
+    use raindex::RaindexYaml;
 
     use super::*;
 
@@ -605,7 +605,7 @@ mod tests {
     #[test]
     fn test_full_yaml() {
         let ob_yaml =
-            OrderbookYaml::new(vec![full_yaml()], OrderbookYamlValidation::default()).unwrap();
+            RaindexYaml::new(vec![full_yaml()], RaindexYamlValidation::default()).unwrap();
         let dotrain_yaml =
             DotrainYaml::new(vec![full_yaml()], DotrainYamlValidation::default()).unwrap();
 

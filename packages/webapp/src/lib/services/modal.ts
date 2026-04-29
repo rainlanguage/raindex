@@ -10,7 +10,7 @@ import {
 } from '@rainlanguage/ui-components';
 import WithdrawAllModal from '../components/WithdrawAllModal.svelte';
 import type { WithdrawAllModalProps } from './handleVaultsWithdrawAll';
-import type { RaindexOrder, RaindexOrderQuote, TakeOrdersMode } from '@rainlanguage/orderbook';
+import type { RaindexOrder, RaindexOrderQuote, TakeOrdersMode } from '@rainlanguage/raindex';
 
 export const handleDepositModal = (props: VaultActionModalProps) => {
 	new DepositModal({ target: document.body, props });

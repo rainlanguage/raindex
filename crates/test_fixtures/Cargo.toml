@@ -1,5 +1,5 @@
 [package]
-name = "rain_orderbook_test_fixtures"
+name = "raindex_test_fixtures"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -3,7 +3,7 @@ import { get, writable, type Writable } from 'svelte/store';
 import { beforeEach, expect, test, describe, type Mock } from 'vitest';
 import DropdownActiveNetworks from '../lib/components/dropdown/DropdownActiveNetworks.svelte';
 import { useRaindexClient } from '$lib/hooks/useRaindexClient';
-import type { NetworkCfg } from '@rainlanguage/orderbook';
+import type { NetworkCfg } from '@rainlanguage/raindex';
 
 vi.mock('$lib/hooks/useRaindexClient', () => ({
 	useRaindexClient: vi.fn()

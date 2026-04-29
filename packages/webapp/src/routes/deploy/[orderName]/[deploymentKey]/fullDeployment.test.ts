@@ -13,7 +13,7 @@ import {
 	DotrainRegistry,
 	type DotrainOrderGui,
 	type NameAndDescriptionCfg
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { REGISTRY_URL } from '$lib/constants';
 import { retry, DEFAULT_MAX_RETRIES } from '$lib/retry';
 import { handleTransactionConfirmationModal } from '$lib/services/modal';
@@ -121,7 +121,7 @@ describe('GUI deployment args isolation tests', () => {
 			const args = result.value!;
 			expect(args).toBeDefined();
 			expect(args.deploymentCalldata).toBeDefined();
-			expect(args.orderbookAddress).toBeDefined();
+			expect(args.raindexAddress).toBeDefined();
 			expect(args.chainId).toBeDefined();
 		},
 		{ timeout: 30000, retry: DEFAULT_MAX_RETRIES }
@@ -369,7 +369,7 @@ describe('Full Deployment Tests', () => {
 			expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
 				args?.deploymentCalldata.slice(suffixEnd)
 			);
-			expect(callArgs.args.toAddress).toEqual(args?.orderbookAddress);
+			expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
 			expect(callArgs.args.chainId).toEqual(args?.chainId);
 		},
 		{ timeout: 60000, retry: DEFAULT_MAX_RETRIES }
@@ -532,7 +532,7 @@ describe('Full Deployment Tests', () => {
 	// 		expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
 	// 			args?.deploymentCalldata.slice(suffixEnd)
 	// 		);
-	// 		expect(callArgs.args.toAddress).toEqual(args?.orderbookAddress);
+	// 		expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
 	// 		expect(callArgs.args.chainId).toEqual(args?.chainId);
 	// 	},
 	// 	{ timeout: 300000 }
@@ -679,7 +679,7 @@ describe('Full Deployment Tests', () => {
 	// 		expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
 	// 			args?.deploymentCalldata.slice(suffixEnd)
 	// 		);
-	// 		expect(callArgs.args.toAddress).toEqual(args?.orderbookAddress);
+	// 		expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
 	// 		expect(callArgs.args.chainId).toEqual(args?.chainId);
 	// 	},
 	// 	{ timeout: 300000 }

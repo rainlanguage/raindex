@@ -3,7 +3,7 @@ import type {
 	RaindexTransaction,
 	RaindexVaultBalanceChange,
 	RaindexVaultToken
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import type { UTCTimestamp } from 'lightweight-charts';
 import { timestampSecondsToUTCTimestamp } from '../services/time';
 import { sortBy } from 'lodash';
@@ -88,7 +88,7 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -114,9 +114,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade,
 			{
 				id: '2',
@@ -150,7 +150,7 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -176,9 +176,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade,
 			{
 				id: '3',
@@ -212,7 +212,7 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -238,9 +238,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade
 		];
 
@@ -294,7 +294,7 @@ if (import.meta.vitest) {
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
 					__typename: 'Withdraw',
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -319,9 +319,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade,
 			{
 				id: '2',
@@ -354,7 +354,7 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -379,9 +379,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade,
 			{
 				id: '3',
@@ -414,7 +414,7 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
 				orderHash: 'orderHash',
 				inputVaultBalanceChange: {
@@ -439,9 +439,9 @@ if (import.meta.vitest) {
 						timestamp: BigInt(1632000000),
 						blockNumber: BigInt(0)
 					} as unknown as RaindexTransaction,
-					orderbook: '0x1'
+					raindex: '0x1'
 				} as unknown as RaindexVaultBalanceChange,
-				orderbook: '0x00'
+				raindex: '0x00'
 			} as unknown as RaindexTrade
 		];
 

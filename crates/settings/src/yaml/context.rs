@@ -434,7 +434,7 @@ mod tests {
             }],
             network: mock_network(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         })
     }
@@ -451,7 +451,7 @@ mod tests {
             outputs: vec![],
             network: mock_network(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         })
     }
@@ -586,7 +586,7 @@ mod tests {
             }],
             network: mock_network(),
             rainlang: Some(mock_rainlang()),
-            orderbook: Some(mock_orderbook()),
+            raindex: Some(mock_raindex()),
             oracle_url: None,
         };
         context.add_order(Arc::new(order));
@@ -602,7 +602,7 @@ mod tests {
         assert_eq!(context_order.outputs[0].vault_id, None);
         assert_eq!(context_order.network, mock_network());
         assert_eq!(context_order.rainlang, Some(mock_rainlang()));
-        assert_eq!(context_order.orderbook, Some(mock_orderbook()));
+        assert_eq!(context_order.raindex, Some(mock_raindex()));
     }
 
     #[test]

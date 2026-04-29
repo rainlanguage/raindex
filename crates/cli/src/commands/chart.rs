@@ -1,7 +1,7 @@
 use crate::execute::Execute;
 use anyhow::{anyhow, Result};
 use clap::Args;
-use rain_orderbook_common::fuzz::{FuzzRunner, FuzzRunnerContext};
+use raindex_common::fuzz::{FuzzRunner, FuzzRunnerContext};
 use std::fs::read_to_string;
 use std::path::PathBuf;
 use tracing::info;
@@ -31,8 +31,8 @@ impl Execute for Chart {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_test_fixtures::LocalEvm;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -50,14 +50,14 @@ tokens:
     decimals: 18
 orders:
   flare:
-    orderbook: "flare"
+    raindex: "flare"
     inputs:
       - token: "token1"
     outputs:
       - token: "token2"
 scenarios:
   flare:
-    orderbook: "flare"
+    raindex: "flare"
     runs: 1
     bindings:
       raindex-subparser: {subparser}
@@ -70,7 +70,7 @@ deployments:
         )
     }
 
-    fn get_settings(rpc: &str, orderbook: &str, rainlang: &str) -> String {
+    fn get_settings(rpc: &str, raindex: &str, rainlang: &str) -> String {
         format!(
             r#"
 version: {spec_version}
@@ -84,9 +84,9 @@ subgraphs:
   flare: "https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-flare/2024-12-13-9dc7/gn"
 metaboards:
   flare: "https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn"
-orderbooks:
+raindexes:
   flare:
-    address: {orderbook}
+    address: {raindex}
     network: "flare"
     subgraph: "flare"
 rainlangs:
@@ -183,19 +183,19 @@ io: fixed-io;
     #[tokio::test(flavor = "multi_thread")]
     async fn test_chart_execute_success() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
-        let orderbook = &local_evm.orderbook;
-        let orderbook_subparser = &local_evm.orderbook_subparser;
+        let raindex = &local_evm.raindex;
+        let raindex_subparser = &local_evm.raindex_subparser;
         let rainlang = local_evm.rainlang;
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
 
         let settings = get_settings(
             &local_evm.url(),
-            &orderbook.address().to_string(),
+            &raindex.address().to_string(),
             &rainlang.to_string(),
         );
         let dotrain_prefix = get_dotrain_prefix(
-            &orderbook_subparser.address().to_string(),
+            &raindex_subparser.address().to_string(),
             &token1.address().to_string(),
             &token2.address().to_string(),
         );
@@ -235,19 +235,19 @@ io: fixed-io;
     #[tokio::test(flavor = "multi_thread")]
     async fn test_chart_execute_missing_scenario() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
-        let orderbook = &local_evm.orderbook;
-        let orderbook_subparser = &local_evm.orderbook_subparser;
+        let raindex = &local_evm.raindex;
+        let raindex_subparser = &local_evm.raindex_subparser;
         let rainlang = local_evm.rainlang;
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
 
         let settings = get_settings(
             &local_evm.url(),
-            &orderbook.address().to_string(),
+            &raindex.address().to_string(),
             &rainlang.to_string(),
         );
         let dotrain_prefix = get_dotrain_prefix(
-            &orderbook_subparser.address().to_string(),
+            &raindex_subparser.address().to_string(),
             &token1.address().to_string(),
             &token2.address().to_string(),
         );
@@ -292,19 +292,19 @@ charts:
     #[tokio::test(flavor = "multi_thread")]
     async fn test_chart_execute_missing_rpc_response() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
-        let orderbook = &local_evm.orderbook;
-        let orderbook_subparser = &local_evm.orderbook_subparser;
+        let raindex = &local_evm.raindex;
+        let raindex_subparser = &local_evm.raindex_subparser;
         let rainlang = local_evm.rainlang;
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
 
         let settings = get_settings(
             "http://localhost:8545",
-            &orderbook.address().to_string(),
+            &raindex.address().to_string(),
             &rainlang.to_string(),
         );
         let dotrain_prefix = get_dotrain_prefix(
-            &orderbook_subparser.address().to_string(),
+            &raindex_subparser.address().to_string(),
             &token1.address().to_string(),
             &token2.address().to_string(),
         );

@@ -1,11 +1,11 @@
-Rain Orderbook Bindings — Architecture
+Rain Raindex Bindings — Architecture
 
 Summary
-- Purpose: Provide strongly typed Rust bindings to the Rain Orderbook Solidity contracts and small utilities for calling them from Rust (native and WASM). The crate centralizes ABI-derived types and call helpers so the rest of the workspace can construct calldata, perform reads, and expose safe JS-facing types.
+- Purpose: Provide strongly typed Rust bindings to the Rain Raindex Solidity contracts and small utilities for calling them from Rust (native and WASM). The crate centralizes ABI-derived types and call helpers so the rest of the workspace can construct calldata, perform reads, and expose safe JS-facing types.
 - Scope: ABI-based type generation via Alloy, a read‑only provider builder with multi‑RPC fallback, and WASM interop shims (TypeScript typings + conversions).
 
 File Layout
-- Cargo.toml: Declares the crate `rain_orderbook_bindings`. Key deps: `alloy` (codegen + types + RPC), `serde` (Serialize/Deserialize), `tower` (layers), `url`, `thiserror`. For WASM builds it uses `wasm-bindgen-utils` and `wasm-bindgen-test` for tests.
+- Cargo.toml: Declares the crate `raindex_bindings`. Key deps: `alloy` (codegen + types + RPC), `serde` (Serialize/Deserialize), `tower` (layers), `url`, `thiserror`. For WASM builds it uses `wasm-bindgen-utils` and `wasm-bindgen-test` for tests.
 - src/lib.rs: Declares contract bindings using Alloy’s `sol!` macro and re‑exports internal modules. Conditionally includes WASM modules.
 - src/provider.rs: Builds a read‑only provider with multi‑RPC fallback and sensible default request fillers.
 - src/js_api.rs (wasm only): JS/WASM interop. Implements wasm conversion traits and custom TypeScript interfaces for selected ABI types used in the GUI.
@@ -15,10 +15,10 @@ Generated Solidity Bindings (Alloy `sol!`)
 - The crate uses `alloy::sol!` to generate Rust modules, types, and (optionally) RPC call helpers from contract ABIs produced by Foundry. ABIs are read from the repository’s `out/` directory.
 
 - Bindings defined in `src/lib.rs`:
-  - `IOrderBookV5, "../../out/IOrderBookV5.sol/IOrderBookV5.json"`
+  - `IRaindexV5, "../../out/IRaindexV5.sol/IRaindexV5.json"`
     - Attributes: `#![sol(all_derives = true, rpc)]`, `#![sol(extra_derives(serde::Serialize, serde::Deserialize))]`.
     - Effect: Generates Rust types for all ABI structs/enums/events and RPC instance helpers for calling the contract. Adds `Serialize/Deserialize` derives for ergonomic (de)serialization.
-  - `OrderBook, "../../out/OrderBook.sol/OrderBook.json"`
+  - `Raindex, "../../out/Raindex.sol/Raindex.json"`
     - Attributes: `#![sol(all_derives = true)]`, `#![sol(extra_derives(serde::Serialize, serde::Deserialize))]`.
     - Effect: Same as above but without the `rpc` helpers. This is sufficient for constructing/calculating calldata (e.g., `multicallCall`) without needing a bound instance type.
   - `IERC20, "../../out/IERC20.sol/IERC20.json"`
@@ -29,8 +29,8 @@ Generated Solidity Bindings (Alloy `sol!`)
     - Effect: Full types for concrete ERC‑20; used for calldata construction and decoding when instance helpers aren’t required.
 
 - Practical result of the `sol!(… rpc)` attribute:
-  - For `IOrderBookV5` and `IERC20`, you can construct an instance bound to a provider and call methods with strong typing, for example: `let ob = IOrderBookV5Instance::new(address, provider.clone()); ob.quote2(config).await?`.
-  - For all bindings, you can still directly use generated call structs, e.g., `IOrderBookV5::removeOrder3Call { ... }.abi_encode()` or `OrderBook::multicallCall { ... }`.
+  - For `IRaindexV5` and `IERC20`, you can construct an instance bound to a provider and call methods with strong typing, for example: `let ob = IRaindexV5Instance::new(address, provider.clone()); ob.quote2(config).await?`.
+  - For all bindings, you can still directly use generated call structs, e.g., `IRaindexV5::removeOrder3Call { ... }.abi_encode()` or `Raindex::multicallCall { ... }`.
 
 - Derives and defaults:
   - `all_derives = true` enables useful traits on generated types, including `Clone`, `Debug`, `Default`, `Eq`, `PartialEq`, and more, which the codebase relies on (e.g., `OrderV4::default()`).
@@ -88,20 +88,20 @@ WASM Numeric Conversion (`src/wasm_traits.rs`)
 
 How This Crate Is Used Elsewhere
 - Quote engine (`crates/quote`):
-  - Imports `IOrderBookV5::IOrderBookV5Instance` and `mk_read_provider`.
+  - Imports `IRaindexV5::IRaindexV5Instance` and `mk_read_provider`.
   - Binds the instance to a provider and calls `quote2` for many orders via Alloy’s multicall helper.
 - Common utilities (`crates/common`):
   - Uses ABI‑generated call structs (e.g., `deposit3Call`, `withdraw3Call`, `removeOrder3Call`, `IERC20::approveCall`) to build calldata for transactions.
 - JS API (`crates/js_api`):
-  - Builds GUI calldata for approvals/deposits/add‑order and uses call structs like `OrderBook::multicallCall` without needing on‑chain RPC instance helpers.
+  - Builds GUI calldata for approvals/deposits/add‑order and uses call structs like `Raindex::multicallCall` without needing on‑chain RPC instance helpers.
 - CLI (`crates/cli`):
   - Consumes ABI struct types such as `OrderV4` and `IOV2` to construct orders from user inputs.
 
 Design Choices and Rationale
 - Keep bindings centralized: All ABI structs and call helpers live in one place so downstream crates share a single, consistent type system.
 - Split `rpc` vs. non‑`rpc` bindings:
-  - `IOrderBookV5`/`IERC20` include RPC instance helpers for ergonomic reads.
-  - `OrderBook`/`ERC20` are included without `rpc` when only calldata construction/decoding is required.
+  - `IRaindexV5`/`IERC20` include RPC instance helpers for ergonomic reads.
+  - `Raindex`/`ERC20` are included without `rpc` when only calldata construction/decoding is required.
 - Provider is read‑only by design: This crate does not handle signing or nonce management beyond auto‑fillers. Submission/signature flows live in other crates.
 - WASM boundary is explicit: Hand‑authored TS interfaces lock the surface area for the webapp, preventing accidental breaking changes from codegen drift.
 
@@ -111,19 +111,19 @@ Error Handling
 - ABI call errors, revert decoding, and multicall aggregation are handled in consumer crates (e.g., `quote`), leveraging these bindings for encoding/decoding.
 
 Build and Test
-- Build (workspace): `nix develop -c cargo build -p rain_orderbook_bindings`.
+- Build (workspace): `nix develop -c cargo build -p raindex_bindings`.
 - Tests (native and wasm; wasm executed via runner in the flake):
-  - Native: `nix develop -c cargo test -p rain_orderbook_bindings`.
-  - WASM: the workspace’s Nix config sets `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER='wasm-bindgen-test-runner'` and runs `cargo test --target wasm32-unknown-unknown -p rain_orderbook_bindings`.
+  - Native: `nix develop -c cargo test -p raindex_bindings`.
+  - WASM: the workspace’s Nix config sets `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER='wasm-bindgen-test-runner'` and runs `cargo test --target wasm32-unknown-unknown -p raindex_bindings`.
 
 Examples
 - Constructing a read provider and querying via an instance (native):
   - Parse URLs to `url::Url` and build: `let provider = mk_read_provider(&rpcs)?;`
-  - Bind to an orderbook: `let ob = IOrderBookV5Instance::new(orderbook_addr, provider.clone());`
+  - Bind to a raindex: `let ob = IRaindexV5Instance::new(raindex_addr, provider.clone());`
   - Call a view: `let quote = ob.quote2(config).await?;`
 
 - Building calldata without an instance:
-  - `use rain_orderbook_bindings::IOrderBookV5::removeOrder3Call;`
+  - `use raindex_bindings::IRaindexV5::removeOrder3Call;`
   - Construct the struct and encode: `let bytes = removeOrder3Call { order, tasks }.abi_encode();`
 
 Limitations and Notes

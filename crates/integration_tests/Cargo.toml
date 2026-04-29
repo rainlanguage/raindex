@@ -1,5 +1,5 @@
 [package]
-name = "rain_orderbook_integration_tests"
+name = "raindex_integration_tests"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,9 +10,9 @@ publish = false
 
 [dev-dependencies]
 tokio = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_test_fixtures = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_test_fixtures = { workspace = true }
 alloy = { workspace = true, features = ["full", "node-bindings"] }
-rain_orderbook_common = { workspace = true }
+raindex_common = { workspace = true }
 serde_json = { workspace = true }
 rain-math-float.workspace = true

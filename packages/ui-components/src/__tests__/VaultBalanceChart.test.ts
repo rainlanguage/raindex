@@ -4,7 +4,7 @@ import { test } from 'vitest';
 // import { expect, test, vi } from 'vitest';
 // import { QueryClient } from '@tanstack/svelte-query';
 // import VaultBalanceChart from '../lib/components/charts/VaultBalanceChart.svelte';
-// import type { RaindexVault } from '@rainlanguage/orderbook';
+// import type { RaindexVault } from '@rainlanguage/raindex';
 // import { writable } from 'svelte/store';
 // import type { ComponentProps } from 'svelte';
 

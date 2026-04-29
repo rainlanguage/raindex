@@ -1,5 +1,5 @@
 use crate::local_db::pipeline::SyncPhase;
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
@@ -23,8 +23,8 @@ impl_wasm_traits!(SchedulerState);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct OrderbookSyncStatus {
-    pub ob_id: OrderbookIdentifier,
+pub struct RaindexSyncStatus {
+    pub raindex_id: RaindexIdentifier,
     pub status: LocalDbStatus,
     pub scheduler_state: SchedulerState,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -32,18 +32,18 @@ pub struct OrderbookSyncStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
-impl_wasm_traits!(OrderbookSyncStatus);
+impl_wasm_traits!(RaindexSyncStatus);
 
-impl OrderbookSyncStatus {
+impl RaindexSyncStatus {
     pub fn new(
-        ob_id: OrderbookIdentifier,
+        raindex_id: RaindexIdentifier,
         status: LocalDbStatus,
         scheduler_state: SchedulerState,
         phase_message: Option<String>,
         error: Option<String>,
     ) -> Self {
         Self {
-            ob_id,
+            raindex_id,
             status,
             scheduler_state,
             phase_message,
@@ -51,9 +51,9 @@ impl OrderbookSyncStatus {
         }
     }
 
-    pub fn syncing(ob_id: OrderbookIdentifier, phase: SyncPhase) -> Self {
+    pub fn syncing(raindex_id: RaindexIdentifier, phase: SyncPhase) -> Self {
         Self::new(
-            ob_id,
+            raindex_id,
             LocalDbStatus::Syncing,
             SchedulerState::Leader,
             Some(phase.to_message().to_string()),
@@ -61,13 +61,19 @@ impl OrderbookSyncStatus {
         )
     }
 
-    pub fn active(ob_id: OrderbookIdentifier, scheduler_state: SchedulerState) -> Self {
-        Self::new(ob_id, LocalDbStatus::Active, scheduler_state, None, None)
+    pub fn active(raindex_id: RaindexIdentifier, scheduler_state: SchedulerState) -> Self {
+        Self::new(
+            raindex_id,
+            LocalDbStatus::Active,
+            scheduler_state,
+            None,
+            None,
+        )
     }
 
-    pub fn failure(ob_id: OrderbookIdentifier, error: String) -> Self {
+    pub fn failure(raindex_id: RaindexIdentifier, error: String) -> Self {
         Self::new(
-            ob_id,
+            raindex_id,
             LocalDbStatus::Failure,
             SchedulerState::Leader,
             None,
@@ -157,30 +163,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn orderbook_sync_status_serializes_with_camel_case() {
+    fn raindex_sync_status_serializes_with_camel_case() {
         use crate::local_db::pipeline::SyncPhase;
         use alloy::primitives::address;
 
-        let ob_id = crate::local_db::OrderbookIdentifier::new(
+        let raindex_id = crate::local_db::RaindexIdentifier::new(
             42161,
             address!("0000000000000000000000000000000000001234"),
         );
-        let status = OrderbookSyncStatus::syncing(ob_id, SyncPhase::FetchingLatestBlock);
+        let status = RaindexSyncStatus::syncing(raindex_id, SyncPhase::FetchingLatestBlock);
         let json = serde_json::to_string(&status).unwrap();
 
         assert!(
-            json.contains("\"obId\":{"),
-            "expected obId as nested object in JSON: {}",
+            json.contains("\"raindexId\":{"),
+            "expected raindexId as nested object in JSON: {}",
             json
         );
         assert!(
             json.contains("\"chainId\":42161"),
-            "expected chainId in obId in JSON: {}",
+            "expected chainId in raindexId in JSON: {}",
             json
         );
         assert!(
-            json.contains("\"orderbookAddress\":"),
-            "expected orderbookAddress in obId in JSON: {}",
+            json.contains("\"raindexAddress\":"),
+            "expected raindexAddress in raindexId in JSON: {}",
             json
         );
         assert!(
@@ -199,8 +205,8 @@ mod tests {
             json
         );
         assert!(
-            !json.contains("orderbook_address"),
-            "should not have snake_case orderbook_address: {}",
+            !json.contains("raindex_address"),
+            "should not have snake_case raindex_address: {}",
             json
         );
     }
@@ -301,17 +307,17 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_deserializes_from_json() {
+    fn raindex_sync_status_deserializes_from_json() {
         let json = r#"{
-            "obId": {"chainId": 137, "orderbookAddress": "0x0000000000000000000000000000000000001234"},
+            "raindexId": {"chainId": 137, "raindexAddress": "0x0000000000000000000000000000000000001234"},
             "status": "syncing",
             "schedulerState": "leader",
             "phaseMessage": "Fetching latest block"
         }"#;
 
-        let status: OrderbookSyncStatus = serde_json::from_str(json).unwrap();
+        let status: RaindexSyncStatus = serde_json::from_str(json).unwrap();
 
-        assert_eq!(status.ob_id.chain_id, 137);
+        assert_eq!(status.raindex_id.chain_id, 137);
         assert_eq!(status.status, LocalDbStatus::Syncing);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert_eq!(

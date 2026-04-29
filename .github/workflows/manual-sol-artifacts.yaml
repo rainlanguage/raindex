@@ -52,7 +52,7 @@ jobs:
         env:
           DEPLOYMENT_SUITE: ${{ inputs.suite }}
           DEPLOY_BROADCAST: "1"
-          DEPLOYMENT_KEY: ${{ github.ref == 'refs/heads/main' && secrets.PRIVATE_KEY || secrets.PRIVATE_KEY_DEV }}
+          DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
           ETH_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
 
           CI_DEPLOY_ARBITRUM_RPC_URL: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL || vars.CI_DEPLOY_ARBITRUM_RPC_URL || '' }}

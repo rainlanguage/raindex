@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        task: [ob-rs-test, rainix-rs-artifacts]
+        task: [raindex-rs-test, rainix-rs-artifacts]
         is-not-main:
           - ${{ github.ref != 'refs/heads/main' }}
         include:

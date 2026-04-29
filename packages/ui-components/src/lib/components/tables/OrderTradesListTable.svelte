@@ -7,7 +7,7 @@
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { BugOutline } from 'flowbite-svelte-icons';
-	import type { RaindexOrder, RaindexTrade } from '@rainlanguage/orderbook';
+	import type { RaindexOrder, RaindexTrade } from '@rainlanguage/raindex';
 	import TableTimeFilters from '../charts/TableTimeFilters.svelte';
 	import Tooltip from '../Tooltip.svelte';
 

@@ -2,7 +2,7 @@
 // import { test, vi } from 'vitest';
 import { test } from 'vitest';
 // import { expect } from '$lib/test/matchers';
-// import type { OrderPerformance, RaindexOrder } from '@rainlanguage/orderbook';
+// import type { OrderPerformance, RaindexOrder } from '@rainlanguage/raindex';
 // import { QueryClient } from '@tanstack/svelte-query';
 // import OrderApy from '../lib/components/tables/OrderAPY.svelte';
 // import { bigintStringToPercentage } from '../lib/utils/number';
@@ -10,7 +10,7 @@ import { test } from 'vitest';
 // const mockOrderApy: OrderPerformance = {
 // 	orderId: '1',
 // 	orderHash: '1',
-// 	orderbook: '1',
+// 	raindex: '1',
 // 	denominatedPerformance: {
 // 		apy: '1200000000000000000',
 // 		apyIsNeg: true,

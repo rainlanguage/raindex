@@ -39,7 +39,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -76,7 +76,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -86,7 +86,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
       }
     }
     timestamp
-    orderbook {
+    raindex {
       id
     }
   }

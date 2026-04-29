@@ -3,11 +3,11 @@ schema:
   file: ./schema.graphql
 dataSources:
   - kind: ethereum/contract
-    name: OrderBook
+    name: Raindex
     network: sepolia
     source:
       address: "0x7242ce1ffe34297921c54cD7f9343c411E1E7759"
-      abi: OrderBook
+      abi: Raindex
       startBlock: 0
     mapping:
       kind: ethereum/events
@@ -18,8 +18,8 @@ dataSources:
         - Withdrawal
         - Transaction
       abis:
-        - name: OrderBook
-          file: ../out/OrderBookV6.sol/OrderBookV6.json
+        - name: Raindex
+          file: ../out/RaindexV6.sol/RaindexV6.json
         - name: ERC20
           file: ../out/ERC20.sol/ERC20.json
         - name: DecimalFloat

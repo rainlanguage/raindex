@@ -1,6 +1,6 @@
 use crate::{csv::TryIntoCsv, utils::timestamp::format_bigint_timestamp_display};
 use rain_math_float::Float;
-use rain_orderbook_subgraph_client::types::common::*;
+use raindex_subgraph_client::types::common::*;
 use serde::{Deserialize, Serialize};
 
 use super::FlattenError;
@@ -59,11 +59,11 @@ impl TryIntoCsv<OrderTakeFlattened> for Vec<OrderTakeFlattened> {}
 mod tests {
     use super::*;
     use rain_math_float::FloatError;
-    use rain_orderbook_subgraph_client::types::common::{
-        SgBigInt, SgBytes, SgErc20, SgOrderbook, SgTrade, SgTradeEvent, SgTradeStructPartialOrder,
+    use raindex_subgraph_client::types::common::{
+        SgBigInt, SgBytes, SgErc20, SgRaindex, SgTrade, SgTradeEvent, SgTradeStructPartialOrder,
         SgTradeVaultBalanceChange, SgTransaction, SgVaultBalanceChangeVault,
     };
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_subgraph_client::utils::float::*;
 
     // Helper to build a default, valid SgTrade instance
     fn mock_sg_trade_default() -> SgTrade {
@@ -107,8 +107,8 @@ mod tests {
                     block_number: SgBigInt("1000".to_string()),
                     timestamp: SgBigInt("1678886400".to_string()),
                 },
-                orderbook: SgOrderbook {
-                    id: SgBytes("orderbookVBCIn001".to_string()),
+                raindex: SgRaindex {
+                    id: SgBytes("raindexVBCIn001".to_string()),
                 },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
@@ -140,8 +140,8 @@ mod tests {
                     block_number: SgBigInt("1000".to_string()),
                     timestamp: SgBigInt("1678886400".to_string()),
                 },
-                orderbook: SgOrderbook {
-                    id: SgBytes("orderbookVBCOut001".to_string()),
+                raindex: SgRaindex {
+                    id: SgBytes("raindexVBCOut001".to_string()),
                 },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
@@ -149,8 +149,8 @@ mod tests {
                     },
                 },
             },
-            orderbook: SgOrderbook {
-                id: SgBytes("mainOrderbook001".to_string()),
+            raindex: SgRaindex {
+                id: SgBytes("mainRaindex001".to_string()),
             },
         }
     }

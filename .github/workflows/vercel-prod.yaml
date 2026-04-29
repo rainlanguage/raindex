@@ -54,7 +54,7 @@ jobs:
 
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
-          working-directory: packages/orderbook
+          working-directory: packages/raindex
 
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:

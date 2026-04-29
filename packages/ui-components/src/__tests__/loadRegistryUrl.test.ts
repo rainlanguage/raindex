@@ -3,10 +3,10 @@ import type { Mock } from 'vitest';
 import { loadRegistryUrl } from '../lib/services/loadRegistryUrl';
 import { RegistryManager } from '../lib/providers/registry/RegistryManager';
 import { initialRegistry } from '../__fixtures__/RegistryManager';
-import { DotrainRegistry } from '@rainlanguage/orderbook';
+import { DotrainRegistry } from '@rainlanguage/raindex';
 
 // Mock dependencies
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	DotrainRegistry: {
 		validate: vi.fn()
 	}

@@ -34,7 +34,7 @@ describe("Vault balance changes", () => {
 
     let owner = "0x0987654321098765432109876543210987654321";
 
-    let orderbook =
+    let raindex =
       "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
 
     let vaultId =
@@ -43,7 +43,7 @@ describe("Vault balance changes", () => {
     let token = "0x1234567890123456789012345678901234567890";
 
     handleVaultBalanceChange(
-      Bytes.fromHexString(orderbook),
+      Bytes.fromHexString(raindex),
       Bytes.fromHexString(vaultId),
       Bytes.fromHexString(token),
       FLOAT_100,
@@ -51,7 +51,7 @@ describe("Vault balance changes", () => {
     );
 
     let vaultEId = vaultEntityId(
-      Bytes.fromHexString(orderbook),
+      Bytes.fromHexString(raindex),
       Bytes.fromHexString(owner),
       Bytes.fromHexString(vaultId),
       Bytes.fromHexString(token)

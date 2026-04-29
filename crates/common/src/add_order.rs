@@ -32,17 +32,15 @@ use rain_metadata::{
     ContentLanguage, ContentType, Error as RainMetaError, KnownMagic, RainMetaDocumentV1Item,
 };
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
-use rain_orderbook_app_settings::deployment::DeploymentCfg;
-use rain_orderbook_bindings::IRaindexV6::{
-    addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2,
-};
+use raindex_app_settings::deployment::DeploymentCfg;
+use raindex_bindings::IRaindexV6::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::collections::HashMap;
 use thiserror::Error;
 
-pub static ORDERBOOK_ORDER_ENTRYPOINTS: [&str; 2] = ["calculate-io", "handle-io"];
-pub static ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS: [&str; 1] = ["handle-add-order"];
+pub static RAINDEX_ORDER_ENTRYPOINTS: [&str; 2] = ["calculate-io", "handle-io"];
+pub static RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS: [&str; 1] = ["handle-add-order"];
 
 #[derive(Error, Debug)]
 pub enum AddOrderArgsError {
@@ -258,7 +256,7 @@ impl AddOrderArgs {
         let res = compose_to_rainlang(
             self.dotrain.clone(),
             self.bindings.clone(),
-            &ORDERBOOK_ORDER_ENTRYPOINTS,
+            &RAINDEX_ORDER_ENTRYPOINTS,
         )?;
         Ok(res)
     }
@@ -268,7 +266,7 @@ impl AddOrderArgs {
         let res = compose_to_rainlang(
             self.dotrain.clone(),
             self.bindings.clone(),
-            &ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS,
+            &RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS,
         )?;
         Ok(res)
     }
@@ -360,10 +358,8 @@ impl AddOrderArgs {
         transaction_args: TransactionArgs,
     ) -> Result<WriteContractParameters<addOrder4Call>, AddOrderArgsError> {
         let add_order_call = self.try_into_call(transaction_args.clone().rpcs).await?;
-        let params = transaction_args.try_into_write_contract_parameters(
-            add_order_call,
-            transaction_args.orderbook_address,
-        )?;
+        let params = transaction_args
+            .try_into_write_contract_parameters(add_order_call, transaction_args.raindex_address)?;
         Ok(params)
     }
 
@@ -437,7 +433,7 @@ impl AddOrderArgs {
                     match forker
                         .alloy_call_committing(
                             Address::from(from_address),
-                            transaction_args.orderbook_address,
+                            transaction_args.raindex_address,
                             call,
                             U256::ZERO,
                             true,
@@ -472,7 +468,7 @@ mod tests {
     use rain_metadata::{
         types::dotrain::source_v1::DotrainSourceV1, Error as RainMetaError, KnownMagic,
     };
-    use rain_orderbook_app_settings::{
+    use raindex_app_settings::{
         network::NetworkCfg,
         order::{OrderCfg, OrderIOCfg},
         rainlang::RainlangCfg,
@@ -481,7 +477,7 @@ mod tests {
         token::TokenCfg,
         yaml::{default_document, default_documents},
     };
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_test_fixtures::LocalEvm;
     use std::{
         collections::BTreeMap,
         str::FromStr,
@@ -748,7 +744,7 @@ price: 2e18;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -872,7 +868,7 @@ _ _: 0 0;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -1039,7 +1035,7 @@ _ _: 0 0;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -1120,7 +1116,7 @@ _ _: 0 key1;
     async fn test_simulate_execute_ok() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
 
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
         let token1_holder = local_evm.signer_wallets[0].default_signer().address();
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
@@ -1151,9 +1147,9 @@ tokens:
         decimals: 18
         label: Token1
         symbol: token1
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -1180,7 +1176,7 @@ _ _: 16 52;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -1197,7 +1193,7 @@ _ _: 16 52;
             .unwrap()
             .simulate_execute(
                 TransactionArgs {
-                    orderbook_address: *orderbook.address(),
+                    raindex_address: *raindex.address(),
                     rpcs: vec![local_evm.url()],
                     ..Default::default()
                 },
@@ -1211,7 +1207,7 @@ _ _: 16 52;
     async fn test_simulate_execute_err() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
 
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
         let token1_holder = local_evm.signer_wallets[0].default_signer().address();
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
@@ -1242,9 +1238,9 @@ tokens:
         decimals: 18
         label: Token1
         symbol: token1
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -1271,7 +1267,7 @@ _ _: 16 52;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -1289,7 +1285,7 @@ _ _: 16 52;
             .simulate_execute(
                 TransactionArgs {
                     // send the tx to random address
-                    orderbook_address: Address::random(),
+                    raindex_address: Address::random(),
                     rpcs: vec![local_evm.url()],
                     ..Default::default()
                 },
@@ -1384,7 +1380,7 @@ _ _: 16 52;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         DeploymentCfg {
@@ -1726,7 +1722,7 @@ _ _: 0 0;
         let res = add_order_args
             .get_add_order_call_parameters(TransactionArgs {
                 rpcs: vec![local_evm.url().to_string()],
-                orderbook_address: *local_evm.orderbook.address(),
+                raindex_address: *local_evm.raindex.address(),
                 max_priority_fee_per_gas: Some(100),
                 max_fee_per_gas: Some(200),
                 ..Default::default()
@@ -1745,7 +1741,7 @@ _ _: 0 0;
         );
         assert_eq!(res.call.config.meta, add_order_call.config.meta);
         assert_eq!(res.call.tasks, add_order_call.tasks);
-        assert_eq!(res.address, *local_evm.orderbook.address());
+        assert_eq!(res.address, *local_evm.raindex.address());
         assert_eq!(res.max_priority_fee_per_gas, Some(100));
         assert_eq!(res.max_fee_per_gas, Some(200));
     }

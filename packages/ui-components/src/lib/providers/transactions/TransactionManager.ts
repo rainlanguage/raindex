@@ -21,7 +21,7 @@ import {
 	type Address,
 	Float,
 	type WasmEncodedResult
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 
 /**
  * Function type for adding toast notifications to the UI.
@@ -126,7 +126,7 @@ export class TransactionManager {
 	}
 
 	/**
-	 * Creates and initializes a new transaction for removing an order from the orderbook.
+	 * Creates and initializes a new transaction for removing an order from the raindex.
 	 * @param args - Configuration for the remove order transaction.
 	 * @param args.txHash - Hash of the transaction to track.
 	 * @param args.chainId - Chain ID where the transaction is being executed.
@@ -149,7 +149,7 @@ export class TransactionManager {
 		const successMessage = 'Order removed successfully.';
 		const {
 			chainId,
-			entity: { orderbook },
+			entity: { raindex },
 			queryKey,
 			txHash,
 			raindexClient
@@ -164,7 +164,7 @@ export class TransactionManager {
 		];
 
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getRemoveOrdersForTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getRemoveOrdersForTransaction(chainId, raindex, txHash),
 			isSuccess: (orders) => Array.isArray(orders) && orders.length > 0
 		});
 
@@ -203,7 +203,7 @@ export class TransactionManager {
 		const successMessage = 'Withdrawal successful.';
 		const {
 			chainId,
-			entity: { orderbook },
+			entity: { raindex },
 			queryKey,
 			txHash,
 			raindexClient
@@ -212,7 +212,7 @@ export class TransactionManager {
 		const explorerLink = await getExplorerLink(txHash, chainId, 'tx');
 		const toastLinks: ToastLink[] = [
 			{
-				link: `/vaults/${chainId}-${orderbook}-${queryKey}`,
+				link: `/vaults/${chainId}-${raindex}-${queryKey}`,
 				label: 'View vault'
 			},
 			{
@@ -222,7 +222,7 @@ export class TransactionManager {
 		];
 
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getTransaction(chainId, raindex, txHash),
 			isSuccess: (tx) => !!tx
 		});
 
@@ -240,12 +240,12 @@ export class TransactionManager {
 	/**
 	 * Creates a multicall withdrawal transaction.
 	 *
-	 * Precondition: all provided vaults must share the same Raindex orderbook.
+	 * Precondition: all provided vaults must share the same raindex.
 	 * This is enforced upstream in handleVaultsWithdrawAll.ts:
-	 *   if (vaults.some(v => v.orderbook !== vaults[0].orderbook)) { … }
+	 *   if (vaults.some(v => v.raindex !== vaults[0].raindex)) { … }
 	 *
 	 * @param args.chainId the target chain ID
-	 * @param args.vaults list of RaindexVault instances (must share an orderbook)
+	 * @param args.vaults list of RaindexVault instances (must share a raindex)
 	 * @param args.txHash the transaction hash to wrap
 	 * @param args.queryKey cache key for invalidation
 	 * @param args.raindexClient Raindex API client	 * @example
@@ -268,9 +268,9 @@ export class TransactionManager {
 		if (vaults.length === 0) {
 			throw new Error('At least one vault is required for withdrawal');
 		}
-		// All vaults must share the same orderbook for multicall transactions
+		// All vaults must share the same raindex for multicall transactions
 		// It should be validated before calling this method
-		const orderbook = vaults[0].orderbook;
+		const raindex = vaults[0].raindex;
 		const explorerLink = await getExplorerLink(txHash, chainId, 'tx');
 		const toastLinks: ToastLink[] = [
 			{
@@ -284,7 +284,7 @@ export class TransactionManager {
 		];
 
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getTransaction(chainId, raindex, txHash),
 			isSuccess: (tx) => !!tx
 		});
 
@@ -336,7 +336,7 @@ export class TransactionManager {
 		if (entity) {
 			toastLinks = [
 				{
-					link: `/vaults/${chainId}-${entity.orderbook}-${queryKey}`,
+					link: `/vaults/${chainId}-${entity.raindex}-${queryKey}`,
 					label: 'View vault'
 				},
 				...toastLinks
@@ -412,7 +412,7 @@ export class TransactionManager {
 		const successMessage = 'Deposit successful.';
 		const {
 			chainId,
-			entity: { orderbook },
+			entity: { raindex },
 			txHash,
 			queryKey,
 			raindexClient
@@ -421,7 +421,7 @@ export class TransactionManager {
 		const explorerLink = await getExplorerLink(txHash, chainId, 'tx');
 		const toastLinks: ToastLink[] = [
 			{
-				link: `/vaults/${chainId}-${orderbook}-${queryKey}`,
+				link: `/vaults/${chainId}-${raindex}-${queryKey}`,
 				label: 'View vault'
 			},
 			{
@@ -431,7 +431,7 @@ export class TransactionManager {
 		];
 
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getTransaction(chainId, raindex, txHash),
 			isSuccess: (tx) => !!tx
 		});
 
@@ -462,9 +462,9 @@ export class TransactionManager {
 	 */
 
 	public async createAddOrderTransaction(
-		args: InternalTransactionArgs & { orderbook: Address; raindexClient: RaindexClient }
+		args: InternalTransactionArgs & { raindex: Address; raindexClient: RaindexClient }
 	): Promise<Transaction> {
-		const { queryKey, txHash, chainId, orderbook, raindexClient } = args;
+		const { queryKey, txHash, chainId, raindex, raindexClient } = args;
 		const name = 'Deploying order';
 		const errorMessage = 'Deployment failed.';
 		const successMessage = 'Order deployed successfully.';
@@ -480,7 +480,7 @@ export class TransactionManager {
 		// SDK-based indexing - the SDK's getAddOrdersForTransaction handles
 		// local-DB-first polling followed by subgraph fallback internally
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getAddOrdersForTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getAddOrdersForTransaction(chainId, raindex, txHash),
 			isSuccess: (orders) => Array.isArray(orders) && orders.length > 0,
 			buildLinks: (orders) => {
 				if (!Array.isArray(orders) || orders.length === 0) return [];
@@ -488,7 +488,7 @@ export class TransactionManager {
 				if (!firstOrder?.orderHash) return [];
 				return [
 					{
-						link: `/orders/${chainId}-${orderbook}-${firstOrder.orderHash}`,
+						link: `/orders/${chainId}-${raindex}-${firstOrder.orderHash}`,
 						label: 'View order'
 					}
 				];
@@ -531,7 +531,7 @@ export class TransactionManager {
 		const successMessage = 'Order taken successfully.';
 		const {
 			chainId,
-			entity: { orderbook },
+			entity: { raindex },
 			queryKey,
 			txHash,
 			raindexClient
@@ -545,7 +545,7 @@ export class TransactionManager {
 			}
 		];
 		const awaitIndexingFn = createSdkIndexingFn({
-			call: () => raindexClient.getTransaction(chainId, orderbook, txHash),
+			call: () => raindexClient.getTransaction(chainId, raindex, txHash),
 			isSuccess: (tx) => !!tx
 		});
 

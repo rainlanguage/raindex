@@ -22,7 +22,7 @@ use crate::local_db::{
         EventsPipeline, StatusBus, TokensPipeline, WindowPipeline,
     },
     query::LocalDbQueryExecutor,
-    LocalDbError, OrderbookIdentifier,
+    LocalDbError, RaindexIdentifier,
 };
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
 #[cfg(target_family = "wasm")]
@@ -34,7 +34,7 @@ use config::NetworkRunnerConfig;
 use environment::default_environment;
 use futures::future::join_all;
 use leadership::{DefaultLeadership, Leadership, LeadershipGuard};
-use rain_orderbook_app_settings::remote::manifest::ManifestMap;
+use raindex_app_settings::remote::manifest::ManifestMap;
 
 pub struct ClientRunner<B, W, E, T, A, S, L> {
     network_key: Option<String>,
@@ -65,7 +65,7 @@ where
         leadership: L,
     ) -> Result<Self, LocalDbError> {
         let settings = parse_runner_settings(&settings_yaml)?;
-        let base_targets = build_runner_targets(&settings.orderbooks, &settings.syncs)?;
+        let base_targets = build_runner_targets(&settings.raindexes, &settings.syncs)?;
 
         Ok(Self {
             network_key: None,
@@ -124,7 +124,7 @@ where
         if !self.manifests_loaded {
             self.manifest_map = match self
                 .environment
-                .fetch_manifests(&self.settings.orderbooks)
+                .fetch_manifests(&self.settings.raindexes)
                 .await
             {
                 Ok(map) => map,
@@ -132,8 +132,8 @@ where
                     return Ok(RunOutcome::Report(RunReport {
                         successes: Vec::new(),
                         failures: vec![TargetFailure {
-                            ob_id: OrderbookIdentifier::new(0, Address::ZERO),
-                            orderbook_key: None,
+                            raindex_id: RaindexIdentifier::new(0, Address::ZERO),
+                            raindex_key: None,
                             stage: TargetStage::ManifestFetch,
                             error,
                         }],
@@ -190,8 +190,8 @@ where
                             Ok(target)
                         }
                         Err(error) => Err(TargetFailure {
-                            ob_id: target.inputs.ob_id.clone(),
-                            orderbook_key: Some(target.orderbook_key.clone()),
+                            raindex_id: target.inputs.raindex_id.clone(),
+                            raindex_key: Some(target.raindex_key.clone()),
                             stage: TargetStage::DumpDownload,
                             error,
                         }),
@@ -230,13 +230,13 @@ where
         let futures = targets.into_iter().map(move |target| {
             let environment = environment.clone();
             async move {
-                let ob_id = target.inputs.ob_id.clone();
+                let raindex_id = target.inputs.raindex_id.clone();
                 let engine = match environment.build_engine(&target) {
                     Ok(engine) => engine.into_engine(),
                     Err(error) => {
                         return Err(TargetFailure {
-                            ob_id,
-                            orderbook_key: Some(target.orderbook_key.clone()),
+                            raindex_id,
+                            raindex_key: Some(target.raindex_key.clone()),
                             stage: TargetStage::EngineBuild,
                             error,
                         })
@@ -246,8 +246,8 @@ where
                 match engine.run(db, &target.inputs).await {
                     Ok(outcome) => Ok(TargetSuccess { outcome }),
                     Err(error) => Err(TargetFailure {
-                        ob_id,
-                        orderbook_key: Some(target.orderbook_key.clone()),
+                        raindex_id,
+                        raindex_key: Some(target.raindex_key.clone()),
                         stage: TargetStage::EngineRun,
                         error,
                     }),
@@ -331,16 +331,16 @@ mod tests {
     use crate::local_db::query::fetch_tables::{fetch_tables_stmt, TableResponse};
     use crate::local_db::query::fetch_target_watermark::fetch_target_watermark_stmt;
     use crate::local_db::query::{FromDbJson, LocalDbQueryError, SqlStatement, SqlStatementBatch};
-    use crate::local_db::{LocalDbError, OrderbookIdentifier};
+    use crate::local_db::{LocalDbError, RaindexIdentifier};
     use crate::rpc_client::LogEntryResponse;
     use alloy::primitives::{address, b256, Address, Bytes, B256};
     use async_trait::async_trait;
-    use rain_orderbook_app_settings::local_db_manifest::{
-        LocalDbManifest, ManifestNetwork, ManifestOrderbook, DB_SCHEMA_VERSION, MANIFEST_VERSION,
+    use raindex_app_settings::local_db_manifest::{
+        LocalDbManifest, ManifestNetwork, ManifestRaindex, DB_SCHEMA_VERSION, MANIFEST_VERSION,
     };
-    use rain_orderbook_app_settings::orderbook::OrderbookCfg;
-    use rain_orderbook_app_settings::remote::manifest::ManifestMap;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::raindex::RaindexCfg;
+    use raindex_app_settings::remote::manifest::ManifestMap;
+    use raindex_app_settings::spec_version::SpecVersion;
     use serde::Serialize;
     use serde_json::{json, Value};
     use std::collections::{HashMap, VecDeque};
@@ -351,11 +351,11 @@ mod tests {
 
     const CHAIN_ID: u32 = 42161;
     const NETWORK_KEY: &str = "anvil";
-    const ORDERBOOK_KEY_A: &str = "ob-a";
-    const ORDERBOOK_KEY_B: &str = "ob-b";
+    const RAINDEX_KEY_A: &str = "raindex-a";
+    const RAINDEX_KEY_B: &str = "raindex-b";
 
-    const ORDERBOOK_A: Address = address!("00000000000000000000000000000000000000a1");
-    const ORDERBOOK_B: Address = address!("00000000000000000000000000000000000000b2");
+    const RAINDEX_A: Address = address!("00000000000000000000000000000000000000a1");
+    const RAINDEX_B: Address = address!("00000000000000000000000000000000000000b2");
 
     #[derive(Clone, Default)]
     struct AlwaysLeadership;
@@ -440,7 +440,7 @@ mod tests {
 
     #[derive(Clone, Debug)]
     struct BootstrapRecord {
-        orderbook_key: String,
+        raindex_key: String,
         dump_sql: Option<String>,
         latest_block: u64,
     }
@@ -473,11 +473,11 @@ mod tests {
             self.dump_requests.lock().unwrap().clone()
         }
 
-        fn record_engine_run(&self, orderbook_key: &str) {
+        fn record_engine_run(&self, raindex_key: &str) {
             self.engine_runs
                 .lock()
                 .unwrap()
-                .push(orderbook_key.to_string());
+                .push(raindex_key.to_string());
         }
 
         fn engine_runs(&self) -> Vec<String> {
@@ -486,7 +486,7 @@ mod tests {
 
         fn record_bootstrap(
             &self,
-            orderbook_key: String,
+            raindex_key: String,
             dump_sql: Option<String>,
             latest_block: u64,
         ) {
@@ -494,7 +494,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push(BootstrapRecord {
-                    orderbook_key,
+                    raindex_key,
                     dump_sql,
                     latest_block,
                 });
@@ -504,11 +504,11 @@ mod tests {
             self.bootstrap_records.lock().unwrap().clone()
         }
 
-        fn record_status(&self, orderbook_key: &str, message: &str) {
+        fn record_status(&self, raindex_key: &str, message: &str) {
             self.status_messages
                 .lock()
                 .unwrap()
-                .push((orderbook_key.to_string(), message.to_string()));
+                .push((raindex_key.to_string(), message.to_string()));
         }
 
         fn record_persist(&self) {
@@ -635,14 +635,14 @@ mod tests {
     #[derive(Clone)]
     struct StubBootstrap {
         telemetry: Telemetry,
-        orderbook_key: String,
+        raindex_key: String,
     }
 
     impl StubBootstrap {
-        fn new(telemetry: Telemetry, orderbook_key: String) -> Self {
+        fn new(telemetry: Telemetry, raindex_key: String) -> Self {
             Self {
                 telemetry,
-                orderbook_key,
+                raindex_key,
             }
         }
     }
@@ -663,7 +663,7 @@ mod tests {
         async fn inspect_state<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
         ) -> Result<BootstrapState, LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -685,10 +685,10 @@ mod tests {
             Ok(())
         }
 
-        async fn clear_orderbook_data<DB>(
+        async fn clear_raindex_data<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
         ) -> Result<(), LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -706,7 +706,7 @@ mod tests {
         {
             let dump_sql = config.dump_stmt.as_ref().map(dump_sql);
             self.telemetry.record_bootstrap(
-                self.orderbook_key.clone(),
+                self.raindex_key.clone(),
                 dump_sql,
                 config.latest_block,
             );
@@ -745,7 +745,7 @@ mod tests {
         async fn compute<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
             _cfg: &SyncConfig,
             _latest_block: u64,
         ) -> Result<(u64, u64), LocalDbError>
@@ -779,9 +779,9 @@ mod tests {
             ))
         }
 
-        async fn fetch_orderbook(
+        async fn fetch_raindex(
             &self,
-            _orderbook_address: Address,
+            _raindex_address: Address,
             _from_block: u64,
             _to_block: u64,
             _cfg: &FetchConfig,
@@ -815,7 +815,7 @@ mod tests {
         async fn load_existing<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
             _token_addrs_lower: &[Address],
         ) -> Result<
             Vec<crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow>,
@@ -839,15 +839,15 @@ mod tests {
     #[derive(Clone)]
     struct StubApply {
         telemetry: Telemetry,
-        orderbook_key: String,
+        raindex_key: String,
         fail: bool,
     }
 
     impl StubApply {
-        fn new(telemetry: Telemetry, orderbook_key: String, fail: bool) -> Self {
+        fn new(telemetry: Telemetry, raindex_key: String, fail: bool) -> Self {
             Self {
                 telemetry,
-                orderbook_key,
+                raindex_key,
                 fail,
             }
         }
@@ -865,10 +865,7 @@ mod tests {
         ) -> Result<SqlStatementBatch, LocalDbError> {
             let mut batch = SqlStatementBatch::new();
             batch.add(SqlStatement::new("BEGIN TRANSACTION"));
-            batch.add(SqlStatement::new(format!(
-                "-- apply {}",
-                self.orderbook_key
-            )));
+            batch.add(SqlStatement::new(format!("-- apply {}", self.raindex_key)));
             batch.add(SqlStatement::new("COMMIT"));
             Ok(batch)
         }
@@ -877,11 +874,11 @@ mod tests {
         where
             DB: LocalDbQueryExecutor + ?Sized,
         {
-            self.telemetry.record_engine_run(&self.orderbook_key);
+            self.telemetry.record_engine_run(&self.raindex_key);
             if self.fail {
                 return Err(LocalDbError::CustomError(format!(
                     "apply failed {}",
-                    self.orderbook_key
+                    self.raindex_key
                 )));
             }
             db.execute_batch(batch).await?;
@@ -893,14 +890,14 @@ mod tests {
     #[derive(Clone)]
     struct StubStatusBus {
         telemetry: Telemetry,
-        orderbook_key: String,
+        raindex_key: String,
     }
 
     impl StubStatusBus {
-        fn new(telemetry: Telemetry, orderbook_key: String) -> Self {
+        fn new(telemetry: Telemetry, raindex_key: String) -> Self {
             Self {
                 telemetry,
-                orderbook_key,
+                raindex_key,
             }
         }
     }
@@ -909,7 +906,7 @@ mod tests {
     impl StatusBus for StubStatusBus {
         async fn send(&self, phase: SyncPhase) -> Result<(), LocalDbError> {
             self.telemetry
-                .record_status(&self.orderbook_key, phase.to_message());
+                .record_status(&self.raindex_key, phase.to_message());
             Ok(())
         }
     }
@@ -952,19 +949,19 @@ mod tests {
     const END_HASH_B: &str = "0x000000000000000000000000000000000000000000000000000000000000beef";
 
     fn dump_url_a() -> Url {
-        Url::parse("https://dumps.example/ob-a.sql").unwrap()
+        Url::parse("https://dumps.example/raindex-a.sql").unwrap()
     }
 
     fn dump_url_b() -> Url {
-        Url::parse("https://dumps.example/ob-b.sql").unwrap()
+        Url::parse("https://dumps.example/raindex-b.sql").unwrap()
     }
 
     fn manifest_for_a() -> ManifestMap {
-        make_manifest(remote_url_a(), ORDERBOOK_A, dump_url_a(), 111, END_HASH_A)
+        make_manifest(remote_url_a(), RAINDEX_A, dump_url_a(), 111, END_HASH_A)
     }
 
     fn manifest_for_b() -> ManifestMap {
-        make_manifest(remote_url_b(), ORDERBOOK_B, dump_url_b(), 222, END_HASH_B)
+        make_manifest(remote_url_b(), RAINDEX_B, dump_url_b(), 222, END_HASH_B)
     }
 
     fn manifest_for_both() -> ManifestMap {
@@ -975,7 +972,7 @@ mod tests {
 
     fn make_manifest(
         remote: Url,
-        orderbook_address: Address,
+        raindex_address: Address,
         dump_url: Url,
         end_block: u64,
         end_hash: &str,
@@ -988,8 +985,8 @@ mod tests {
                 NETWORK_KEY.to_string(),
                 ManifestNetwork {
                     chain_id: CHAIN_ID,
-                    orderbooks: vec![ManifestOrderbook {
-                        address: orderbook_address,
+                    raindexes: vec![ManifestRaindex {
+                        address: raindex_address,
                         dump_url,
                         end_block,
                         end_block_hash: Bytes::copy_from_slice(end_block_hash.as_slice()),
@@ -1001,7 +998,7 @@ mod tests {
         HashMap::from([(remote, manifest)])
     }
 
-    fn two_orderbooks_settings_yaml() -> String {
+    fn two_raindexes_settings_yaml() -> String {
         format!(
             r#"
 version: {version}
@@ -1025,14 +1022,14 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
     local-db-remote: remote-a
     deployment-block: 123
-  ob-b:
+  raindex-b:
     address: 0x00000000000000000000000000000000000000b2
     network: anvil
     subgraph: anvil
@@ -1043,7 +1040,7 @@ orderbooks:
         )
     }
 
-    fn single_orderbook_settings_yaml() -> String {
+    fn single_raindex_settings_yaml() -> String {
         format!(
             r#"
 version: {version}
@@ -1066,8 +1063,8 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -1095,7 +1092,7 @@ orderbooks:
         };
         db.set_json_value(&fetch_db_metadata_stmt(), &[metadata_row]);
         db.set_json_raw(
-            &fetch_target_watermark_stmt(&OrderbookIdentifier::new(0, Address::ZERO)),
+            &fetch_target_watermark_stmt(&RaindexIdentifier::new(0, Address::ZERO)),
             json!([]),
         );
     }
@@ -1104,10 +1101,13 @@ orderbooks:
         prepare_db_baseline(db);
         for target in targets {
             db.set_json_raw(
-                &fetch_target_watermark_stmt(&target.inputs.ob_id),
+                &fetch_target_watermark_stmt(&target.inputs.raindex_id),
                 json!([]),
             );
-            db.set_json_raw(&fetch_store_addresses_stmt(&target.inputs.ob_id), json!([]));
+            db.set_json_raw(
+                &fetch_store_addresses_stmt(&target.inputs.raindex_id),
+                json!([]),
+            );
         }
     }
 
@@ -1118,17 +1118,17 @@ orderbooks:
         let behaviors = Arc::new(behaviors);
         Arc::new(move |target: &RunnerTarget| {
             let behavior = behaviors
-                .get(&target.orderbook_key)
+                .get(&target.raindex_key)
                 .copied()
                 .unwrap_or(EngineBehavior::Success);
             let telemetry = telemetry.clone();
             telemetry.record_builder_init();
             let fail_apply = behavior == EngineBehavior::ApplyFail;
-            let bootstrap = StubBootstrap::new(telemetry.clone(), target.orderbook_key.clone());
+            let bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
             let window = StubWindow::new(0, target.inputs.cfg.deployment_block);
             let events = StubEvents::new(target.inputs.cfg.deployment_block);
-            let apply = StubApply::new(telemetry.clone(), target.orderbook_key.clone(), fail_apply);
-            let status = StubStatusBus::new(telemetry.clone(), target.orderbook_key.clone());
+            let apply = StubApply::new(telemetry.clone(), target.raindex_key.clone(), fail_apply);
+            let status = StubStatusBus::new(telemetry.clone(), target.raindex_key.clone());
             Ok(EnginePipelines::new(
                 bootstrap, window, events, StubTokens, apply, status,
             ))
@@ -1147,7 +1147,7 @@ orderbooks:
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::clone(&manifest_arc);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1198,9 +1198,12 @@ orderbooks:
             .collect()
     }
 
-    fn expect_orderbooks(report: &RunReport, expected: &[Address]) {
+    fn expect_raindexes(report: &RunReport, expected: &[Address]) {
         let outcomes = extract_outcomes(report);
-        let mut addrs: Vec<Address> = outcomes.iter().map(|o| o.ob_id.orderbook_address).collect();
+        let mut addrs: Vec<Address> = outcomes
+            .iter()
+            .map(|o| o.raindex_id.raindex_address)
+            .collect();
         addrs.sort();
         let mut expected_sorted = expected.to_vec();
         expected_sorted.sort();
@@ -1229,7 +1232,7 @@ orderbooks:
 
     #[test]
     fn default_environment_builds_engine_for_target() {
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let runner = ClientRunner::new(settings).expect("runner builds with default env");
         assert_eq!(runner.base_targets.len(), 1);
 
@@ -1247,7 +1250,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         let db = RecordingDb::default();
@@ -1257,7 +1260,7 @@ orderbooks:
         let report = unwrap_report(outcome);
         let outcomes = extract_outcomes(&report);
         assert_eq!(outcomes.len(), 2);
-        expect_orderbooks(&report, &[ORDERBOOK_A, ORDERBOOK_B]);
+        expect_raindexes(&report, &[RAINDEX_A, RAINDEX_B]);
         assert!(runner.manifests_loaded);
         assert!(runner.has_provisioned_dumps);
         assert_eq!(telemetry.manifest_fetch_count(), 1);
@@ -1273,10 +1276,10 @@ orderbooks:
             .is_some_and(|sql| sql.starts_with("-- dump for "))));
         let latest_blocks: HashMap<String, u64> = records
             .iter()
-            .map(|record| (record.orderbook_key.clone(), record.latest_block))
+            .map(|record| (record.raindex_key.clone(), record.latest_block))
             .collect();
-        assert_eq!(latest_blocks.get(ORDERBOOK_KEY_A), Some(&111));
-        assert_eq!(latest_blocks.get(ORDERBOOK_KEY_B), Some(&222));
+        assert_eq!(latest_blocks.get(RAINDEX_KEY_A), Some(&111));
+        assert_eq!(latest_blocks.get(RAINDEX_KEY_B), Some(&222));
         assert_eq!(db.batch_calls().len(), 2);
     }
 
@@ -1285,7 +1288,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
 
@@ -1310,7 +1313,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let leadership = CountingLeadership::new();
         let mut runner =
             ClientRunner::with_environment(settings, environment, leadership.clone()).unwrap();
@@ -1335,7 +1338,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let leadership = SequenceLeadership::new(vec![LeadershipAction::Skip]);
         let mut runner = ClientRunner::with_environment(settings, environment, leadership).unwrap();
 
@@ -1356,7 +1359,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let leadership =
             SequenceLeadership::new(vec![LeadershipAction::Skip, LeadershipAction::Grant]);
         let mut runner = ClientRunner::with_environment(settings, environment, leadership).unwrap();
@@ -1385,7 +1388,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let leadership =
             SequenceLeadership::new(vec![LeadershipAction::Fail("no leadership".into())]);
         let mut runner = ClientRunner::with_environment(settings, environment, leadership).unwrap();
@@ -1406,12 +1409,12 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment = build_environment(
             manifest_for_a(),
-            HashMap::from([(ORDERBOOK_KEY_B.to_string(), EngineBehavior::Success)]),
+            HashMap::from([(RAINDEX_KEY_B.to_string(), EngineBehavior::Success)]),
             1,
             1,
             telemetry.clone(),
         );
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         let db = RecordingDb::default();
@@ -1427,8 +1430,8 @@ orderbooks:
         let records = telemetry.bootstrap_records();
         let record_a = records
             .iter()
-            .find(|r| r.orderbook_key == ORDERBOOK_KEY_A)
-            .expect("record for ob-a");
+            .find(|r| r.raindex_key == RAINDEX_KEY_A)
+            .expect("record for raindex-a");
         assert!(record_a
             .dump_sql
             .as_ref()
@@ -1437,8 +1440,8 @@ orderbooks:
 
         let record_b = records
             .iter()
-            .find(|r| r.orderbook_key == ORDERBOOK_KEY_B)
-            .expect("record for ob-b");
+            .find(|r| r.raindex_key == RAINDEX_KEY_B)
+            .expect("record for raindex-b");
         assert!(record_b.dump_sql.is_none());
         assert_eq!(record_b.latest_block, 0);
     }
@@ -1448,7 +1451,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(ManifestMap::new(), HashMap::new(), 1, 0, telemetry.clone());
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         runner.base_targets.clear();
@@ -1473,7 +1476,7 @@ orderbooks:
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::clone(&manifest_arc);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1497,7 +1500,7 @@ orderbooks:
         };
         let engine_builder = engine_builder_for_behaviors(telemetry.clone(), HashMap::new());
         let environment = RunnerEnvironment::new(manifest_fetcher, dump_downloader, engine_builder);
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
 
@@ -1523,7 +1526,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 Box::pin(async move {
                     telemetry.record_manifest_fetch();
@@ -1542,7 +1545,7 @@ orderbooks:
 
         let engine_builder = engine_builder_for_behaviors(telemetry.clone(), HashMap::new());
         let environment = RunnerEnvironment::new(manifest_fetcher, dump_downloader, engine_builder);
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
 
@@ -1575,7 +1578,7 @@ orderbooks:
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::clone(&manifest_arc);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1602,7 +1605,7 @@ orderbooks:
         let engine_builder = engine_builder_for_behaviors(telemetry.clone(), behaviors);
         let environment = RunnerEnvironment::new(manifest_fetcher, dump_downloader, engine_builder);
 
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         let db = RecordingDb::default();
@@ -1627,7 +1630,7 @@ orderbooks:
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::new(manifest);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1651,7 +1654,7 @@ orderbooks:
         let engine_builder = engine_builder_for_behaviors(telemetry.clone(), HashMap::new());
         let environment = RunnerEnvironment::new(manifest_fetcher, dump_downloader, engine_builder);
 
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         let db = RecordingDb::default();
@@ -1667,11 +1670,11 @@ orderbooks:
             .failures
             .iter()
             .any(|failure| failure.stage == TargetStage::DumpDownload
-                && failure.ob_id.orderbook_address == ORDERBOOK_A));
+                && failure.raindex_id.raindex_address == RAINDEX_A));
         assert!(report
             .successes
             .iter()
-            .any(|success| success.outcome.ob_id.orderbook_address == ORDERBOOK_B));
+            .any(|success| success.outcome.raindex_id.raindex_address == RAINDEX_B));
         assert!(!runner.has_provisioned_dumps);
     }
 
@@ -1679,14 +1682,14 @@ orderbooks:
     async fn engine_builder_error_is_propagated() {
         let telemetry = Telemetry::default();
         let manifest = manifest_for_both();
-        let settings = two_orderbooks_settings_yaml();
-        let behaviors = HashMap::from([(ORDERBOOK_KEY_B.to_string(), EngineBehavior::Success)]);
+        let settings = two_raindexes_settings_yaml();
+        let behaviors = HashMap::from([(RAINDEX_KEY_B.to_string(), EngineBehavior::Success)]);
 
         let manifest_arc = Arc::new(manifest);
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::clone(&manifest_arc);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1717,25 +1720,25 @@ orderbooks:
             let telemetry = telemetry.clone();
             let behaviors = Arc::new(behaviors);
             Arc::new(move |target: &RunnerTarget| {
-                if target.orderbook_key == ORDERBOOK_KEY_A {
+                if target.raindex_key == RAINDEX_KEY_A {
                     return Err(LocalDbError::CustomError("builder failed".into()));
                 }
                 let behaviors = Arc::clone(&behaviors);
                 let telemetry = telemetry.clone();
                 let behavior = behaviors
-                    .get(&target.orderbook_key)
+                    .get(&target.raindex_key)
                     .copied()
                     .unwrap_or(EngineBehavior::Success);
                 telemetry.record_builder_init();
-                let bootstrap = StubBootstrap::new(telemetry.clone(), target.orderbook_key.clone());
+                let bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
                 let window = StubWindow::new(0, target.inputs.cfg.deployment_block);
                 let events = StubEvents::new(target.inputs.cfg.deployment_block);
                 let apply = StubApply::new(
                     telemetry.clone(),
-                    target.orderbook_key.clone(),
+                    target.raindex_key.clone(),
                     behavior == EngineBehavior::ApplyFail,
                 );
-                let status = StubStatusBus::new(telemetry.clone(), target.orderbook_key.clone());
+                let status = StubStatusBus::new(telemetry.clone(), target.raindex_key.clone());
                 Ok(EnginePipelines::new(
                     bootstrap, window, events, StubTokens, apply, status,
                 ))
@@ -1760,7 +1763,7 @@ orderbooks:
         assert_eq!(telemetry.dump_requests().len(), 2);
         let engine_runs = telemetry.engine_runs();
         assert!(
-            engine_runs.iter().all(|key| key != ORDERBOOK_KEY_A),
+            engine_runs.iter().all(|key| key != RAINDEX_KEY_A),
             "engine should not run for target with builder failure"
         );
     }
@@ -1769,11 +1772,11 @@ orderbooks:
     async fn engine_run_failure_is_propagated() {
         let telemetry = Telemetry::default();
         let mut behaviors = HashMap::new();
-        behaviors.insert(ORDERBOOK_KEY_A.to_string(), EngineBehavior::ApplyFail);
-        behaviors.insert(ORDERBOOK_KEY_B.to_string(), EngineBehavior::Success);
+        behaviors.insert(RAINDEX_KEY_A.to_string(), EngineBehavior::ApplyFail);
+        behaviors.insert(RAINDEX_KEY_B.to_string(), EngineBehavior::Success);
         let environment =
             build_environment(manifest_for_both(), behaviors, 1, 2, telemetry.clone());
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
         let db = RecordingDb::default();
@@ -1793,20 +1796,20 @@ orderbooks:
         assert!(telemetry
             .engine_runs()
             .iter()
-            .any(|key| key == ORDERBOOK_KEY_A));
+            .any(|key| key == RAINDEX_KEY_A));
     }
 
     #[tokio::test]
     async fn engine_build_and_run_failures_are_both_reported() {
         let telemetry = Telemetry::default();
         let manifest = manifest_for_both();
-        let settings = two_orderbooks_settings_yaml();
+        let settings = two_raindexes_settings_yaml();
 
         let manifest_arc = Arc::new(manifest);
         let manifest_fetcher = {
             let telemetry = telemetry.clone();
             let manifest_arc = Arc::clone(&manifest_arc);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let telemetry = telemetry.clone();
                 let manifest_arc = Arc::clone(&manifest_arc);
                 Box::pin(async move {
@@ -1820,15 +1823,15 @@ orderbooks:
         let engine_builder: TestEngineBuilder = {
             let telemetry = telemetry.clone();
             Arc::new(move |target: &RunnerTarget| {
-                if target.orderbook_key == ORDERBOOK_KEY_A {
+                if target.raindex_key == RAINDEX_KEY_A {
                     return Err(LocalDbError::CustomError("build boom".into()));
                 }
                 telemetry.record_builder_init();
-                let bootstrap = StubBootstrap::new(telemetry.clone(), target.orderbook_key.clone());
+                let bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
                 let window = StubWindow::new(0, target.inputs.cfg.deployment_block);
                 let events = StubEvents::new(target.inputs.cfg.deployment_block);
-                let apply = StubApply::new(telemetry.clone(), target.orderbook_key.clone(), true); // force engine run failure
-                let status = StubStatusBus::new(telemetry.clone(), target.orderbook_key.clone());
+                let apply = StubApply::new(telemetry.clone(), target.raindex_key.clone(), true); // force engine run failure
+                let status = StubStatusBus::new(telemetry.clone(), target.raindex_key.clone());
                 Ok(EnginePipelines::new(
                     bootstrap, window, events, StubTokens, apply, status,
                 ))
@@ -1849,11 +1852,11 @@ orderbooks:
         assert!(report
             .failures
             .iter()
-            .any(|f| f.ob_id.orderbook_address == ORDERBOOK_A));
+            .any(|f| f.raindex_id.raindex_address == RAINDEX_A));
         assert!(report
             .failures
             .iter()
-            .any(|f| f.ob_id.orderbook_address == ORDERBOOK_B));
+            .any(|f| f.raindex_id.raindex_address == RAINDEX_B));
     }
 
     #[tokio::test]
@@ -1861,7 +1864,7 @@ orderbooks:
         let telemetry = Telemetry::default();
         let environment =
             build_environment(ManifestMap::new(), HashMap::new(), 1, 0, telemetry.clone());
-        let settings = single_orderbook_settings_yaml();
+        let settings = single_raindex_settings_yaml();
         let mut runner =
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
 
@@ -1878,7 +1881,7 @@ orderbooks:
         let records = telemetry.bootstrap_records();
         assert_eq!(records.len(), 1);
         let record = &records[0];
-        assert_eq!(record.orderbook_key, ORDERBOOK_KEY_A);
+        assert_eq!(record.raindex_key, RAINDEX_KEY_A);
         assert_eq!(record.dump_sql.as_deref(), Some("-- preloaded dump"));
         assert_eq!(record.latest_block, 0);
     }

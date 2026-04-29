@@ -1,5 +1,5 @@
 import type { Hex } from 'viem';
-import type { RaindexVault } from '@rainlanguage/orderbook';
+import type { RaindexVault } from '@rainlanguage/raindex';
 import type { ToastLink } from './toast';
 import type { TransactionStoreState } from '$lib/models/Transaction';
 

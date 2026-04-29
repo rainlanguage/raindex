@@ -4,11 +4,11 @@ import {
 	fetchRegistryDotrains,
 	validateOrders
 } from '../lib/services/registry';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { DotrainOrderGui } from '@rainlanguage/raindex';
 import type { Mock } from 'vitest';
 
 // Mock the DotrainOrderGui dependency
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	DotrainOrderGui: {
 		getOrderDetails: vi.fn()
 	}

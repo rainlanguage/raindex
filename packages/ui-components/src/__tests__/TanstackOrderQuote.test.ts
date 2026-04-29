@@ -3,12 +3,12 @@ import { describe, it, vi, type Mock } from 'vitest';
 import { QueryClient } from '@tanstack/svelte-query';
 import TanstackOrderQuote from '../lib/components/detail/TanstackOrderQuote.svelte';
 import { expect } from '../lib/test/matchers';
-import type { RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexOrder } from '@rainlanguage/raindex';
 import { useToasts } from '$lib/providers/toasts/useToasts';
 import { writable } from 'svelte/store';
 import { invalidateTanstackQueries } from '$lib/queries/queryClient';
 
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	getOrderQuote: vi.fn()
 }));
 

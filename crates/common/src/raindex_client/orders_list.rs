@@ -50,8 +50,8 @@ impl RaindexOrders {
 #[cfg(not(target_family = "wasm"))]
 mod tests {
     use super::*;
-    use crate::local_db::OrderbookIdentifier;
-    use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+    use crate::local_db::RaindexIdentifier;
+    use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS};
     use alloy::primitives::{b256, Address};
     use httpmock::MockServer;
     use serde_json::json;
@@ -78,7 +78,7 @@ mod tests {
                                 "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
                                 "name": "sFLR", "symbol": "sFLR", "decimals": "18"
                             },
-                            "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                            "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                             "ordersAsOutput": [], "ordersAsInput": [], "balanceChanges": []
                         }],
                         "inputs": [{
@@ -91,10 +91,10 @@ mod tests {
                                 "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
                                 "name": "WFLR", "symbol": "WFLR", "decimals": "18"
                             },
-                            "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                            "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                             "ordersAsOutput": [], "ordersAsInput": [], "balanceChanges": []
                         }],
-                        "orderbook": { "id": CHAIN_ID_1_ORDERBOOK_ADDRESS },
+                        "raindex": { "id": CHAIN_ID_1_RAINDEX_ADDRESS },
                         "active": true, "timestampAdded": "0", "meta": null,
                         "addEvents": [], "trades": [], "removeEvents": []
                     }]
@@ -116,10 +116,7 @@ mod tests {
         .unwrap();
         client
             .get_order_by_hash(
-                &OrderbookIdentifier::new(
-                    1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
-                ),
+                &RaindexIdentifier::new(1, Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap()),
                 b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
             )
             .await

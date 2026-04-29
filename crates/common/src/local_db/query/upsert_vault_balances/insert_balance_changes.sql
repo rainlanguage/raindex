@@ -1,14 +1,14 @@
 WITH RECURSIVE params AS (
   SELECT
     ?1 AS chain_id,
-    ?2 AS orderbook_address,
+    ?2 AS raindex_address,
     ?3 AS start_block,
     ?4 AS end_block
 ),
 filtered AS (
   SELECT
     vd.chain_id,
-    vd.orderbook_address,
+    vd.raindex_address,
     vd.transaction_hash,
     vd.owner,
     vd.token,
@@ -19,17 +19,17 @@ filtered AS (
     vd.kind AS change_type,
     vd.delta,
     ROW_NUMBER() OVER (
-      PARTITION BY vd.chain_id, vd.orderbook_address, vd.owner, vd.token, vd.vault_id
+      PARTITION BY vd.chain_id, vd.raindex_address, vd.owner, vd.token, vd.vault_id
       ORDER BY vd.block_number, vd.log_index
     ) AS rn,
     COALESCE(rvb.balance, FLOAT_ZERO_HEX()) AS prefix_balance
   FROM vault_deltas vd
   JOIN params p
     ON p.chain_id = vd.chain_id
-   AND p.orderbook_address = vd.orderbook_address
+   AND p.raindex_address = vd.raindex_address
   LEFT JOIN running_vault_balances rvb
     ON rvb.chain_id = vd.chain_id
-   AND rvb.orderbook_address = vd.orderbook_address
+   AND rvb.raindex_address = vd.raindex_address
    AND rvb.owner = vd.owner
    AND rvb.token = vd.token
    AND rvb.vault_id = vd.vault_id
@@ -38,7 +38,7 @@ filtered AS (
 ordered AS (
   SELECT
     f.chain_id,
-    f.orderbook_address,
+    f.raindex_address,
     f.transaction_hash,
     f.owner,
     f.token,
@@ -67,7 +67,7 @@ ordered AS (
 
   SELECT
     next.chain_id,
-    next.orderbook_address,
+    next.raindex_address,
     next.transaction_hash,
     next.owner,
     next.token,
@@ -92,7 +92,7 @@ ordered AS (
   FROM ordered
   JOIN filtered next
     ON next.chain_id = ordered.chain_id
-   AND next.orderbook_address = ordered.orderbook_address
+   AND next.raindex_address = ordered.raindex_address
    AND next.owner = ordered.owner
    AND next.token = ordered.token
    AND next.vault_id = ordered.vault_id
@@ -100,7 +100,7 @@ ordered AS (
 )
 INSERT OR IGNORE INTO vault_balance_changes (
   chain_id,
-  orderbook_address,
+  raindex_address,
   transaction_hash,
   owner,
   token,
@@ -114,7 +114,7 @@ INSERT OR IGNORE INTO vault_balance_changes (
 )
 SELECT
   chain_id,
-  orderbook_address,
+  raindex_address,
   transaction_hash,
   owner,
   token,

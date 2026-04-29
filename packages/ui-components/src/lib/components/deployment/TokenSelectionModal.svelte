@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Input, Button, Modal } from 'flowbite-svelte';
 	import { SearchOutline, CheckCircleSolid, ChevronDownSolid } from 'flowbite-svelte-icons';
-	import type { ExtendedTokenInfo } from '@rainlanguage/orderbook';
+	import type { ExtendedTokenInfo } from '@rainlanguage/raindex';
 	import { useGui } from '$lib/hooks/useGui';
 	import { onMount, tick } from 'svelte';
 

@@ -13,7 +13,7 @@
 		RaindexClient,
 		AccountBalance,
 		Float
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import WalletConnect from '../wallet/WalletConnect.svelte';
 	import { type Writable } from 'svelte/store';
 	import type { AppKit } from '@reown/appkit';

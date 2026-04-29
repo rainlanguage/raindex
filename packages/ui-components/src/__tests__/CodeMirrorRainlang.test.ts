@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor } from '@testing-library/svelte';
 import CodeMirrorRainlang from '../lib/components/CodeMirrorRainlang.svelte';
-import type { RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexOrder } from '@rainlanguage/raindex';
 import { writable } from 'svelte/store';
 
 vi.mock('codemirror-rainlang', () => ({

@@ -1,4 +1,4 @@
-import type { NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+import type { NameAndDescriptionCfg } from '@rainlanguage/raindex';
 
 export type ValidOrderDetail = {
 	details: NameAndDescriptionCfg;

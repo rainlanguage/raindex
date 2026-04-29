@@ -1,4 +1,4 @@
-import type { AccountCfg } from '@rainlanguage/orderbook';
+import type { AccountCfg } from '@rainlanguage/raindex';
 
 export function getAccountsAsOptions(accounts?: Map<string, AccountCfg>) {
 	if (!accounts) return {};

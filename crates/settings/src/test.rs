@@ -28,12 +28,12 @@ pub fn mock_rainlang() -> Arc<RainlangCfg> {
     })
 }
 
-// Helper function to create a mock orderbook
-pub fn mock_orderbook() -> Arc<OrderbookCfg> {
-    Arc::new(OrderbookCfg {
+// Helper function to create a mock raindex
+pub fn mock_raindex() -> Arc<RaindexCfg> {
+    Arc::new(RaindexCfg {
         document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
         key: "".to_string(),
-        label: Some("Orderbook1".into()),
+        label: Some("Raindex1".into()),
         address: Address::repeat_byte(0x04),
         subgraph: Arc::new(SubgraphCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),

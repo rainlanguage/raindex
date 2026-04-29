@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 import ButtonVaultLink from '../lib/components/ButtonVaultLink.svelte';
-import type { RaindexVault } from '@rainlanguage/orderbook';
+import type { RaindexVault } from '@rainlanguage/raindex';
 
 describe('ButtonVaultLink', () => {
 	const mockVault = {
@@ -20,7 +20,7 @@ describe('ButtonVaultLink', () => {
 			props: {
 				tokenVault: mockVault,
 				chainId: 1,
-				orderbookAddress: '0x00'
+				raindexAddress: '0x00'
 			}
 		});
 
@@ -35,7 +35,7 @@ describe('ButtonVaultLink', () => {
 			props: {
 				tokenVault: mockVault,
 				chainId: 1,
-				orderbookAddress: '0x00'
+				raindexAddress: '0x00'
 			}
 		});
 

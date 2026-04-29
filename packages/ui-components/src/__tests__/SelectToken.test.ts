@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import SelectToken from '../lib/components/deployment/SelectToken.svelte';
 import type { ComponentProps } from 'svelte';
-import { Float, type AccountBalance, type DotrainOrderGui } from '@rainlanguage/orderbook';
+import { Float, type AccountBalance, type DotrainOrderGui } from '@rainlanguage/raindex';
 import { useGui } from '$lib/hooks/useGui';
 import type { TokenBalance } from '$lib/types/tokenBalance';
 
@@ -41,7 +41,7 @@ const mockGui: DotrainOrderGui = {
 	})
 } as unknown as DotrainOrderGui;
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	return {
 		...(await importOriginal())
 	};

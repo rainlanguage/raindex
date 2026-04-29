@@ -7,7 +7,7 @@ import { darkChartTheme } from '../lib/utils/lightweightChartsThemes';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'svelte';
 import { useRaindexClient } from '$lib/hooks/useRaindexClient';
-import { RaindexClient, RaindexVault, type RaindexOrderAsIO } from '@rainlanguage/orderbook';
+import { RaindexClient, RaindexVault, type RaindexOrderAsIO } from '@rainlanguage/raindex';
 import { useAccount } from '../lib/providers/wallet/useAccount';
 import { QKEY_VAULT } from '$lib/queries/keys';
 import { useToasts } from '../lib/providers/toasts/useToasts';
@@ -24,7 +24,7 @@ vi.mock('$lib/hooks/useRaindexClient', () => ({
 	useRaindexClient: vi.fn()
 }));
 
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	RaindexClient: vi.fn()
 }));
 
@@ -53,7 +53,7 @@ const mockErrToast = vi.fn();
 
 const defaultProps: VaultDetailProps = {
 	chainId: 1,
-	orderbookAddress: '0x00',
+	raindexAddress: '0x00',
 	id: '100',
 	lightweightChartsTheme: readable(darkChartTheme),
 	onDeposit: vi.fn(),
@@ -108,7 +108,7 @@ describe('VaultDetail', () => {
 			formattedBalance: '100000',
 			ordersAsInput: [],
 			ordersAsOutput: [],
-			orderbook: '0x00'
+			raindex: '0x00'
 		} as unknown as RaindexVault;
 		(mockRaindexClient.getVault as Mock).mockResolvedValue({ value: mockData });
 	});

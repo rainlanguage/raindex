@@ -48,7 +48,7 @@ impl ParsedMeta {
     }
 
     /// Parse multiple metadata items from a vector of RainMetaDocumentV1Item
-    /// Returns only the items relevant to the orderbook frontend
+    /// Returns only the items relevant to the raindex frontend
     pub fn parse_multiple(
         items: &[RainMetaDocumentV1Item],
     ) -> Result<Vec<Self>, rain_metadata::Error> {
@@ -60,7 +60,7 @@ impl ParsedMeta {
     }
 
     /// Parse metadata from raw bytes
-    /// This method parses the complete metadata document and extracts only orderbook-relevant items
+    /// This method parses the complete metadata document and extracts only raindex-relevant items
     pub fn parse_from_bytes(bytes: &[u8]) -> Result<Vec<Self>, rain_metadata::Error> {
         let items = RainMetaDocumentV1Item::cbor_decode(bytes)?;
         Self::parse_multiple(&items)

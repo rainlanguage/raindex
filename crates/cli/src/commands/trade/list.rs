@@ -5,7 +5,7 @@ use crate::{
 use anyhow::Result;
 use clap::Args;
 use comfy_table::Table;
-use rain_orderbook_common::{
+use raindex_common::{
     csv::TryIntoCsv,
     subgraph::SubgraphArgs,
     types::{FlattenError, OrderTakeFlattened, NO_SYMBOL},
@@ -98,7 +98,7 @@ mod tests {
         primitives::{Address, B256},
     };
     use httpmock::MockServer;
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_subgraph_client::utils::float::*;
     use serde_json::{json, Value};
 
     #[tokio::test]
@@ -184,7 +184,7 @@ mod tests {
                         "orderBytes": encode_prefixed(B256::random()),
                         "outputs": [],
                         "inputs": [],
-                        "orderbook": {
+                        "raindex": {
                             "id": encode_prefixed(B256::random()),
                         },
                         "meta": null,
@@ -216,7 +216,7 @@ mod tests {
                             "timestamp": "0",
                             "from": encode_prefixed(Address::random())
                         },
-                        "orderbook": {
+                        "raindex": {
                             "id": encode_prefixed(B256::random()),
                         },
                         "trade": {
@@ -249,7 +249,7 @@ mod tests {
                             "timestamp": "0",
                             "from": encode_prefixed(Address::random())
                         },
-                        "orderbook": {
+                        "raindex": {
                             "id": encode_prefixed(B256::random()),
                         },
                         "trade": {
@@ -268,7 +268,7 @@ mod tests {
                             "from": encode_prefixed(Address::random())
                         }
                     },
-                    "orderbook": {
+                    "raindex": {
                         "id": encode_prefixed(B256::random()),
                     },
                 }]

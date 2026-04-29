@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_common"
-description = "Rain Orderbook CLI."
+name = "raindex_common"
+description = "Raindex CLI."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,10 +16,10 @@ browser-tests = []
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_subgraph_client = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_quote = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_subgraph_client = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_quote = { workspace = true }
 alloy = { workspace = true, features = ["dyn-abi", "rand"] }
 alloy-ethers-typecast = { workspace = true }
 url = { workspace = true }
@@ -77,5 +77,5 @@ wasm-bindgen-futures = "0.4"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 httpmock = "0.7.0"
-rain_orderbook_test_fixtures = { workspace = true }
+raindex_test_fixtures = { workspace = true }
 tempfile = "3"

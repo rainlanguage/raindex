@@ -5,12 +5,12 @@ use alloy::{
     sol_types::{abi::token::WordToken, SolEvent},
 };
 use core::convert::TryFrom;
-use rain_orderbook_bindings::{
+use raindex_bindings::{
     IInterpreterStoreV3::Set,
     IRaindexV6::{
         AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
     },
-    OrderBook::MetaV1_2,
+    Raindex::MetaV1_2,
 };
 use serde::{Deserialize, Serialize};
 
@@ -209,13 +209,13 @@ mod test_helpers {
     use crate::rpc_client::LogEntryResponse;
     use alloy::hex;
     use alloy::primitives::{address, b256, Address, Bytes, FixedBytes, B256, U256};
-    use rain_orderbook_bindings::{
+    use raindex_bindings::{
         IRaindexV6::{
             AddOrderV3, AfterClearV2, ClearConfigV2, ClearStateChangeV2, ClearV3, DepositV2,
             RemoveOrderV3, SignedContextV1, TakeOrderConfigV4, TakeOrderV3, WithdrawV2,
         },
         IRaindexV6::{EvaluableV4, OrderV4, IOV2},
-        OrderBook::MetaV1_2,
+        Raindex::MetaV1_2,
     };
     use serde_json::Value;
     use std::str::FromStr;

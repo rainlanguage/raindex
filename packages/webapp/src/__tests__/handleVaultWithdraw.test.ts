@@ -3,7 +3,7 @@ import {
 	handleVaultWithdraw,
 	type VaultWithdrawHandlerDependencies
 } from '../lib/services/handleVaultWithdraw';
-import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/orderbook';
+import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 

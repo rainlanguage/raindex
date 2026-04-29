@@ -1,4 +1,4 @@
-import type { DotrainOrderGui } from '@rainlanguage/orderbook';
+import type { DotrainOrderGui } from '@rainlanguage/raindex';
 import { page } from '$app/stores';
 import { get } from 'svelte/store';
 

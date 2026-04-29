@@ -6,11 +6,11 @@ pub mod yaml;
 
 // re-export other crates to include their wasm bindings as single export point
 #[cfg(target_family = "wasm")]
-pub use rain_orderbook_app_settings;
+pub use raindex_app_settings;
 #[cfg(target_family = "wasm")]
-pub use rain_orderbook_common;
+pub use raindex_common;
 #[cfg(target_family = "wasm")]
-pub use rain_orderbook_subgraph_client;
+pub use raindex_subgraph_client;
 
 use wasm_bindgen_utils::prelude::wasm_bindgen;
 

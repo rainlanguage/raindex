@@ -3,11 +3,11 @@ import { describe, it, expect } from 'vitest';
 import TokenBalance from '../lib/components/deployment/TokenBalance.svelte';
 import type { ComponentProps } from 'svelte';
 import type { TokenBalance as TokenBalanceType } from '$lib/types/tokenBalance';
-import { Float, type AccountBalance } from '@rainlanguage/orderbook';
+import { Float, type AccountBalance } from '@rainlanguage/raindex';
 
 type TokenBalanceComponentProps = ComponentProps<TokenBalance>;
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	return {
 		...(await importOriginal())
 	};

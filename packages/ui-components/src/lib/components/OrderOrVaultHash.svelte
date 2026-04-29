@@ -6,7 +6,7 @@
 		RaindexOrder,
 		RaindexOrderAsIO,
 		RaindexVault
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import {
 		constructHashLink,
 		isOrderOrVaultActive,
@@ -18,11 +18,11 @@
 	export let orderOrVault: OrderOrVault;
 	export let type: 'orders' | 'vaults';
 	export let chainId: number;
-	export let orderbookAddress: Address;
+	export let raindexAddress: Address;
 
 	$: hash = extractHash(orderOrVault);
 	$: isActive = isOrderOrVaultActive(orderOrVault);
-	$: linkPath = constructHashLink(orderOrVault, type, chainId, orderbookAddress);
+	$: linkPath = constructHashLink(orderOrVault, type, chainId, raindexAddress);
 </script>
 
 <a data-testid="order-or-vault-hash" href={linkPath}>

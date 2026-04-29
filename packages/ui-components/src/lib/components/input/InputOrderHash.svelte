@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Label } from 'flowbite-svelte';
 	import type { AppStoresInterface } from '$lib/types/appStores';
-	import type { Hex } from '@rainlanguage/orderbook';
+	import type { Hex } from '@rainlanguage/raindex';
 
 	export let orderHash: AppStoresInterface['orderHash'];
 	export let value = $orderHash;

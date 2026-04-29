@@ -1,5 +1,5 @@
 use rain_math_float::{Float, FloatError};
-use rain_orderbook_app_settings::gui::{DepositValidationCfg, FieldValueValidationCfg};
+use raindex_app_settings::gui::{DepositValidationCfg, FieldValueValidationCfg};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -222,7 +222,7 @@ fn validate_boolean(name: &str, value: &str) -> Result<(), GuiValidationError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::gui::FieldValueValidationCfg;
+    use raindex_app_settings::gui::FieldValueValidationCfg;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

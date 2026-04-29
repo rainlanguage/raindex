@@ -1,5 +1,5 @@
 {
-    "name": "rain-orderbook-subgraph",
+    "name": "rain-raindex-subgraph",
     "description": "Subgraph setup",
     "version": "1.0.0",
     "license": "LicenseRef-DCL-1.0",

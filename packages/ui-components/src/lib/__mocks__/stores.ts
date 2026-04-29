@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import type { Address } from '@rainlanguage/orderbook';
+import type { Address } from '@rainlanguage/raindex';
 import { type Config } from '@wagmi/core';
 import { mockWeb3Config } from './mockWeb3Config';
 
@@ -18,7 +18,7 @@ type MockPageState = {
 };
 
 if (import.meta.vitest) {
-	vi.mock(import('@rainlanguage/orderbook'), async (importOriginal) => {
+	vi.mock(import('@rainlanguage/raindex'), async (importOriginal) => {
 		const actual = await importOriginal();
 		return {
 			...actual
@@ -48,7 +48,7 @@ const mockOrderHashWritable = writable<string>('');
 const mockHideZeroBalanceVaultsWritable = writable<boolean>(false);
 const mockHideInactiveOrdersVaultsWritable = writable<boolean>(false);
 const mockActiveNetworkRefWritable = writable<string>('');
-const mockActiveOrderbookRefWritable = writable<string>('');
+const mockActiveRaindexRefWritable = writable<string>('');
 const mockActiveAccountsWritable = writable<Record<string, string>>({});
 const mockSubgraphUrlWritable = writable<string>('');
 const mockChainIdWritable = writable<number>(0);
@@ -56,7 +56,7 @@ const mockConnectedWritable = writable<boolean>(true);
 const mockWagmiConfigWritable = writable<Config>(mockWeb3Config);
 const mockSelectedChainIdsWritable = writable<number[]>([]);
 const mockActiveTokensWritable = writable<string[]>([]);
-const mockActiveOrderbookAddressesWritable = writable<string[]>([]);
+const mockActiveRaindexAddressesWritable = writable<string[]>([]);
 const mockOwnerFilterWritable = writable<Address>('' as Address);
 
 export const mockShowInactiveOrdersStore = {
@@ -89,10 +89,10 @@ export const mockActiveNetworkRefStore = {
 	mockSetSubscribeValue: (value: string): void => mockActiveNetworkRefWritable.set(value)
 };
 
-export const mockActiveOrderbookRefStore = {
-	subscribe: mockActiveOrderbookRefWritable.subscribe,
-	set: mockActiveOrderbookRefWritable.set,
-	mockSetSubscribeValue: (value: string): void => mockActiveOrderbookRefWritable.set(value)
+export const mockActiveRaindexRefStore = {
+	subscribe: mockActiveRaindexRefWritable.subscribe,
+	set: mockActiveRaindexRefWritable.set,
+	mockSetSubscribeValue: (value: string): void => mockActiveRaindexRefWritable.set(value)
 };
 
 export const mockActiveAccountsStore = {
@@ -152,10 +152,10 @@ export const mockActiveTokensStore = {
 	mockSetSubscribeValue: (value: string[]): void => mockActiveTokensWritable.set(value)
 };
 
-export const mockActiveOrderbookAddressesStore = {
-	subscribe: mockActiveOrderbookAddressesWritable.subscribe,
-	set: mockActiveOrderbookAddressesWritable.set,
-	mockSetSubscribeValue: (value: string[]): void => mockActiveOrderbookAddressesWritable.set(value)
+export const mockActiveRaindexAddressesStore = {
+	subscribe: mockActiveRaindexAddressesWritable.subscribe,
+	set: mockActiveRaindexAddressesWritable.set,
+	mockSetSubscribeValue: (value: string[]): void => mockActiveRaindexAddressesWritable.set(value)
 };
 
 export const mockOwnerFilterStore = {

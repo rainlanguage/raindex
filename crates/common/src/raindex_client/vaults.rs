@@ -3,7 +3,7 @@ use super::*;
 use crate::local_db::query::fetch_order_vaults_volume::LocalDbVaultVolume;
 use crate::local_db::query::fetch_vaults::LocalDbVault;
 use crate::local_db::{
-    query::fetch_vault_balance_changes::LocalDbVaultBalanceChange, OrderbookIdentifier,
+    query::fetch_vault_balance_changes::LocalDbVaultBalanceChange, RaindexIdentifier,
 };
 use crate::raindex_client::local_db::vaults::LocalDbVaults;
 use crate::raindex_client::QuerySource;
@@ -24,18 +24,17 @@ use alloy::{
 };
 use async_trait::async_trait;
 use rain_math_float::Float;
-use rain_orderbook_bindings::{IRaindexV6::deposit4Call, IERC20::approveCall};
-use rain_orderbook_subgraph_client::{
+use raindex_bindings::{IRaindexV6::deposit4Call, IERC20::approveCall};
+use raindex_subgraph_client::{
     performance::vol::{VaultVolume, VolumeDetails},
     types::{
         common::{
-            SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgOrderbook, SgTradeVaultBalanceChange,
-            SgVault, SgVaultBalanceChangeType, SgVaultBalanceChangeUnwrapped,
-            SgVaultsListFilterArgs,
+            SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgRaindex, SgTradeVaultBalanceChange, SgVault,
+            SgVaultBalanceChangeType, SgVaultBalanceChangeUnwrapped, SgVaultsListFilterArgs,
         },
         Id,
     },
-    MultiOrderbookSubgraphClient, OrderbookSubgraphClient, OrderbookSubgraphClientError,
+    MultiRaindexSubgraphClient, RaindexSubgraphClient, RaindexSubgraphClientError,
     SgPaginationArgs,
 };
 use std::str::FromStr;
@@ -65,7 +64,7 @@ pub(crate) trait VaultsDataSource {
 
     async fn get_by_id(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         vault_id: &Bytes,
     ) -> Result<Option<RaindexVault>, RaindexError>;
 
@@ -91,11 +90,11 @@ pub enum RaindexVaultType {
 }
 impl_wasm_traits!(RaindexVaultType);
 
-/// Represents a vault with balance and token information within a given orderbook.
+/// Represents a vault with balance and token information within a given raindex.
 ///
 /// A vault is a fundamental component that holds tokens and participates in order execution.
 /// Each vault has a unique identifier, current balance, associated token metadata, and
-/// belongs to a specific orderbook contract on the blockchain.
+/// belongs to a specific raindex contract on the blockchain.
 ///
 /// Vaults can serve different roles in relation to orders - they can provide tokens (input),
 /// receive tokens (output), or both (input/output), depending on the trading algorithm.
@@ -112,7 +111,7 @@ pub struct RaindexVault {
     balance: Float,
     formatted_balance: String,
     token: RaindexVaultToken,
-    orderbook: Address,
+    raindex: Address,
     orders_as_inputs: Vec<RaindexOrderAsIO>,
     orders_as_outputs: Vec<RaindexOrderAsIO>,
 }
@@ -161,8 +160,8 @@ impl RaindexVault {
         self.token.clone()
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Address")]
-    pub fn orderbook(&self) -> String {
-        self.orderbook.to_string()
+    pub fn raindex(&self) -> String {
+        self.raindex.to_string()
     }
     #[wasm_bindgen(getter = ordersAsInput)]
     pub fn orders_as_inputs(&self) -> Vec<RaindexOrderAsIO> {
@@ -200,8 +199,8 @@ impl RaindexVault {
     pub fn token(&self) -> RaindexVaultToken {
         self.token.clone()
     }
-    pub fn orderbook(&self) -> Address {
-        self.orderbook
+    pub fn raindex(&self) -> Address {
+        self.raindex
     }
     pub fn orders_as_inputs(&self) -> Vec<RaindexOrderAsIO> {
         self.orders_as_inputs.clone()
@@ -320,8 +319,9 @@ impl RaindexVaultToken {
 #[wasm_export]
 impl RaindexVault {
     #[wasm_export(skip)]
-    pub fn get_orderbook_client(&self) -> Result<OrderbookSubgraphClient, RaindexError> {
-        self.raindex_client.get_orderbook_client(self.orderbook)
+    pub fn get_raindex_subgraph_client(&self) -> Result<RaindexSubgraphClient, RaindexError> {
+        self.raindex_client
+            .get_raindex_subgraph_client(self.raindex)
     }
 
     /// Fetches balance change history for a vault
@@ -467,7 +467,7 @@ impl RaindexVault {
         };
 
         let transaction_args = TransactionArgs {
-            orderbook_address: self.orderbook,
+            raindex_address: self.raindex,
             rpcs: rpcs.iter().map(|rpc| rpc.to_string()).collect(),
             ..Default::default()
         };
@@ -477,7 +477,7 @@ impl RaindexVault {
 
     /// Generates ERC20 approval calldata for vault deposits
     ///
-    /// Creates the contract calldata needed to approve the orderbook contract to spend
+    /// Creates the contract calldata needed to approve the raindex contract to spend
     /// tokens for a vault deposit, but only if additional approval is needed.
     ///
     /// ## Examples
@@ -516,7 +516,7 @@ impl RaindexVault {
         }
 
         let calldata = approveCall {
-            spender: transaction_args.orderbook_address,
+            spender: transaction_args.raindex_address,
             amount: amount.to_fixed_decimal(self.token.decimals)?,
         }
         .abi_encode();
@@ -526,7 +526,7 @@ impl RaindexVault {
 
     /// Gets the current ERC20 allowance for a vault
     ///
-    /// Determines how much the orderbook contract is currently approved to spend
+    /// Determines how much the raindex contract is currently approved to spend
     /// on behalf of the vault owner.
     ///
     /// ## Examples
@@ -701,7 +701,7 @@ pub struct RaindexVaultBalanceChange {
     formatted_old_balance: String,
     timestamp: U256,
     transaction: RaindexTransaction,
-    orderbook: Address,
+    raindex: Address,
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
@@ -757,8 +757,8 @@ impl RaindexVaultBalanceChange {
         self.transaction.clone()
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Address")]
-    pub fn orderbook(&self) -> String {
-        self.orderbook.to_string()
+    pub fn raindex(&self) -> String {
+        self.raindex.to_string()
     }
 }
 #[cfg(not(target_family = "wasm"))]
@@ -799,8 +799,8 @@ impl RaindexVaultBalanceChange {
     pub fn transaction(&self) -> RaindexTransaction {
         self.transaction.clone()
     }
-    pub fn orderbook(&self) -> Address {
-        self.orderbook
+    pub fn raindex(&self) -> Address {
+        self.raindex
     }
 }
 
@@ -850,7 +850,7 @@ impl RaindexVaultBalanceChange {
             formatted_old_balance,
             timestamp: U256::from_str(&balance_change.timestamp.0)?,
             transaction: RaindexTransaction::try_from(balance_change.transaction)?,
-            orderbook: Address::from_str(&balance_change.orderbook.id.0)?,
+            raindex: Address::from_str(&balance_change.raindex.id.0)?,
         })
     }
 }
@@ -888,7 +888,7 @@ impl RaindexVaultBalanceChange {
             formatted_old_balance,
             timestamp: U256::from_str(&balance_change.timestamp.0)?,
             transaction: RaindexTransaction::try_from(balance_change.transaction)?,
-            orderbook: Address::from_str(&balance_change.orderbook.id.0)?,
+            raindex: Address::from_str(&balance_change.raindex.id.0)?,
         })
     }
 }
@@ -917,7 +917,7 @@ impl RaindexVaultBalanceChange {
                     formatted_old_balance: old_balance.format()?,
                     timestamp: U256::from_str(&deposit.timestamp.0)?,
                     transaction: RaindexTransaction::try_from(deposit.transaction)?,
-                    orderbook: Address::from_str(&deposit.orderbook.id.0)?,
+                    raindex: Address::from_str(&deposit.raindex.id.0)?,
                 })
             }
             SgVaultBalanceChangeType::Withdrawal(withdrawal) => {
@@ -938,7 +938,7 @@ impl RaindexVaultBalanceChange {
                     formatted_old_balance: old_balance.format()?,
                     timestamp: U256::from_str(&withdrawal.timestamp.0)?,
                     transaction: RaindexTransaction::try_from(withdrawal.transaction)?,
-                    orderbook: Address::from_str(&withdrawal.orderbook.id.0)?,
+                    raindex: Address::from_str(&withdrawal.raindex.id.0)?,
                 })
             }
             SgVaultBalanceChangeType::TradeVaultBalanceChange(trade_change) => {
@@ -962,7 +962,7 @@ impl RaindexVaultBalanceChange {
                     formatted_old_balance: old_balance.format()?,
                     timestamp: U256::from_str(&bounty.timestamp.0)?,
                     transaction: RaindexTransaction::try_from(bounty.transaction)?,
-                    orderbook: Address::from_str(&bounty.orderbook.id.0)?,
+                    raindex: Address::from_str(&bounty.raindex.id.0)?,
                 })
             }
             SgVaultBalanceChangeType::Unknown => Err(RaindexError::InvalidVaultBalanceChangeType(
@@ -1006,13 +1006,13 @@ impl RaindexVaultBalanceChange {
             formatted_old_balance,
             timestamp: U256::from(change.block_timestamp),
             transaction,
-            orderbook: vault.orderbook,
+            raindex: vault.raindex,
         })
     }
 
     pub(crate) fn try_from_local_trade_side(
         chain_id: u32,
-        orderbook: Address,
+        raindex_addr: Address,
         transaction: &RaindexTransaction,
         vault_id: U256,
         token: LocalTradeTokenInfo,
@@ -1061,7 +1061,7 @@ impl RaindexVaultBalanceChange {
             formatted_old_balance,
             timestamp: U256::from(block_timestamp),
             transaction: transaction.clone(),
-            orderbook,
+            raindex: raindex_addr,
         })
     }
 }
@@ -1351,11 +1351,11 @@ impl RaindexClient {
         )]
         chain_id: u32,
         #[wasm_export(
-            js_name = "orderbookAddress",
-            param_description = "Orderbook contract address",
+            js_name = "raindexAddress",
+            param_description = "Raindex contract address",
             unchecked_param_type = "Address"
         )]
-        orderbook_address: String,
+        raindex_address: String,
         #[wasm_export(
             js_name = "vaultId",
             param_description = "Unique vault identifier",
@@ -1363,13 +1363,10 @@ impl RaindexClient {
         )]
         vault_id: String,
     ) -> Result<RaindexVault, RaindexError> {
-        let orderbook_address = Address::from_str(&orderbook_address)?;
+        let raindex_address = Address::from_str(&raindex_address)?;
         let vault_id = Bytes::from_str(&vault_id)?;
-        self.get_vault(
-            &OrderbookIdentifier::new(chain_id, orderbook_address),
-            vault_id,
-        )
-        .await
+        self.get_vault(&RaindexIdentifier::new(chain_id, raindex_address), vault_id)
+            .await
     }
 
     /// Fetches all unique tokens that exist in vaults.
@@ -1426,38 +1423,38 @@ impl RaindexClient {
 impl RaindexClient {
     pub async fn get_vault(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         vault_id: Bytes,
     ) -> Result<RaindexVault, RaindexError> {
-        let orderbook_cfg = self.get_orderbook_by_address(ob_id.orderbook_address)?;
-        if orderbook_cfg.network.chain_id != ob_id.chain_id {
-            return Err(RaindexError::OrderbookNotFound(
-                ob_id.orderbook_address.to_string(),
-                ob_id.chain_id,
+        let raindex_cfg = self.get_raindex_by_address(raindex_id.raindex_address)?;
+        if raindex_cfg.network.chain_id != raindex_id.chain_id {
+            return Err(RaindexError::RaindexNotFound(
+                raindex_id.raindex_address.to_string(),
+                raindex_id.chain_id,
             ));
         }
 
-        match self.query_source(ob_id.chain_id) {
+        match self.query_source(raindex_id.chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbVaults::new(&local_db, ClientRef::new(self.clone()));
                 local_source
-                    .get_by_id(ob_id, &vault_id)
+                    .get_by_id(raindex_id, &vault_id)
                     .await?
                     .ok_or_else(|| {
                         RaindexError::VaultNotFound(
-                            ob_id.orderbook_address.to_string(),
-                            ob_id.chain_id,
+                            raindex_id.raindex_address.to_string(),
+                            raindex_id.chain_id,
                             vault_id.to_string(),
                         )
                     })
             }
             QuerySource::Subgraph => SubgraphVaults::new(self)
-                .get_by_id(ob_id, &vault_id)
+                .get_by_id(raindex_id, &vault_id)
                 .await?
                 .ok_or_else(|| {
                     RaindexError::VaultNotFound(
-                        ob_id.orderbook_address.to_string(),
-                        ob_id.chain_id,
+                        raindex_id.raindex_address.to_string(),
+                        raindex_id.chain_id,
                         vault_id.to_string(),
                     )
                 }),
@@ -1476,7 +1473,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
     ) -> Result<Vec<RaindexVault>, RaindexError> {
         let raindex_client = ClientRef::new(self.client.clone());
         let multi_subgraph_args = self.client.get_multi_subgraph_args(chain_ids)?;
-        let client = MultiOrderbookSubgraphClient::new(
+        let client = MultiRaindexSubgraphClient::new(
             multi_subgraph_args.values().flatten().cloned().collect(),
         );
 
@@ -1518,18 +1515,21 @@ impl VaultsDataSource for SubgraphVaults<'_> {
 
     async fn get_by_id(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         vault_id: &Bytes,
     ) -> Result<Option<RaindexVault>, RaindexError> {
         let raindex_client = ClientRef::new(self.client.clone());
-        let client = self.client.get_orderbook_client(ob_id.orderbook_address)?;
+        let client = self
+            .client
+            .get_raindex_subgraph_client(raindex_id.raindex_address)?;
         let vault = match client.vault_detail(Id::new(vault_id.to_string())).await {
             Ok(vault) => vault,
-            Err(OrderbookSubgraphClientError::Empty) => return Ok(None),
+            Err(RaindexSubgraphClientError::Empty) => return Ok(None),
             Err(err) => return Err(err.into()),
         };
 
-        let vault = RaindexVault::try_from_sg_vault(raindex_client, ob_id.chain_id, vault, None)?;
+        let vault =
+            RaindexVault::try_from_sg_vault(raindex_client, raindex_id.chain_id, vault, None)?;
         Ok(Some(vault))
     }
 
@@ -1539,7 +1539,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
         page: Option<u16>,
         filter_types: Option<&[VaultBalanceChangeFilter]>,
     ) -> Result<Vec<RaindexVaultBalanceChange>, RaindexError> {
-        let client = self.client.get_orderbook_client(vault.orderbook)?;
+        let client = self.client.get_raindex_subgraph_client(vault.raindex)?;
 
         let filter_typenames: Option<Vec<&str>> = filter_types.map(|filters| {
             filters
@@ -1576,7 +1576,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
         chain_ids: Option<Vec<u32>>,
     ) -> Result<Vec<RaindexVaultToken>, RaindexError> {
         let multi_subgraph_args = self.client.get_multi_subgraph_args(chain_ids)?;
-        let client = MultiOrderbookSubgraphClient::new(
+        let client = MultiRaindexSubgraphClient::new(
             multi_subgraph_args.values().flatten().cloned().collect(),
         );
 
@@ -1607,7 +1607,7 @@ pub struct GetVaultsFilters {
     #[tsify(optional, type = "Address[]")]
     pub tokens: Option<Vec<Address>>,
     #[tsify(optional, type = "Address[]")]
-    pub orderbook_addresses: Option<Vec<Address>>,
+    pub raindex_addresses: Option<Vec<Address>>,
     #[serde(default)]
     pub only_active_orders: bool,
 }
@@ -1632,8 +1632,8 @@ impl TryFrom<GetVaultsFilters> for SgVaultsListFilterArgs {
                         .collect()
                 })
                 .unwrap_or_default(),
-            orderbooks: filters
-                .orderbook_addresses
+            raindexes: filters
+                .raindex_addresses
                 .map(|addrs| {
                     addrs
                         .into_iter()
@@ -1668,7 +1668,7 @@ impl RaindexVault {
             balance,
             formatted_balance,
             token,
-            orderbook: Address::from_str(&vault.orderbook.id.0)?,
+            raindex: Address::from_str(&vault.raindex.id.0)?,
             orders_as_inputs: vault
                 .orders_as_input
                 .iter()
@@ -1693,7 +1693,7 @@ impl RaindexVault {
             balance: self.balance,
             formatted_balance: self.formatted_balance.clone(),
             token: self.token.clone(),
-            orderbook: self.orderbook,
+            raindex: self.raindex,
             orders_as_inputs: self.orders_as_inputs.clone(),
             orders_as_outputs: self.orders_as_outputs.clone(),
         }
@@ -1706,8 +1706,8 @@ impl RaindexVault {
             balance: SgBytes(self.balance.as_hex()),
             owner: SgBytes(self.owner.to_string()),
             token: self.token.try_into()?,
-            orderbook: SgOrderbook {
-                id: SgBytes(self.orderbook.to_string()),
+            raindex: SgRaindex {
+                id: SgBytes(self.raindex.to_string()),
             },
             orders_as_input: self
                 .orders_as_inputs
@@ -1731,7 +1731,7 @@ impl RaindexVault {
         let balance = Float::from_hex(&vault.balance)?;
         let formatted_balance = balance.format()?;
 
-        let mut id = Vec::from(vault.orderbook_address.as_slice());
+        let mut id = Vec::from(vault.raindex_address.as_slice());
         id.extend_from_slice(vault.owner.as_slice());
         id.extend_from_slice(vault.token.as_slice());
         id.extend_from_slice(&vault.vault_id.to_le_bytes::<32>());
@@ -1753,7 +1753,7 @@ impl RaindexVault {
                 symbol: Some(vault.token_symbol),
                 decimals: vault.token_decimals,
             },
-            orderbook: vault.orderbook_address,
+            raindex: vault.raindex_address,
             orders_as_inputs: RaindexOrderAsIO::try_from_local_db_orders_csv(
                 "inputOrders",
                 &vault.input_orders,
@@ -1900,7 +1900,7 @@ mod tests {
                 vault_id: U256::from_str(vault_id).unwrap(),
                 token: Address::from_str(token).unwrap(),
                 owner: Address::from_str(owner).unwrap(),
-                orderbook_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
+                raindex_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
                 token_name: "Token".to_string(),
                 token_symbol: "TKN".to_string(),
                 token_decimals: 18,
@@ -1936,7 +1936,7 @@ mod tests {
             assert_eq!(result_vault.chain_id(), 42161);
             assert_eq!(result_vault.owner().to_lowercase(), owner.to_string());
             assert_eq!(
-                result_vault.orderbook().to_lowercase(),
+                result_vault.raindex().to_lowercase(),
                 "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string()
             );
             assert_eq!(result_vault.formatted_balance(), "1".to_string());
@@ -1967,10 +1967,10 @@ mod tests {
             let vault_id_hex = derived_vault.id();
             let vault_id_bytes = Bytes::from_str(&vault_id_hex).expect("valid vault id");
 
-            let orderbook =
+            let raindex_addr =
                 Address::from_str("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB").unwrap();
             let retrieved = client
-                .get_vault(&OrderbookIdentifier::new(42161, orderbook), vault_id_bytes)
+                .get_vault(&RaindexIdentifier::new(42161, raindex_addr), vault_id_bytes)
                 .await
                 .expect("local vault retrieval should succeed");
 
@@ -2033,10 +2033,10 @@ mod tests {
 
             let vault_id_bytes = Bytes::from_str(&derived_vault.id()).expect("valid vault id");
 
-            let orderbook =
+            let raindex_addr =
                 Address::from_str("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB").unwrap();
             let vault = client
-                .get_vault(&OrderbookIdentifier::new(42161, orderbook), vault_id_bytes)
+                .get_vault(&RaindexIdentifier::new(42161, raindex_addr), vault_id_bytes)
                 .await
                 .expect("local vault retrieval should succeed");
 
@@ -2084,7 +2084,7 @@ mod tests {
                 owners: vec![Address::from_str(owner_kept).unwrap()],
                 hide_zero_balance: true,
                 tokens: Some(vec![Address::from_str(token_kept).unwrap()]),
-                orderbook_addresses: None,
+                raindex_addresses: None,
                 only_active_orders: false,
             };
 
@@ -2149,17 +2149,17 @@ mod tests {
     mod non_wasm {
         use super::*;
         use crate::raindex_client::tests::get_test_yaml;
-        use crate::raindex_client::tests::CHAIN_ID_1_ORDERBOOK_ADDRESS;
+        use crate::raindex_client::tests::CHAIN_ID_1_RAINDEX_ADDRESS;
         use alloy::hex::encode_prefixed;
         use alloy::primitives::{address, b256};
         use alloy::sol_types::SolCall;
         use httpmock::MockServer;
-        use rain_orderbook_bindings::IERC20Metadata::decimalsCall;
-        use rain_orderbook_bindings::{
+        use raindex_bindings::IERC20Metadata::decimalsCall;
+        use raindex_bindings::{
             IRaindexV6::{deposit4Call, withdraw4Call},
             IERC20::approveCall,
         };
-        use rain_orderbook_subgraph_client::utils::float::*;
+        use raindex_subgraph_client::utils::float::*;
         use serde_json::{json, Value};
         use std::sync::Arc;
         use LocalDbVault;
@@ -2167,7 +2167,7 @@ mod tests {
         #[test]
         fn test_try_from_local_trade_side_with_running_balance() {
             let chain_id = 42161;
-            let orderbook = address!("0x0000000000000000000000000000000000000001");
+            let raindex_addr = address!("0x0000000000000000000000000000000000000001");
             let transaction = RaindexTransaction::from_local_parts(
                 b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef"),
                 address!("0x0000000000000000000000000000000000000002"),
@@ -2184,7 +2184,7 @@ mod tests {
 
             let change = RaindexVaultBalanceChange::try_from_local_trade_side(
                 chain_id,
-                orderbook,
+                raindex_addr,
                 &transaction,
                 U256::from(16),
                 LocalTradeTokenInfo {
@@ -2216,7 +2216,7 @@ mod tests {
                 expected_old_balance.format().unwrap()
             );
             assert_eq!(change.timestamp(), U256::from(789));
-            assert_eq!(change.orderbook(), orderbook);
+            assert_eq!(change.raindex(), raindex_addr);
             assert_eq!(change.transaction().id(), transaction.id());
 
             let token = change.token();
@@ -2237,7 +2237,7 @@ mod tests {
         #[test]
         fn test_try_from_local_trade_side_defaults() {
             let chain_id = 1;
-            let orderbook = address!("0x0000000000000000000000000000000000000004");
+            let raindex_addr = address!("0x0000000000000000000000000000000000000004");
             let transaction = RaindexTransaction::from_local_parts(
                 b256!("0x00000000000000000000000000000000000000000000000000000000feedface"),
                 address!("0x0000000000000000000000000000000000000005"),
@@ -2252,7 +2252,7 @@ mod tests {
 
             let change = RaindexVaultBalanceChange::try_from_local_trade_side(
                 chain_id,
-                orderbook,
+                raindex_addr,
                 &transaction,
                 U256::from(2),
                 LocalTradeTokenInfo {
@@ -2314,7 +2314,7 @@ mod tests {
                 vault_id: U256::from(1),
                 token: address!("0x0000000000000000000000000000000000000000"),
                 owner: address!("0x0000000000000000000000000000000000000000"),
-                orderbook_address: Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                raindex_address: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                 token_name: "Test Token".to_string(),
                 token_symbol: "TST".to_string(),
                 token_decimals: 6,
@@ -2348,8 +2348,8 @@ mod tests {
                 "symbol": "TKN1",
                 "decimals": "18"
               },
-              "orderbook": {
-                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+              "raindex": {
+                "id": CHAIN_ID_1_RAINDEX_ADDRESS
               },
               "ordersAsOutput": [],
               "ordersAsInput": [],
@@ -2370,7 +2370,7 @@ mod tests {
                     "symbol": "TKN2",
                     "decimals": "18"
                 },
-                "orderbook": {
+                "raindex": {
                     "id": "0x0000000000000000000000000000000000000000"
                 },
                 "ordersAsOutput": [],
@@ -2432,8 +2432,8 @@ mod tests {
             assert_eq!(vault1.formatted_balance, "1");
             assert_eq!(vault1.token.id, "token1");
             assert_eq!(
-                vault1.orderbook,
-                Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap()
+                vault1.raindex,
+                Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap()
             );
 
             let vault2 = result[1].clone();
@@ -2448,7 +2448,7 @@ mod tests {
             assert_eq!(vault2.formatted_balance, "2");
             assert_eq!(vault2.token.id, "token2");
             assert_eq!(
-                vault2.orderbook,
+                vault2.raindex,
                 Address::from_str("0x0000000000000000000000000000000000000000").unwrap()
             );
         }
@@ -2481,9 +2481,9 @@ mod tests {
 
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x10").unwrap(),
                 )
@@ -2507,8 +2507,8 @@ mod tests {
 
             assert_eq!(vault.token.id, "token1");
             assert_eq!(
-                vault.orderbook,
-                Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap()
+                vault.raindex,
+                Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap()
             );
         }
 
@@ -2531,8 +2531,8 @@ mod tests {
                                 "symbol": "TKN1",
                                 "decimals": null // Missing decimals
                             },
-                            "orderbook": {
-                                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+                            "raindex": {
+                                "id": CHAIN_ID_1_RAINDEX_ADDRESS
                             },
                             "ordersAsOutput": [],
                             "ordersAsInput": [],
@@ -2571,9 +2571,9 @@ mod tests {
             .unwrap();
             let err = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -2628,7 +2628,7 @@ mod tests {
                                     "blockNumber": "34407047",
                                     "timestamp": "1734054063"
                                 },
-                                "orderbook": {
+                                "raindex": {
                                     "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                                 }
                             }
@@ -2662,9 +2662,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -2703,7 +2703,7 @@ mod tests {
             assert_eq!(result[0].transaction.block_number(), U256::from(34407047));
             assert_eq!(result[0].transaction.timestamp(), U256::from(1734054063));
             assert_eq!(
-                result[0].orderbook,
+                result[0].raindex,
                 Address::from_str("0xcee8cd002f151a536394e564b84076c41bbbcd4d").unwrap()
             );
         }
@@ -2722,8 +2722,8 @@ mod tests {
                     "symbol": "USDC",
                     "decimals": "6"
                 },
-                "orderbook": {
-                    "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+                "raindex": {
+                    "id": CHAIN_ID_1_RAINDEX_ADDRESS
                 },
                 "ordersAsOutput": [],
                 "ordersAsInput": [],
@@ -2755,9 +2755,9 @@ mod tests {
 
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0456").unwrap(),
                 )
@@ -2810,7 +2810,7 @@ mod tests {
                                     "blockNumber": "34407047",
                                     "timestamp": "1734054063"
                                 },
-                                "orderbook": {
+                                "raindex": {
                                     "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                                 }
                             }
@@ -2843,9 +2843,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -2908,7 +2908,7 @@ mod tests {
                                     "blockNumber": "34407047",
                                     "timestamp": "1734054063"
                                 },
-                                "orderbook": {
+                                "raindex": {
                                     "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                                 }
                             }
@@ -2955,9 +2955,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3007,9 +3007,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3076,9 +3076,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3143,9 +3143,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3159,7 +3159,7 @@ mod tests {
                 result,
                 Bytes::copy_from_slice(
                     &approveCall {
-                        spender: Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        spender: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                         amount: U256::from(600000000000000000000u128),
                     }
                     .abi_encode(),
@@ -3221,9 +3221,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3275,7 +3275,7 @@ mod tests {
                     "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
                 )
                 .unwrap()]),
-                orderbook_addresses: None,
+                raindex_addresses: None,
                 only_active_orders: false,
             };
 
@@ -3334,7 +3334,7 @@ mod tests {
                     Address::from_str("0x1d80c49bbbcd1c0911346656b529df9e5c2f783d").unwrap(),
                     Address::from_str("0x12e605bc104e93b45e1ad99f9e555f659051c2bb").unwrap(),
                 ]),
-                orderbook_addresses: None,
+                raindex_addresses: None,
                 only_active_orders: false,
             };
 
@@ -3486,9 +3486,9 @@ mod tests {
             .unwrap();
             let vault = raindex_client
                 .get_vault(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     Bytes::from_str("0x0123").unwrap(),
                 )
@@ -3500,14 +3500,14 @@ mod tests {
         }
 
         #[test]
-        fn get_vaults_filters_to_sg_filter_args_maps_orderbook_addresses() {
-            use rain_orderbook_subgraph_client::types::common::SgVaultsListFilterArgs;
+        fn get_vaults_filters_to_sg_filter_args_maps_raindex_addresses() {
+            use raindex_subgraph_client::types::common::SgVaultsListFilterArgs;
 
             let filters = GetVaultsFilters {
                 owners: vec![],
                 hide_zero_balance: false,
                 tokens: None,
-                orderbook_addresses: Some(vec![
+                raindex_addresses: Some(vec![
                     address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
                     address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"),
                 ]),
@@ -3516,43 +3516,43 @@ mod tests {
 
             let sg_filter_args: SgVaultsListFilterArgs = filters.try_into().unwrap();
 
-            assert_eq!(sg_filter_args.orderbooks.len(), 2);
+            assert_eq!(sg_filter_args.raindexes.len(), 2);
             assert_eq!(
-                sg_filter_args.orderbooks[0],
+                sg_filter_args.raindexes[0],
                 "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
             );
             assert_eq!(
-                sg_filter_args.orderbooks[1],
+                sg_filter_args.raindexes[1],
                 "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
             );
         }
 
         #[test]
-        fn get_vaults_filters_to_sg_filter_args_empty_orderbook_addresses() {
-            use rain_orderbook_subgraph_client::types::common::SgVaultsListFilterArgs;
+        fn get_vaults_filters_to_sg_filter_args_empty_raindex_addresses() {
+            use raindex_subgraph_client::types::common::SgVaultsListFilterArgs;
 
             let filters = GetVaultsFilters {
                 owners: vec![],
                 hide_zero_balance: false,
                 tokens: None,
-                orderbook_addresses: None,
+                raindex_addresses: None,
                 only_active_orders: false,
             };
 
             let sg_filter_args: SgVaultsListFilterArgs = filters.try_into().unwrap();
 
-            assert!(sg_filter_args.orderbooks.is_empty());
+            assert!(sg_filter_args.raindexes.is_empty());
         }
 
         #[test]
         fn get_vaults_filters_to_sg_filter_args_lowercases_mixed_case_addresses() {
-            use rain_orderbook_subgraph_client::types::common::SgVaultsListFilterArgs;
+            use raindex_subgraph_client::types::common::SgVaultsListFilterArgs;
 
             let filters = GetVaultsFilters {
                 owners: vec![],
                 hide_zero_balance: false,
                 tokens: None,
-                orderbook_addresses: Some(vec![address!(
+                raindex_addresses: Some(vec![address!(
                     "0xDeaDbEEfDeaDbEEfDeaDbEEfDeaDbEEfDeaDbEEf"
                 )]),
                 only_active_orders: false,
@@ -3560,9 +3560,9 @@ mod tests {
 
             let sg_filter_args: SgVaultsListFilterArgs = filters.try_into().unwrap();
 
-            assert_eq!(sg_filter_args.orderbooks.len(), 1);
+            assert_eq!(sg_filter_args.raindexes.len(), 1);
             assert_eq!(
-                sg_filter_args.orderbooks[0],
+                sg_filter_args.raindexes[0],
                 "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
             );
         }

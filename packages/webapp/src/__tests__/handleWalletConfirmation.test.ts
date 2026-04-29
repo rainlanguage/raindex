@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleWalletConfirmation } from '../lib/services/handleWalletConfirmation';
 import { sendTransaction, switchChain } from '@wagmi/core';
 import { mockWeb3Config } from '$lib/__mocks__/mockWeb3Config';
-import type { RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexOrder } from '@rainlanguage/raindex';
 
 const { mockWagmiConfigStore } = await vi.hoisted(() => import('../lib/__mocks__/stores'));
 
@@ -25,7 +25,7 @@ const mockOrder = {
 	owner: '0x4',
 	outputs: [],
 	inputs: [],
-	orderbook: 0x5,
+	raindex: 0x5,
 	active: true,
 	timestampAdded: BigInt(1234567890),
 	tradesCount: 0

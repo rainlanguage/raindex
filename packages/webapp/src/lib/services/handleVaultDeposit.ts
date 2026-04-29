@@ -1,4 +1,4 @@
-import type { Float, RaindexClient, RaindexVault } from '@rainlanguage/orderbook';
+import type { Float, RaindexClient, RaindexVault } from '@rainlanguage/raindex';
 import { type Hex } from 'viem';
 import type {
 	TransactionManager,
@@ -31,7 +31,7 @@ async function executeDeposit(args: DepositArgs) {
 			closeOnConfirm: false,
 			args: {
 				entity: vault,
-				toAddress: vault.orderbook,
+				toAddress: vault.raindex,
 				chainId: vault.chainId,
 				onConfirm: (txHash: Hex) => {
 					manager.createDepositTransaction({

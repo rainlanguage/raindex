@@ -1,6 +1,6 @@
-# rain_orderbook_math — Architecture & Design Notes
+# raindex_math — Architecture & Design Notes
 
-This crate provides small, focused, and overflow‑safe helpers for 256‑bit integer math used across the Rain Orderbook codebase. It standardizes two things:
+This crate provides small, focused, and overflow‑safe helpers for 256‑bit integer math used across the Rain Raindex codebase. It standardizes two things:
 
 - Fixed‑point arithmetic in 18‑decimals (a.k.a. “wad” math).
 - Safe scaling between token native decimals and 18‑decimals.
@@ -161,7 +161,7 @@ Assume `amount` is a token balance in its native decimals.
 - Normalize to 18 decimals:
   ```rust
   use alloy::primitives::U256;
-  use rain_orderbook_math::BigUintMath;
+  use raindex_math::BigUintMath;
 
   let usdc_amount = U256::from(1_500_000u64); // 1.5 USDC with 6 decimals
   let wad = usdc_amount.scale_18(6)?;          // 1.5 * 1e18 as U256
@@ -190,8 +190,8 @@ Assume `amount` is a token balance in its native decimals.
 ## File Map
 
 - `src/lib.rs` — All implementations and tests.
-- `Cargo.toml` — Declares crate as `rain_orderbook_math`; depends on `alloy`, `thiserror` (and `once_cell` via workspace, unused here).
+- `Cargo.toml` — Declares crate as `raindex_math`; depends on `alloy`, `thiserror` (and `once_cell` via workspace, unused here).
 
 ## Summary
 
-`rain_orderbook_math` supplies the minimal, safe building blocks needed for consistent 18‑dec fixed‑point math on `U256`, with careful overflow handling and 512‑bit intermediates for the common mul‑then‑div pattern. Other Rain Orderbook crates rely on these helpers to normalize magnitudes and compute rates without duplicating math or risking undefined overflow behavior.
+`raindex_math` supplies the minimal, safe building blocks needed for consistent 18‑dec fixed‑point math on `U256`, with careful overflow handling and 512‑bit intermediates for the common mul‑then‑div pattern. Other Rain Raindex crates rely on these helpers to normalize magnitudes and compute rates without duplicating math or risking undefined overflow behavior.

@@ -33,7 +33,7 @@
 		RaindexVaultsList,
 		type Address,
 		type Hex
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import { useToasts } from '$lib/providers/toasts/useToasts';
 	import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 
@@ -41,7 +41,7 @@
 	export let handleDebugTradeModal: DebugTradeModalHandler | undefined = undefined;
 	export let codeMirrorTheme;
 	export let lightweightChartsTheme;
-	export let orderbookAddress: Address;
+	export let raindexAddress: Address;
 	export let orderHash: Hex;
 	export let chainId: number;
 	export let rpcs: string[] | undefined = undefined;
@@ -86,7 +86,7 @@
 	$: orderDetailQuery = createQuery<RaindexOrder>({
 		queryKey: [QKEY_ORDER, orderHash],
 		queryFn: async () => {
-			const result = await raindexClient.getOrderByHash(chainId, orderbookAddress, orderHash);
+			const result = await raindexClient.getOrderByHash(chainId, raindexAddress, orderHash);
 			if (result.error) throw new Error(result.error.readableMsg);
 			return result.value;
 		}
@@ -167,9 +167,9 @@
 	<svelte:fragment slot="card" let:data>
 		<div class="flex flex-col gap-y-6">
 			<CardProperty>
-				<svelte:fragment slot="key">Orderbook</svelte:fragment>
+				<svelte:fragment slot="key">Raindex</svelte:fragment>
 				<svelte:fragment slot="value">
-					<Hash type={HashType.Identifier} shorten={false} value={data.orderbook} />
+					<Hash type={HashType.Identifier} shorten={false} value={data.raindex} />
 				</svelte:fragment>
 			</CardProperty>
 
@@ -261,7 +261,7 @@
 						<svelte:fragment slot="value">
 							<div class="mt-2 space-y-2">
 								{#each filteredVaults as vault}
-									<ButtonVaultLink tokenVault={vault} {chainId} {orderbookAddress}>
+									<ButtonVaultLink tokenVault={vault} {chainId} {raindexAddress}>
 										<svelte:fragment slot="buttons">
 											{#if matchesAccount(vault.owner)}
 												<div class="flex gap-1">

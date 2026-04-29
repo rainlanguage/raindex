@@ -3,7 +3,7 @@ use rain_metadata::types::dotrain::{
     gui_state_v1::{DotrainGuiStateV1, ShortenedTokenCfg, ValueCfg},
     source_v1::DotrainSourceV1,
 };
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     gui::GuiDepositCfg,
     order::{OrderIOCfg, VaultType},
     token::TokenCfg,
@@ -261,7 +261,7 @@ impl DotrainOrderGui {
             for select_token in st {
                 if let Ok(token) = self
                     .dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .get_token(&select_token.key)
                 {
                     select_tokens.insert(select_token.key, token);
@@ -394,12 +394,12 @@ impl DotrainOrderGui {
             }
             if dotrain_order_gui.is_select_token_set(key.clone())? {
                 TokenCfg::remove_record_from_yaml(
-                    dotrain_order_gui.dotrain_order.orderbook_yaml().documents,
+                    dotrain_order_gui.dotrain_order.raindex_yaml().documents,
                     &key,
                 )?;
             }
             TokenCfg::add_record_to_yaml(
-                dotrain_order_gui.dotrain_order.orderbook_yaml().documents,
+                dotrain_order_gui.dotrain_order.raindex_yaml().documents,
                 &key,
                 &token.network.key,
                 &token.address.to_string(),
@@ -547,15 +547,13 @@ mod tests {
     };
     use alloy::primitives::{Address, U256};
     use js_sys::{eval, Reflect};
-    use rain_orderbook_app_settings::{
-        network::NetworkCfg, order::VaultType, yaml::YamlParsableHash,
-    };
-    use rain_orderbook_common::dotrain::RainDocument;
-    use rain_orderbook_common::dotrain_order::DotrainOrder;
+    use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
+    use raindex_common::dotrain::RainDocument;
+    use raindex_common::dotrain_order::DotrainOrder;
     use std::str::FromStr;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByy0aXWzwh4Ev4qgKH6AL6JttNKY1Bqx4p_wJ2v1pmLxPtxzbs7JvTfJadd4A5wtubfkC0w0FU-AxDCyJhPBgaGlTJEXQCkCyq1H3R4776t3qDZiRTGncieiQN37AvSlDMu6zoQ7Zb7YyHLJKBX1KHTxNmKHxIGSjNToWr_5ATRfGMbHTEJ59ApyP9nh20LPqm61zy_Jabe425akI4hto6xqpqpp2z9A4-pv2Cn8tQbxvLGddTvDRX3tBGMyao6Z4xV7vus4k8iq9Oq7_0_1F5RRV-JLU-zRkIn9inJ5AjfkymPKAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21Qy27CMBCMadWqUk-oUk-V-gG1EoeiJki9tEK8BFwgAi4oBEOiGDsE84j4CT4ZAusgIvawM-sZ765d0C7xAjgJ-DTgc0w0FQ-AxDDyJhPBgaFlTJEnQClCykv3ut133lavUK3EgmJO5VbEobr3AehLGVV0nQnPZb5YyYplWGU9jjy8jtk-daA0IzW62qu_AS1-O7tDLqEiega5l-7wWUKPqm51Ti8paNe42ZZkI4hto7xqZqpp219AcU3MfjbjRpgktbbc-oMlHzl_5dANOoTM3Xbc7f9bTlTFzeHvu_oLyqgn8bkpntKIiWRBuTwC_jr8_soBAAA=";
 
     fn encode_state(state: &SerializedGuiState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -698,7 +696,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
-            version: 5
+            version: 6
             networks:
                 test:
                     rpcs:
@@ -714,7 +712,7 @@ mod tests {
                 test:
                     network: test
                     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-            orderbooks:
+            raindexes:
                 test:
                     address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
                     network: test
@@ -730,7 +728,7 @@ mod tests {
                     outputs:
                         - token: token1
                     rainlang: test
-                    orderbook: test
+                    raindex: test
             deployments:
                 select-token-deployment:
                     order: test
@@ -851,7 +849,7 @@ mod tests {
 
         let restored_token = gui
             .dotrain_order
-            .orderbook_yaml()
+            .raindex_yaml()
             .get_token("token3")
             .unwrap();
         assert_eq!(restored_token.address, replacement_token.address);

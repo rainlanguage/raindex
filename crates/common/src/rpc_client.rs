@@ -3,7 +3,7 @@ use alloy::providers::Provider;
 use alloy::rpc::json_rpc::{Id, RequestMeta};
 use alloy::rpc::types::Filter;
 use alloy::transports::TransportError;
-use rain_orderbook_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
+use raindex_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::sync::Arc;

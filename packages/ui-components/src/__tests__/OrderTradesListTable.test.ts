@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { test, vi, type Mock } from 'vitest';
 import { expect } from '../lib/test/matchers';
-import type { RaindexOrder, RaindexTrade } from '@rainlanguage/orderbook';
+import type { RaindexOrder, RaindexTrade } from '@rainlanguage/raindex';
 import OrderTradesListTable from '../lib/components/tables/OrderTradesListTable.svelte';
 import { QueryClient } from '@tanstack/svelte-query';
 
@@ -39,7 +39,7 @@ const mockTradeOrdersList: RaindexTrade[] = [
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
 		orderHash: 'orderHash',
 		inputVaultBalanceChange: {
@@ -66,9 +66,9 @@ const mockTradeOrdersList: RaindexTrade[] = [
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
-		orderbook: '0x00'
+		raindex: '0x00'
 	},
 	{
 		id: '2',
@@ -103,7 +103,7 @@ const mockTradeOrdersList: RaindexTrade[] = [
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
 		orderHash: 'orderHash',
 		inputVaultBalanceChange: {
@@ -130,9 +130,9 @@ const mockTradeOrdersList: RaindexTrade[] = [
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
-		orderbook: '0x00'
+		raindex: '0x00'
 	}
 ] as unknown as RaindexTrade[];
 
@@ -359,7 +359,7 @@ const createMockTrade = (id: string, inputAmount: string, outputAmount: string):
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
 		orderHash: 'orderHash',
 		inputVaultBalanceChange: {
@@ -386,9 +386,9 @@ const createMockTrade = (id: string, inputAmount: string, outputAmount: string):
 				timestamp: BigInt(1632000000),
 				blockNumber: BigInt(0)
 			},
-			orderbook: '0x1'
+			raindex: '0x1'
 		},
-		orderbook: '0x00'
+		raindex: '0x00'
 	}) as unknown as RaindexTrade;
 
 test('displays dash when output amount is zero (prevents division by zero)', async () => {

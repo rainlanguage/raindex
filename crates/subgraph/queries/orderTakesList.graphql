@@ -26,7 +26,7 @@ query OrderTakesListQuery($id: Bytes!, $skip: Int = 0, $first: Int = 25) {
       id
       orderHash
     }
-    orderbook {
+    raindex {
       id
     }
     inputVaultBalanceChange {

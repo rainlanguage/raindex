@@ -2,13 +2,13 @@ WITH
 params AS (
   SELECT
     ?1 AS chain_id,
-    ?2 AS orderbook_address,
+    ?2 AS raindex_address,
     ?3 AS order_hash
 ),
 order_add_events AS (
   SELECT
     oe.chain_id,
-    oe.orderbook_address,
+    oe.raindex_address,
     oe.transaction_hash,
     oe.log_index,
     oe.block_number,
@@ -19,7 +19,7 @@ order_add_events AS (
   FROM order_events oe
   JOIN params p
     ON oe.chain_id = p.chain_id
-   AND oe.orderbook_address = p.orderbook_address
+   AND oe.raindex_address = p.raindex_address
    AND oe.order_hash = p.order_hash
   WHERE oe.event_type = 'AddOrderV3'
 ),
@@ -27,7 +27,7 @@ take_trades AS (
   SELECT
     'take' AS trade_kind,
     t.chain_id,
-    t.orderbook_address,
+    t.raindex_address,
     oe.order_hash,
     t.order_owner,
     t.order_nonce,
@@ -45,10 +45,10 @@ take_trades AS (
   FROM take_orders t
   JOIN params p
     ON t.chain_id = p.chain_id
-   AND t.orderbook_address = p.orderbook_address
+   AND t.raindex_address = p.raindex_address
   JOIN order_add_events oe
     ON oe.chain_id = t.chain_id
-   AND oe.orderbook_address = t.orderbook_address
+   AND oe.raindex_address = t.raindex_address
    AND oe.order_owner = t.order_owner
    AND oe.order_nonce = t.order_nonce
    AND (
@@ -59,7 +59,7 @@ take_trades AS (
      SELECT 1
      FROM order_add_events newer
      WHERE newer.chain_id = oe.chain_id
-      AND newer.orderbook_address = oe.orderbook_address
+      AND newer.raindex_address = oe.raindex_address
       AND newer.order_owner = oe.order_owner
        AND newer.order_nonce = oe.order_nonce
        AND (
@@ -73,14 +73,14 @@ take_trades AS (
    )
   JOIN order_ios io_in
     ON io_in.chain_id = oe.chain_id
-   AND io_in.orderbook_address = oe.orderbook_address
+   AND io_in.raindex_address = oe.raindex_address
    AND io_in.transaction_hash = oe.transaction_hash
    AND io_in.log_index = oe.log_index
    AND io_in.io_index = t.input_io_index
    AND io_in.io_type = 'input'
   JOIN order_ios io_out
     ON io_out.chain_id = oe.chain_id
-   AND io_out.orderbook_address = oe.orderbook_address
+   AND io_out.raindex_address = oe.raindex_address
    AND io_out.transaction_hash = oe.transaction_hash
    AND io_out.log_index = oe.log_index
    AND io_out.io_index = t.output_io_index
@@ -90,7 +90,7 @@ clear_alice AS (
   SELECT DISTINCT
     'clear' AS trade_kind,
     c.chain_id,
-    c.orderbook_address,
+    c.raindex_address,
     oe.order_hash,
     oe.order_owner,
     oe.order_nonce,
@@ -108,10 +108,10 @@ clear_alice AS (
   FROM clear_v3_events c
   JOIN params p
     ON c.chain_id = p.chain_id
-   AND c.orderbook_address = p.orderbook_address
+   AND c.raindex_address = p.raindex_address
   JOIN order_add_events oe
     ON oe.chain_id = c.chain_id
-   AND oe.orderbook_address = c.orderbook_address
+   AND oe.raindex_address = c.raindex_address
    AND oe.order_hash = c.alice_order_hash
    AND (
         oe.block_number < c.block_number
@@ -121,7 +121,7 @@ clear_alice AS (
      SELECT 1
      FROM order_add_events newer
      WHERE newer.chain_id = oe.chain_id
-      AND newer.orderbook_address = oe.orderbook_address
+      AND newer.raindex_address = oe.raindex_address
       AND newer.order_hash = oe.order_hash
        AND (
             newer.block_number < c.block_number
@@ -134,26 +134,26 @@ clear_alice AS (
    )
   JOIN after_clear_v2_events a
     ON a.chain_id = c.chain_id
-   AND a.orderbook_address = c.orderbook_address
+   AND a.raindex_address = c.raindex_address
    AND a.transaction_hash = c.transaction_hash
    AND a.log_index = (
        SELECT MIN(ac.log_index)
        FROM after_clear_v2_events ac
        WHERE ac.chain_id = c.chain_id
-         AND ac.orderbook_address = c.orderbook_address
+         AND ac.raindex_address = c.raindex_address
          AND ac.transaction_hash = c.transaction_hash
          AND ac.log_index > c.log_index
    )
   JOIN order_ios io_in
     ON io_in.chain_id = oe.chain_id
-   AND io_in.orderbook_address = oe.orderbook_address
+   AND io_in.raindex_address = oe.raindex_address
    AND io_in.transaction_hash = oe.transaction_hash
    AND io_in.log_index = oe.log_index
    AND io_in.io_index = c.alice_input_io_index
    AND io_in.io_type = 'input'
   JOIN order_ios io_out
     ON io_out.chain_id = oe.chain_id
-   AND io_out.orderbook_address = oe.orderbook_address
+   AND io_out.raindex_address = oe.raindex_address
    AND io_out.transaction_hash = oe.transaction_hash
    AND io_out.log_index = oe.log_index
    AND io_out.io_index = c.alice_output_io_index
@@ -164,7 +164,7 @@ clear_bob AS (
   SELECT DISTINCT
     'clear' AS trade_kind,
     c.chain_id,
-    c.orderbook_address,
+    c.raindex_address,
     oe.order_hash,
     oe.order_owner,
     oe.order_nonce,
@@ -182,10 +182,10 @@ clear_bob AS (
   FROM clear_v3_events c
   JOIN params p
     ON c.chain_id = p.chain_id
-   AND c.orderbook_address = p.orderbook_address
+   AND c.raindex_address = p.raindex_address
   JOIN order_add_events oe
     ON oe.chain_id = c.chain_id
-   AND oe.orderbook_address = c.orderbook_address
+   AND oe.raindex_address = c.raindex_address
    AND oe.order_hash = c.bob_order_hash
    AND (
         oe.block_number < c.block_number
@@ -195,7 +195,7 @@ clear_bob AS (
      SELECT 1
      FROM order_add_events newer
      WHERE newer.chain_id = oe.chain_id
-      AND newer.orderbook_address = oe.orderbook_address
+      AND newer.raindex_address = oe.raindex_address
       AND newer.order_hash = oe.order_hash
        AND (
             newer.block_number < c.block_number
@@ -208,26 +208,26 @@ clear_bob AS (
    )
   JOIN after_clear_v2_events a
     ON a.chain_id = c.chain_id
-   AND a.orderbook_address = c.orderbook_address
+   AND a.raindex_address = c.raindex_address
    AND a.transaction_hash = c.transaction_hash
    AND a.log_index = (
        SELECT MIN(ac.log_index)
        FROM after_clear_v2_events ac
        WHERE ac.chain_id = c.chain_id
-         AND ac.orderbook_address = c.orderbook_address
+         AND ac.raindex_address = c.raindex_address
          AND ac.transaction_hash = c.transaction_hash
          AND ac.log_index > c.log_index
    )
   JOIN order_ios io_in
     ON io_in.chain_id = oe.chain_id
-   AND io_in.orderbook_address = oe.orderbook_address
+   AND io_in.raindex_address = oe.raindex_address
    AND io_in.transaction_hash = oe.transaction_hash
    AND io_in.log_index = oe.log_index
    AND io_in.io_index = c.bob_input_io_index
    AND io_in.io_type = 'input'
   JOIN order_ios io_out
     ON io_out.chain_id = oe.chain_id
-   AND io_out.orderbook_address = oe.orderbook_address
+   AND io_out.raindex_address = oe.raindex_address
    AND io_out.transaction_hash = oe.transaction_hash
    AND io_out.log_index = oe.log_index
    AND io_out.io_index = c.bob_output_io_index
@@ -248,7 +248,7 @@ trade_rows AS (
   SELECT
     ut.trade_kind,
     ut.chain_id,
-    ut.orderbook_address,
+    ut.raindex_address,
     ut.order_hash,
     ut.order_owner,
     ut.order_nonce,
@@ -277,20 +277,20 @@ trade_with_snapshots AS (
   FROM trade_rows tr
   LEFT JOIN running_vault_balances mvb_in
     ON mvb_in.chain_id = tr.chain_id
-   AND mvb_in.orderbook_address = tr.orderbook_address
+   AND mvb_in.raindex_address = tr.raindex_address
    AND mvb_in.owner = tr.order_owner
    AND mvb_in.token = tr.input_token
    AND mvb_in.vault_id = tr.input_vault_id
   LEFT JOIN running_vault_balances mvb_out
     ON mvb_out.chain_id = tr.chain_id
-   AND mvb_out.orderbook_address = tr.orderbook_address
+   AND mvb_out.raindex_address = tr.raindex_address
    AND mvb_out.owner = tr.order_owner
    AND mvb_out.token = tr.output_token
    AND mvb_out.vault_id = tr.output_vault_id
 )
 SELECT
   tws.trade_kind,
-  tws.orderbook_address AS orderbook,
+  tws.raindex_address AS raindex,
   tws.order_hash,
   tws.order_owner,
   tws.order_nonce,
@@ -321,7 +321,7 @@ SELECT
 FROM trade_with_snapshots tws
 LEFT JOIN vault_balance_changes vbc_input
   ON vbc_input.chain_id = tws.chain_id
- AND vbc_input.orderbook_address = tws.orderbook_address
+ AND vbc_input.raindex_address = tws.raindex_address
  AND vbc_input.owner = tws.order_owner
  AND vbc_input.token = tws.input_token
  AND vbc_input.vault_id = tws.input_vault_id
@@ -329,7 +329,7 @@ LEFT JOIN vault_balance_changes vbc_input
  AND vbc_input.log_index = tws.log_index
 LEFT JOIN vault_balance_changes vbc_output
   ON vbc_output.chain_id = tws.chain_id
- AND vbc_output.orderbook_address = tws.orderbook_address
+ AND vbc_output.raindex_address = tws.raindex_address
  AND vbc_output.owner = tws.order_owner
  AND vbc_output.token = tws.output_token
  AND vbc_output.vault_id = tws.output_vault_id
@@ -337,11 +337,11 @@ LEFT JOIN vault_balance_changes vbc_output
  AND vbc_output.log_index = tws.log_index
 LEFT JOIN erc20_tokens tok_in
   ON tok_in.chain_id = tws.chain_id
- AND tok_in.orderbook_address = tws.orderbook_address
+ AND tok_in.raindex_address = tws.raindex_address
  AND tok_in.token_address = tws.input_token
 LEFT JOIN erc20_tokens tok_out
   ON tok_out.chain_id = tws.chain_id
- AND tok_out.orderbook_address = tws.orderbook_address
+ AND tok_out.raindex_address = tws.raindex_address
  AND tok_out.token_address = tws.output_token
 WHERE 1 = 1
 /*START_TS_CLAUSE*/

@@ -3,8 +3,8 @@ use crate::output::{output, SupportedOutputEncoding};
 use alloy::sol_types::SolCall;
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use rain_orderbook_common::add_order::AddOrderArgs;
-use rain_orderbook_common::dotrain_order::DotrainOrder;
+use raindex_common::add_order::AddOrderArgs;
+use raindex_common::dotrain_order::DotrainOrder;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
@@ -75,8 +75,8 @@ mod tests {
     use rain_interpreter_bindings::Rainlang::{
         expressionDeployerAddressCall, interpreterAddressCall, parserAddressCall, storeAddressCall,
     };
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::{FieldErrorKind, YamlError};
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::{FieldErrorKind, YamlError};
     use serde_json::json;
     use std::io::Write;
     use std::str::FromStr;
@@ -126,7 +126,7 @@ mod tests {
         );
     }
 
-    async fn mock_orderbook_rpc_calls(rpc_server: &MockServer) {
+    async fn mock_raindex_rpc_calls(rpc_server: &MockServer) {
         // Helper to build ABI-encoded address return values.
         let build_address_return = |id: u64| {
             let addr = Address::random();
@@ -214,8 +214,8 @@ rainlangs:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -251,7 +251,7 @@ orders:
             - token: token2
               vault-id: 1
         rainlang: some-rainlang
-        orderbook: some-orderbook
+        raindex: some-raindex
 
 deployments:
     some-deployment:
@@ -273,7 +273,7 @@ _ _: 0 0;
         write!(temp_dotrain_file, "{}", dotrain_content).unwrap();
         let dotrain_path = temp_dotrain_file.path();
 
-        mock_orderbook_rpc_calls(&rpc_server).await;
+        mock_raindex_rpc_calls(&rpc_server).await;
 
         let add_order_calldata = AddOrderCalldata {
             dotrain_file: dotrain_path.to_path_buf(),
@@ -325,7 +325,7 @@ scenarios:
 orders:
     some-order:
         rainlang: some-rainlang
-        orderbook: 0x0000000000000000000000000000000000000000
+        raindex: 0x0000000000000000000000000000000000000000
         inputs: []
         outputs: []
 deployments:
@@ -410,7 +410,7 @@ test: test
     #[tokio::test]
     async fn test_execute_invalid_rainlang_script() {
         let rpc_server = MockServer::start_async().await;
-        mock_orderbook_rpc_calls(&rpc_server).await;
+        mock_raindex_rpc_calls(&rpc_server).await;
 
         let dotrain_content_invalid_script = format!(
             "
@@ -422,8 +422,8 @@ networks:
     chain-id: 1
 subgraphs:
   some-subgraph: https://www.some-subgraph.com
-orderbooks:
-  some-orderbook:
+raindexes:
+  some-raindex:
     address: 0x0000000000000000000000000000000000000000
     network: some-network
     subgraph: some-subgraph
@@ -439,7 +439,7 @@ scenarios:
 orders:
   some-order:
     rainlang: some-rainlang
-    orderbook: some-orderbook
+    raindex: some-raindex
     inputs:
       - token: token1
     outputs:
@@ -493,8 +493,8 @@ rainlangs:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -530,7 +530,7 @@ orders:
             - token: token2
               vault-id: 1
         rainlang: some-rainlang
-        orderbook: some-orderbook
+        raindex: some-raindex
 
 deployments:
     some-deployment:

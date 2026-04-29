@@ -52,7 +52,7 @@ pub enum TransactionArgsError {
 
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct TransactionArgs {
-    pub orderbook_address: Address,
+    pub raindex_address: Address,
     pub derivation_index: Option<usize>,
     pub chain_id: Option<u64>,
     pub rpcs: Vec<String>,
@@ -139,12 +139,12 @@ mod tests {
     use httpmock::MockServer;
 
     use super::*;
-    use rain_orderbook_bindings::IRaindexV6::vaultBalance2Call;
+    use raindex_bindings::IRaindexV6::vaultBalance2Call;
 
     #[test]
     fn test_try_into_write_contract_parameters_ok() {
         let args = TransactionArgs {
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: None,
             chain_id: None,
             rpcs: vec!["https://mainnet.infura.io/v3/your-api-key".to_string()],
@@ -168,7 +168,7 @@ mod tests {
         assert_eq!(params.max_fee_per_gas, None);
 
         let args = TransactionArgs {
-            orderbook_address: address!("123abcdef24Ca5003905aA834De7156C68b2E1d0"),
+            raindex_address: address!("123abcdef24Ca5003905aA834De7156C68b2E1d0"),
             derivation_index: Some(0),
             chain_id: Some(1),
             rpcs: vec!["https://mainnet.infura.io/v3/your-api-key".to_string()],
@@ -211,7 +211,7 @@ mod tests {
         });
 
         let mut args = TransactionArgs {
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: None,
             chain_id: None,
             rpcs: vec![server.url("/rpc")],
@@ -238,7 +238,7 @@ mod tests {
         });
 
         let mut args = TransactionArgs {
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: None,
             chain_id: None,
             rpcs: vec![server.url("/rpc")],
@@ -272,7 +272,7 @@ mod tests {
         });
 
         let args = TransactionArgs {
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: None,
             chain_id: None,
             rpcs: vec![server.url("/rpc")],

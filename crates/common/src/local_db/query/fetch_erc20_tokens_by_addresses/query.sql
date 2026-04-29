@@ -1,4 +1,4 @@
-SELECT chain_id, orderbook_address, token_address, name, symbol, decimals
+SELECT chain_id, raindex_address, token_address, name, symbol, decimals
 FROM erc20_tokens
-WHERE chain_id = ?1 AND orderbook_address = ?2
+WHERE chain_id = ?1 AND raindex_address = ?2
   /*ADDRESSES_CLAUSE*/;

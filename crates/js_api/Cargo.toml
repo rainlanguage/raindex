@@ -1,5 +1,5 @@
 [package]
-name = "rain_orderbook_js_api"
+name = "raindex_js_api"
 description = "Javascript bindings for common functions accross the app."
 version.workspace = true
 edition.workspace = true
@@ -16,11 +16,11 @@ cynic = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
-rain_orderbook_common = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_subgraph_client = { workspace = true }
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_quote = { workspace = true }
+raindex_common = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_subgraph_client = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_quote = { workspace = true }
 alloy-ethers-typecast = { workspace = true }
 wasm-bindgen-utils = { workspace = true }
 tokio = { workspace = true, features = [

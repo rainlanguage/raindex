@@ -1,5 +1,5 @@
 import { RegistryManager } from '../providers/registry/RegistryManager';
-import { DotrainRegistry } from '@rainlanguage/orderbook';
+import { DotrainRegistry } from '@rainlanguage/raindex';
 
 export async function loadRegistryUrl(
 	url: string,

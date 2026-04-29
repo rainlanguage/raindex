@@ -1,7 +1,7 @@
 import { render, screen, cleanup, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import LocalDbStatusCard from '../lib/components/LocalDbStatusCard.svelte';
-import type { NetworkSyncStatus, OrderbookSyncStatus } from '@rainlanguage/orderbook';
+import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
 
 vi.mock('$lib/utils/getNetworkName', () => ({
 	getNetworkName: (chainId: number) => {
@@ -83,24 +83,24 @@ describe('LocalDbStatusCard', () => {
 		render(LocalDbStatusCard, {
 			props: {
 				networkStatuses: new Map(),
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
 		expect(screen.getByText('Active')).toBeInTheDocument();
 	});
 
-	it('accepts orderbookStatuses prop', () => {
+	it('accepts raindexStatuses prop', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'active',
 					schedulerState: 'leader'
@@ -109,7 +109,7 @@ describe('LocalDbStatusCard', () => {
 		]);
 
 		render(LocalDbStatusCard, {
-			props: { networkStatuses, orderbookStatuses }
+			props: { networkStatuses, raindexStatuses }
 		});
 
 		expect(screen.getByText('Active')).toBeInTheDocument();

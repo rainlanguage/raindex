@@ -2,7 +2,7 @@ pub use crate::local_db::pipeline::SyncPhase;
 use crate::local_db::query::{
     FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
 };
-use crate::local_db::{LocalDbError, OrderbookIdentifier};
+use crate::local_db::{LocalDbError, RaindexIdentifier};
 #[cfg(target_family = "wasm")]
 use executor::JsCallbackExecutor;
 
@@ -27,7 +27,7 @@ pub mod vaults;
 pub use state::SyncReadiness;
 pub(crate) use state::{ClassifiedChains, LocalDbState, QuerySource};
 pub use status::{
-    LocalDbStatus, LocalDbStatusSnapshot, NetworkSyncStatus, OrderbookSyncStatus, SchedulerState,
+    LocalDbStatus, LocalDbStatusSnapshot, NetworkSyncStatus, RaindexSyncStatus, SchedulerState,
 };
 
 #[cfg(target_family = "wasm")]
@@ -337,9 +337,9 @@ mod wasm_tests {
     use super::*;
     use crate::raindex_client::RaindexClient;
     use gloo_timers::future::TimeoutFuture;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::{
-        orderbook::{OrderbookYaml, OrderbookYamlValidation},
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::{
+        raindex::{RaindexYaml, RaindexYamlValidation},
         YamlParsable,
     };
     use std::cell::RefCell;
@@ -354,7 +354,7 @@ mod wasm_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    fn single_orderbook_settings_yaml() -> String {
+    fn single_raindex_settings_yaml() -> String {
         format!(
             r#"
 version: {version}
@@ -377,8 +377,8 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 1000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -391,9 +391,9 @@ orderbooks:
 
     #[cfg(not(target_family = "wasm"))]
     async fn build_client() -> RaindexClient {
-        RaindexClient::new(vec![single_orderbook_settings_yaml()], None, None)
+        RaindexClient::new(vec![single_raindex_settings_yaml()], None, None)
             .await
-            .expect("valid orderbook yaml")
+            .expect("valid raindex yaml")
     }
 
     fn success_callback() -> js_sys::Function {

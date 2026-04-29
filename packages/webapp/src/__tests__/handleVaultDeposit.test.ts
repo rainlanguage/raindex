@@ -3,7 +3,7 @@ import {
 	handleVaultDeposit,
 	type VaultDepositHandlerDependencies
 } from '../lib/services/handleVaultDeposit';
-import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/orderbook';
+import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import { waitFor } from '@testing-library/svelte';
 import type { TransactionManager } from '@rainlanguage/ui-components';
@@ -162,7 +162,7 @@ describe('handleVaultDeposit', () => {
 					closeOnConfirm: false,
 					args: {
 						entity: mockVault,
-						toAddress: mockVault.orderbook,
+						toAddress: mockVault.raindex,
 						chainId: mockVault.chainId,
 						onConfirm: expect.any(Function),
 						calldata: mockDepositCalldata

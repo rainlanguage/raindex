@@ -1,4 +1,4 @@
-import type { RaindexClient, RaindexVault, RaindexVaultsList } from '@rainlanguage/orderbook';
+import type { RaindexClient, RaindexVault, RaindexVaultsList } from '@rainlanguage/raindex';
 import { type Hex } from 'viem';
 import { QKEY_VAULTS, type TransactionManager } from '@rainlanguage/ui-components';
 import type { TransactionConfirmationProps } from '@rainlanguage/ui-components';
@@ -51,8 +51,8 @@ export async function handleVaultsWithdrawAll(
 			vaults,
 			onSubmit: async () => {
 				try {
-					// Validate that all vaults share the same orderbook
-					const orderbook = vaults[0].orderbook;
+					// Validate that all vaults share the same raindex
+					const raindex = vaults[0].raindex;
 					const calldataResult = await vaultsList.getWithdrawCalldata();
 					if (calldataResult.error) {
 						throw new Error(
@@ -65,7 +65,7 @@ export async function handleVaultsWithdrawAll(
 						open: true,
 						modalTitle: `Withdrawing from ${vaults.length} vaults...`,
 						args: {
-							toAddress: orderbook,
+							toAddress: raindex,
 							chainId: vaults[0].chainId,
 							calldata,
 							onConfirm: async (txHash: Hex) => {

@@ -4,7 +4,7 @@ import {
 } from "../generated/schema";
 import { eventId } from "./interfaces/event";
 import { handleVaultBalanceChange, vaultEntityId } from "./vault";
-import { DepositV2 } from "../generated/OrderBook/OrderBook";
+import { DepositV2 } from "../generated/Raindex/Raindex";
 import { Float, getCalculator } from "./float";
 import { getERC20Entity } from "./erc20";
 
@@ -49,7 +49,7 @@ export function createDepositEntity(
   depositAmount: Float
 ): void {
   let deposit = new DepositEntity(eventId(event));
-  deposit.orderbook = event.address;
+  deposit.raindex = event.address;
   deposit.amount = depositAmount;
   deposit.sender = event.params.sender;
   deposit.vault = vaultEntityId(

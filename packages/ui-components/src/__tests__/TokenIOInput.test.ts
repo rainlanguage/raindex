@@ -2,11 +2,11 @@ import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import TokenIOInput from '../lib/components/deployment/TokenIOInput.svelte';
 import type { ComponentProps } from 'svelte';
-import { AccountBalance, DotrainOrderGui, Float } from '@rainlanguage/orderbook';
+import { AccountBalance, DotrainOrderGui, Float } from '@rainlanguage/raindex';
 import { useGui } from '$lib/hooks/useGui';
 import type { TokenBalance } from '$lib/types/tokenBalance';
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => {
+vi.mock('@rainlanguage/raindex', async (importOriginal) => {
 	return {
 		...(await importOriginal()),
 		DotrainOrderGui: vi.fn()

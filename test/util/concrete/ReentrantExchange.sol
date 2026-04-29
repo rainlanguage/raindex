@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {GenericPoolOrderBookV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolOrderBookV6FlashBorrower.sol";
+import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
     IRaindexV6,
     TakeOrdersConfigV5,
@@ -19,12 +19,12 @@ import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 
 /// @dev Exchange that re-enters arb4 when called during _exchange.
 contract ReentrantExchange {
-    GenericPoolOrderBookV6FlashBorrower internal immutable iArb;
-    IRaindexV6 internal immutable iOrderBook;
+    GenericPoolRaindexV6FlashBorrower internal immutable iArb;
+    IRaindexV6 internal immutable iRaindex;
 
-    constructor(GenericPoolOrderBookV6FlashBorrower arb, IRaindexV6 orderBook) {
+    constructor(GenericPoolRaindexV6FlashBorrower arb, IRaindexV6 raindex) {
         iArb = arb;
-        iOrderBook = orderBook;
+        iRaindex = raindex;
     }
 
     /// Called by pool.functionCallWithValue during _exchange. Re-enters arb4.
@@ -46,7 +46,7 @@ contract ReentrantExchange {
         orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
 
         iArb.arb4(
-            iOrderBook,
+            iRaindex,
             TakeOrdersConfigV5({
                 minimumIO: LibDecimalFloat.packLossless(1, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),

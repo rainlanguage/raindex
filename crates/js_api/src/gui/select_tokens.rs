@@ -1,11 +1,11 @@
 use super::*;
 use futures::StreamExt;
 use rain_math_float::Float;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     deployment::DeploymentCfg, gui::GuiSelectTokensCfg, network::NetworkCfg, order::OrderCfg,
     token::TokenCfg, yaml::YamlParsableHash,
 };
-use rain_orderbook_common::raindex_client::vaults::AccountBalance;
+use raindex_common::raindex_client::vaults::AccountBalance;
 use std::str::FromStr;
 
 const MAX_CONCURRENT_FETCHES: usize = 5;
@@ -70,7 +70,7 @@ impl DotrainOrderGui {
         #[wasm_export(param_description = "Token key from select-tokens configuration")]
         key: String,
     ) -> Result<bool, GuiError> {
-        Ok(self.dotrain_order.orderbook_yaml().get_token(&key).is_ok())
+        Ok(self.dotrain_order.raindex_yaml().get_token(&key).is_ok())
     }
 
     /// Validates that all required tokens have been selected.
@@ -102,7 +102,7 @@ impl DotrainOrderGui {
             for select_token in select_tokens {
                 if self
                     .dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .get_token(&select_token.key)
                     .is_err()
                 {
@@ -159,7 +159,7 @@ impl DotrainOrderGui {
         if TokenCfg::parse_from_yaml(self.dotrain_order.dotrain_yaml().documents, &key, None)
             .is_ok()
         {
-            TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)?;
+            TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
         }
 
         let address = Address::from_str(&address)?;
@@ -177,7 +177,7 @@ impl DotrainOrderGui {
         let token_info = erc20.token_info(None).await?;
 
         TokenCfg::add_record_to_yaml(
-            self.dotrain_order.orderbook_yaml().documents,
+            self.dotrain_order.raindex_yaml().documents,
             &key,
             &network_key,
             &address.to_string(),
@@ -219,7 +219,7 @@ impl DotrainOrderGui {
             return Err(GuiError::TokenNotFound(key.clone()));
         }
 
-        TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)?;
+        TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
 
         self.execute_state_update_callback()?;
         Ok(())
@@ -292,7 +292,7 @@ impl DotrainOrderGui {
         )?;
         let network_key =
             OrderCfg::parse_network_key(self.dotrain_order.dotrain_yaml().documents, &order_key)?;
-        let tokens = self.dotrain_order.orderbook_yaml().get_tokens()?;
+        let tokens = self.dotrain_order.raindex_yaml().get_tokens()?;
 
         let mut fetch_futures = Vec::new();
 
@@ -377,7 +377,7 @@ impl DotrainOrderGui {
             OrderCfg::parse_network_key(self.dotrain_order.dotrain_yaml().documents, &order_key)?;
         let network = self
             .dotrain_order
-            .orderbook_yaml()
+            .raindex_yaml()
             .get_network(&network_key)?;
 
         let erc20 = ERC20::new(network.rpcs, Address::from_str(&token_address)?);
@@ -403,7 +403,7 @@ impl DotrainOrderGui {
         symbol: String,
     ) {
         TokenCfg::add_record_to_yaml(
-            self.dotrain_order.orderbook_yaml().documents,
+            self.dotrain_order.raindex_yaml().documents,
             &key,
             &network_key,
             &address,
@@ -415,7 +415,7 @@ impl DotrainOrderGui {
     }
 
     pub fn remove_record_from_yaml(&self, key: String) {
-        TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)
+        TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)
             .unwrap();
     }
 }
@@ -799,7 +799,7 @@ mod tests {
         use crate::gui::{DotrainOrderGui, GuiError};
         use alloy::primitives::Address;
         use httpmock::MockServer;
-        use rain_orderbook_app_settings::spec_version::SpecVersion;
+        use raindex_app_settings::spec_version::SpecVersion;
         use serde_json::json;
         use std::str::FromStr;
 
@@ -859,8 +859,8 @@ rainlangs:
   some-rainlang:
     network: some-network
     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-  some-orderbook:
+raindexes:
+  some-raindex:
     address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
     network: some-network
     subgraph: some-sg

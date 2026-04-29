@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => ({
 		testTimeout: 10000,
 		server: {
 			deps: {
-				inline: [/@reown\/appkit/, /@tanstack\/svelte-query/, /@rainlanguage\/orderbook/]
+				inline: [/@reown\/appkit/, /@tanstack\/svelte-query/, /@rainlanguage\/raindex/]
 			}
 		},
 		deps: {

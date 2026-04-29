@@ -1,4 +1,4 @@
-import type { AccountBalance } from '@rainlanguage/orderbook';
+import type { AccountBalance } from '@rainlanguage/raindex';
 
 export interface TokenBalance {
 	value: AccountBalance;

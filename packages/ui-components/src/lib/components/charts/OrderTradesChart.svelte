@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Readable } from 'svelte/store';
-	import { type RaindexOrder } from '@rainlanguage/orderbook';
+	import { type RaindexOrder } from '@rainlanguage/raindex';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { QKEY_ORDER_TRADES_LIST } from '../../queries/keys';
 	import {

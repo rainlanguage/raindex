@@ -1,5 +1,5 @@
 import { getContext } from 'svelte';
-import { RaindexClient } from '@rainlanguage/orderbook';
+import { RaindexClient } from '@rainlanguage/raindex';
 import { DeploymentStepsError, DeploymentStepsErrorCode } from '../errors/DeploymentStepsError';
 export const RAINDEX_CLIENT_CONTEXT_KEY = 'raindex-client-context';
 

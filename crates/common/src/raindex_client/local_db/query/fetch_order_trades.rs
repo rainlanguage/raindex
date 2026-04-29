@@ -2,17 +2,18 @@ use crate::local_db::query::fetch_order_trades::{
     build_fetch_order_trades_stmt, LocalDbOrderTrade,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use alloy::primitives::B256;
 
 pub async fn fetch_order_trades<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     order_hash: B256,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<Vec<LocalDbOrderTrade>, LocalDbQueryError> {
-    let stmt = build_fetch_order_trades_stmt(ob_id, order_hash, start_timestamp, end_timestamp)?;
+    let stmt =
+        build_fetch_order_trades_stmt(raindex_id, order_hash, start_timestamp, end_timestamp)?;
     exec.query_json(&stmt).await
 }
 
@@ -30,14 +31,14 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn wrapper_uses_builder_sql_exactly() {
         let chain_id = 111;
-        let orderbook = Address::from([0x77; 20]);
+        let raindex = Address::from([0x77; 20]);
         let order_hash =
             b256!("0x000000000000000000000000000000000000000000000000000000000000abcd");
         let start = Some(100);
         let end = Some(200);
 
         let expected_stmt = build_fetch_order_trades_stmt(
-            &OrderbookIdentifier::new(chain_id, orderbook),
+            &RaindexIdentifier::new(chain_id, raindex),
             order_hash.clone(),
             start,
             end,
@@ -53,7 +54,7 @@ mod wasm_tests {
 
         let res = super::fetch_order_trades(
             &exec,
-            &OrderbookIdentifier::new(chain_id, orderbook),
+            &RaindexIdentifier::new(chain_id, raindex),
             order_hash,
             start,
             end,

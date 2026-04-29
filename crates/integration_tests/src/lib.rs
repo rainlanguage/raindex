@@ -9,15 +9,15 @@ mod tests {
         rpc::types::TransactionRequest,
     };
     use rain_math_float::Float;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_common::{add_order::AddOrderArgs, dotrain_order::DotrainOrder};
-    use rain_orderbook_test_fixtures::{LocalEvm, Orderbook::QuoteV2};
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_common::{add_order::AddOrderArgs, dotrain_order::DotrainOrder};
+    use raindex_test_fixtures::{LocalEvm, Raindex::QuoteV2};
 
     #[tokio::test]
     async fn test_post_task_set() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
 
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
 
         let token1_holder = local_evm.signer_wallets[0].default_signer().address();
 
@@ -50,9 +50,9 @@ tokens:
         decimals: 18
         label: Dai
         symbol: DAI
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -72,7 +72,7 @@ deployments:
 ---
 #key1 !Test binding
 #calculate-io
-using-words-from {orderbook_subparser}
+using-words-from {raindex_subparser}
 amount price: get("amount") 52;
 #handle-add-order
 :set("amount" 100);
@@ -80,8 +80,8 @@ amount price: get("amount") 52;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
-            orderbook_subparser = local_evm.orderbook_subparser.address(),
+            raindex = raindex.address(),
+            raindex_subparser = local_evm.raindex_subparser.address(),
             rainlang_address = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -115,7 +115,7 @@ amount price: get("amount") 52;
             .order;
 
         let quote = local_evm
-            .call_contract(orderbook.quote2(QuoteV2 {
+            .call_contract(raindex.quote2(QuoteV2 {
                 order,
                 inputIOIndex: U256::from(0),
                 outputIOIndex: U256::from(0),
@@ -138,7 +138,7 @@ amount price: get("amount") 52;
     #[tokio::test]
     async fn test_post_task_revert() {
         let local_evm = LocalEvm::new().await;
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
 
         let dotrain = format!(
             r#"
@@ -166,9 +166,9 @@ tokens:
         decimals: 18
         label: Dai
         symbol: DAI
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -195,7 +195,7 @@ amount price: get("amount") 52;
 :ensure(0 "should fail");
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang_address = local_evm.rainlang,
             spec_version = SpecVersion::current(),
         );
@@ -214,7 +214,7 @@ amount price: get("amount") 52;
             .abi_encode();
         let tx = TransactionRequest::default()
             .with_input(calldata)
-            .with_to(*orderbook.address());
+            .with_to(*raindex.address());
 
         let res = local_evm
             .send_transaction(WithOtherFields::new(tx))

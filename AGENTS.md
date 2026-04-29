@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - Solidity contracts: `src/`, tests in `test/` with fixtures in `test-resources/`.
 - Rust workspace: `crates/*` (e.g., `cli`, `common`, `bindings`, `js_api`, `quote`, `subgraph`, `settings`, `math`, `integration_tests`).
-- JavaScript/Svelte: `packages/*` — `webapp`, `ui-components`, `orderbook` (wasm wrapper published to npm).
+- JavaScript/Svelte: `packages/*` — `webapp`, `ui-components`, `raindex` (wasm wrapper published to npm).
 - Subgraph and tooling: `subgraph/`, `script/`, helper scripts like `prep-all.sh`.
 
 ## Build, Test, and Development Commands
@@ -11,7 +11,7 @@
 - Rust: `cargo build --workspace`; tests: `cargo test`.
 - Solidity (Foundry): `forge build`; tests: `forge test`.
 - Webapp: `cd packages/webapp && npm run dev`.
-- JS workspaces (top-level): `npm run test`, `npm run build:ui`, `npm run build:orderbook`.
+- JS workspaces (top-level): `npm run test`, `npm run build:ui`, `npm run build:raindex`.
 - WASM bundle: `rainix-wasm-artifacts`.
 
 ## Coding Style & Naming Conventions

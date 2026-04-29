@@ -1,6 +1,6 @@
 # @rainlanguage/webapp — Architecture
 
-This package is the SvelteKit web application for exploring and interacting with the Rain Orderbook. It composes the `@rainlanguage/ui-components` library with the WASM‑backed SDK `@rainlanguage/orderbook` to provide a browser UI for:
+This package is the SvelteKit web application for exploring and interacting with Rain Raindex. It composes the `@rainlanguage/ui-components` library with the WASM‑backed SDK `@rainlanguage/raindex` to provide a browser UI for:
 
 - Browsing orders, trades and vaults across networks
 - Viewing order detail and performing actions (remove, deposit, withdraw)
@@ -11,14 +11,14 @@ This package is the SvelteKit web application for exploring and interacting with
 ## Overview
 
 - Purpose
-  - End‑user web UI showcasing Orderbook features and the reusable `@rainlanguage/ui-components` surface.
+  - End‑user web UI showcasing Raindex features and the reusable `@rainlanguage/ui-components` surface.
   - Loads workspace settings from YAML, initializes a `RaindexClient`, and wires providers for state, wallet and transactions.
 - Targets
   - Client‑side SvelteKit app (SSR disabled) built with Vite and Tailwind.
   - Deployed using the Vercel adapter (Node.js 20 runtime).
 - Upstream libraries
   - UI: `@rainlanguage/ui-components`, `flowbite-svelte`, `@tanstack/svelte-query`.
-  - SDK: `@rainlanguage/orderbook` (WASM), `@rainlanguage/float`.
+  - SDK: `@rainlanguage/raindex` (WASM), `@rainlanguage/float`.
   - Wallet: `viem`, `@wagmi/core`, `@reown/appkit` + `@reown/appkit-adapter-wagmi`.
 
 Typical development
@@ -56,12 +56,12 @@ nix develop -c npm run dev
 - `/` — Home. Static copy and getting‑started content via `Homepage.svelte`.
 - `/orders`
   - Lists orders via `OrdersListTable` from `@rainlanguage/ui-components`.
-  - Detail route: `/orders/[chainId]-[orderbook]-[orderHash]` displays `OrderDetail` and wires actions:
+  - Detail route: `/orders/[chainId]-[raindex]-[orderHash]` displays `OrderDetail` and wires actions:
     - Remove order
     - Deposit / Withdraw / Withdraw All to/from vaults
 - `/vaults`
   - Lists vaults using `VaultsListTable`; supports filtering, active accounts, and bulk withdraw.
-  - Detail route: `/vaults/[chainId]-[orderbook]-[id]` (components handle the heavy lifting inside `ui-components`).
+  - Detail route: `/vaults/[chainId]-[raindex]-[id]` (components handle the heavy lifting inside `ui-components`).
 - `/deploy`
   - Loads a dotrain registry (`?registry=` query param or default `REGISTRY_URL`), validates orders, and shows valid/invalid sections.
   - Nested routes:
@@ -117,7 +117,7 @@ PUBLIC_WALLETCONNECT_PROJECT_ID=<your_walletconnect_project_id>
 
 ## How It Fits The Workspace
 
-- Rust crates under `crates/*` implement the core logic; `@rainlanguage/orderbook` packages a WASM surface to consume from JS.
+- Rust crates under `crates/*` implement the core logic; `@rainlanguage/raindex` packages a WASM surface to consume from JS.
 - `@rainlanguage/ui-components` provides reusable Svelte components, transaction plumbing, and providers.
 - This webapp stitches both together into a cohesive UI. It lives in the JS workspace and is not part of the Cargo workspace.
 
@@ -131,4 +131,4 @@ PUBLIC_WALLETCONNECT_PROJECT_ID=<your_walletconnect_project_id>
 - When adding new flows that touch the blockchain, prefer composing `@rainlanguage/ui-components` helpers and passing the `RaindexClient` from the layout provider.
 
 
-This document explains the purpose and structure of `packages/webapp`, how the app boots and wires providers, where key features live, and how it integrates with the rest of the Rain Orderbook workspace.
+This document explains the purpose and structure of `packages/webapp`, how the app boots and wires providers, where key features live, and how it integrates with the rest of the Rain Raindex workspace.

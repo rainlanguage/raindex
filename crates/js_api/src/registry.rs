@@ -1,7 +1,7 @@
 use crate::gui::{DotrainOrderGui, GuiError};
-use crate::yaml::{OrderbookYaml, OrderbookYamlError};
-use rain_orderbook_app_settings::gui::NameAndDescriptionCfg;
-use rain_orderbook_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
+use crate::yaml::{RaindexYaml, RaindexYamlError};
+use raindex_app_settings::gui::NameAndDescriptionCfg;
+use raindex_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
 use reqwest;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -83,7 +83,7 @@ pub struct DotrainRegistry {
     /// This URL points to a YAML file containing shared configuration such as:
     /// - Network configurations (RPCs, chain IDs)
     /// - Subgraph endpoints
-    /// - Orderbook contract addresses
+    /// - Raindex contract addresses
     /// - Token definitions
     /// - Other common settings used across multiple strategies
     settings_url: Url,
@@ -147,7 +147,7 @@ pub enum DotrainRegistryError {
     #[error(transparent)]
     GuiError(#[from] GuiError),
     #[error(transparent)]
-    OrderbookYamlError(#[from] OrderbookYamlError),
+    RaindexYamlError(#[from] RaindexYamlError),
     #[error(transparent)]
     RaindexClientError(#[from] RaindexClientError),
 }
@@ -180,7 +180,7 @@ impl DotrainRegistryError {
                 format!("Invalid URL format: {}. Please ensure the URL is properly formatted.", err)
             }
             DotrainRegistryError::GuiError(err) => err.to_readable_msg(),
-            DotrainRegistryError::OrderbookYamlError(err) => err.to_readable_msg(),
+            DotrainRegistryError::RaindexYamlError(err) => err.to_readable_msg(),
             DotrainRegistryError::RaindexClientError(err) => err.to_readable_msg(),
         }
     }
@@ -521,29 +521,29 @@ impl DotrainRegistry {
         Ok(gui)
     }
 
-    /// Creates an OrderbookYaml instance from the registry's shared settings.
+    /// Creates an RaindexYaml instance from the registry's shared settings.
     ///
-    /// This method provides access to the OrderbookYaml SDK, allowing you to query tokens,
-    /// networks, orderbooks, and other configuration from the shared settings YAML.
+    /// This method provides access to the RaindexYaml SDK, allowing you to query tokens,
+    /// networks, raindexes, and other configuration from the shared settings YAML.
     ///
     /// ## Examples
     ///
     /// ```javascript
-    /// const yamlResult = registry.getOrderbookYaml();
+    /// const yamlResult = registry.getRaindexYaml();
     /// if (yamlResult.error) {
-    ///   console.error("Failed to get OrderbookYaml:", yamlResult.error.readableMsg);
+    ///   console.error("Failed to get RaindexYaml:", yamlResult.error.readableMsg);
     ///   return;
     /// }
-    /// const orderbookYaml = yamlResult.value;
+    /// const raindexYaml = yamlResult.value;
     /// ```
     #[wasm_export(
-        js_name = "getOrderbookYaml",
+        js_name = "getRaindexYaml",
         preserve_js_class,
-        unchecked_return_type = "OrderbookYaml",
-        return_description = "OrderbookYaml instance from registry settings"
+        unchecked_return_type = "RaindexYaml",
+        return_description = "RaindexYaml instance from registry settings"
     )]
-    pub fn get_orderbook_yaml(&self) -> Result<OrderbookYaml, DotrainRegistryError> {
-        let yaml = OrderbookYaml::new(vec![self.settings.clone()], None)?;
+    pub fn get_raindex_yaml(&self) -> Result<RaindexYaml, DotrainRegistryError> {
+        let yaml = RaindexYaml::new(vec![self.settings.clone()], None)?;
         Ok(yaml)
     }
 }
@@ -732,7 +732,7 @@ impl DotrainRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::spec_version::SpecVersion;
     use std::collections::HashMap;
 
     const MOCK_REGISTRY_CONTENT: &str = r#"https://example.com/settings.yaml
@@ -766,7 +766,7 @@ rainlangs:
   base:
     address: 0x2222222222222222222222222222222222222222
     network: base
-orderbooks:
+raindexes:
   flare:
     address: 0xCEe8Cd002F151A536394E564b84076c41bBBcD4d
     network: flare
@@ -847,14 +847,14 @@ scenarios:
 orders:
   flare:
     rainlang: flare
-    orderbook: flare
+    raindex: flare
     inputs:
       - token: token1
     outputs:
       - token: token1
   base:
     rainlang: base
-    orderbook: base
+    raindex: base
     inputs:
       - token: token2
     outputs:
@@ -1574,7 +1574,7 @@ rainlangs:
   mainnet:
     address: 0x1111111111111111111111111111111111111111
     network: mainnet
-orderbooks:
+raindexes:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
@@ -1610,7 +1610,7 @@ scenarios:
 orders:
   mainnet:
     rainlang: mainnet
-    orderbook: mainnet
+    raindex: mainnet
     inputs:
       - token: weth
     outputs:
@@ -1628,7 +1628,7 @@ _ _: 0 0;
 "#;
 
         #[tokio::test]
-        async fn test_get_orderbook_yaml_returns_valid_instance() {
+        async fn test_get_raindex_yaml_returns_valid_instance() {
             let server = MockServer::start_async().await;
 
             let test_registry_content = format!(
@@ -1656,8 +1656,8 @@ _ _: 0 0;
                 .await
                 .unwrap();
 
-            let orderbook_yaml = registry.get_orderbook_yaml();
-            assert!(orderbook_yaml.is_ok());
+            let raindex_yaml = registry.get_raindex_yaml();
+            assert!(raindex_yaml.is_ok());
         }
 
         #[tokio::test]

@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlBuildError, SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use alloy::primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ const QUERY_TEMPLATE: &str = include_str!("query.sql");
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LocalDbOrderTrade {
     pub trade_kind: String,
-    pub orderbook: Address,
+    pub raindex: Address,
     pub order_hash: B256,
     pub order_owner: Address,
     pub order_nonce: String,
@@ -44,14 +44,14 @@ const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
 const END_TS_BODY: &str = "\nAND tws.block_timestamp <= {param}\n";
 
 pub fn build_fetch_order_trades_stmt(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     order_hash: B256,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
-    stmt.push(SqlValue::from(ob_id.chain_id));
-    stmt.push(SqlValue::from(ob_id.orderbook_address));
+    stmt.push(SqlValue::from(raindex_id.chain_id));
+    stmt.push(SqlValue::from(raindex_id.raindex_address));
     stmt.push(SqlValue::from(order_hash));
 
     // Optional time filters
@@ -94,7 +94,7 @@ mod tests {
         let order_hash =
             b256!("0x00000000000000000000000000000000000000000000000000000000deadface");
         let stmt = build_fetch_order_trades_stmt(
-            &OrderbookIdentifier::new(137, Address::ZERO),
+            &RaindexIdentifier::new(137, Address::ZERO),
             order_hash,
             Some(11),
             Some(22),
@@ -105,7 +105,7 @@ mod tests {
         assert!(!stmt.sql.contains(END_TS_CLAUSE));
         assert!(stmt.sql.contains("tws.block_timestamp >="));
         assert!(stmt.sql.contains("tws.block_timestamp <="));
-        // First three fixed params: chain id (?1), orderbook address (?2), order hash (?3)
+        // First three fixed params: chain id (?1), raindex address (?2), order hash (?3)
         assert_eq!(stmt.params.len(), 5); // includes start and end
         assert_eq!(stmt.params[0], SqlValue::U64(137));
         assert_eq!(stmt.params[1], SqlValue::Text(Address::ZERO.to_string()));
@@ -120,7 +120,7 @@ mod tests {
         let order_hash =
             b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let stmt = build_fetch_order_trades_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             order_hash,
             None,
             None,
@@ -131,7 +131,7 @@ mod tests {
         assert!(!stmt.sql.contains(START_TS_CLAUSE));
         assert!(!stmt.sql.contains(END_TS_CLAUSE));
         assert_eq!(stmt.params.len(), 3);
-        // Order of fixed params: chain id (?1), orderbook (?2), order hash (?3)
+        // Order of fixed params: chain id (?1), raindex (?2), order hash (?3)
         assert_eq!(stmt.params[0], SqlValue::U64(1));
         assert_eq!(stmt.params[1], SqlValue::Text(Address::ZERO.to_string()));
         assert_eq!(

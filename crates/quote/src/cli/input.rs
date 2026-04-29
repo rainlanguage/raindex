@@ -5,7 +5,7 @@ use alloy::primitives::{
 };
 use alloy::sol_types::SolType;
 use clap::Args;
-use rain_orderbook_bindings::IRaindexV6::{OrderV4, QuoteV2};
+use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2};
 use std::str::FromStr;
 
 /// Group of valid input formats
@@ -30,7 +30,7 @@ pub struct Input {
         long,
         num_args = 4,
         value_names = [
-            "ORDERBOOK_ADDRESS",
+            "RAINDEX_ADDRESS",
             "INPUT_IO_INDEX",
             "OUTPUT_IO_INDEX",
             "ORDER_BYTES"
@@ -43,7 +43,7 @@ pub struct Input {
         long,
         num_args = 4,
         value_names = [
-            "ORDERBOOK_ADDRESS",
+            "RAINDEX_ADDRESS",
             "INPUT_IO_INDEX",
             "OUTPUT_IO_INDEX",
             "ORDER_HASH"
@@ -100,10 +100,10 @@ pub fn parse_input(value: &str) -> anyhow::Result<BatchQuoteSpec> {
     while let Some(bytes_piece) = bytes.get(start_index..end_index) {
         batch_quote_sepcs.0.push(QuoteSpec {
             signed_context: vec![],
-            orderbook: bytes_piece
+            raindex: bytes_piece
                 .get(..20)
                 .map(Address::from_slice)
-                .ok_or(anyhow::anyhow!("missing orderbook address"))?,
+                .ok_or(anyhow::anyhow!("missing raindex address"))?,
             input_io_index: bytes_piece
                 .get(20..21)
                 .map(|v| v[0])
@@ -130,7 +130,7 @@ impl TryFrom<&Vec<String>> for BatchQuoteTarget {
         let mut batch_quote_target = BatchQuoteTarget::default();
         let mut iter = value.iter();
 
-        while let Some(orderbook_str) = iter.next() {
+        while let Some(raindex_str) = iter.next() {
             let input_io_index_str = match iter.next() {
                 Some(s) => s,
                 None => return Err(anyhow::anyhow!("missing input IO index")),
@@ -145,7 +145,7 @@ impl TryFrom<&Vec<String>> for BatchQuoteTarget {
             };
 
             batch_quote_target.0.push(QuoteTarget {
-                orderbook: Address::from_hex(orderbook_str)?,
+                raindex: Address::from_hex(raindex_str)?,
                 quote_config: QuoteV2 {
                     signedContext: vec![],
                     inputIOIndex: U256::from_str(input_io_index_str)?,
@@ -168,7 +168,7 @@ impl TryFrom<&Vec<String>> for BatchQuoteSpec {
     fn try_from(value: &Vec<String>) -> Result<Self, Self::Error> {
         let mut batch_quote_specs = BatchQuoteSpec::default();
         let mut iter = value.iter();
-        while let Some(orderbook_str) = iter.next() {
+        while let Some(raindex_str) = iter.next() {
             let input_io_index_str = match iter.next() {
                 Some(s) => s,
                 None => return Err(anyhow::anyhow!("missing input IO index")),
@@ -184,7 +184,7 @@ impl TryFrom<&Vec<String>> for BatchQuoteSpec {
 
             batch_quote_specs.0.push(QuoteSpec {
                 signed_context: vec![],
-                orderbook: Address::from_hex(orderbook_str)?,
+                raindex: Address::from_hex(raindex_str)?,
                 order_hash: U256::from_str(order_hash_str)?,
                 input_io_index: input_io_index_str.parse()?,
                 output_io_index: output_io_index_str.parse()?,
@@ -202,26 +202,26 @@ mod tests {
     use super::*;
     use alloy::primitives::hex::encode_prefixed;
     use alloy::sol_types::SolValue;
-    use rain_orderbook_bindings::IRaindexV6::{EvaluableV4, OrderV4};
+    use raindex_bindings::IRaindexV6::{EvaluableV4, OrderV4};
 
     #[test]
     fn test_parse_input() {
-        let orderbook_address1 = Address::random();
+        let raindex_address1 = Address::random();
         let input_io_index1 = 10u8;
         let output_io_index1 = 8u8;
         let order_hash1 = [5u8; 32];
 
-        let orderbook_address2 = Address::random();
+        let raindex_address2 = Address::random();
         let input_io_index2 = 1u8;
         let output_io_index2 = 2u8;
         let order_hash2 = [2u8; 32];
 
         let mut bytes = vec![];
-        bytes.extend(orderbook_address1.0 .0);
+        bytes.extend(raindex_address1.0 .0);
         bytes.push(input_io_index1);
         bytes.push(output_io_index1);
         bytes.extend(order_hash1);
-        bytes.extend(orderbook_address2.0 .0);
+        bytes.extend(raindex_address2.0 .0);
         bytes.push(input_io_index2);
         bytes.push(output_io_index2);
         bytes.extend(order_hash2);
@@ -235,14 +235,14 @@ mod tests {
                 input_io_index: input_io_index1,
                 output_io_index: output_io_index1,
                 signed_context: vec![],
-                orderbook: orderbook_address1,
+                raindex: raindex_address1,
             },
             QuoteSpec {
                 order_hash: U256::from_be_bytes(order_hash2),
                 input_io_index: input_io_index2,
                 output_io_index: output_io_index2,
                 signed_context: vec![],
-                orderbook: orderbook_address2,
+                raindex: raindex_address2,
             },
         ]);
         assert_eq!(result, expected);
@@ -261,8 +261,8 @@ mod tests {
         // valid targets
         let input_index = 8u8;
         let output_index = 9u8;
-        let orderbook1 = Address::random();
-        let orderbook2 = Address::random();
+        let raindex1 = Address::random();
+        let raindex2 = Address::random();
         let order1 = OrderV4 {
             evaluable: EvaluableV4 {
                 bytecode: vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0].into(),
@@ -281,11 +281,11 @@ mod tests {
         let order_bytes2 = order2.abi_encode();
 
         let targets_str = vec![
-            encode_prefixed(orderbook1.0),
+            encode_prefixed(raindex1.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed(order_bytes1.clone()),
-            encode_prefixed(orderbook2.0),
+            encode_prefixed(raindex2.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed(order_bytes2),
@@ -294,7 +294,7 @@ mod tests {
         let result: BatchQuoteTarget = (&targets_str).try_into().unwrap();
         let expected = BatchQuoteTarget(vec![
             QuoteTarget {
-                orderbook: orderbook1,
+                raindex: raindex1,
                 quote_config: QuoteV2 {
                     inputIOIndex: U256::from(input_index),
                     outputIOIndex: U256::from(output_index),
@@ -303,7 +303,7 @@ mod tests {
                 },
             },
             QuoteTarget {
-                orderbook: orderbook2,
+                raindex: raindex2,
                 quote_config: QuoteV2 {
                     inputIOIndex: U256::from(input_index),
                     outputIOIndex: U256::from(output_index),
@@ -316,11 +316,11 @@ mod tests {
 
         // invalid targets
         let targets_str = vec![
-            encode_prefixed(orderbook1.0),
+            encode_prefixed(raindex1.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed(order_bytes1),
-            encode_prefixed(orderbook2.0),
+            encode_prefixed(raindex2.0),
             input_index.to_string(),
             output_index.to_string(),
         ];
@@ -329,7 +329,7 @@ mod tests {
             .to_string();
         assert_eq!(result, "missing order bytes");
 
-        let targets_str = vec![encode_prefixed(orderbook1.0), input_index.to_string()];
+        let targets_str = vec![encode_prefixed(raindex1.0), input_index.to_string()];
         let result = std::convert::TryInto::<BatchQuoteTarget>::try_into(&targets_str)
             .expect_err("expected error")
             .to_string();
@@ -341,17 +341,17 @@ mod tests {
         // valid targets
         let input_index = 8u8;
         let output_index = 9u8;
-        let orderbook1 = Address::random();
-        let orderbook2 = Address::random();
+        let raindex1 = Address::random();
+        let raindex2 = Address::random();
         let order_hash1 = [1u8; 32];
         let order_hash2 = [2u8; 32];
 
         let specs_str = vec![
-            encode_prefixed(orderbook1.0),
+            encode_prefixed(raindex1.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed(order_hash1),
-            encode_prefixed(orderbook2.0),
+            encode_prefixed(raindex2.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed(order_hash2),
@@ -360,14 +360,14 @@ mod tests {
         let result: BatchQuoteSpec = (&specs_str).try_into().unwrap();
         let expected = BatchQuoteSpec(vec![
             QuoteSpec {
-                orderbook: orderbook1,
+                raindex: raindex1,
                 input_io_index: input_index,
                 output_io_index: output_index,
                 signed_context: vec![],
                 order_hash: U256::from_be_bytes(order_hash1),
             },
             QuoteSpec {
-                orderbook: orderbook2,
+                raindex: raindex2,
                 input_io_index: input_index,
                 output_io_index: output_index,
                 signed_context: vec![],
@@ -378,11 +378,11 @@ mod tests {
 
         // invalid targets
         let specs_str = vec![
-            encode_prefixed(orderbook1.0),
+            encode_prefixed(raindex1.0),
             input_index.to_string(),
             output_index.to_string(),
             encode_prefixed([1u8; 32]),
-            encode_prefixed(orderbook2.0),
+            encode_prefixed(raindex2.0),
             input_index.to_string(),
             output_index.to_string(),
         ];
@@ -391,7 +391,7 @@ mod tests {
             .to_string();
         assert_eq!(result, "missing order hash");
 
-        let specs_str = vec![encode_prefixed(orderbook1.0), input_index.to_string()];
+        let specs_str = vec![encode_prefixed(raindex1.0), input_index.to_string()];
         let result = std::convert::TryInto::<BatchQuoteSpec>::try_into(&specs_str)
             .expect_err("expected error")
             .to_string();
@@ -400,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_read_content() {
-        let orderbook = Address::random();
+        let raindex = Address::random();
         let input_io_index = 10u8;
         let output_io_index = 8u8;
         let order_hash = [5u8; 32];
@@ -410,7 +410,7 @@ mod tests {
             input_io_index,
             output_io_index,
             signed_context: vec![],
-            orderbook,
+            raindex,
         }]);
         let input = Input {
             input: Some(specs.clone()),
@@ -420,7 +420,7 @@ mod tests {
         matches!(input.read_content().unwrap(), InputContentType::Spec(_));
 
         let targets_str = vec![
-            encode_prefixed(orderbook.0),
+            encode_prefixed(raindex.0),
             input_io_index.to_string(),
             output_io_index.to_string(),
             encode_prefixed(OrderV4::default().abi_encode()),
@@ -433,7 +433,7 @@ mod tests {
         matches!(input.read_content().unwrap(), InputContentType::Target(_));
 
         let specs_str = vec![
-            encode_prefixed(orderbook.0),
+            encode_prefixed(raindex.0),
             input_io_index.to_string(),
             output_io_index.to_string(),
             encode_prefixed([1u8; 32]),

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import OrderPage from '../lib/components/deployment/OrderPage.svelte';
-import type { NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+import type { NameAndDescriptionCfg } from '@rainlanguage/raindex';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // Mock fetch

@@ -2,7 +2,7 @@ use crate::execute::Execute;
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, Args, Parser};
 use csv::Writer;
-use rain_orderbook_common::dotrain_order::{AuthoringMetaV2, DotrainOrder, WordsResult};
+use raindex_common::dotrain_order::{AuthoringMetaV2, DotrainOrder, WordsResult};
 use std::{fs::read_to_string, path::PathBuf};
 
 /// Get words of a rainlang contract from the given inputs
@@ -96,7 +96,7 @@ impl Execute for Words {
 
         let results = if let Some(rainlang_key) = &self.source.rainlang {
             // get rainlang from order config
-            let rainlang = dotrain_order.orderbook_yaml().get_rainlang(rainlang_key)?;
+            let rainlang = dotrain_order.raindex_yaml().get_rainlang(rainlang_key)?;
 
             // get metaboard subgraph url
             let metaboard_url = self
@@ -105,7 +105,7 @@ impl Execute for Words {
                 .map(|v| v.to_string())
                 .or_else(|| {
                     dotrain_order
-                        .orderbook_yaml()
+                        .raindex_yaml()
                         .get_metaboard(&rainlang.network.key)
                         .ok()
                         .map(|metaboard| metaboard.url.to_string())
@@ -132,7 +132,7 @@ impl Execute for Words {
                     .key
                     .clone();
                 dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .add_metaboard(network_name, v)?;
             }
             if self.rainlang_only {
@@ -179,7 +179,7 @@ impl Execute for Words {
             if let Some(v) = &self.metaboard_subgraph {
                 let network_key = deployment.scenario.rainlang.network.key.clone();
                 dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .add_metaboard(&network_key, v)?;
             }
             let result = dotrain_order.get_all_words_for_scenario(scenario).await?;
@@ -225,7 +225,7 @@ mod tests {
     use clap::CommandFactory;
     use httpmock::MockServer;
     use rain_metadata::{KnownMagic, RainMetaDocumentV1Item};
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::spec_version::SpecVersion;
     use serde_bytes::ByteBuf;
     use serde_json::json;
     use tempfile::NamedTempFile;
@@ -533,8 +533,8 @@ scenarios:
         bindings:
             key1: 10
 
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -563,7 +563,7 @@ orders:
             - token: token2
               vault-id: 1
         rainlang: some-rainlang
-        orderbook: some-orderbook
+        raindex: some-raindex
 
 deployments:
     some-deployment:

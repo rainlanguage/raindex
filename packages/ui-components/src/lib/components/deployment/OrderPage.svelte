@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { fade } from 'svelte/transition';
-	import type { NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+	import type { NameAndDescriptionCfg } from '@rainlanguage/raindex';
 	import DeploymentsSection from './DeploymentsSection.svelte';
 	import SvelteMarkdown from 'svelte-markdown';
 	import { onMount } from 'svelte';

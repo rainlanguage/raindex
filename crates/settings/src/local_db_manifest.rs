@@ -9,7 +9,8 @@ use strict_yaml_rust::{strict_yaml::Hash, StrictYaml, StrictYamlEmitter};
 use url::Url;
 
 pub const MANIFEST_VERSION: u32 = 1;
-pub const DB_SCHEMA_VERSION: u32 = 2;
+// Bumped from 2 to 3 for orderbook_address -> raindex_address column rename
+pub const DB_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalDbManifest {
@@ -27,19 +28,19 @@ impl Default for LocalDbManifest {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ManifestNetwork {
     pub chain_id: u32,
-    pub orderbooks: Vec<ManifestOrderbook>,
+    pub raindexes: Vec<ManifestRaindex>,
 }
 
 impl ManifestNetwork {
     pub fn new(chain_id: u32) -> Self {
         Self {
             chain_id,
-            orderbooks: Vec::new(),
+            raindexes: Vec::new(),
         }
     }
 
-    pub fn push_orderbook(&mut self, orderbook: ManifestOrderbook) {
-        self.orderbooks.push(orderbook);
+    pub fn push_raindex(&mut self, raindex: ManifestRaindex) {
+        self.raindexes.push(raindex);
     }
 
     fn to_yaml_hash(&self) -> Hash {
@@ -49,15 +50,15 @@ impl ManifestNetwork {
             StrictYaml::String(self.chain_id.to_string()),
         );
 
-        let orderbooks_yaml: Vec<StrictYaml> = self
-            .orderbooks
+        let raindexes_yaml: Vec<StrictYaml> = self
+            .raindexes
             .iter()
-            .map(ManifestOrderbook::to_yaml_hash)
+            .map(ManifestRaindex::to_yaml_hash)
             .collect();
 
         hash.insert(
-            StrictYaml::String("orderbooks".to_string()),
-            StrictYaml::Array(orderbooks_yaml),
+            StrictYaml::String("raindexes".to_string()),
+            StrictYaml::Array(raindexes_yaml),
         );
 
         hash
@@ -65,7 +66,7 @@ impl ManifestNetwork {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct ManifestOrderbook {
+pub struct ManifestRaindex {
     pub address: Address,
     pub dump_url: Url,
     pub end_block: u64,
@@ -73,7 +74,7 @@ pub struct ManifestOrderbook {
     pub end_block_time_ms: u64,
 }
 
-impl ManifestOrderbook {
+impl ManifestRaindex {
     fn to_yaml_hash(&self) -> StrictYaml {
         let mut hash = Hash::new();
         hash.insert(
@@ -101,11 +102,15 @@ impl ManifestOrderbook {
 }
 
 impl LocalDbManifest {
-    pub fn find(&self, chain_id: u32, address: Address) -> Option<&ManifestOrderbook> {
+    pub fn find(&self, chain_id: u32, address: Address) -> Option<&ManifestRaindex> {
         self.networks
             .values()
             .find(|n| n.chain_id == chain_id)
-            .and_then(|n| n.orderbooks.iter().find(|ob| ob.address == address))
+            .and_then(|n| {
+                n.raindexes
+                    .iter()
+                    .find(|raindex_entry| raindex_entry.address == address)
+            })
     }
 
     pub fn new() -> Self {
@@ -153,14 +158,14 @@ impl LocalDbManifest {
         Ok(())
     }
 
-    pub fn push_orderbook(
+    pub fn push_raindex(
         &mut self,
         network_key: &str,
-        orderbook: ManifestOrderbook,
+        raindex: ManifestRaindex,
     ) -> Result<(), YamlError> {
         match self.networks.get_mut(network_key) {
             Some(network) => {
-                network.push_orderbook(orderbook);
+                network.push_raindex(raindex);
                 Ok(())
             }
             None => Err(YamlError::Field {
@@ -345,25 +350,25 @@ fn parse_single_network(
         location_network.clone(),
     )?;
 
-    let orderbooks_yaml = require_vec(network_yaml, "orderbooks", Some(location_network.clone()))?;
+    let raindexes_yaml = require_vec(network_yaml, "raindexes", Some(location_network.clone()))?;
 
-    let mut orderbooks: Vec<ManifestOrderbook> = Vec::new();
-    for (idx, ob_yaml) in orderbooks_yaml.iter().enumerate() {
-        orderbooks.push(parse_single_orderbook(idx, ob_yaml, &location_network)?);
+    let mut raindexes: Vec<ManifestRaindex> = Vec::new();
+    for (idx, ob_yaml) in raindexes_yaml.iter().enumerate() {
+        raindexes.push(parse_single_raindex(idx, ob_yaml, &location_network)?);
     }
 
     Ok(ManifestNetwork {
         chain_id,
-        orderbooks,
+        raindexes,
     })
 }
 
-fn parse_single_orderbook(
+fn parse_single_raindex(
     idx: usize,
     ob_yaml: &StrictYaml,
     location_network: &str,
-) -> Result<ManifestOrderbook, YamlError> {
-    let location_ob = format!("{}.orderbooks[{}]", location_network, idx);
+) -> Result<ManifestRaindex, YamlError> {
+    let location_ob = format!("{}.raindexes[{}]", location_network, idx);
 
     let address_str = require_string(ob_yaml, Some("address"), Some(location_ob.clone()))?;
     let address = Address::from_str(&address_str).map_err(|e| YamlError::Field {
@@ -403,7 +408,7 @@ fn parse_single_orderbook(
         location_ob.clone(),
     )?;
 
-    Ok(ManifestOrderbook {
+    Ok(ManifestRaindex {
         address,
         dump_url,
         end_block,
@@ -422,8 +427,8 @@ mod tests {
         StrictYamlLoader::load_from_str(yaml).unwrap()[0].clone()
     }
 
-    fn sample_orderbook() -> ManifestOrderbook {
-        ManifestOrderbook {
+    fn sample_raindex() -> ManifestRaindex {
+        ManifestRaindex {
             address: Address::from_str("0x00000000000000000000000000000000000000aa").unwrap(),
             dump_url: Url::parse("https://example.com/dump").unwrap(),
             end_block: 42,
@@ -438,14 +443,14 @@ mod tests {
         manifest.add_network("mainnet", 1).unwrap();
         manifest.add_network("polygon", 137).unwrap();
 
-        let ob_main = ManifestOrderbook {
+        let ob_main = ManifestRaindex {
             address: Address::from_str("0x0000000000000000000000000000000000000001").unwrap(),
             dump_url: Url::parse("https://example.com/mainnet").unwrap(),
             end_block: 50,
             end_block_hash: Bytes::from_str("0x0def").unwrap(),
             end_block_time_ms: 2000,
         };
-        let ob_polygon = ManifestOrderbook {
+        let ob_polygon = ManifestRaindex {
             address: Address::from_str("0x0000000000000000000000000000000000000002").unwrap(),
             dump_url: Url::parse("https://example.com/polygon").unwrap(),
             end_block: 60,
@@ -453,9 +458,9 @@ mod tests {
             end_block_time_ms: 3000,
         };
 
-        manifest.push_orderbook("mainnet", ob_main.clone()).unwrap();
+        manifest.push_raindex("mainnet", ob_main.clone()).unwrap();
         manifest
-            .push_orderbook("polygon", ob_polygon.clone())
+            .push_raindex("polygon", ob_polygon.clone())
             .unwrap();
 
         let yaml_one = manifest.to_yaml_string().unwrap();
@@ -468,11 +473,11 @@ mod tests {
     }
 
     #[test]
-    fn test_push_orderbook_without_network_errors() {
+    fn test_push_raindex_without_network_errors() {
         let mut manifest = LocalDbManifest::new();
-        let orderbook = sample_orderbook();
+        let raindex = sample_raindex();
         let err = manifest
-            .push_orderbook("missing", orderbook)
+            .push_raindex("missing", raindex)
             .expect_err("should error when network missing");
         match err {
             YamlError::Field {
@@ -530,18 +535,18 @@ mod tests {
         // OK header
         let yaml_ok = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks: {}
 "#;
         let doc = load(yaml_ok);
         let (mv, sv) = parse_manifest_header(&doc, "manifest").expect("header parses");
         assert_eq!(mv, 1);
-        assert_eq!(sv, 2);
+        assert_eq!(sv, 3);
 
         // Incompatible manifest version
         let yaml_bad = r#"
 manifest-version: 999
-db-schema-version: 2
+db-schema-version: 3
 networks: {}
 "#;
         let err = parse_manifest_header(&load(yaml_bad), "manifest").unwrap_err();
@@ -579,11 +584,11 @@ networks: {}
     fn test_networks_helper_empty_key_rejected() {
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   "":
     chain-id: 1
-    orderbooks: []
+    raindexes: []
 "#;
         let err = parse_networks(&load(yaml), "manifest").unwrap_err();
         match err {
@@ -599,10 +604,10 @@ networks:
     }
 
     #[test]
-    fn test_orderbook_helper_ok_and_bad_address() {
+    fn test_raindex_helper_ok_and_bad_address() {
         let base_loc = "manifest.networks.mainnet";
 
-        // Valid orderbook
+        // Valid raindex
         let ob_ok = r#"
 address: "0x0000000000000000000000000000000000000001"
 dump-url: "http://example.com"
@@ -610,10 +615,11 @@ end-block: 1
 end-block-hash: "0x0abc"
 end-block-time-ms: 1
 "#;
-        let ob_doc = load(ob_ok);
-        let ob = parse_single_orderbook(0, &ob_doc, base_loc).expect("orderbook parses");
-        assert_eq!(ob.end_block, 1);
-        assert_eq!(ob.end_block_time_ms, 1);
+        let raindex_doc = load(ob_ok);
+        let raindex_entry =
+            parse_single_raindex(0, &raindex_doc, base_loc).expect("raindex parses");
+        assert_eq!(raindex_entry.end_block, 1);
+        assert_eq!(raindex_entry.end_block_time_ms, 1);
 
         // Bad address
         let ob_bad = r#"
@@ -623,14 +629,14 @@ end-block: 1
 end-block-hash: "0x0abc"
 end-block-time-ms: 1
 "#;
-        let err = parse_single_orderbook(0, &load(ob_bad), base_loc).unwrap_err();
+        let err = parse_single_raindex(0, &load(ob_bad), base_loc).unwrap_err();
         match err {
             YamlError::Field {
                 kind: FieldErrorKind::InvalidValue { field, .. },
                 location,
             } => {
                 assert_eq!(field, "address");
-                assert_eq!(location, "manifest.networks.mainnet.orderbooks[0]");
+                assert_eq!(location, "manifest.networks.mainnet.raindexes[0]");
             }
             other => panic!("unexpected error: {other:?}"),
         }
@@ -639,7 +645,7 @@ end-block-time-ms: 1
     #[test]
     fn test_missing_manifest_version() {
         let yaml = r#"
-db-schema-version: 2
+db-schema-version: 3
 networks: {}
 "#;
         let err = parse_manifest_doc(&load(yaml)).unwrap_err();
@@ -660,7 +666,7 @@ networks: {}
     fn test_missing_networks_defaults_to_empty() {
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 "#;
         let manifest = parse_manifest_doc(&load(yaml)).unwrap();
         assert!(manifest.networks.is_empty());
@@ -690,7 +696,7 @@ networks: {}
     fn test_zero_or_invalid_manifest_and_schema_versions() {
         let yaml_zero_manifest = r#"
 manifest-version: 0
-db-schema-version: 2
+db-schema-version: 3
 networks: {}
 "#;
         let err = parse_manifest_doc(&load(yaml_zero_manifest)).unwrap_err();
@@ -709,7 +715,7 @@ networks: {}
     fn test_network_missing_chain_id_and_invalid() {
         let yaml_missing = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet: {}
 "#;
@@ -718,21 +724,21 @@ networks:
 
         let yaml_zero = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 0
-    orderbooks: []
+    raindexes: []
 "#;
         let err = parse_manifest_doc(&load(yaml_zero)).unwrap_err();
         assert!(matches!(err, YamlError::Field { .. }));
     }
 
     #[test]
-    fn test_orderbooks_required_and_type() {
+    fn test_raindexes_required_and_type() {
         let yaml_missing = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
@@ -742,26 +748,26 @@ networks:
 
         let yaml_non_list = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks: {}
+    raindexes: {}
 "#;
         let err = parse_manifest_doc(&load(yaml_non_list)).unwrap_err();
         assert!(matches!(err, YamlError::Field { .. }));
     }
 
     #[test]
-    fn test_orderbook_missing_fields() {
+    fn test_raindex_missing_fields() {
         // Full, valid baseline
         let good = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com"
         end-block: 1
@@ -773,11 +779,11 @@ networks:
         // Now omit each required field individually
         let missing_address = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - dump-url: "http://example.com"
         end-block: 1
         end-block-hash: "0x0abc"
@@ -790,11 +796,11 @@ networks:
 
         let missing_dump = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         end-block: 1
         end-block-hash: "0x0abc"
@@ -807,11 +813,11 @@ networks:
 
         let missing_end_block = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com"
         end-block-hash: "0x0abc"
@@ -824,11 +830,11 @@ networks:
 
         let missing_end_hash = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com"
         end-block: 1
@@ -841,11 +847,11 @@ networks:
 
         let missing_end_time = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com"
         end-block: 1
@@ -861,11 +867,11 @@ networks:
     fn test_find_across_networks_and_negatives() {
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x1111111111111111111111111111111111111111"
         dump-url: "http://example.com/a"
         end-block: 10
@@ -873,7 +879,7 @@ networks:
         end-block-time-ms: 100
   other:
     chain-id: 2
-    orderbooks:
+    raindexes:
       - address: "0x2222222222222222222222222222222222222222"
         dump-url: "http://example.com/b"
         end-block: 20
@@ -919,7 +925,7 @@ networks:
     fn test_incompatible_manifest_version_rejected() {
         let yaml = r#"
 manifest-version: 999
-db-schema-version: 2
+db-schema-version: 3
 networks: {}
 "#;
         let err = parse_manifest_doc(&load(yaml)).unwrap_err();
@@ -939,11 +945,11 @@ networks: {}
     fn test_empty_network_key_is_rejected() {
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   "":
     chain-id: 1
-    orderbooks: []
+    raindexes: []
 "#;
         let err = parse_manifest_doc(&load(yaml)).unwrap_err();
         match err {

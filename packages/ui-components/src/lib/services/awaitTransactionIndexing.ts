@@ -10,16 +10,16 @@ import type {
 	RaindexOrder,
 	Address,
 	Hex
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 
 export type AwaitSubgraphConfig = {
 	chainId: number;
-	orderbook: Address;
+	raindex: Address;
 	txHash: Hex;
 	successMessage: string;
 	fetchEntityFn: (
 		chainId: number,
-		orderbook: Address,
+		raindex: Address,
 		txHash: Hex
 	) => Promise<WasmEncodedResult<RaindexTransaction | RaindexOrder[] | null | undefined>>;
 	isSuccess: (data: RaindexTransaction | RaindexOrder[]) => boolean;
@@ -68,7 +68,7 @@ export type IndexingResult<T> = {
  * @template T The type of data returned by the subgraph
  * @param options Configuration options for the indexing operation
  * @param options.chainId Chain ID to query
- * @param options.orderbook Orderbook address to query
+ * @param options.raindex Raindex address to query
  * @param options.txHash Transaction hash to check for indexing
  * @param options.successMessage Message to display on successful indexing
  * @param options.maxAttempts Maximum number of attempts before timing out (default: 10)
@@ -84,9 +84,9 @@ export const awaitSubgraphIndexing = async <T>(options: {
 	 */
 	chainId: number;
 	/**
-	 * Orderbook address to query
+	 * Raindex address to query
 	 */
-	orderbook: Address;
+	raindex: Address;
 	/**
 	 * Transaction hash to check for indexing
 	 */
@@ -110,12 +110,12 @@ export const awaitSubgraphIndexing = async <T>(options: {
 	/**
 	 * Function to fetch data from the subgraph
 	 * @param chainId Chain ID to query
-	 * @param orderbook Orderbook address to query
+	 * @param raindex Raindex address to query
 	 * @param txHash Transaction hash to query
 	 */
 	fetchEntityFn: (
 		chainId: number,
-		orderbook: Address,
+		raindex: Address,
 		txHash: Hex
 	) => Promise<WasmEncodedResult<T | null | undefined>>;
 	/**
@@ -126,7 +126,7 @@ export const awaitSubgraphIndexing = async <T>(options: {
 }): Promise<IndexingResult<T>> => {
 	const {
 		chainId,
-		orderbook,
+		raindex,
 		txHash,
 		successMessage,
 		maxAttempts = 10,
@@ -138,7 +138,7 @@ export const awaitSubgraphIndexing = async <T>(options: {
 
 	const checkIndexing = async (attempt: number): Promise<IndexingResult<T>> => {
 		try {
-			const data = await fetchEntityFn(chainId, orderbook, txHash);
+			const data = await fetchEntityFn(chainId, raindex, txHash);
 
 			if (data.value && isSuccess(data.value)) {
 				let newOrderHash;

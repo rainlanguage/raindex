@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/svelte';
 import DeploymentSteps from '../lib/components/deployment/DeploymentSteps.svelte';
-import { DotrainOrderGui, type ScenarioCfg } from '@rainlanguage/orderbook';
+import { DotrainOrderGui, type ScenarioCfg } from '@rainlanguage/raindex';
 import type { ComponentProps } from 'svelte';
 import { readable, writable } from 'svelte/store';
 import type { AppKit } from '@reown/appkit';
-import type { GuiDeploymentCfg, RaindexClient } from '@rainlanguage/orderbook';
+import type { GuiDeploymentCfg, RaindexClient } from '@rainlanguage/raindex';
 import userEvent from '@testing-library/user-event';
 import { useGui } from '$lib/hooks/useGui';
 import { useAccount } from '$lib/providers/wallet/useAccount';
 import type { Account } from '$lib/types/account';
 import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	DotrainOrderGui: vi.fn()
 }));
 
@@ -71,7 +71,7 @@ const mockDeployment = {
 				},
 				address: '0x0'
 			},
-			orderbook: {
+			raindex: {
 				id: 'flare',
 				address: '0x0'
 			},

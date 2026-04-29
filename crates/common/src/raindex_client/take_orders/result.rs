@@ -3,7 +3,7 @@ use crate::take_orders::{build_approval_calldata, BuiltTakeOrdersConfig, ParsedT
 use alloy::primitives::{Address, Bytes};
 use alloy::sol_types::SolCall;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
+use raindex_bindings::IRaindexV6::takeOrders4Call;
 use serde::{Deserialize, Serialize};
 use std::ops::{Div, Mul};
 use wasm_bindgen_utils::prelude::*;
@@ -19,7 +19,7 @@ pub(crate) struct ApprovalInfoData {
 
 #[derive(Clone)]
 pub(crate) struct TakeOrdersInfoData {
-    pub orderbook: Address,
+    pub raindex: Address,
     pub calldata: Bytes,
     pub effective_price: Float,
     pub prices: Vec<Float>,
@@ -110,7 +110,7 @@ impl ApprovalInfo {
 #[serde(rename_all = "camelCase")]
 #[wasm_bindgen]
 pub struct TakeOrdersInfo {
-    orderbook: Address,
+    raindex: Address,
     calldata: Bytes,
     effective_price: Float,
     prices: Vec<Float>,
@@ -120,7 +120,7 @@ pub struct TakeOrdersInfo {
 
 impl TakeOrdersInfo {
     pub(crate) fn new(
-        orderbook: Address,
+        raindex: Address,
         calldata: Bytes,
         effective_price: Float,
         prices: Vec<Float>,
@@ -128,7 +128,7 @@ impl TakeOrdersInfo {
         max_sell_cap: Float,
     ) -> Self {
         Self {
-            orderbook,
+            raindex,
             calldata,
             effective_price,
             prices,
@@ -142,8 +142,8 @@ impl TakeOrdersInfo {
 #[wasm_bindgen]
 impl TakeOrdersInfo {
     #[wasm_bindgen(getter, unchecked_return_type = "Hex")]
-    pub fn orderbook(&self) -> String {
-        self.orderbook.to_string()
+    pub fn raindex(&self) -> String {
+        self.raindex.to_string()
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Hex")]
     pub fn calldata(&self) -> String {
@@ -169,8 +169,8 @@ impl TakeOrdersInfo {
 
 #[cfg(not(target_family = "wasm"))]
 impl TakeOrdersInfo {
-    pub fn orderbook(&self) -> Address {
-        self.orderbook
+    pub fn raindex(&self) -> Address {
+        self.raindex
     }
     pub fn calldata(&self) -> &Bytes {
         &self.calldata
@@ -204,7 +204,7 @@ impl std::fmt::Debug for TakeOrdersCalldataResult {
                 .finish(),
             TakeOrdersCalldataResultInner::Ready(data) => f
                 .debug_struct("TakeOrdersCalldataResult::Ready")
-                .field("orderbook", &data.orderbook)
+                .field("raindex", &data.raindex)
                 .finish(),
         }
     }
@@ -256,7 +256,7 @@ impl TakeOrdersCalldataResult {
         match &self.inner {
             TakeOrdersCalldataResultInner::NeedsApproval(_) => None,
             TakeOrdersCalldataResultInner::Ready(data) => Some(TakeOrdersInfo::new(
-                data.orderbook,
+                data.raindex,
                 data.calldata.clone(),
                 data.effective_price,
                 data.prices.clone(),
@@ -294,7 +294,7 @@ impl TakeOrdersCalldataResult {
         match &self.inner {
             TakeOrdersCalldataResultInner::NeedsApproval(_) => None,
             TakeOrdersCalldataResultInner::Ready(data) => Some(TakeOrdersInfo::new(
-                data.orderbook,
+                data.raindex,
                 data.calldata.clone(),
                 data.effective_price,
                 data.prices.clone(),
@@ -374,7 +374,7 @@ pub(crate) fn build_approval_result(
 }
 
 pub(crate) fn build_calldata_result(
-    orderbook: Address,
+    raindex_addr: Address,
     built_config: BuiltTakeOrdersConfig,
     mode: ParsedTakeOrdersMode,
     price_cap: Float,
@@ -410,7 +410,7 @@ pub(crate) fn build_calldata_result(
     };
 
     Ok(TakeOrdersCalldataResult::ready(TakeOrdersInfoData {
-        orderbook,
+        raindex: raindex_addr,
         calldata,
         effective_price,
         prices,
@@ -422,12 +422,12 @@ pub(crate) fn build_calldata_result(
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use super::*;
-    use crate::raindex_client::take_orders::selection::select_best_orderbook_simulation;
+    use crate::raindex_client::take_orders::selection::select_best_raindex_simulation;
     use crate::take_orders::build_take_orders_config_from_simulation;
     use crate::test_helpers::candidates::make_candidate;
     use alloy::primitives::U256;
-    use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
-    use rain_orderbook_bindings::IERC20::approveCall;
+    use raindex_bindings::IRaindexV6::takeOrders4Call;
+    use raindex_bindings::IERC20::approveCall;
 
     fn high_price_cap() -> Float {
         Float::parse("1000000".to_string()).unwrap()
@@ -449,27 +449,27 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_produces_valid_calldata_buy_mode() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("10".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let buy_target = Float::parse("10".to_string()).unwrap();
         let price_cap = high_price_cap();
         let mode = buy_up_to(buy_target);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap);
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap);
 
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
-        assert_eq!(take_orders_info.orderbook(), ob);
+        assert_eq!(take_orders_info.raindex(), raindex_addr);
         assert!(!take_orders_info.calldata().is_empty());
         assert!(!take_orders_info.prices().is_empty());
 
@@ -484,27 +484,27 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_produces_valid_calldata_spend_mode() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("100".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let spend_budget = Float::parse("20".to_string()).unwrap();
         let price_cap = high_price_cap();
         let mode = spend_up_to(spend_budget);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap);
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap);
 
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
-        assert_eq!(take_orders_info.orderbook(), ob);
+        assert_eq!(take_orders_info.raindex(), raindex_addr);
         assert!(!take_orders_info.calldata().is_empty());
         assert!(!take_orders_info.prices().is_empty());
 
@@ -519,21 +519,21 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_effective_price_calculation() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("10".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let buy_target = Float::parse("10".to_string()).unwrap();
         let price_cap = high_price_cap();
         let mode = buy_up_to(buy_target);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap).unwrap();
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap).unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
 
@@ -546,22 +546,22 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_prices_match_legs() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("10".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let buy_target = Float::parse("10".to_string()).unwrap();
         let price_cap = high_price_cap();
         let mode = buy_up_to(buy_target);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let leg_count = sim.legs.len();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap).unwrap();
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap).unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
 
@@ -578,21 +578,21 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_expected_sell_and_max_sell_cap_buy_mode() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("10".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let buy_target = Float::parse("10".to_string()).unwrap();
         let price_cap = Float::parse("3".to_string()).unwrap();
         let mode = buy_up_to(buy_target);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap).unwrap();
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap).unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
 
@@ -614,21 +614,21 @@ mod tests {
 
     #[test]
     fn test_build_calldata_result_expected_sell_and_max_sell_cap_spend_mode() {
-        let ob = Address::from([0x11u8; 20]);
+        let raindex_addr = Address::from([0x11u8; 20]);
         let max_output = Float::parse("100".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
-        let candidate = make_candidate(ob, max_output, ratio);
+        let candidate = make_candidate(raindex_addr, max_output, ratio);
         let candidates = vec![candidate];
         let spend_budget = Float::parse("20".to_string()).unwrap();
         let price_cap = Float::parse("3".to_string()).unwrap();
         let mode = spend_up_to(spend_budget);
 
-        let (_, sim) = select_best_orderbook_simulation(candidates, mode, price_cap).unwrap();
+        let (_, sim) = select_best_raindex_simulation(candidates, mode, price_cap).unwrap();
         let built = build_take_orders_config_from_simulation(sim, mode, price_cap)
             .unwrap()
             .unwrap();
 
-        let result = build_calldata_result(ob, built, mode, price_cap).unwrap();
+        let result = build_calldata_result(raindex_addr, built, mode, price_cap).unwrap();
         assert!(result.is_ready());
         let take_orders_info = result.take_orders_info().unwrap();
 

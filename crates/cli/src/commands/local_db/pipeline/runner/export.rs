@@ -2,14 +2,14 @@ use crate::commands::local_db::executor::RusqliteExecutor;
 use alloy::primitives::hex::encode_prefixed;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use rain_orderbook_common::local_db::export::{export_data_only, ExportError};
-use rain_orderbook_common::local_db::pipeline::runner::utils::RunnerTarget;
-use rain_orderbook_common::local_db::pipeline::SyncOutcome;
-use rain_orderbook_common::local_db::query::fetch_target_watermark::{
+use raindex_common::local_db::export::{export_data_only, ExportError};
+use raindex_common::local_db::pipeline::runner::utils::RunnerTarget;
+use raindex_common::local_db::pipeline::SyncOutcome;
+use raindex_common::local_db::query::fetch_target_watermark::{
     fetch_target_watermark_stmt, TargetWatermarkRow,
 };
-use rain_orderbook_common::local_db::query::LocalDbQueryExecutor;
-use rain_orderbook_common::local_db::LocalDbError;
+use raindex_common::local_db::query::LocalDbQueryExecutor;
+use raindex_common::local_db::LocalDbError;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tokio::fs::create_dir_all;
@@ -28,17 +28,17 @@ pub(super) async fn export_dump(
     outcome: &SyncOutcome,
     out_root: &Path,
 ) -> Result<Option<ExportMetadata>, LocalDbError> {
-    let dump_sql = match export_data_only(executor, &target.inputs.ob_id).await? {
+    let dump_sql = match export_data_only(executor, &target.inputs.raindex_id).await? {
         Some(sql) => sql,
         None => return Ok(None),
     };
 
-    let chain_folder = out_root.join(target.inputs.ob_id.chain_id.to_string());
+    let chain_folder = out_root.join(target.inputs.raindex_id.chain_id.to_string());
     create_dir_all(&chain_folder).await?;
 
     let filename = format!(
         "{}-{}.sql.gz",
-        target.inputs.ob_id.chain_id, target.inputs.ob_id.orderbook_address
+        target.inputs.raindex_id.chain_id, target.inputs.raindex_id.raindex_address
     );
     let dump_path = chain_folder.join(filename);
 
@@ -51,12 +51,12 @@ pub(super) async fn export_dump(
 
     tokio::fs::write(&dump_path, compressed).await?;
 
-    let watermark_stmt = fetch_target_watermark_stmt(&target.inputs.ob_id);
+    let watermark_stmt = fetch_target_watermark_stmt(&target.inputs.raindex_id);
     let rows: Vec<TargetWatermarkRow> = executor.query_json(&watermark_stmt).await?;
     let row = rows.into_iter().next().ok_or_else(|| {
         LocalDbError::from(ExportError::MissingTargetWatermark {
-            chain_id: target.inputs.ob_id.chain_id,
-            orderbook_address: target.inputs.ob_id.orderbook_address,
+            chain_id: target.inputs.raindex_id.chain_id,
+            raindex_address: target.inputs.raindex_id.raindex_address,
         })
     })?;
 
@@ -73,9 +73,9 @@ mod tests {
     use super::*;
     use alloy::primitives::address;
     use flate2::read::GzDecoder;
-    use rain_orderbook_common::local_db::{
+    use raindex_common::local_db::{
         pipeline::{engine::SyncInputs, FinalityConfig, SyncConfig, WindowOverrides},
-        FetchConfig, OrderbookIdentifier,
+        FetchConfig, RaindexIdentifier,
     };
     use rusqlite::{params, Connection};
     use std::io::{Cursor, Read};
@@ -86,22 +86,20 @@ mod tests {
     #[tokio::test]
     async fn export_dump_writes_gzip_and_reads_watermark_metadata() {
         let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("orderbook.sqlite");
+        let db_path = temp_dir.path().join("raindex.sqlite");
         let conn = Connection::open(&db_path).expect("open sqlite db");
-        conn.execute_batch(
-            rain_orderbook_common::local_db::query::create_tables::CREATE_TABLES_SQL,
-        )
-        .expect("create tables");
+        conn.execute_batch(raindex_common::local_db::query::create_tables::CREATE_TABLES_SQL)
+            .expect("create tables");
 
         let chain_id = 42161u32;
-        let orderbook_address = address!("0x0000000000000000000000000000000000000abc");
-        let orderbook_str = encode_prefixed(orderbook_address);
+        let raindex_address = address!("0x0000000000000000000000000000000000000abc");
+        let raindex_str = encode_prefixed(raindex_address);
 
         conn.execute(
-            "INSERT INTO raw_events (chain_id, orderbook_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
+            "INSERT INTO raw_events (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
             params![
                 chain_id as i64,
-                orderbook_str.as_str(),
+                raindex_str.as_str(),
                 "0xtesttx",
                 0i64,
                 1000i64,
@@ -115,11 +113,11 @@ mod tests {
         .expect("insert raw_events row");
 
         conn.execute(
-            "INSERT INTO target_watermarks (chain_id, orderbook_address, last_block, last_hash) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(chain_id, orderbook_address) DO UPDATE SET last_block = excluded.last_block, last_hash = excluded.last_hash, updated_at = 1_700_000_000_000;",
+            "INSERT INTO target_watermarks (chain_id, raindex_address, last_block, last_hash) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(chain_id, raindex_address) DO UPDATE SET last_block = excluded.last_block, last_hash = excluded.last_hash, updated_at = 1_700_000_000_000;",
             params![
                 chain_id as i64,
-                orderbook_str.as_str(),
+                raindex_str.as_str(),
                 1000i64,
                 "0xdeadbeef",
             ],
@@ -137,17 +135,17 @@ mod tests {
             window_overrides: WindowOverrides::default(),
         };
 
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id,
-            orderbook_address,
+            raindex_address,
         };
 
         let target = RunnerTarget {
-            orderbook_key: "test".to_string(),
+            raindex_key: "test".to_string(),
             manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
-                ob_id: ob_id.clone(),
+                raindex_id: raindex_id.clone(),
                 metadata_rpcs: Vec::new(),
                 cfg: sync_config,
                 dump_str: None,
@@ -157,7 +155,7 @@ mod tests {
         };
 
         let outcome = SyncOutcome {
-            ob_id,
+            raindex_id,
             start_block: 900,
             target_block: 1000,
             fetched_logs: 1,
@@ -181,7 +179,7 @@ mod tests {
         );
         let expected_file = format!(
             "{}-{}.sql.gz",
-            chain_id, target.inputs.ob_id.orderbook_address
+            chain_id, target.inputs.raindex_id.raindex_address
         );
         assert_eq!(
             metadata
@@ -207,16 +205,14 @@ mod tests {
     #[tokio::test]
     async fn export_dump_returns_none_when_no_rows_are_present() {
         let temp_dir = TempDir::new().unwrap();
-        let db_path = temp_dir.path().join("orderbook.sqlite");
+        let db_path = temp_dir.path().join("raindex.sqlite");
         let conn = Connection::open(&db_path).expect("open sqlite db");
-        conn.execute_batch(
-            rain_orderbook_common::local_db::query::create_tables::CREATE_TABLES_SQL,
-        )
-        .expect("create tables");
+        conn.execute_batch(raindex_common::local_db::query::create_tables::CREATE_TABLES_SQL)
+            .expect("create tables");
         drop(conn);
 
         let chain_id = 10u32;
-        let orderbook_address = address!("0x0000000000000000000000000000000000000fff");
+        let raindex_address = address!("0x0000000000000000000000000000000000000fff");
         let executor = RusqliteExecutor::new(&db_path);
         let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         let sync_config = SyncConfig {
@@ -226,17 +222,17 @@ mod tests {
             window_overrides: WindowOverrides::default(),
         };
 
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id,
-            orderbook_address,
+            raindex_address,
         };
 
         let target = RunnerTarget {
-            orderbook_key: "empty".to_string(),
+            raindex_key: "empty".to_string(),
             manifest_url: Url::parse("https://example.com/empty.yaml").unwrap(),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
-                ob_id: ob_id.clone(),
+                raindex_id: raindex_id.clone(),
                 metadata_rpcs: Vec::new(),
                 cfg: sync_config,
                 dump_str: None,
@@ -246,7 +242,7 @@ mod tests {
         };
 
         let outcome = SyncOutcome {
-            ob_id,
+            raindex_id,
             start_block: 0,
             target_block: 0,
             fetched_logs: 0,

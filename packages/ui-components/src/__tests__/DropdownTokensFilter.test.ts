@@ -2,7 +2,7 @@ import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import { get, writable, readable } from 'svelte/store';
 import DropdownTokensFilter from '../lib/components/dropdown/DropdownTokensFilter.svelte';
 import { expect, test, describe, beforeEach } from 'vitest';
-import type { Address, RaindexVaultToken } from '@rainlanguage/orderbook';
+import type { Address, RaindexVaultToken } from '@rainlanguage/raindex';
 import type { QueryObserverResult } from '@tanstack/svelte-query';
 
 describe('DropdownTokensFilter', () => {

@@ -1,5 +1,5 @@
 import { getContext, setContext } from 'svelte';
-import type { DotrainRegistry } from '@rainlanguage/orderbook';
+import type { DotrainRegistry } from '@rainlanguage/raindex';
 import type { RegistryManager } from '../registry/RegistryManager';
 
 export type DotrainRegistryContext = {

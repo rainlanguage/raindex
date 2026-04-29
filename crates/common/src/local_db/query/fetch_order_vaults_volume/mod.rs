@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlBuildError, SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use alloy::primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
@@ -25,14 +25,14 @@ const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
 const END_TS_BODY: &str = "\nAND block_timestamp <= {param}\n";
 
 pub fn build_fetch_order_vaults_volume_stmt(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     order_hash: B256,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
-    stmt.push(SqlValue::from(ob_id.chain_id));
-    stmt.push(SqlValue::from(ob_id.orderbook_address));
+    stmt.push(SqlValue::from(raindex_id.chain_id));
+    stmt.push(SqlValue::from(raindex_id.raindex_address));
     stmt.push(SqlValue::from(order_hash));
 
     let start_param = if let Some(v) = start_timestamp {
@@ -74,7 +74,7 @@ mod tests {
         let order_hash =
             b256!("0x00000000000000000000000000000000000000000000000000000000deadface");
         let stmt = build_fetch_order_vaults_volume_stmt(
-            &OrderbookIdentifier::new(137, Address::ZERO),
+            &RaindexIdentifier::new(137, Address::ZERO),
             order_hash,
             Some(11),
             Some(22),
@@ -98,7 +98,7 @@ mod tests {
         let order_hash =
             b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let stmt = build_fetch_order_vaults_volume_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             order_hash,
             None,
             None,

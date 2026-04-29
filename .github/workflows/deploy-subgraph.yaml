@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOLDSKY_TOKEN: ${{ secrets.CI_GOLDSKY_TOKEN }}
-      GOLDSKY_SUBGRAPH_NAME: ob4
+      GOLDSKY_SUBGRAPH_NAME: raindex
     steps:
       - uses: actions/checkout@v4
         with:

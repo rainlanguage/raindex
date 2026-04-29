@@ -3,7 +3,7 @@ import {
 	type RaindexOrder,
 	type RaindexOrderQuote,
 	type TakeOrdersInfo
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { type Hex } from 'viem';
 import type {
 	TransactionManager,
@@ -53,7 +53,7 @@ async function executeTakeOrder(args: ExecuteTakeOrderArgs): Promise<void> {
 		closeOnConfirm: false,
 		args: {
 			entity: order,
-			toAddress: takeOrdersInfo.orderbook as Hex,
+			toAddress: takeOrdersInfo.raindex as Hex,
 			chainId: order.chainId,
 			onConfirm: (txHash: Hex) => {
 				manager.createTakeOrderTransaction({

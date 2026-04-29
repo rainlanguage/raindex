@@ -9,14 +9,12 @@ use rain_metaboard_subgraph::metaboard_client::{
 };
 use rain_metaboard_subgraph::types::metas::BigInt as MetaBigInt;
 use rain_metadata::RainMetaDocumentV1Item;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     order::{OrderIOCfg, VaultType},
-    orderbook::OrderbookCfg,
+    raindex::RaindexCfg,
 };
-use rain_orderbook_bindings::{
-    IRaindexV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
-};
-use rain_orderbook_common::{
+use raindex_bindings::{IRaindexV6::deposit4Call, Raindex::multicallCall, IERC20::approveCall};
+use raindex_common::{
     add_order::AddOrderArgs, deposit::DepositArgs, erc20::ERC20, transaction::TransactionArgs,
 };
 use std::{collections::HashMap, str::FromStr, sync::Arc};
@@ -101,7 +99,7 @@ pub struct DeploymentTransactionArgs {
     #[tsify(type = "string")]
     deployment_calldata: Bytes,
     #[tsify(type = "string")]
-    orderbook_address: Address,
+    raindex_address: Address,
     chain_id: u32,
     #[tsify(type = "ExternalCall | undefined")]
     emit_meta_call: Option<ExternalCall>,
@@ -128,24 +126,24 @@ pub struct VaultAndDeposit {
 
 #[wasm_export]
 impl DotrainOrderGui {
-    fn get_orderbook(&self) -> Result<Arc<OrderbookCfg>, GuiError> {
+    fn get_raindex(&self) -> Result<Arc<RaindexCfg>, GuiError> {
         let deployment = self.get_current_deployment()?;
         deployment
             .deployment
             .as_ref()
             .order
             .as_ref()
-            .orderbook
+            .raindex
             .as_ref()
-            .ok_or(GuiError::OrderbookNotFound)
+            .ok_or(GuiError::RaindexNotFound)
             .cloned()
     }
 
     fn get_transaction_args(&self) -> Result<TransactionArgs, GuiError> {
-        let orderbook = self.get_orderbook()?;
+        let raindex = self.get_raindex()?;
         Ok(TransactionArgs {
-            orderbook_address: orderbook.address,
-            rpcs: orderbook
+            raindex_address: raindex.address,
+            rpcs: raindex
                 .network
                 .rpcs
                 .clone()
@@ -227,7 +225,7 @@ impl DotrainOrderGui {
         self.get_current_deployment()
     }
 
-    /// Checks token allowances for all deposits against the orderbook contract.
+    /// Checks token allowances for all deposits against the raindex contract.
     ///
     /// Queries the blockchain to determine current  allowances for each output token that
     /// will be deposited. This helps determine which tokens need approval before
@@ -285,7 +283,7 @@ impl DotrainOrderGui {
                 .address;
 
             let erc20 = ERC20::new(rpcs, token);
-            let allowance = erc20.allowance(owner, tx_args.orderbook_address).await?;
+            let allowance = erc20.allowance(owner, tx_args.raindex_address).await?;
 
             results.push(TokenAllowance { token, allowance });
         }
@@ -356,7 +354,7 @@ impl DotrainOrderGui {
 
             if !allowance_float.eq(*deposit_amount)? {
                 let calldata = approveCall {
-                    spender: tx_args.orderbook_address,
+                    spender: tx_args.raindex_address,
                     amount: deposit_amount.to_fixed_decimal(decimals)?,
                 }
                 .abi_encode();
@@ -414,7 +412,7 @@ impl DotrainOrderGui {
         Ok(add_order_args)
     }
 
-    /// Generates calldata for depositing tokens into orderbook vaults.
+    /// Generates calldata for depositing tokens into raindex vaults.
     ///
     /// Creates deposit calldatas for all configured deposits, automatically
     /// skipping zero amounts and ensuring vault IDs are properly assigned.
@@ -487,7 +485,7 @@ impl DotrainOrderGui {
                 decimals,
             };
             let calldata = deposit4Call::try_from(deposit_args)
-                .map_err(rain_orderbook_common::deposit::DepositError::from)?
+                .map_err(raindex_common::deposit::DepositError::from)?
                 .abi_encode();
             calldatas.push(Bytes::copy_from_slice(&calldata));
         }
@@ -495,7 +493,7 @@ impl DotrainOrderGui {
         Ok(DepositCalldataResult::Calldatas(calldatas))
     }
 
-    /// Generates calldata for adding the order to the orderbook.
+    /// Generates calldata for adding the order to the raindex.
     ///
     /// Creates the addOrder calldata with all field values applied to the
     /// Rainlang code and proper vault configurations.
@@ -738,7 +736,7 @@ impl DotrainOrderGui {
     ///
     /// - `approvals` - Token approval calldatas with symbols for UI
     /// - `deploymentCalldata` - Main order deployment calldata
-    /// - `orderbookAddress` - Target contract address
+    /// - `raindexAddress` - Target contract address
     /// - `chainId` - Network identifier
     ///
     /// # Examples
@@ -756,8 +754,8 @@ impl DotrainOrderGui {
     ///   approvals,
     ///   // deploymentCalldata is the multicall calldata for the order
     ///   deploymentCalldata,
-    ///   // orderbookAddress is the address of the orderbook
-    ///   orderbookAddress,
+    ///   // raindexAddress is the address of the raindex
+    ///   raindexAddress,
     ///   // chainId is the chain ID of the network
     ///   chainId,
     /// } = result.value;
@@ -840,12 +838,12 @@ impl DotrainOrderGui {
         Ok(DeploymentTransactionArgs {
             approvals,
             deployment_calldata,
-            orderbook_address: deployment
+            raindex_address: deployment
                 .deployment
                 .order
-                .orderbook
+                .raindex
                 .as_ref()
-                .ok_or(GuiError::OrderbookNotFound)?
+                .ok_or(GuiError::RaindexNotFound)?
                 .address,
             chain_id: deployment.deployment.order.network.chain_id,
             emit_meta_call,
@@ -854,9 +852,8 @@ impl DotrainOrderGui {
 
     fn get_metaboard_client(&self) -> Result<MetaboardSubgraphClient, GuiError> {
         let deployment = self.get_current_deployment()?;
-        let orderbook_yaml = self.dotrain_order.orderbook_yaml();
-        let metaboard_cfg =
-            orderbook_yaml.get_metaboard(&deployment.deployment.order.network.key)?;
+        let raindex_yaml = self.dotrain_order.raindex_yaml();
+        let metaboard_cfg = raindex_yaml.get_metaboard(&deployment.deployment.order.network.key)?;
         Ok(MetaboardSubgraphClient::new(metaboard_cfg.url.clone()))
     }
 

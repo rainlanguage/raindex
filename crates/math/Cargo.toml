@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_math"
-description = "Math toolings for Rain Orderbooks crates"
+name = "raindex_math"
+description = "Math toolings for Raindex crates"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

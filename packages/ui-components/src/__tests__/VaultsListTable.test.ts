@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, type Mock, beforeEach } from 'vitest';
 import VaultsListTable from '../lib/components/tables/VaultsListTable.svelte';
 import { readable } from 'svelte/store';
-import { Float, type RaindexVault, type RaindexVaultsList } from '@rainlanguage/orderbook';
+import { Float, type RaindexVault, type RaindexVaultsList } from '@rainlanguage/raindex';
 import type { ComponentProps } from 'svelte';
 import userEvent from '@testing-library/user-event';
 import { useAccount } from '$lib/providers/wallet/useAccount';
@@ -42,7 +42,7 @@ const mockVault = {
 		symbol: 'MTK',
 		decimals: '18'
 	},
-	orderbook: '0x2222222222222222222222222222222222222222',
+	raindex: '0x2222222222222222222222222222222222222222',
 	ordersAsInput: [],
 	ordersAsOutput: []
 } as unknown as RaindexVault;
@@ -56,7 +56,7 @@ vi.mock('@tanstack/svelte-query');
 // Hoisted mock stores
 const {
 	mockActiveNetworkRefStore,
-	mockActiveOrderbookRefStore,
+	mockActiveRaindexRefStore,
 	mockHideZeroBalanceVaultsStore,
 	mockHideInactiveOrdersVaultsStore,
 	mockOrderHashStore,
@@ -64,7 +64,7 @@ const {
 	mockActiveAccountsStore,
 	mockSelectedChainIdsStore,
 	mockActiveTokensStore,
-	mockActiveOrderbookAddressesStore,
+	mockActiveRaindexAddressesStore,
 	mockOwnerFilterStore
 } = await vi.hoisted(() => import('../lib/__mocks__/stores'));
 
@@ -74,11 +74,11 @@ const defaultProps = {
 	hideZeroBalanceVaults: mockHideZeroBalanceVaultsStore,
 	hideInactiveOrdersVaults: mockHideInactiveOrdersVaultsStore,
 	activeNetworkRef: mockActiveNetworkRefStore,
-	activeOrderbookRef: mockActiveOrderbookRefStore,
+	activeRaindexRef: mockActiveRaindexRefStore,
 	activeAccounts: mockActiveAccountsStore,
 	selectedChainIds: mockSelectedChainIdsStore,
 	activeTokens: mockActiveTokensStore,
-	activeOrderbookAddresses: mockActiveOrderbookAddressesStore,
+	activeRaindexAddresses: mockActiveRaindexAddressesStore,
 	ownerFilter: mockOwnerFilterStore
 };
 
@@ -112,12 +112,12 @@ describe('VaultsListTable', () => {
 				value: new Map(),
 				error: undefined
 			})),
-			getAllOrderbooks: vi.fn(() => ({
+			getAllRaindexes: vi.fn(() => ({
 				value: new Map([
 					[
-						'orderbook1',
+						'raindex1',
 						{
-							key: 'orderbook1',
+							key: 'raindex1',
 							address: '0x1111111111111111111111111111111111111111',
 							network: { chainId: 1 }
 						}
@@ -149,7 +149,7 @@ describe('VaultsListTable', () => {
 		const addressesCell = screen.getByTestId('vaultAddresses');
 		expect(addressesCell).toBeInTheDocument();
 		expect(addressesCell).toHaveTextContent('Vault:');
-		expect(addressesCell).toHaveTextContent('Orderbook:');
+		expect(addressesCell).toHaveTextContent('Raindex:');
 		expect(addressesCell).toHaveTextContent('Owner:');
 
 		// Token column now contains both token name and balance
@@ -447,10 +447,10 @@ describe('VaultsListTable', () => {
 		expect(withdrawButton).toBeDisabled();
 	});
 
-	it('passes orderbookAddresses filter to getVaults when orderbooks are selected', async () => {
-		const orderbookAddress = '0x1111111111111111111111111111111111111111';
+	it('passes raindexAddresses filter to getVaults when raindexes are selected', async () => {
+		const raindexAddress = '0x1111111111111111111111111111111111111111';
 
-		mockActiveOrderbookAddressesStore.mockSetSubscribeValue([orderbookAddress]);
+		mockActiveRaindexAddressesStore.mockSetSubscribeValue([raindexAddress]);
 
 		const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
 		mockQuery.createInfiniteQuery = vi.fn((options: any) => {
@@ -476,15 +476,15 @@ describe('VaultsListTable', () => {
 			expect(mockGetVaults).toHaveBeenCalledWith(
 				expect.anything(),
 				expect.objectContaining({
-					orderbookAddresses: [orderbookAddress]
+					raindexAddresses: [raindexAddress]
 				}),
 				expect.anything()
 			);
 		});
 	});
 
-	it('does not pass orderbookAddresses filter when no orderbooks are selected', async () => {
-		mockActiveOrderbookAddressesStore.mockSetSubscribeValue([]);
+	it('does not pass raindexAddresses filter when no raindexes are selected', async () => {
+		mockActiveRaindexAddressesStore.mockSetSubscribeValue([]);
 
 		const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
 		mockQuery.createInfiniteQuery = vi.fn((options: any) => {
@@ -510,7 +510,7 @@ describe('VaultsListTable', () => {
 			expect(mockGetVaults).toHaveBeenCalledWith(
 				expect.anything(),
 				expect.objectContaining({
-					orderbookAddresses: undefined
+					raindexAddresses: undefined
 				}),
 				expect.anything()
 			);

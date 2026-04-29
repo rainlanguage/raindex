@@ -1,9 +1,9 @@
 import { render, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect } from 'vitest';
 import InputTokenAmount from '$lib/components/input/InputTokenAmount.svelte';
-import { Float } from '@rainlanguage/orderbook';
+import { Float } from '@rainlanguage/raindex';
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => ({
+vi.mock('@rainlanguage/raindex', async (importOriginal) => ({
 	...(await importOriginal())
 }));
 

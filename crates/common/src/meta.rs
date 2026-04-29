@@ -46,8 +46,8 @@ impl TryDecodeRainlangSource for String {
 
 #[cfg(test)]
 mod tests {
-    use rain_orderbook_subgraph_client::types::common::SgBytes;
-    use rain_orderbook_subgraph_client::types::common::SgRainMetaV1;
+    use raindex_subgraph_client::types::common::SgBytes;
+    use raindex_subgraph_client::types::common::SgRainMetaV1;
 
     use super::*;
 

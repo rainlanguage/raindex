@@ -7,7 +7,7 @@ import type {
 	RaindexVault,
 	RaindexVaultBalanceChange,
 	RaindexVaultBalanceChangeType
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { formatTimestampSecondsAsLocal } from '../lib/services/time';
 import { VAULT_BALANCE_CHANGE_LABELS } from '../lib/utils/vaultBalanceChangeLabels';
 
@@ -48,7 +48,7 @@ const createMockVaultBalanceChange = (
 			timestamp: BigInt(1625247600),
 			blockNumber: BigInt(1234567890)
 		},
-		orderbook: '0x00',
+		raindex: '0x00',
 		...overrides
 	} as unknown as RaindexVaultBalanceChange;
 };

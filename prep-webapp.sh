@@ -32,7 +32,7 @@ echo "Preparing base setup..."
 rm -rf target || true
 
 echo "Building packages..."
-nix develop -i ${keep[@]} -c bash -c '(npm run build -w @rainlanguage/orderbook)'
+nix develop -i ${keep[@]} -c bash -c '(npm run build -w @rainlanguage/raindex)'
 
 rm -rf target || true
 

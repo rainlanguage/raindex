@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/svelte';
 import { test, vi } from 'vitest';
 import { expect } from '$lib/test/matchers';
-import type { RaindexOrder, RaindexVaultVolume } from '@rainlanguage/orderbook';
+import type { RaindexOrder, RaindexVaultVolume } from '@rainlanguage/raindex';
 import OrderVaultsVolTable from '../lib/components/tables/OrderVaultsVolTable.svelte';
 import { QueryClient } from '@tanstack/svelte-query';
 

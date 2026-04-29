@@ -1,5 +1,5 @@
 import { getContext } from 'svelte';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { DotrainOrderGui } from '@rainlanguage/raindex';
 import { DeploymentStepsError, DeploymentStepsErrorCode } from '../errors/DeploymentStepsError';
 export const GUI_CONTEXT_KEY = 'gui-context';
 

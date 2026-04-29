@@ -5,7 +5,7 @@ use crate::{
 use anyhow::Result;
 use clap::Args;
 use comfy_table::Table;
-use rain_orderbook_common::{
+use raindex_common::{
     csv::TryIntoCsv,
     subgraph::SubgraphArgs,
     types::{FlattenError, OrderFlattened, LIST_DELIMITER},
@@ -99,7 +99,7 @@ mod tests {
     use super::*;
     use alloy::{hex::encode_prefixed, primitives::B256, sol_types::SolValue};
     use httpmock::MockServer;
-    use rain_orderbook_bindings::IRaindexV6::{OrderV4, IOV2};
+    use raindex_bindings::IRaindexV6::{OrderV4, IOV2};
     use serde_json::{json, Value};
 
     #[tokio::test]
@@ -228,7 +228,7 @@ mod tests {
                             "address": encode_prefixed(io.token),
                             "decimals": "0",
                         },
-                        "orderbook": { "id": encode_prefixed(B256::random()) },
+                        "raindex": { "id": encode_prefixed(B256::random()) },
                         "owner": encode_prefixed(order.owner),
                         "ordersAsOutput": [],
                         "ordersAsInput": [],
@@ -245,13 +245,13 @@ mod tests {
                             "address": encode_prefixed(io.token),
                             "decimals": "0",
                         },
-                        "orderbook": { "id": encode_prefixed(B256::random()) },
+                        "raindex": { "id": encode_prefixed(B256::random()) },
                         "owner": encode_prefixed(order.owner),
                         "ordersAsOutput": [],
                         "ordersAsInput": [],
                         "balanceChanges": []
                     }],
-                    "orderbook": {
+                    "raindex": {
                         "id": encode_prefixed(B256::random()),
                     },
                     "meta": null,

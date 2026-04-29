@@ -30,13 +30,13 @@ jobs:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
 
       - run: nix develop .#webapp-shell -c npm run docs
-        working-directory: packages/orderbook
+        working-directory: packages/raindex
 
       - name: Prepare Vercel build output
         run: |
-          OUTPUT_DIR="packages/orderbook/.vercel/output"
+          OUTPUT_DIR="packages/raindex/.vercel/output"
           mkdir -p "${OUTPUT_DIR}/static"
-          cp -r packages/orderbook/docs/* "${OUTPUT_DIR}/static/"
+          cp -r packages/raindex/docs/* "${OUTPUT_DIR}/static/"
           echo '{ "version": 3 }' > "${OUTPUT_DIR}/config.json"
 
       - name: Install Vercel CLI
@@ -44,7 +44,7 @@ jobs:
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} packages/orderbook
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} packages/raindex
 
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status

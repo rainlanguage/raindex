@@ -66,7 +66,7 @@ mod tests {
         use crate::local_db::{FetchConfig, LocalDbError};
         use crate::rpc_client::RpcClient;
         use alloy::primitives::Address;
-        use rain_orderbook_test_fixtures::LocalEvm;
+        use raindex_test_fixtures::LocalEvm;
         use url::Url;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

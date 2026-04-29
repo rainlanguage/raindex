@@ -4,7 +4,7 @@ import {
 	RaindexOrder,
 	RaindexTransaction,
 	RaindexVault
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { QueryClient } from '@tanstack/svelte-query';
 import OrderDetail from '../lib/components/detail/OrderDetail.svelte';
@@ -28,7 +28,7 @@ vi.mock('$lib/providers/wallet/useAccount', () => ({
 }));
 
 // Mock the js_api functions
-vi.mock('@rainlanguage/orderbook', () => ({
+vi.mock('@rainlanguage/raindex', () => ({
 	RaindexClient: vi.fn()
 }));
 
@@ -55,12 +55,12 @@ vi.mock('$lib/components/CodeMirrorRainlang.svelte', async () => {
 vi.mock('$lib/services/getExplorerLink', () => ({
 	getExplorerLink: vi.fn()
 }));
-const orderbookAddress = '0x123456789012345678901234567890123456abcd';
+const raindexAddress = '0x123456789012345678901234567890123456abcd';
 const orderHash = '0x0234';
 
 const defaultProps: ComponentProps<OrderDetail> = {
 	chainId: 1,
-	orderbookAddress,
+	raindexAddress,
 	orderHash,
 	codeMirrorTheme: readable('dark'),
 	lightweightChartsTheme: readable(darkChartTheme),
@@ -77,7 +77,7 @@ const mockVaultsList = () => ({
 
 const mockOrder: RaindexOrder = {
 	chainId: 1,
-	orderbook: orderbookAddress,
+	raindex: raindexAddress,
 	id: 'mockId',
 	orderBytes: '0x0000000000000000000000000000000000000000...',
 	orderHash: orderHash,
@@ -108,7 +108,7 @@ const mockOrder: RaindexOrder = {
 				owner: '0x1234567890123456789012345678901234567890',
 				ordersAsOutput: [],
 				ordersAsInput: [],
-				orderbook: orderbookAddress
+				raindex: raindexAddress
 			} as unknown as RaindexVault,
 			{
 				chainId: 1,
@@ -126,7 +126,7 @@ const mockOrder: RaindexOrder = {
 				owner: '0x1234567890123456789012345678901234567890',
 				ordersAsOutput: [],
 				ordersAsInput: [],
-				orderbook: orderbookAddress
+				raindex: raindexAddress
 			} as unknown as RaindexVault
 		]
 	},
@@ -181,7 +181,7 @@ describe('OrderDetail', () => {
 			context: new Map([['$$_queryClient', queryClient]])
 		});
 
-		expect(mockRaindexClient.getOrderByHash).toHaveBeenCalledWith(1, orderbookAddress, orderHash);
+		expect(mockRaindexClient.getOrderByHash).toHaveBeenCalledWith(1, raindexAddress, orderHash);
 	});
 
 	it('shows the correct empty message when the query returns no data', async () => {
@@ -205,10 +205,10 @@ describe('OrderDetail', () => {
 
 		await waitFor(() => {
 			expect(screen.getByText('Order')).toBeInTheDocument();
-			expect(screen.getByText('Orderbook')).toBeInTheDocument();
+			expect(screen.getByText('Raindex')).toBeInTheDocument();
 			expect(screen.getByText('Owner')).toBeInTheDocument();
 			expect(screen.getByText('Created')).toBeInTheDocument();
-			expect(screen.getByText(orderbookAddress)).toBeInTheDocument();
+			expect(screen.getByText(raindexAddress)).toBeInTheDocument();
 			expect(screen.getByText('0x1234567890123456789012345678901234567890')).toBeInTheDocument();
 		});
 	});
@@ -313,7 +313,7 @@ describe('OrderDetail', () => {
 		await waitFor(() => {
 			expect(screen.getByText('Order')).toBeInTheDocument();
 
-			expect(screen.getByText('Orderbook')).toBeInTheDocument();
+			expect(screen.getByText('Raindex')).toBeInTheDocument();
 
 			expect(screen.getByText('Owner')).toBeInTheDocument();
 
@@ -341,7 +341,7 @@ describe('OrderDetail', () => {
 
 		await waitFor(() => {
 			expect(screen.getByText('Order')).toBeInTheDocument();
-			expect(screen.getByText('Orderbook')).toBeInTheDocument();
+			expect(screen.getByText('Raindex')).toBeInTheDocument();
 			expect(screen.getByText('Owner')).toBeInTheDocument();
 			expect(screen.getByText('Created')).toBeInTheDocument();
 		});

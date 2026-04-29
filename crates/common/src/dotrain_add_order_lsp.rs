@@ -1,5 +1,5 @@
 #[cfg(not(target_family = "wasm"))]
-use crate::add_order::ORDERBOOK_ORDER_ENTRYPOINTS;
+use crate::add_order::RAINDEX_ORDER_ENTRYPOINTS;
 #[cfg(not(target_family = "wasm"))]
 use crate::rainlang::parse_rainlang_on_fork;
 #[cfg(not(target_family = "wasm"))]
@@ -76,7 +76,7 @@ impl DotrainAddOrderLsp {
             bindings_problems.extend(top_problems.to_vec());
             bindings_problems
         } else {
-            let rainlang = match rain_document.compose(&ORDERBOOK_ORDER_ENTRYPOINTS) {
+            let rainlang = match rain_document.compose(&RAINDEX_ORDER_ENTRYPOINTS) {
                 Ok(v) => v,
                 Err(e) => match e {
                     ComposeError::Reject(msg) => {
@@ -123,8 +123,8 @@ impl DotrainAddOrderLsp {
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_test_fixtures::LocalEvm;
     use url::Url;
 
     fn get_text() -> String {
@@ -144,19 +144,19 @@ tokens:
 
 orders:
   flare1:
-    orderbook: flare
+    raindex: flare
     inputs:
       - token: token1
     outputs:
       - token: token2
   flareaaaaa:
-    orderbook: flare
+    raindex: flare
     inputs:
       - token: token1
     outputs:
       - token: token1
   flare2:
-    orderbook: flare
+    raindex: flare
     inputs:
       - token: token2
     outputs:
@@ -164,7 +164,7 @@ orders:
 
 scenarios:
   flare:
-    orderbook: flare
+    raindex: flare
     runs: 1
     bindings:
       raindex-subparser: 0xFe2411CDa193D9E4e83A5c234C7Fd320101883aC

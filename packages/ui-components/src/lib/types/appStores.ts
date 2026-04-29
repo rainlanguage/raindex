@@ -1,5 +1,5 @@
 import type { Writable } from 'svelte/store';
-import type { Address, Hex } from '@rainlanguage/orderbook';
+import type { Address, Hex } from '@rainlanguage/raindex';
 
 export interface AppStoresInterface {
 	selectedChainIds: Writable<number[]>;
@@ -8,6 +8,6 @@ export interface AppStoresInterface {
 	hideZeroBalanceVaults: Writable<boolean>;
 	hideInactiveOrdersVaults: Writable<boolean>;
 	activeTokens: Writable<Address[]>;
-	activeOrderbookAddresses: Writable<Address[]>;
+	activeRaindexAddresses: Writable<Address[]>;
 	ownerFilter: Writable<Address>;
 }

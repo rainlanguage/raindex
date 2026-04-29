@@ -10,7 +10,7 @@ query VaultsListQuery($skip: Int = 0, $first: Int = 25) {
       decimals
     }
     balance
-    orderbook {
+    raindex {
       id
     }
     ordersAsInput {

@@ -4,7 +4,7 @@ SELECT
   l.order_owner AS owner,
   fa.block_timestamp AS blockTimestamp,
   fa.block_number AS blockNumber,
-  l.orderbook_address AS orderbookAddress,
+  l.raindex_address AS raindexAddress,
   la.order_bytes AS orderBytes,
   json_group_array(
     CASE
@@ -16,7 +16,7 @@ SELECT
           'vaultId', ios.vault_id,
           'token', ios.token,
           'owner', l.order_owner,
-          'orderbookAddress', l.orderbook_address,
+          'raindexAddress', l.raindex_address,
           'tokenName', COALESCE(tok.name, ''),
           'tokenSymbol', COALESCE(tok.symbol, ''),
           'tokenDecimals', COALESCE(tok.decimals, 0),
@@ -37,7 +37,7 @@ SELECT
           'vaultId', ios.vault_id,
           'token', ios.token,
           'owner', l.order_owner,
-          'orderbookAddress', l.orderbook_address,
+          'raindexAddress', l.raindex_address,
           'tokenName', COALESCE(tok.name, ''),
           'tokenSymbol', COALESCE(tok.symbol, ''),
           'tokenDecimals', COALESCE(tok.decimals, 0),
@@ -55,7 +55,7 @@ SELECT
     SELECT m.meta
     FROM meta_events m
     WHERE m.chain_id = l.chain_id
-      AND m.orderbook_address = l.orderbook_address
+      AND m.raindex_address = l.raindex_address
       AND m.subject = COALESCE(la.order_hash, l.order_hash)
     ORDER BY m.block_number DESC, m.log_index DESC
     LIMIT 1
@@ -63,7 +63,7 @@ SELECT
 FROM (
   SELECT
     latest.chain_id,
-    latest.orderbook_address,
+    latest.raindex_address,
     latest.order_owner,
     latest.order_nonce,
     latest.order_hash,
@@ -75,7 +75,7 @@ FROM (
   FROM (
     SELECT
       oe.chain_id,
-      oe.orderbook_address,
+      oe.raindex_address,
       oe.order_owner,
       oe.order_nonce,
       oe.order_hash,
@@ -87,7 +87,7 @@ FROM (
       ROW_NUMBER() OVER (
         PARTITION BY
           oe.chain_id,
-          oe.orderbook_address,
+          oe.raindex_address,
           oe.order_owner,
           oe.order_nonce
         ORDER BY oe.block_number DESC, oe.log_index DESC
@@ -95,7 +95,7 @@ FROM (
     FROM order_events oe
     WHERE 1 = 1
       /*MAIN_CHAIN_IDS_CLAUSE*/
-      /*MAIN_ORDERBOOKS_CLAUSE*/
+      /*MAIN_RAINDEXES_CLAUSE*/
       /*TX_HASH_CLAUSE*/
   ) latest
   WHERE latest.row_rank_latest = 1
@@ -103,7 +103,7 @@ FROM (
 LEFT JOIN (
   SELECT
     ranked.chain_id,
-    ranked.orderbook_address,
+    ranked.raindex_address,
     ranked.order_owner,
     ranked.order_nonce,
     ranked.transaction_hash,
@@ -113,7 +113,7 @@ LEFT JOIN (
   FROM (
     SELECT
       oe.chain_id,
-      oe.orderbook_address,
+      oe.raindex_address,
       oe.order_owner,
       oe.order_nonce,
       oe.transaction_hash,
@@ -123,7 +123,7 @@ LEFT JOIN (
       ROW_NUMBER() OVER (
         PARTITION BY
           oe.chain_id,
-          oe.orderbook_address,
+          oe.raindex_address,
           oe.order_owner,
           oe.order_nonce
         ORDER BY oe.block_number DESC, oe.log_index DESC
@@ -131,27 +131,27 @@ LEFT JOIN (
     FROM order_events oe
     WHERE oe.event_type = 'AddOrderV3'
       /*LATEST_ADD_CHAIN_IDS_CLAUSE*/
-      /*LATEST_ADD_ORDERBOOKS_CLAUSE*/
+      /*LATEST_ADD_RAINDEXES_CLAUSE*/
   ) ranked
   WHERE ranked.row_rank_add = 1
 ) la
   ON la.chain_id = l.chain_id
- AND la.orderbook_address = l.orderbook_address
+ AND la.raindex_address = l.raindex_address
  AND la.order_owner = l.order_owner
  AND la.order_nonce = l.order_nonce
 LEFT JOIN order_ios ios
   ON ios.chain_id = l.chain_id
- AND ios.orderbook_address = l.orderbook_address
+ AND ios.raindex_address = l.raindex_address
  AND ios.transaction_hash = la.transaction_hash
  AND ios.log_index = la.log_index
 LEFT JOIN erc20_tokens tok
   ON tok.chain_id = ios.chain_id
- AND tok.orderbook_address = ios.orderbook_address
+ AND tok.raindex_address = ios.raindex_address
  AND tok.token_address = ios.token
 LEFT JOIN (
   SELECT
     rvb.chain_id,
-    rvb.orderbook_address,
+    rvb.raindex_address,
     rvb.owner,
     rvb.token,
     rvb.vault_id,
@@ -159,60 +159,60 @@ LEFT JOIN (
   FROM running_vault_balances rvb
 ) vb
   ON vb.chain_id = ios.chain_id
- AND vb.orderbook_address = ios.orderbook_address
+ AND vb.raindex_address = ios.raindex_address
  AND vb.token = ios.token
  AND vb.vault_id = ios.vault_id
  AND vb.owner = l.order_owner
 LEFT JOIN (
   SELECT
     t.chain_id,
-    t.orderbook_address,
+    t.raindex_address,
     t.order_owner,
     t.order_nonce,
     COUNT(*) AS trade_count
   FROM take_orders t
   WHERE 1 = 1
     /*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/
-    /*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/
-  GROUP BY t.chain_id, t.orderbook_address, t.order_owner, t.order_nonce
+    /*TAKE_ORDERS_RAINDEXES_CLAUSE*/
+  GROUP BY t.chain_id, t.raindex_address, t.order_owner, t.order_nonce
 ) tc
   ON tc.chain_id = l.chain_id
- AND tc.orderbook_address = l.orderbook_address
+ AND tc.raindex_address = l.raindex_address
  AND tc.order_owner = l.order_owner
  AND tc.order_nonce = l.order_nonce
 LEFT JOIN (
   SELECT
     entries.chain_id,
-    entries.orderbook_address,
+    entries.raindex_address,
     entries.order_hash,
     COUNT(*) AS trade_count
   FROM (
     SELECT
       c.chain_id,
-      c.orderbook_address,
+      c.raindex_address,
       c.alice_order_hash AS order_hash
     FROM clear_v3_events c
     WHERE c.alice_order_hash IS NOT NULL
     UNION ALL
     SELECT
       c.chain_id,
-      c.orderbook_address,
+      c.raindex_address,
       c.bob_order_hash AS order_hash
     FROM clear_v3_events c
     WHERE c.bob_order_hash IS NOT NULL
   ) entries
   WHERE entries.order_hash IS NOT NULL
     /*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/
-    /*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/
-  GROUP BY entries.chain_id, entries.orderbook_address, entries.order_hash
+    /*CLEAR_EVENTS_RAINDEXES_CLAUSE*/
+  GROUP BY entries.chain_id, entries.raindex_address, entries.order_hash
 ) cc
   ON cc.chain_id = l.chain_id
- AND cc.orderbook_address = l.orderbook_address
+ AND cc.raindex_address = l.raindex_address
  AND cc.order_hash = COALESCE(la.order_hash, l.order_hash)
 LEFT JOIN (
   SELECT
     ranked.chain_id,
-    ranked.orderbook_address,
+    ranked.raindex_address,
     ranked.order_owner,
     ranked.order_nonce,
     ranked.block_timestamp,
@@ -220,7 +220,7 @@ LEFT JOIN (
   FROM (
     SELECT
       oe.chain_id,
-      oe.orderbook_address,
+      oe.raindex_address,
       oe.order_owner,
       oe.order_nonce,
       oe.block_timestamp,
@@ -228,7 +228,7 @@ LEFT JOIN (
       ROW_NUMBER() OVER (
         PARTITION BY
           oe.chain_id,
-          oe.orderbook_address,
+          oe.raindex_address,
           oe.order_owner,
           oe.order_nonce
         ORDER BY oe.block_number ASC, oe.log_index ASC
@@ -236,12 +236,12 @@ LEFT JOIN (
     FROM order_events oe
     WHERE oe.event_type = 'AddOrderV3'
       /*FIRST_ADD_CHAIN_IDS_CLAUSE*/
-      /*FIRST_ADD_ORDERBOOKS_CLAUSE*/
+      /*FIRST_ADD_RAINDEXES_CLAUSE*/
   ) ranked
   WHERE ranked.row_rank_first_add = 1
 ) fa
   ON fa.chain_id = l.chain_id
- AND fa.orderbook_address = l.orderbook_address
+ AND fa.raindex_address = l.raindex_address
  AND fa.order_owner = l.order_owner
  AND fa.order_nonce = l.order_nonce
 WHERE
@@ -260,7 +260,7 @@ GROUP BY
   l.order_owner,
   fa.block_timestamp,
   fa.block_number,
-  l.orderbook_address,
+  l.raindex_address,
   l.order_nonce,
   l.event_type,
   la.transaction_hash

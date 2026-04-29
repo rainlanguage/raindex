@@ -4,7 +4,7 @@ export { default as Hash, HashType } from './components/Hash.svelte';
 export { default as TanstackAppTable } from './components/TanstackAppTable.svelte';
 export { default as DropdownCheckbox } from './components/dropdown/DropdownCheckbox.svelte';
 export { default as DropdownTokensFilter } from './components/dropdown/DropdownTokensFilter.svelte';
-export { default as DropdownOrderbooksFilter } from './components/dropdown/DropdownOrderbooksFilter.svelte';
+export { default as DropdownRaindexesFilter } from './components/dropdown/DropdownRaindexesFilter.svelte';
 export { default as InputOwnerFilter } from './components/input/InputOwnerFilter.svelte';
 export { default as DropdownRadio } from './components/dropdown/DropdownRadio.svelte';
 export { default as Refresh } from './components/icon/Refresh.svelte';
@@ -12,7 +12,7 @@ export { default as CheckboxActiveOrders } from './components/checkbox/CheckboxA
 export { default as InputOrderHash } from './components/input/InputOrderHash.svelte';
 export { default as CheckboxZeroBalanceVault } from './components/CheckboxZeroBalanceVault.svelte';
 export { default as CheckboxInactiveOrdersVault } from './components/CheckboxInactiveOrdersVault.svelte';
-export { default as ListViewOrderbookFilters } from './components/ListViewOrderbookFilters.svelte';
+export { default as ListViewRaindexFilters } from './components/ListViewRaindexFilters.svelte';
 export { default as OrdersListTable } from './components/tables/OrdersListTable.svelte';
 export { default as VaultsListTable } from './components/tables/VaultsListTable.svelte';
 export { default as PageHeader } from './components/PageHeader.svelte';

@@ -1,6 +1,6 @@
 > NOTE: Before using this guide, read the repository root `AGENTS.md` for authoritative agent instructions.
 
-# Rain Orderbook – Agent Guide (Concise)
+# Raindex – Agent Guide (Concise)
 
 Always run commands via Nix: `nix develop -c <command>`. Never cancel long-running tasks (45–90 min builds, 30+ min tests).
 
@@ -8,9 +8,9 @@ Always run commands via Nix: `nix develop -c <command>`. Never cancel long-runni
 ```bash
 nix develop -c cargo build
 nix develop -c cargo build --target wasm32-unknown-unknown --lib -r --workspace \
-  --exclude rain_orderbook_cli --exclude rain_orderbook_integration_tests
+  --exclude raindex_cli --exclude raindex_integration_tests
 nix develop -c npm install
-nix develop -c npm run build:orderbook
+nix develop -c npm run build:raindex
 nix develop -c npm run build:ui
 ```
 
@@ -19,7 +19,7 @@ If any step fails due to earlier lint/test issues, use the fallback below.
 ## 2. Development loop
 - Edit code
 - Rebuild dependencies you touched:
-  - Rust used by `@rainlanguage/orderbook` → `nix develop -c npm run build:orderbook`
+  - Rust used by `@rainlanguage/raindex` → `nix develop -c npm run build:raindex`
   - `@rainlanguage/ui-components` → `nix develop -c npm run build -w @rainlanguage/ui-components`
 - Run targeted tests and lints for changed areas
 
@@ -28,7 +28,7 @@ If any step fails due to earlier lint/test issues, use the fallback below.
 | Area | Build (if needed) | Lint/Check | Tests |
 |------|--------------------|------------|-------|
 | Rust crates (`crates/*`) | `nix develop -c cargo build` | `nix develop -c cargo clippy --workspace --all-targets --all-features -D warnings` | `nix develop -c cargo test --workspace` or `--package <crate>` |
-| Orderbook TS (`packages/orderbook`) | `nix develop -c npm run build:orderbook` | `nix develop -c npm run check -w @rainlanguage/orderbook` | `nix develop -c npm run test -w @rainlanguage/orderbook` |
+| Raindex TS (`packages/raindex`) | `nix develop -c npm run build:raindex` | `nix develop -c npm run check -w @rainlanguage/raindex` | `nix develop -c npm run test -w @rainlanguage/raindex` |
 | UI components (`packages/ui-components`) | `nix develop -c npm run build -w @rainlanguage/ui-components` | `nix develop -c npm run svelte-lint-format-check -w @rainlanguage/ui-components` | `nix develop -c npm run test -w @rainlanguage/ui-components` |
 | Webapp (`packages/webapp`) | `nix develop -c npm run build -w @rainlanguage/webapp` | `nix develop -c npm run svelte-lint-format-check -w @rainlanguage/webapp` | `nix develop -c npm run test -w @rainlanguage/webapp` |
 | Solidity contracts | `nix develop -c forge build` | — | `nix develop -c forge test` |
@@ -48,7 +48,7 @@ Partial commits are OK during the session. Before your final commit of the sessi
 ```bash
 ./prep-all.sh
 nix develop -c npm run lint-format-check:all
-nix develop -c npm run build:orderbook   # if Rust/orderbook changed
+nix develop -c npm run build:raindex   # if Rust/raindex changed
 nix develop -c npm run build:ui
 nix develop -c cargo test --workspace
 nix develop -c npm run test
@@ -71,8 +71,8 @@ nix develop -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude && rainix
 nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-sol-prelude && rainix-rs-prelude)'
 nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-sol-prelude && rainix-rs-prelude)'
 nix develop -c rainix-sol-prelude && nix develop -c rainix-rs-prelude && nix develop -c raindex-prelude
-nix develop -c ob-ui-components-prelude
-nix develop -c npm run build -w @rainlanguage/orderbook
+nix develop -c raindex-ui-components-prelude
+nix develop -c npm run build -w @rainlanguage/raindex
 nix develop -c npm run build -w @rainlanguage/ui-components
 nix develop -c npm run build -w @rainlanguage/webapp
 ```

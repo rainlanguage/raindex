@@ -1,5 +1,5 @@
 use crate::{
-    add_order::{ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS, ORDERBOOK_ORDER_ENTRYPOINTS},
+    add_order::{RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS, RAINDEX_ORDER_ENTRYPOINTS},
     rainlang::compose_to_rainlang,
 };
 use alloy::primitives::Address;
@@ -8,16 +8,16 @@ use dotrain::{error::ComposeError, types::patterns::FRONTMATTER_SEPARATOR, RainD
 use futures::future::join_all;
 use rain_interpreter_parser::{Parser2, ParserError, ParserV2};
 pub use rain_metadata::types::authoring::v2::*;
-use rain_orderbook_app_settings::yaml::{
-    clone_section_entry, context::ContextProfile, dotrain::DotrainYaml, orderbook::OrderbookYaml,
+use raindex_app_settings::yaml::{
+    clone_section_entry, context::ContextProfile, dotrain::DotrainYaml, raindex::RaindexYaml,
     FieldErrorKind, YamlError, YamlParsable,
 };
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     remote_networks::ParseRemoteNetworksError,
     remote_tokens::ParseRemoteTokensError,
-    yaml::{dotrain::DotrainYamlValidation, orderbook::OrderbookYamlValidation},
+    yaml::{dotrain::DotrainYamlValidation, raindex::RaindexYamlValidation},
 };
-use rain_orderbook_app_settings::{scenario::ScenarioCfg, spec_version::SpecVersion};
+use raindex_app_settings::{scenario::ScenarioCfg, spec_version::SpecVersion};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::{strict_yaml::Hash as StrictYamlHash, StrictYaml, StrictYamlLoader};
@@ -25,7 +25,7 @@ use thiserror::Error;
 use wasm_bindgen_utils::prelude::*;
 
 /// DotrainOrder represents a parsed and validated dotrain configuration that combines
-/// YAML frontmatter with Rainlang code for orderbook operations.
+/// YAML frontmatter with Rainlang code for raindex operations.
 ///
 /// A dotrain file contains:
 /// - YAML frontmatter defining networks, tokens, orders, scenarios, and deployments
@@ -313,8 +313,7 @@ impl DotrainOrder {
             sources.extend(settings);
         }
 
-        let mut orderbook_yaml =
-            OrderbookYaml::new(sources.clone(), OrderbookYamlValidation::default())?;
+        let mut raindex_yaml = RaindexYaml::new(sources.clone(), RaindexYamlValidation::default())?;
 
         let mut dotrain_yaml = DotrainYaml::new_with_profile(
             sources.clone(),
@@ -322,7 +321,7 @@ impl DotrainOrder {
             profile,
         )?;
 
-        let remote_data = orderbook_yaml.fetch_remote_data().await?;
+        let remote_data = raindex_yaml.fetch_remote_data().await?;
         if !remote_data.remote_networks.is_empty() {
             dotrain_yaml
                 .cache
@@ -396,7 +395,7 @@ impl DotrainOrder {
         Ok(compose_to_rainlang(
             self.dotrain.clone(),
             scenario.bindings.clone(),
-            &ORDERBOOK_ORDER_ENTRYPOINTS,
+            &RAINDEX_ORDER_ENTRYPOINTS,
         )?)
     }
 
@@ -433,7 +432,7 @@ impl DotrainOrder {
         Ok(compose_to_rainlang(
             self.dotrain.clone(),
             scenario.bindings.clone(),
-            &ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS,
+            &RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS,
         )?)
     }
 
@@ -472,7 +471,7 @@ impl DotrainOrder {
         Ok(compose_to_rainlang(
             self.dotrain.clone(),
             scenario.bindings.clone(),
-            &ORDERBOOK_ORDER_ENTRYPOINTS,
+            &RAINDEX_ORDER_ENTRYPOINTS,
         )?)
     }
 }
@@ -482,8 +481,8 @@ impl DotrainOrder {
         self.dotrain_yaml.clone()
     }
 
-    pub fn orderbook_yaml(&self) -> OrderbookYaml {
-        OrderbookYaml::from_dotrain_yaml(self.dotrain_yaml.clone())
+    pub fn raindex_yaml(&self) -> RaindexYaml {
+        RaindexYaml::from_dotrain_yaml(self.dotrain_yaml.clone())
     }
 
     pub async fn get_pragmas_for_scenario(
@@ -519,7 +518,7 @@ impl DotrainOrder {
             .iter()
             .map(|rpc| rpc.to_string())
             .collect::<Vec<String>>();
-        let metaboard = self.orderbook_yaml().get_metaboard(&network.key)?.url;
+        let metaboard = self.raindex_yaml().get_metaboard(&network.key)?.url;
         Ok(AuthoringMetaV2::fetch_for_contract(address, rpcs, metaboard.to_string()).await?)
     }
 
@@ -604,7 +603,7 @@ impl DotrainOrder {
     }
 
     pub async fn validate_spec_version(&self) -> Result<(), DotrainOrderError> {
-        let spec_version = self.orderbook_yaml().get_spec_version()?;
+        let spec_version = self.raindex_yaml().get_spec_version()?;
         if !SpecVersion::is_current(&spec_version) {
             return Err(DotrainOrderError::SpecVersionMismatch(
                 SpecVersion::current(),
@@ -620,7 +619,7 @@ impl DotrainOrder {
         deployment_key: &str,
     ) -> Result<String, DotrainOrderError> {
         let dotrain_yaml = self.dotrain_yaml();
-        let orderbook_yaml = self.orderbook_yaml();
+        let raindex_yaml = self.raindex_yaml();
         let deployment = dotrain_yaml.get_deployment(deployment_key)?;
         let order_cfg = deployment.order.clone();
         let scenario_cfg = deployment.scenario.clone();
@@ -628,16 +627,19 @@ impl DotrainOrder {
 
         let network_key = order_cfg.network.key.clone();
         let rainlang_key = rainlang_cfg.key.clone();
-        let orderbook_key = order_cfg.orderbook.as_ref().map(|ob| ob.key.clone());
-        let subgraph_key = order_cfg
-            .orderbook
+        let raindex_key = order_cfg
+            .raindex
             .as_ref()
-            .map(|ob| ob.subgraph.key.clone());
+            .map(|raindex_cfg| raindex_cfg.key.clone());
+        let subgraph_key = order_cfg
+            .raindex
+            .as_ref()
+            .map(|raindex_cfg| raindex_cfg.subgraph.key.clone());
 
         let order_key = order_cfg.key.clone();
         let deployment_key = deployment.key.clone();
 
-        let metaboard_key = match orderbook_yaml.get_metaboard(&network_key) {
+        let metaboard_key = match raindex_yaml.get_metaboard(&network_key) {
             Ok(cfg) => Some(cfg.key.clone()),
             Err(YamlError::KeyNotFound(_)) => None,
             Err(YamlError::Field {
@@ -649,7 +651,7 @@ impl DotrainOrder {
 
         let documents = dotrain_yaml.documents.clone();
 
-        let spec_version = orderbook_yaml.get_spec_version()?;
+        let spec_version = raindex_yaml.get_spec_version()?;
 
         let mut root_hash = StrictYamlHash::new();
         root_hash.insert(
@@ -675,14 +677,14 @@ impl DotrainOrder {
             StrictYaml::Hash(rainlangs_hash),
         );
 
-        if let Some(orderbook_key) = orderbook_key {
-            let orderbook_value = clone_section_entry(&documents, "orderbooks", &orderbook_key)
+        if let Some(raindex_key) = raindex_key {
+            let raindex_value = clone_section_entry(&documents, "raindexes", &raindex_key)
                 .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
-            let mut orderbooks_hash = StrictYamlHash::new();
-            orderbooks_hash.insert(StrictYaml::String(orderbook_key.clone()), orderbook_value);
+            let mut raindexes_hash = StrictYamlHash::new();
+            raindexes_hash.insert(StrictYaml::String(raindex_key.clone()), raindex_value);
             root_hash.insert(
-                StrictYaml::String("orderbooks".to_string()),
-                StrictYaml::Hash(orderbooks_hash),
+                StrictYaml::String("raindexes".to_string()),
+                StrictYaml::Hash(raindexes_hash),
             );
         }
 
@@ -867,7 +869,7 @@ mod tests {
     use alloy::{hex::encode_prefixed, primitives::B256, sol, sol_types::SolValue};
     use httpmock::MockServer;
     use rain_metadata::{KnownMagic, RainMetaDocumentV1Item};
-    use rain_orderbook_app_settings::yaml::FieldErrorKind;
+    use raindex_app_settings::yaml::FieldErrorKind;
     use serde_bytes::ByteBuf;
     use serde_json::json;
     use strict_yaml_rust::{strict_yaml::Hash as StrictYamlHash, StrictYaml, StrictYamlLoader};
@@ -928,7 +930,7 @@ _ _: 0 0;
 
         assert_eq!(
             dotrain_order
-                .orderbook_yaml()
+                .raindex_yaml()
                 .get_network("polygon")
                 .unwrap()
                 .rpcs
@@ -1142,7 +1144,7 @@ rainlangs:
   polygon:
     address: 0x1234567890123456789012345678901234567890
     network: polygon
-orderbooks:
+raindexes:
   primary:
     address: 0x0101010101010101010101010101010101010101
     network: polygon
@@ -1163,7 +1165,7 @@ tokens:
 orders:
   polygon-order:
     network: polygon
-    orderbook: primary
+    raindex: primary
     inputs:
       - token: t1
         vault-id: 1
@@ -1204,15 +1206,15 @@ _ _: 0 0;
         let (frontmatter, _) = split_frontmatter_and_body(&generated);
         let root = get_root_hash(&frontmatter);
 
-        let StrictYaml::Hash(orderbooks) = root
-            .get(&StrictYaml::String("orderbooks".to_string()))
-            .expect("orderbooks present")
+        let StrictYaml::Hash(raindexes) = root
+            .get(&StrictYaml::String("raindexes".to_string()))
+            .expect("raindexes present")
             .clone()
         else {
-            panic!("orderbooks not a hash");
+            panic!("raindexes not a hash");
         };
-        assert!(orderbooks.contains_key(&StrictYaml::String("primary".to_string())));
-        assert!(!orderbooks.contains_key(&StrictYaml::String("unused".to_string())));
+        assert!(raindexes.contains_key(&StrictYaml::String("primary".to_string())));
+        assert!(!raindexes.contains_key(&StrictYaml::String("unused".to_string())));
 
         let StrictYaml::Hash(subgraphs) = root
             .get(&StrictYaml::String("subgraphs".to_string()))
@@ -1389,7 +1391,7 @@ networks:
 
         assert_eq!(
             dotrain_order
-                .orderbook_yaml()
+                .raindex_yaml()
                 .get_network("mainnet")
                 .unwrap()
                 .rpcs

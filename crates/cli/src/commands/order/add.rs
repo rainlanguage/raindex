@@ -3,11 +3,11 @@ use crate::{
 };
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, Args};
-use rain_orderbook_app_settings::yaml::dotrain::{DotrainYaml, DotrainYamlValidation};
-use rain_orderbook_app_settings::yaml::YamlParsable;
-use rain_orderbook_common::add_order::AddOrderArgs;
-use rain_orderbook_common::dotrain::RainDocument;
-use rain_orderbook_common::transaction::TransactionArgs;
+use raindex_app_settings::yaml::dotrain::{DotrainYaml, DotrainYamlValidation};
+use raindex_app_settings::yaml::YamlParsable;
+use raindex_common::add_order::AddOrderArgs;
+use raindex_common::dotrain::RainDocument;
+use raindex_common::transaction::TransactionArgs;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 use tracing::info;
@@ -79,8 +79,8 @@ impl Execute for CliOrderAddArgs {
 mod tests {
     use super::*;
     use alloy::primitives::{address, Address, B256, U256};
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_bindings::IRaindexV6::IOV2;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_bindings::IRaindexV6::IOV2;
     use std::{collections::HashMap, str::FromStr};
     use tempfile::NamedTempFile;
 
@@ -97,7 +97,7 @@ mod tests {
             dotrain_file: dotrain_path,
             deployment: "some-deployment".to_string(),
             transaction_args: CliTransactionArgs {
-                orderbook_address: Address::random(),
+                raindex_address: Address::random(),
                 derivation_index: None,
                 chain_id: Some(123),
                 rpcs: vec!["https://some-rpc.com".to_string()],
@@ -144,8 +144,8 @@ rainlangs:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -179,7 +179,7 @@ orders:
             - token: token2
               vault-id: 1
         rainlang: some-rainlang
-        orderbook: some-orderbook
+        raindex: some-raindex
 
 deployments:
     some-deployment:

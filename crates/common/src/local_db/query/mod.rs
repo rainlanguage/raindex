@@ -1,4 +1,4 @@
-pub mod clear_orderbook_data;
+pub mod clear_raindex_data;
 pub mod clear_tables;
 pub mod create_tables;
 pub mod create_views;

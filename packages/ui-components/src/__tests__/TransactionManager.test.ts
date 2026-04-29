@@ -22,7 +22,7 @@ import {
 	RaindexVault,
 	type Address,
 	type WasmEncodedResult
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 
 vi.mock('../lib/models/Transaction', () => ({
 	TransactionStore: vi.fn()
@@ -32,7 +32,7 @@ vi.mock('../lib/services/getExplorerLink', () => ({
 	getExplorerLink: vi.fn()
 }));
 
-vi.mock('@rainlanguage/orderbook', async (importOriginal) => ({
+vi.mock('@rainlanguage/raindex', async (importOriginal) => ({
 	...(await importOriginal()),
 	getTransactionRemoveOrders: vi.fn(),
 	getTransaction: vi.fn(),
@@ -53,7 +53,7 @@ describe('TransactionManager', () => {
 
 	const mockSgOrderEntity = {
 		id: 'mockOrderEntityId',
-		orderbook: 'mockOrderbook',
+		raindex: 'mockRaindex',
 		getRemoveOrdersForTransaction: vi.fn()
 	} as unknown as RaindexOrder;
 
@@ -246,7 +246,7 @@ describe('TransactionManager', () => {
 			// Verify the SDK method was called with correct arguments
 			expect(mockRaindexClient.getRemoveOrdersForTransaction).toHaveBeenCalledWith(
 				removeOrderMockArgs.chainId,
-				mockSgOrderEntity.orderbook,
+				mockSgOrderEntity.raindex,
 				removeOrderMockArgs.txHash
 			);
 
@@ -325,7 +325,7 @@ describe('TransactionManager', () => {
 					queryKey: withdrawMockArgs.queryKey,
 					toastLinks: [
 						{
-							link: `/vaults/${withdrawMockArgs.chainId}-${withdrawMockArgs.entity.orderbook}-${withdrawMockArgs.queryKey}`,
+							link: `/vaults/${withdrawMockArgs.chainId}-${withdrawMockArgs.entity.raindex}-${withdrawMockArgs.queryKey}`,
 							label: 'View vault'
 						},
 						{
@@ -448,10 +448,10 @@ describe('TransactionManager', () => {
 
 			await callArgs.awaitIndexingFn!(mockContext);
 
-			// Verify the SDK method was called with correct arguments (chainId, orderbook, txHash)
+			// Verify the SDK method was called with correct arguments (chainId, raindex, txHash)
 			expect(mockRaindexClient.getTransaction).toHaveBeenCalledWith(
 				withdrawMockArgs.chainId,
-				withdrawMockArgs.entity.orderbook,
+				withdrawMockArgs.entity.raindex,
 				withdrawMockArgs.txHash
 			);
 
@@ -571,7 +571,7 @@ describe('TransactionManager', () => {
 					queryKey: mockArgs.queryKey,
 					toastLinks: [
 						{
-							link: `/vaults/${mockArgs.chainId}-${mockEntity.orderbook}-${mockArgs.queryKey}`,
+							link: `/vaults/${mockArgs.chainId}-${mockEntity.raindex}-${mockArgs.queryKey}`,
 							label: 'View vault'
 						},
 						{
@@ -716,7 +716,7 @@ describe('TransactionManager', () => {
 					queryKey: mockArgs.queryKey,
 					toastLinks: [
 						{
-							link: `/vaults/${mockArgs.chainId}-${mockEntity.orderbook}-${mockArgs.queryKey}`,
+							link: `/vaults/${mockArgs.chainId}-${mockEntity.raindex}-${mockArgs.queryKey}`,
 							label: 'View vault'
 						},
 						{
@@ -831,10 +831,10 @@ describe('TransactionManager', () => {
 
 			await callArgs.awaitIndexingFn!(mockContext);
 
-			// Verify the SDK method was called with correct arguments (chainId, orderbook, txHash)
+			// Verify the SDK method was called with correct arguments (chainId, raindex, txHash)
 			expect(mockRaindexClient.getTransaction).toHaveBeenCalledWith(
 				mockArgs.chainId,
-				mockArgs.entity.orderbook,
+				mockArgs.entity.raindex,
 				mockArgs.txHash
 			);
 
@@ -882,13 +882,13 @@ describe('TransactionManager', () => {
 	describe('createAddOrderTransaction', () => {
 		const addOrderMockArgs: InternalTransactionArgs & {
 			raindexClient: RaindexClient;
-			orderbook: Address;
+			raindex: Address;
 		} = {
 			txHash: '0xaddordertxhash' as `0x${string}`,
 			chainId: 1,
 			queryKey: 'myNewStrategyDeployment',
 			raindexClient: mockRaindexClient,
-			orderbook: '0xorderbook' as Address
+			raindex: '0xraindex' as Address
 		};
 
 		beforeEach(() => {
@@ -1095,7 +1095,7 @@ describe('TransactionManager', () => {
 
 			expect(mockRaindexClient.getTransaction).toHaveBeenCalledWith(
 				takeOrderMockArgs.chainId,
-				takeOrderMockArgs.entity.orderbook,
+				takeOrderMockArgs.entity.raindex,
 				takeOrderMockArgs.txHash
 			);
 

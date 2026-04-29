@@ -6,10 +6,8 @@ use alloy::sol_types::SolCall;
 use alloy_ethers_typecast::WritableClientError;
 #[cfg(not(target_family = "wasm"))]
 use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
-use rain_orderbook_bindings::IRaindexV6::removeOrder3Call;
-use rain_orderbook_subgraph_client::types::{
-    common::SgOrder, order_detail_traits::OrderDetailError,
-};
+use raindex_bindings::IRaindexV6::removeOrder3Call;
+use raindex_subgraph_client::types::{common::SgOrder, order_detail_traits::OrderDetailError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -59,7 +57,7 @@ impl RemoveOrderArgs {
         let remove_order_call: removeOrder3Call = self.try_into()?;
         let params = transaction_args.try_into_write_contract_parameters(
             remove_order_call,
-            transaction_args.orderbook_address,
+            transaction_args.raindex_address,
         )?;
 
         WriteTransaction::new(ledger_client, params, 4, transaction_status_changed)
@@ -79,11 +77,9 @@ impl RemoveOrderArgs {
 mod tests {
     use super::*;
     use alloy::primitives::Address;
-    use rain_orderbook_bindings::IRaindexV6::removeOrder3Call;
-    use rain_orderbook_subgraph_client::types::common::{
-        SgBigInt, SgBytes, SgErc20, SgOrderbook, SgVault,
-    };
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_bindings::IRaindexV6::removeOrder3Call;
+    use raindex_subgraph_client::types::common::{SgBigInt, SgBytes, SgErc20, SgRaindex, SgVault};
+    use raindex_subgraph_client::utils::float::*;
 
     fn get_order() -> SgOrder {
         SgOrder {
@@ -110,7 +106,7 @@ mod tests {
                         symbol: Some("WFLR".to_string()),
                         decimals: Some(SgBigInt("18".to_string())),
                     },
-                    orderbook: SgOrderbook {
+                    raindex: SgRaindex {
                         id: SgBytes("0xcee8cd002f151a536394e564b84076c41bbbcd4d".to_string()),
                     },
                     orders_as_output: vec![],
@@ -119,7 +115,7 @@ mod tests {
                 },
             ],
             inputs: vec![],
-            orderbook: SgOrderbook {
+            raindex: SgRaindex {
                 id: SgBytes("0xcee8cd002f151a536394e564b84076c41bbbcd4d".to_string()),
             },
             active: true,
@@ -154,7 +150,7 @@ mod tests {
 
         let args = TransactionArgs {
             rpcs: vec!["http://test.com".to_string()],
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: Some(0_usize),
             chain_id: Some(1),
             max_priority_fee_per_gas: Some(200),
@@ -162,9 +158,9 @@ mod tests {
         };
 
         let params = args
-            .try_into_write_contract_parameters(remove_order_call.clone(), args.orderbook_address)
+            .try_into_write_contract_parameters(remove_order_call.clone(), args.raindex_address)
             .unwrap();
-        assert_eq!(params.address, args.orderbook_address);
+        assert_eq!(params.address, args.raindex_address);
         assert_eq!(params.call, remove_order_call);
         assert_eq!(params.max_priority_fee_per_gas, Some(200));
         assert_eq!(params.max_fee_per_gas, Some(100));

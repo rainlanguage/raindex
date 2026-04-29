@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button, Label } from 'flowbite-svelte';
-	import type { Address } from '@rainlanguage/orderbook';
+	import type { Address } from '@rainlanguage/raindex';
 	import type { AppStoresInterface } from '$lib/types/appStores';
 	import { useAccount } from '$lib/providers/wallet/useAccount';
 

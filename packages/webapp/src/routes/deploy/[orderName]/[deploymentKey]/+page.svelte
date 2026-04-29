@@ -10,7 +10,7 @@
 	} from '@rainlanguage/ui-components';
 	import { connected, appKitModal } from '$lib/stores/wagmi';
 	import { handleDisclaimerModal } from '$lib/services/modal';
-	import { RaindexClient, DotrainOrderGui } from '@rainlanguage/orderbook';
+	import { RaindexClient, DotrainOrderGui } from '@rainlanguage/raindex';
 	import { onMount } from 'svelte';
 	import { handleAddOrder } from '$lib/services/handleAddOrder';
 	import { handleTransactionConfirmationModal } from '$lib/services/modal';

@@ -7,12 +7,19 @@
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, flake-utils, rainix, rain }:
-    flake-utils.lib.eachDefaultSystem (system:
+  outputs =
+    {
+      flake-utils,
+      rainix,
+      rain,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
       let
         pkgs = rainix.pkgs.${system};
-        old-pkgs = rainix.old-pkgs.${system};
-      in rec {
+      in
+      rec {
         packages = rec {
 
           raindex-prelude = rainix.mkTask.${system} {
@@ -23,26 +30,26 @@
               mkdir -p meta;
               forge script --silent ./script/BuildAuthoringMeta.sol;
               rain meta build \
-                -i <(cat ./meta/OrderBookV6SubParserAuthoringMeta.rain.meta) \
+                -i <(cat ./meta/RaindexV6SubParserAuthoringMeta.rain.meta) \
                 -m authoring-meta-v2 \
                 -t cbor \
                 -e deflate \
                 -l none \
-                -o meta/OrderBookV6SubParser.rain.meta \
+                -o meta/RaindexV6SubParser.rain.meta \
                 ;
             '';
           };
 
-          ob-rs-test = rainix.mkTask.${system} {
-            name = "ob-rs-test";
+          raindex-rs-test = rainix.mkTask.${system} {
+            name = "raindex-rs-test";
             body = ''
               set -euxo pipefail
               cargo test --workspace
             '';
           };
 
-          ob-ui-components-prelude = rainix.mkTask.${system} {
-            name = "ob-ui-components-prelude";
+          raindex-ui-components-prelude = rainix.mkTask.${system} {
+            name = "raindex-ui-components-prelude";
             body = ''
               set -euxo pipefail
 
@@ -56,14 +63,14 @@
             ];
           };
 
-          rainix-ob-cli-artifact = rainix.mkTask.${system} {
-            name = "rainix-ob-cli-artifact";
+          raindex-cli-artifact = rainix.mkTask.${system} {
+            name = "raindex-cli-artifact";
             body = ''
               set -euxo pipefail
 
               OUTPUT_DIR=crates/cli/bin
-              ARCHIVE_NAME=rain-orderbook-cli.tar.gz
-              BINARY_NAME=rain-orderbook-cli
+              ARCHIVE_NAME=raindex-cli.tar.gz
+              BINARY_NAME=raindex-cli
 
               TARGET_TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
 
@@ -76,12 +83,12 @@
                   ;;
               esac
 
-              cargo build --release -p rain_orderbook_cli --target "$TARGET_TRIPLE"
+              cargo build --release -p raindex_cli --target "$TARGET_TRIPLE"
 
               mkdir -p "$OUTPUT_DIR"
               rm -f "$OUTPUT_DIR/$ARCHIVE_NAME"
 
-              cp "target/$TARGET_TRIPLE/release/rain_orderbook_cli" "$OUTPUT_DIR/$BINARY_NAME"
+              cp "target/$TARGET_TRIPLE/release/raindex_cli" "$OUTPUT_DIR/$BINARY_NAME"
               chmod 755 "$OUTPUT_DIR/$BINARY_NAME"
               strip "$OUTPUT_DIR/$BINARY_NAME" || true
 
@@ -94,7 +101,7 @@
             body = ''
               set -euxo pipefail
 
-              cargo build --profile release-wasm --target wasm32-unknown-unknown --lib -p rain_orderbook_js_api
+              cargo build --profile release-wasm --target wasm32-unknown-unknown --lib -p raindex_js_api
             '';
           };
 
@@ -103,7 +110,7 @@
             body = ''
               set -euxo pipefail
 
-              CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER='wasm-bindgen-test-runner' cargo test --target wasm32-unknown-unknown --lib -p rain_orderbook_quote -p rain_orderbook_bindings -p rain_orderbook_js_api -p rain_orderbook_common
+              CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER='wasm-bindgen-test-runner' cargo test --target wasm32-unknown-unknown --lib -p raindex_quote -p raindex_bindings -p raindex_js_api -p raindex_common
             '';
           };
 
@@ -128,7 +135,7 @@
             name = "js-install";
             body = ''
               set -euxo pipefail
-              cd packages/orderbook
+              cd packages/raindex
               npm install --no-check
             '';
           };
@@ -137,7 +144,7 @@
             name = "build-js-bindings";
             body = ''
               set -euxo pipefail
-              cd packages/orderbook
+              cd packages/raindex
               npm run build
             '';
           };
@@ -146,19 +153,20 @@
             name = "test-js-bindings";
             body = ''
               set -euxo pipefail
-              cd packages/orderbook
+              cd packages/raindex
               npm install --no-check
               npm run build
               npm test
             '';
           };
 
-        } // rainix.packages.${system};
+        }
+        // rainix.packages.${system};
 
         devShells.default = pkgs.mkShell {
           packages = [
             packages.raindex-prelude
-            packages.ob-rs-test
+            packages.raindex-rs-test
             packages.rainix-wasm-artifacts
             packages.rainix-wasm-test
             packages.rainix-wasm-browser-test
@@ -166,21 +174,17 @@
             packages.build-js-bindings
             packages.test-js-bindings
             rain.defaultPackage.${system}
-            packages.ob-ui-components-prelude
-            packages.rainix-ob-cli-artifact
+            packages.raindex-ui-components-prelude
+            packages.raindex-cli-artifact
           ];
 
-          shellHook = rainix.devShells.${system}.default.shellHook;
-          buildInputs = rainix.devShells.${system}.default.buildInputs;
-          nativeBuildInputs =
-            rainix.devShells.${system}.default.nativeBuildInputs;
+          inherit (rainix.devShells.${system}.default) shellHook buildInputs nativeBuildInputs;
         };
         devShells.webapp-shell = pkgs.mkShell {
           packages = with pkgs; [ nodejs_20 ];
-          buildInputs = rainix.devShells.${system}.default.buildInputs;
-          nativeBuildInputs =
-            rainix.devShells.${system}.default.nativeBuildInputs;
+          inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
-      });
+      }
+    );
 
 }

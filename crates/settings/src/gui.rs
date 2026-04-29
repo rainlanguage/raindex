@@ -1195,7 +1195,7 @@ mod tests {
             outputs: vec![],
             network: mock_network(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {

@@ -14,9 +14,9 @@ use alloy::{
 };
 use futures::future::join_all;
 use rain_error_decoding::{AbiDecodedErrorType, ErrorRegistry};
-use rain_orderbook_bindings::provider::{mk_read_provider, ReadProvider};
-use rain_orderbook_bindings::IRaindexV6::quote2Call;
-use rain_orderbook_bindings::OrderBook::multicallCall;
+use raindex_bindings::provider::{mk_read_provider, ReadProvider};
+use raindex_bindings::IRaindexV6::quote2Call;
+use raindex_bindings::Raindex::multicallCall;
 use url::Url;
 
 const DEFAULT_QUOTE_CHUNK_SIZE: usize = 16;
@@ -33,15 +33,15 @@ fn single_quote_failure(err: &Error) -> QuoteResult {
     )))
 }
 
-/// Issue a single `orderbook.multicall([quote2, quote2, ...])` RPC call with
+/// Issue a single `raindex.multicall([quote2, quote2, ...])` RPC call with
 /// `from = counterparty` so each inner `quote2` sees `msg.sender = counterparty`.
 ///
 /// OrderBookV6 inherits OpenZeppelin's `Multicall` which `delegatecall`s each
-/// element back into the orderbook itself. `delegatecall` preserves the outer
+/// element back into the raindex itself. `delegatecall` preserves the outer
 /// `msg.sender`, so the calldata built here gives API-gated strategies (which
 /// read `order-counterparty()` in `calculate-io`) the correct taker address.
 ///
-/// All `quote_targets` passed here MUST share the same `orderbook` address —
+/// All `quote_targets` passed here MUST share the same `raindex` address —
 /// that grouping is the caller's responsibility (see `batch_quote`).
 ///
 /// Behavior:
@@ -60,8 +60,8 @@ async fn quote_chunk_once(
     registry: Option<&dyn ErrorRegistry>,
 ) -> Result<Vec<QuoteResult>, Error> {
     debug_assert!(!quote_targets.is_empty());
-    let orderbook = quote_targets[0].orderbook;
-    debug_assert!(quote_targets.iter().all(|t| t.orderbook == orderbook));
+    let raindex = quote_targets[0].raindex;
+    debug_assert!(quote_targets.iter().all(|t| t.raindex == raindex));
 
     let inner_calls: Vec<Bytes> = quote_targets
         .iter()
@@ -81,7 +81,7 @@ async fn quote_chunk_once(
     .abi_encode();
 
     let tx = TransactionRequest::default()
-        .with_to(orderbook)
+        .with_to(raindex)
         .with_from(counterparty)
         .with_input(calldata);
     let tx = WithOtherFields::new(tx);
@@ -153,10 +153,10 @@ async fn quote_chunk_once(
     }
 }
 
-/// Execute `quote_chunk_once` for a single-orderbook group. If it fails at the
+/// Execute `quote_chunk_once` for a single-raindex group. If it fails at the
 /// chunk level (OZ Multicall bubbles the first revert), recursively bisect the
 /// group to isolate which target is responsible. All targets in `quote_targets`
-/// MUST share the same orderbook.
+/// MUST share the same raindex.
 async fn quote_chunk_with_probe_and_split(
     quote_targets: &[QuoteTarget],
     provider: &ReadProvider,
@@ -246,13 +246,13 @@ fn chunk_err_to_quote_result(err: &Error) -> QuoteResult {
 
 /// Quotes an array of `QuoteTarget`s.
 ///
-/// Targets are partitioned by their `orderbook` address so that each orderbook
-/// gets its own `multicall(bytes[])` RPC call. Using the orderbook's own OZ
+/// Targets are partitioned by their `raindex` address so that each raindex
+/// gets its own `multicall(bytes[])` RPC call. Using the raindex's own OZ
 /// `Multicall` (rather than Multicall3) ensures `msg.sender` inside each
 /// inner `quote2` is preserved as `counterparty` — critical for gated
 /// strategies that read `order-counterparty()` inside `calculate-io`.
 ///
-/// Within each orderbook group, targets are chunked by `chunk_size` and each
+/// Within each raindex group, targets are chunked by `chunk_size` and each
 /// chunk is quoted with probe-and-split bisection: on a chunk revert (OZ
 /// Multicall bubbles the first failing inner call's revert), we recurse to
 /// isolate which target is responsible.
@@ -278,18 +278,18 @@ pub async fn batch_quote(
 
     let chunk_size = normalize_chunk_size(chunk_size);
 
-    // Group by orderbook, preserving the original index of each target so we
+    // Group by raindex, preserving the original index of each target so we
     // can scatter results back into the final vector in input order.
     let mut groups: Vec<(Address, Vec<(usize, QuoteTarget)>)> = Vec::new();
     for (i, target) in quote_targets.iter().enumerate() {
-        if let Some(group) = groups.iter_mut().find(|(ob, _)| *ob == target.orderbook) {
+        if let Some(group) = groups.iter_mut().find(|(ob, _)| *ob == target.raindex) {
             group.1.push((i, target.clone()));
         } else {
-            groups.push((target.orderbook, vec![(i, target.clone())]));
+            groups.push((target.raindex, vec![(i, target.clone())]));
         }
     }
 
-    // For each orderbook group, run chunked bisected multicalls concurrently.
+    // For each raindex group, run chunked bisected multicalls concurrently.
     let group_futures = groups.into_iter().map(|(_ob, indexed_targets)| {
         let provider = provider.clone();
         async move {
@@ -338,7 +338,7 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::ErrorRegistry;
     use rain_math_float::Float;
-    use rain_orderbook_bindings::IRaindexV6::{quote2Call, quote2Return};
+    use raindex_bindings::IRaindexV6::{quote2Call, quote2Return};
     use serde_json::json;
 
     #[test]
@@ -646,7 +646,7 @@ mod tests {
     async fn test_batch_quote_chunk_uniform_revert_bisects_to_singletons() {
         let rpc_server = MockServer::start_async().await;
 
-        // Every eth_call to this orderbook reverts with TokenSelfTrade.
+        // Every eth_call to this raindex reverts with TokenSelfTrade.
         mock_eth_call_revert(&rpc_server, "/rpc", "0x734bc71c");
 
         struct FakeRegistry;

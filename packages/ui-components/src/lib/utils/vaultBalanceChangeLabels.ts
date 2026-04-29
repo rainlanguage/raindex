@@ -1,7 +1,7 @@
 import type {
 	RaindexVaultBalanceChangeType,
 	VaultBalanceChangeFilter
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 
 export const VAULT_BALANCE_CHANGE_LABELS: Record<RaindexVaultBalanceChangeType, string> = {
 	deposit: 'Deposit',

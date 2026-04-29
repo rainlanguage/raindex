@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { RaindexOrder } from '@rainlanguage/orderbook';
+	import type { RaindexOrder } from '@rainlanguage/raindex';
 	import CodeMirror from 'svelte-codemirror-editor';
 	import { RainlangLR } from 'codemirror-rainlang';
 

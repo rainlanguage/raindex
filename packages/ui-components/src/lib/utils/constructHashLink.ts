@@ -1,9 +1,4 @@
-import type {
-	Address,
-	RaindexOrder,
-	RaindexOrderAsIO,
-	RaindexVault
-} from '@rainlanguage/orderbook';
+import type { Address, RaindexOrder, RaindexOrderAsIO, RaindexVault } from '@rainlanguage/raindex';
 import fc from 'fast-check';
 import { test } from '@fast-check/vitest';
 
@@ -17,14 +12,14 @@ function isOrder(obj: OrderOrVault): obj is RaindexOrder | RaindexOrderAsIO {
  * @param orderOrVault - The order or vault object
  * @param type - The type of resource ('orders' or 'vaults')
  * @param chainId - The chain id
- * @param orderbookAddress - The orderbook address
+ * @param raindexAddress - The raindex address
  * @returns The constructed link path
  */
 export function constructHashLink(
 	orderOrVault: OrderOrVault,
 	type: 'orders' | 'vaults',
 	chainId: number,
-	orderbookAddress: Address
+	raindexAddress: Address
 ): string {
 	if (!orderOrVault) {
 		return `/${type}`;
@@ -32,7 +27,7 @@ export function constructHashLink(
 
 	const slug = isOrder(orderOrVault) ? orderOrVault.orderHash : (orderOrVault as RaindexVault).id;
 
-	return `/${type}/${chainId}-${orderbookAddress}-${slug}`;
+	return `/${type}/${chainId}-${raindexAddress}-${slug}`;
 }
 
 /**
@@ -69,14 +64,14 @@ if (import.meta.vitest) {
 			fc.oneof(fc.constant('orders'), fc.constant('vaults')),
 			fc.integer(),
 			fc.string()
-		])('constructs correct link for orders', (order, type, chainId, orderbookAddress) => {
+		])('constructs correct link for orders', (order, type, chainId, raindexAddress) => {
 			const result = constructHashLink(
 				order as RaindexOrder,
 				type,
 				chainId,
-				orderbookAddress as Address
+				raindexAddress as Address
 			);
-			expect(result).toBe(`/${type}/${chainId}-${orderbookAddress}-${order.orderHash}`);
+			expect(result).toBe(`/${type}/${chainId}-${raindexAddress}-${order.orderHash}`);
 		});
 
 		test.prop([
@@ -87,14 +82,14 @@ if (import.meta.vitest) {
 			fc.oneof(fc.constant('orders'), fc.constant('vaults')),
 			fc.integer(),
 			fc.string()
-		])('constructs correct link for vaults', (vault, type, chainId, orderbookAddress) => {
+		])('constructs correct link for vaults', (vault, type, chainId, raindexAddress) => {
 			const result = constructHashLink(
 				vault as RaindexVault,
 				type,
 				chainId,
-				orderbookAddress as Address
+				raindexAddress as Address
 			);
-			expect(result).toBe(`/${type}/${chainId}-${orderbookAddress}-${vault.id}`);
+			expect(result).toBe(`/${type}/${chainId}-${raindexAddress}-${vault.id}`);
 		});
 	});
 

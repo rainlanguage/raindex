@@ -1,5 +1,5 @@
 import { Bytes, ethereum } from "@graphprotocol/graph-ts";
-import { TakeOrderV3 } from "../generated/OrderBook/OrderBook";
+import { TakeOrderV3 } from "../generated/Raindex/Raindex";
 import { TakeOrder } from "../generated/schema";
 import { eventId } from "./interfaces/event";
 import { handleVaultBalanceChange, vaultEntityId } from "./vault";
@@ -84,7 +84,7 @@ export function handleTakeOrder(event: TakeOrderV3): void {
 
 export function createTakeOrderEntity(event: TakeOrderV3): void {
   let takeOrder = new TakeOrder(eventId(event));
-  takeOrder.orderbook = event.address;
+  takeOrder.raindex = event.address;
   takeOrder.inputAmount = event.params.input;
   takeOrder.outputAmount = event.params.output;
   takeOrder.sender = event.params.sender;

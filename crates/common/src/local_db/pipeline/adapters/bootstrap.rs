@@ -1,4 +1,4 @@
-use crate::local_db::query::clear_orderbook_data::clear_orderbook_data_batch;
+use crate::local_db::query::clear_raindex_data::clear_raindex_data_batch;
 use crate::local_db::query::clear_tables::clear_tables_stmt;
 use crate::local_db::query::create_tables::create_tables_stmt;
 use crate::local_db::query::create_tables::REQUIRED_TABLES;
@@ -11,14 +11,14 @@ use crate::local_db::query::insert_db_metadata::insert_db_metadata_stmt;
 use crate::local_db::query::integrity_check::{integrity_check_stmt, IntegrityCheckRow};
 use crate::local_db::query::{LocalDbQueryExecutor, SqlStatementBatch};
 use crate::local_db::LocalDbError;
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use async_trait::async_trait;
-use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct BootstrapConfig {
-    pub ob_id: OrderbookIdentifier,
+    pub raindex_id: RaindexIdentifier,
     pub dump_stmt: Option<SqlStatementBatch>,
     pub latest_block: u64,
     pub block_number_threshold: u32,
@@ -71,7 +71,7 @@ pub trait BootstrapPipeline {
     async fn inspect_state<DB>(
         &self,
         db: &DB,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
     ) -> Result<BootstrapState, LocalDbError>
     where
         DB: LocalDbQueryExecutor + ?Sized,
@@ -87,8 +87,9 @@ pub trait BootstrapPipeline {
             .all(|&t| existing_set.contains(&t.to_ascii_lowercase()));
 
         let last_synced_block = if existing_set.contains("target_watermarks") {
-            let rows: Vec<TargetWatermarkRow> =
-                db.query_json(&fetch_target_watermark_stmt(ob_id)).await?;
+            let rows: Vec<TargetWatermarkRow> = db
+                .query_json(&fetch_target_watermark_stmt(raindex_id))
+                .await?;
             rows.first().map(|r| r.last_block)
         } else {
             None
@@ -130,15 +131,15 @@ pub trait BootstrapPipeline {
         Ok(is_healthy)
     }
 
-    async fn clear_orderbook_data<DB>(
+    async fn clear_raindex_data<DB>(
         &self,
         db: &DB,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
     ) -> Result<(), LocalDbError>
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        let batch = clear_orderbook_data_batch(ob_id);
+        let batch = clear_raindex_data_batch(raindex_id);
         db.execute_batch(&batch).await?;
         Ok(())
     }
@@ -433,11 +434,11 @@ mod tests {
         .unwrap();
 
         // Watermark row present
-        let ob_id = OrderbookIdentifier::new(1, Address::ZERO);
-        let watermark_stmt = fetch_target_watermark_stmt(&ob_id);
+        let raindex_id = RaindexIdentifier::new(1, Address::ZERO);
+        let watermark_stmt = fetch_target_watermark_stmt(&raindex_id);
         let watermark_json = json!([TargetWatermarkRow {
-            chain_id: ob_id.chain_id,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id,
+            raindex_address: raindex_id.raindex_address,
             last_block: 123,
             last_hash: Bytes::from_str("0xbeef").unwrap(),
             updated_at: 1,
@@ -447,7 +448,7 @@ mod tests {
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&watermark_stmt, watermark_json);
 
-        let state = adapter.inspect_state(&db, &ob_id).await.unwrap();
+        let state = adapter.inspect_state(&db, &raindex_id).await.unwrap();
         assert!(state.has_required_tables);
         assert_eq!(state.last_synced_block, Some(123));
     }
@@ -456,8 +457,8 @@ mod tests {
     async fn inspect_state_missing_tables_means_not_ready_and_no_watermark_query() {
         let adapter = TestBootstrapPipeline::new();
         let db = MockDb::default().with_json(&fetch_tables_stmt(), json!([]));
-        let ob_id = OrderbookIdentifier::new(1, Address::ZERO);
-        let state = adapter.inspect_state(&db, &ob_id).await.unwrap();
+        let raindex_id = RaindexIdentifier::new(1, Address::ZERO);
+        let state = adapter.inspect_state(&db, &raindex_id).await.unwrap();
         assert!(!state.has_required_tables);
         assert_eq!(state.last_synced_block, None);
     }
@@ -483,11 +484,11 @@ mod tests {
         .unwrap();
 
         let db = MockDb::default().with_json(&fetch_tables_stmt(), tables_json);
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
         };
-        let state = adapter.inspect_state(&db, &ob_id).await.unwrap();
+        let state = adapter.inspect_state(&db, &raindex_id).await.unwrap();
         assert!(!state.has_required_tables);
         assert_eq!(state.last_synced_block, None);
     }
@@ -505,14 +506,14 @@ mod tests {
         )
         .unwrap();
 
-        let ob_id = OrderbookIdentifier::new(1, Address::ZERO);
-        let watermark_stmt = fetch_target_watermark_stmt(&ob_id);
+        let raindex_id = RaindexIdentifier::new(1, Address::ZERO);
+        let watermark_stmt = fetch_target_watermark_stmt(&raindex_id);
 
         let db = MockDb::default()
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&watermark_stmt, json!([]));
 
-        let state = adapter.inspect_state(&db, &ob_id).await.unwrap();
+        let state = adapter.inspect_state(&db, &raindex_id).await.unwrap();
         assert!(state.has_required_tables);
         assert_eq!(state.last_synced_block, None);
     }
@@ -536,11 +537,11 @@ mod tests {
         )
         .unwrap();
 
-        let ob_id = OrderbookIdentifier::new(1, Address::ZERO);
-        let watermark_stmt = fetch_target_watermark_stmt(&ob_id);
+        let raindex_id = RaindexIdentifier::new(1, Address::ZERO);
+        let watermark_stmt = fetch_target_watermark_stmt(&raindex_id);
         let watermark_json = json!([TargetWatermarkRow {
-            chain_id: ob_id.chain_id,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id,
+            raindex_address: raindex_id.raindex_address,
             last_block: 42,
             last_hash: Bytes::from_str("0xbeef").unwrap(),
             updated_at: 1,
@@ -550,7 +551,7 @@ mod tests {
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&watermark_stmt, watermark_json);
 
-        let state = adapter.inspect_state(&db, &ob_id).await.unwrap();
+        let state = adapter.inspect_state(&db, &raindex_id).await.unwrap();
         assert!(state.has_required_tables);
         assert_eq!(state.last_synced_block, Some(42));
     }
@@ -559,11 +560,11 @@ mod tests {
     async fn inspect_state_propagates_fetch_tables_error() {
         let adapter = TestBootstrapPipeline::new();
         let db = MockDb::default(); // no json for fetch_tables_stmt()
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
         };
-        let err = adapter.inspect_state(&db, &ob_id).await.unwrap_err();
+        let err = adapter.inspect_state(&db, &raindex_id).await.unwrap_err();
         match err {
             LocalDbError::LocalDbQueryError(..) => {}
             other => panic!("unexpected error: {other:?}"),
@@ -585,12 +586,12 @@ mod tests {
         .unwrap();
 
         let db = MockDb::default().with_json(&fetch_tables_stmt(), tables_json);
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
         };
         // Intentionally do not provide json for watermark_stmt -> should error
-        let err = adapter.inspect_state(&db, &ob_id).await.unwrap_err();
+        let err = adapter.inspect_state(&db, &raindex_id).await.unwrap_err();
         match err {
             LocalDbError::LocalDbQueryError(..) => {}
             other => panic!("unexpected error: {other:?}"),
@@ -701,7 +702,7 @@ mod tests {
         let adapter = TestBootstrapPipeline::new();
         let db = MockDb::default();
         let cfg = BootstrapConfig {
-            ob_id: OrderbookIdentifier::new(1, Address::ZERO),
+            raindex_id: RaindexIdentifier::new(1, Address::ZERO),
             dump_stmt: None,
             latest_block: 0,
             block_number_threshold: 10_000,
@@ -728,18 +729,18 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_orderbook_data_executes_expected_statement() {
+    async fn clear_raindex_data_executes_expected_statement() {
         let adapter = TestBootstrapPipeline::new();
-        let ob_id = OrderbookIdentifier::new(42161, Address::from([0x11; 20]));
+        let raindex_id = RaindexIdentifier::new(42161, Address::from([0x11; 20]));
         let db = RecordingTextExecutor::succeed();
 
         adapter
-            .clear_orderbook_data(&db, &ob_id)
+            .clear_raindex_data(&db, &raindex_id)
             .await
-            .expect("clear_orderbook_data should succeed");
+            .expect("clear_raindex_data should succeed");
 
         let captured = db.captured_sql();
-        let expected: Vec<String> = clear_orderbook_data_batch(&ob_id)
+        let expected: Vec<String> = clear_raindex_data_batch(&raindex_id)
             .statements()
             .iter()
             .map(|stmt| stmt.sql().to_string())
@@ -748,16 +749,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn clear_orderbook_data_propagates_error() {
+    async fn clear_raindex_data_propagates_error() {
         let adapter = TestBootstrapPipeline::new();
-        let ob_id = OrderbookIdentifier::new(10, Address::from([0x22; 20]));
+        let raindex_id = RaindexIdentifier::new(10, Address::from([0x22; 20]));
         let inner_error = LocalDbQueryError::database("boom");
         let db = RecordingTextExecutor::fail(LocalDbError::from(inner_error.clone()));
 
         let err = adapter
-            .clear_orderbook_data(&db, &ob_id)
+            .clear_raindex_data(&db, &raindex_id)
             .await
-            .expect_err("clear_orderbook_data should propagate error");
+            .expect_err("clear_raindex_data should propagate error");
 
         match err {
             LocalDbError::LocalDbQueryError(actual) => {
@@ -767,7 +768,7 @@ mod tests {
         }
 
         let captured = db.captured_sql();
-        let expected: Vec<String> = clear_orderbook_data_batch(&ob_id)
+        let expected: Vec<String> = clear_raindex_data_batch(&raindex_id)
             .statements()
             .iter()
             .map(|stmt| stmt.sql().to_string())

@@ -132,7 +132,7 @@ mod tests {
 
     use super::*;
     use crate::types::common::{
-        SgBigInt, SgBytes, SgOrderbook, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
+        SgBigInt, SgBytes, SgRaindex, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
         SgTradeStructPartialOrder, SgTradeVaultBalanceChange, SgTransaction,
         SgVaultBalanceChangeVault,
     };
@@ -243,7 +243,7 @@ mod tests {
                 },
             },
             timestamp: bigint.clone(),
-            orderbook: SgOrderbook { id: bytes.clone() },
+            raindex: SgRaindex { id: bytes.clone() },
             output_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
                 __typename: "TradeVaultBalanceChange".to_string(),
@@ -262,7 +262,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
                         __typename: "TradeEvent".to_string(),
@@ -287,7 +287,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
                         __typename: "TradeEvent".to_string(),
@@ -312,7 +312,7 @@ mod tests {
                 },
             },
             timestamp: bigint.clone(),
-            orderbook: SgOrderbook { id: bytes.clone() },
+            raindex: SgRaindex { id: bytes.clone() },
             output_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
                 __typename: "TradeVaultBalanceChange".to_string(),
@@ -331,7 +331,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
                         __typename: "TradeEvent".to_string(),
@@ -356,7 +356,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
                 trade: SgTradeRef {
                     trade_event: SgTradeEventTypename {
                         __typename: "TradeEvent".to_string(),
@@ -541,7 +541,7 @@ mod tests {
     //             },
     //         },
     //         timestamp: bigint.clone(),
-    //         orderbook: SgOrderbook { id: bytes.clone() },
+    //         raindex: SgRaindex { id: bytes.clone() },
     //         output_vault_balance_change: SgTradeVaultBalanceChange {
     //             id: bytes.clone(),
     //             __typename: "TradeVaultBalanceChange".to_string(),
@@ -560,7 +560,7 @@ mod tests {
     //                 block_number: bigint.clone(),
     //                 timestamp: bigint.clone(),
     //             },
-    //             orderbook: SgOrderbook { id: bytes.clone() },
+    //             raindex: SgRaindex { id: bytes.clone() },
     //         },
     //         input_vault_balance_change: SgTradeVaultBalanceChange {
     //             id: bytes.clone(),
@@ -580,7 +580,7 @@ mod tests {
     //                 block_number: bigint.clone(),
     //                 timestamp: bigint.clone(),
     //             },
-    //             orderbook: SgOrderbook { id: bytes.clone() },
+    //             raindex: SgRaindex { id: bytes.clone() },
     //         },
     //     };
     //
@@ -600,7 +600,7 @@ mod tests {
     //             },
     //         },
     //         timestamp: bigint.clone(),
-    //         orderbook: SgOrderbook { id: bytes.clone() },
+    //         raindex: SgRaindex { id: bytes.clone() },
     //         output_vault_balance_change: SgTradeVaultBalanceChange {
     //             id: bytes.clone(),
     //             __typename: "TradeVaultBalanceChange".to_string(),
@@ -619,7 +619,7 @@ mod tests {
     //                 block_number: bigint.clone(),
     //                 timestamp: bigint.clone(),
     //             },
-    //             orderbook: SgOrderbook { id: bytes.clone() },
+    //             raindex: SgRaindex { id: bytes.clone() },
     //         },
     //         input_vault_balance_change: SgTradeVaultBalanceChange {
     //             id: bytes.clone(),
@@ -639,7 +639,7 @@ mod tests {
     //                 block_number: bigint.clone(),
     //                 timestamp: bigint.clone(),
     //             },
-    //             orderbook: SgOrderbook { id: bytes.clone() },
+    //             raindex: SgRaindex { id: bytes.clone() },
     //         },
     //     };
     //

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { RaindexTrade, RaindexVaultToken } from '@rainlanguage/orderbook';
+import type { RaindexTrade, RaindexVaultToken } from '@rainlanguage/raindex';
 import {
 	extractPairsFromTrades,
 	getDefaultPair,
@@ -66,7 +66,7 @@ function createMockTrade(
 			blockNumber: BigInt(12345)
 		},
 		orderHash: '0xorderhash',
-		orderbook: '0xorderbook'
+		raindex: '0xraindex'
 	} as unknown as RaindexTrade;
 }
 

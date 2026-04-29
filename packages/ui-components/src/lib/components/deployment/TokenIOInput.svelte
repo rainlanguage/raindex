@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Input } from 'flowbite-svelte';
-	import { type OrderIOCfg, type TokenInfo, type VaultType } from '@rainlanguage/orderbook';
+	import { type OrderIOCfg, type TokenInfo, type VaultType } from '@rainlanguage/raindex';
 	import { onMount } from 'svelte';
 	import { useGui } from '$lib/hooks/useGui';
 	import type { TokenBalance } from '$lib/types/tokenBalance';

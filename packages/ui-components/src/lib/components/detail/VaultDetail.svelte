@@ -6,12 +6,7 @@
 	import TanstackPageContentDetail from './TanstackPageContentDetail.svelte';
 	import CardProperty from '../CardProperty.svelte';
 	import { QKEY_VAULT } from '../../queries/keys';
-	import {
-		RaindexClient,
-		type Address,
-		type Hex,
-		type RaindexVault
-	} from '@rainlanguage/orderbook';
+	import { RaindexClient, type Address, type Hex, type RaindexVault } from '@rainlanguage/raindex';
 	// import type { ChartTheme } from '../../utils/lightweightChartsThemes';
 	import { toHex } from 'viem';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -33,7 +28,7 @@
 	import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 
 	export let id: Hex;
-	export let orderbookAddress: Address;
+	export let raindexAddress: Address;
 	export let chainId: number;
 	// export let lightweightChartsTheme: Readable<ChartTheme> | undefined = undefined;
 
@@ -57,7 +52,7 @@
 	$: vaultDetailQuery = createQuery<RaindexVault>({
 		queryKey: [id, QKEY_VAULT + id],
 		queryFn: async () => {
-			const result = await raindexClient.getVault(chainId, orderbookAddress, id);
+			const result = await raindexClient.getVault(chainId, raindexAddress, id);
 			if (result.error) throw new Error(result.error.readableMsg);
 			return result.value;
 		}
@@ -123,10 +118,10 @@
 			<svelte:fragment slot="value">{toHex(data.vaultId)}</svelte:fragment>
 		</CardProperty>
 
-		<CardProperty data-testid="vaultDetailOrderbookAddress">
-			<svelte:fragment slot="key">Orderbook</svelte:fragment>
+		<CardProperty data-testid="vaultDetailRaindexAddress">
+			<svelte:fragment slot="key">Raindex</svelte:fragment>
 			<svelte:fragment slot="value">
-				<Hash type={HashType.Identifier} value={data.orderbook} />
+				<Hash type={HashType.Identifier} value={data.raindex} />
 			</svelte:fragment>
 		</CardProperty>
 
@@ -170,7 +165,7 @@
 				<p data-testid="vaultDetailOrdersAsInput" class="flex flex-wrap justify-start">
 					{#if data.ordersAsInput && data.ordersAsInput.length > 0}
 						{#each data.ordersAsInput as order}
-							<OrderOrVaultHash type="orders" orderOrVault={order} {chainId} {orderbookAddress} />
+							<OrderOrVaultHash type="orders" orderOrVault={order} {chainId} {raindexAddress} />
 						{/each}
 					{:else}
 						None
@@ -185,7 +180,7 @@
 				<p data-testid="vaultDetailOrdersAsOutput" class="flex flex-wrap justify-start">
 					{#if data.ordersAsOutput && data.ordersAsOutput.length > 0}
 						{#each data.ordersAsOutput as order}
-							<OrderOrVaultHash type="orders" orderOrVault={order} {chainId} {orderbookAddress} />
+							<OrderOrVaultHash type="orders" orderOrVault={order} {chainId} {raindexAddress} />
 						{/each}
 					{:else}
 						None

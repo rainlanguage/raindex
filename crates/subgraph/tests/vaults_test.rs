@@ -1,6 +1,6 @@
 use insta::assert_snapshot;
-use rain_orderbook_subgraph_client::types::common::*;
-use rain_orderbook_subgraph_client::types::vault::SgVaultsListQuery;
+use raindex_subgraph_client::types::common::*;
+use raindex_subgraph_client::types::vault::SgVaultsListQuery;
 
 #[test]
 fn vaults_query_gql_output() {

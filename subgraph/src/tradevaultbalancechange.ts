@@ -24,7 +24,7 @@ export function createTradeVaultBalanceChangeEntity(
   let tradeVaultBalanceChange = new TradeVaultBalanceChange(
     tradeVaultBalanceChangeId(event, vaultEntityId)
   );
-  tradeVaultBalanceChange.orderbook = event.address;
+  tradeVaultBalanceChange.raindex = event.address;
   tradeVaultBalanceChange.amount = amount;
   tradeVaultBalanceChange.oldVaultBalance = oldVaultBalance;
   tradeVaultBalanceChange.newVaultBalance = calculator.add(

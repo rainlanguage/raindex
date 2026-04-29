@@ -3,36 +3,36 @@
 pragma solidity =0.8.25;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {OrderBookV6SubParser} from "../src/concrete/parser/OrderBookV6SubParser.sol";
+import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
 import {IMetaBoardV1_2} from "rain.metadata/interface/unstable/IMetaBoardV1_2.sol";
 import {LibDescribedByMeta} from "rain.metadata/lib/LibDescribedByMeta.sol";
 import {LibMetaBoardDeploy} from "rain.metadata/lib/deploy/LibMetaBoardDeploy.sol";
 import {LibDecimalFloatDeploy} from "rain.math.float/lib/deploy/LibDecimalFloatDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
-import {LibOrderBookDeploy} from "../src/lib/deploy/LibOrderBookDeploy.sol";
-import {CREATION_CODE as ORDERBOOK_CREATION_CODE} from "../src/generated/OrderBookV6.pointers.sol";
-import {CREATION_CODE as SUB_PARSER_CREATION_CODE} from "../src/generated/OrderBookV6SubParser.pointers.sol";
+import {LibRaindexDeploy} from "../src/lib/deploy/LibRaindexDeploy.sol";
+import {CREATION_CODE as RAINDEX_CREATION_CODE} from "../src/generated/RaindexV6.pointers.sol";
+import {CREATION_CODE as SUB_PARSER_CREATION_CODE} from "../src/generated/RaindexV6SubParser.pointers.sol";
 import {ROUTE_PROCESSOR_4_CREATION_CODE} from "../src/lib/deploy/LibRouteProcessor4CreationCode.sol";
-import {GenericPoolOrderBookV6ArbOrderTaker} from "../src/concrete/arb/GenericPoolOrderBookV6ArbOrderTaker.sol";
-import {RouteProcessorOrderBookV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorOrderBookV6ArbOrderTaker.sol";
-import {GenericPoolOrderBookV6FlashBorrower} from "../src/concrete/arb/GenericPoolOrderBookV6FlashBorrower.sol";
+import {GenericPoolRaindexV6ArbOrderTaker} from "../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
+import {RouteProcessorRaindexV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
+import {GenericPoolRaindexV6FlashBorrower} from "../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 
-/// @dev Deploy only the OrderBookV6 (raindex) contract.
+/// @dev Deploy only the RaindexV6 (raindex) contract.
 bytes32 constant DEPLOYMENT_SUITE_RAINDEX = keccak256("raindex");
-/// @dev Deploy only the OrderBookV6SubParser contract.
+/// @dev Deploy only the RaindexV6SubParser contract.
 bytes32 constant DEPLOYMENT_SUITE_SUBPARSER = keccak256("subparser");
 /// @dev Deploy only the RouteProcessor4 contract.
 bytes32 constant DEPLOYMENT_SUITE_ROUTE_PROCESSOR = keccak256("route-processor");
-/// @dev Deploy only GenericPoolOrderBookV6ArbOrderTaker.
+/// @dev Deploy only GenericPoolRaindexV6ArbOrderTaker.
 bytes32 constant DEPLOYMENT_SUITE_ARB_GENERIC_POOL_ORDER_TAKER = keccak256("arb-generic-pool-order-taker");
-/// @dev Deploy only RouteProcessorOrderBookV6ArbOrderTaker.
+/// @dev Deploy only RouteProcessorRaindexV6ArbOrderTaker.
 bytes32 constant DEPLOYMENT_SUITE_ARB_ROUTE_PROCESSOR_ORDER_TAKER = keccak256("arb-route-processor-order-taker");
-/// @dev Deploy only GenericPoolOrderBookV6FlashBorrower.
+/// @dev Deploy only GenericPoolRaindexV6FlashBorrower.
 bytes32 constant DEPLOYMENT_SUITE_ARB_GENERIC_POOL_FLASH_BORROWER = keccak256("arb-generic-pool-flash-borrower");
 
 /// @title Deploy
-/// @notice Foundry script that deploys orderbook contracts. Controlled by the
+/// @notice Foundry script that deploys raindex contracts. Controlled by the
 /// `DEPLOYMENT_SUITE` env var to select which subset to deploy, and
 /// `DEPLOYMENT_KEY` for the deployer private key.
 contract Deploy is Script {
@@ -48,7 +48,7 @@ contract Deploy is Script {
         bytes32 suite = keccak256(bytes(suiteString));
 
         if (suite == DEPLOYMENT_SUITE_RAINDEX) {
-            console2.log("Deploying OrderBookV6...");
+            console2.log("Deploying RaindexV6...");
             address[] memory deps = new address[](3);
             deps[0] = LibDecimalFloatDeploy.ZOLTU_DEPLOYED_LOG_TABLES_ADDRESS;
             deps[1] = address(LibTOFUTokenDecimals.TOFU_DECIMALS_DEPLOYMENT);
@@ -57,15 +57,15 @@ contract Deploy is Script {
                 vm,
                 LibRainDeploy.supportedNetworks(),
                 deployerPrivateKey,
-                ORDERBOOK_CREATION_CODE,
-                "src/concrete/ob/OrderBookV6.sol:OrderBookV6",
-                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.ORDERBOOK_DEPLOYED_CODEHASH,
+                RAINDEX_CREATION_CODE,
+                "src/concrete/raindex/RaindexV6.sol:RaindexV6",
+                LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.RAINDEX_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );
         } else if (suite == DEPLOYMENT_SUITE_SUBPARSER) {
-            console2.log("Deploying OrderBookV6SubParser...");
+            console2.log("Deploying RaindexV6SubParser...");
             address[] memory deps = new address[](3);
             deps[0] = LibDecimalFloatDeploy.ZOLTU_DEPLOYED_LOG_TABLES_ADDRESS;
             deps[1] = address(LibTOFUTokenDecimals.TOFU_DECIMALS_DEPLOYMENT);
@@ -75,19 +75,17 @@ contract Deploy is Script {
                 LibRainDeploy.supportedNetworks(),
                 deployerPrivateKey,
                 SUB_PARSER_CREATION_CODE,
-                "src/concrete/parser/OrderBookV6SubParser.sol:OrderBookV6SubParser",
-                LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.SUB_PARSER_DEPLOYED_CODEHASH,
+                "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
+                LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.SUB_PARSER_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );
             IMetaBoardV1_2 metaboard = IMetaBoardV1_2(LibMetaBoardDeploy.METABOARD_DEPLOYED_ADDRESS);
             vm.startBroadcast(deployerPrivateKey);
-            bytes memory subParserDescribedByMeta = vm.readFileBinary("meta/OrderBookV6SubParser.rain.meta");
+            bytes memory subParserDescribedByMeta = vm.readFileBinary("meta/RaindexV6SubParser.rain.meta");
             LibDescribedByMeta.emitForDescribedAddress(
-                metaboard,
-                OrderBookV6SubParser(LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS),
-                subParserDescribedByMeta
+                metaboard, RaindexV6SubParser(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS), subParserDescribedByMeta
             );
             vm.stopBroadcast();
         } else if (suite == DEPLOYMENT_SUITE_ROUTE_PROCESSOR) {
@@ -99,50 +97,50 @@ contract Deploy is Script {
                 deployerPrivateKey,
                 ROUTE_PROCESSOR_4_CREATION_CODE,
                 "RouteProcessor4",
-                LibOrderBookDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.ROUTE_PROCESSOR_DEPLOYED_CODEHASH,
+                LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );
         } else if (suite == DEPLOYMENT_SUITE_ARB_GENERIC_POOL_ORDER_TAKER) {
-            console2.log("Deploying GenericPoolOrderBookV6ArbOrderTaker...");
+            console2.log("Deploying GenericPoolRaindexV6ArbOrderTaker...");
             address[] memory deps = new address[](0);
             LibRainDeploy.deployAndBroadcast(
                 vm,
                 LibRainDeploy.supportedNetworks(),
                 deployerPrivateKey,
-                type(GenericPoolOrderBookV6ArbOrderTaker).creationCode,
-                "src/concrete/arb/GenericPoolOrderBookV6ArbOrderTaker.sol:GenericPoolOrderBookV6ArbOrderTaker",
-                LibOrderBookDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
+                type(GenericPoolRaindexV6ArbOrderTaker).creationCode,
+                "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
+                LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );
         } else if (suite == DEPLOYMENT_SUITE_ARB_ROUTE_PROCESSOR_ORDER_TAKER) {
-            console2.log("Deploying RouteProcessorOrderBookV6ArbOrderTaker...");
+            console2.log("Deploying RouteProcessorRaindexV6ArbOrderTaker...");
             address[] memory deps = new address[](0);
             LibRainDeploy.deployAndBroadcast(
                 vm,
                 LibRainDeploy.supportedNetworks(),
                 deployerPrivateKey,
-                type(RouteProcessorOrderBookV6ArbOrderTaker).creationCode,
-                "src/concrete/arb/RouteProcessorOrderBookV6ArbOrderTaker.sol:RouteProcessorOrderBookV6ArbOrderTaker",
-                LibOrderBookDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
+                type(RouteProcessorRaindexV6ArbOrderTaker).creationCode,
+                "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker",
+                LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );
         } else if (suite == DEPLOYMENT_SUITE_ARB_GENERIC_POOL_FLASH_BORROWER) {
-            console2.log("Deploying GenericPoolOrderBookV6FlashBorrower...");
+            console2.log("Deploying GenericPoolRaindexV6FlashBorrower...");
             address[] memory deps = new address[](0);
             LibRainDeploy.deployAndBroadcast(
                 vm,
                 LibRainDeploy.supportedNetworks(),
                 deployerPrivateKey,
-                type(GenericPoolOrderBookV6FlashBorrower).creationCode,
-                "src/concrete/arb/GenericPoolOrderBookV6FlashBorrower.sol:GenericPoolOrderBookV6FlashBorrower",
-                LibOrderBookDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS,
-                LibOrderBookDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH,
+                type(GenericPoolRaindexV6FlashBorrower).creationCode,
+                "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower",
+                LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS,
+                LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH,
                 deps,
                 sDepCodeHashes
             );

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/svelte';
 import LocalDbStatusModal from '../lib/components/LocalDbStatusModal.svelte';
-import type { NetworkSyncStatus, OrderbookSyncStatus } from '@rainlanguage/orderbook';
+import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
 
 vi.mock('$lib/utils/getNetworkName', () => ({
 	getNetworkName: (chainId: number) => {
@@ -24,7 +24,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses: new Map(),
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
@@ -36,7 +36,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses: new Map(),
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
@@ -53,7 +53,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
@@ -70,7 +70,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
@@ -86,7 +86,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
@@ -102,24 +102,24 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
 		expect(screen.queryByText('Observing')).not.toBeInTheDocument();
 	});
 
-	it('displays orderbook addresses under their network', () => {
+	it('displays raindex addresses under their network', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'active',
 					schedulerState: 'leader'
@@ -131,24 +131,24 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
 		expect(screen.getByText('0x1234567890123456789012345678901234567890')).toBeInTheDocument();
 	});
 
-	it('shows phase message when orderbook is syncing', () => {
+	it('shows phase message when raindex is syncing', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'syncing', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'syncing',
 					schedulerState: 'leader',
@@ -161,24 +161,24 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
 		expect(screen.getByText('Fetching latest block')).toBeInTheDocument();
 	});
 
-	it('does not show phase message when orderbook status is not syncing', () => {
+	it('does not show phase message when raindex status is not syncing', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'active',
 					schedulerState: 'leader',
@@ -191,24 +191,24 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
 		expect(screen.queryByText('This should not appear')).not.toBeInTheDocument();
 	});
 
-	it('shows error message when orderbook has failure', () => {
+	it('shows error message when raindex has failure', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'failure', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'failure',
 					schedulerState: 'leader',
@@ -221,7 +221,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
@@ -245,25 +245,25 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses: new Map()
+				raindexStatuses: new Map()
 			}
 		});
 
 		expect(screen.getByText('Network initialization failed')).toBeInTheDocument();
 	});
 
-	it('groups orderbooks correctly by chain ID', () => {
+	it('groups raindexes correctly by chain ID', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }],
 			[42161, { chainId: 42161, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1111111111111111111111111111111111111111',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1111111111111111111111111111111111111111'
+						raindexAddress: '0x1111111111111111111111111111111111111111'
 					},
 					status: 'active',
 					schedulerState: 'leader'
@@ -272,9 +272,9 @@ describe('LocalDbStatusModal', () => {
 			[
 				'42161:0x2222222222222222222222222222222222222222',
 				{
-					obId: {
+					raindexId: {
 						chainId: 42161,
-						orderbookAddress: '0x2222222222222222222222222222222222222222'
+						raindexAddress: '0x2222222222222222222222222222222222222222'
 					},
 					status: 'syncing',
 					schedulerState: 'leader'
@@ -286,7 +286,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
@@ -299,17 +299,17 @@ describe('LocalDbStatusModal', () => {
 		expect(screen.getByText('0x2222222222222222222222222222222222222222')).toBeInTheDocument();
 	});
 
-	it('handles multiple orderbooks on the same network', () => {
+	it('handles multiple raindexes on the same network', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1111111111111111111111111111111111111111',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1111111111111111111111111111111111111111'
+						raindexAddress: '0x1111111111111111111111111111111111111111'
 					},
 					status: 'active',
 					schedulerState: 'leader'
@@ -318,9 +318,9 @@ describe('LocalDbStatusModal', () => {
 			[
 				'137:0x2222222222222222222222222222222222222222',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x2222222222222222222222222222222222222222'
+						raindexAddress: '0x2222222222222222222222222222222222222222'
 					},
 					status: 'syncing',
 					schedulerState: 'leader',
@@ -333,7 +333,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
@@ -342,17 +342,17 @@ describe('LocalDbStatusModal', () => {
 		expect(screen.getByText('Running bootstrap')).toBeInTheDocument();
 	});
 
-	it('does not show orderbook error when status is not failure', () => {
+	it('does not show raindex error when status is not failure', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'active', schedulerState: 'leader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'active',
 					schedulerState: 'leader',
@@ -365,7 +365,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 
@@ -376,13 +376,13 @@ describe('LocalDbStatusModal', () => {
 		const networkStatuses = new Map<number, NetworkSyncStatus>([
 			[137, { chainId: 137, status: 'syncing', schedulerState: 'notLeader' }]
 		]);
-		const orderbookStatuses = new Map<string, OrderbookSyncStatus>([
+		const raindexStatuses = new Map<string, RaindexSyncStatus>([
 			[
 				'137:0x1234567890123456789012345678901234567890',
 				{
-					obId: {
+					raindexId: {
 						chainId: 137,
-						orderbookAddress: '0x1234567890123456789012345678901234567890'
+						raindexAddress: '0x1234567890123456789012345678901234567890'
 					},
 					status: 'syncing',
 					schedulerState: 'notLeader',
@@ -395,7 +395,7 @@ describe('LocalDbStatusModal', () => {
 			props: {
 				open: true,
 				networkStatuses,
-				orderbookStatuses
+				raindexStatuses
 			}
 		});
 

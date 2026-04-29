@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_subgraph_client"
-description = "Subgraph client, queries & schemas for the Rain Orderbook"
+name = "raindex_subgraph_client"
+description = "Subgraph client, queries & schemas for the Raindex"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,8 +15,8 @@ thiserror = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 alloy = { workspace = true, features = ["rand"] }
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_math = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_math = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true, features = ["serde"] }
 cynic-introspection = "3.7.3"

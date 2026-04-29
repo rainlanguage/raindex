@@ -51,15 +51,15 @@ pub(crate) fn worst_price(sim: &SimulationResult) -> Result<Option<Float>, Raind
     Ok(max)
 }
 
-pub(crate) fn select_best_orderbook_simulation(
+pub(crate) fn select_best_raindex_simulation(
     candidates: Vec<TakeOrderCandidate>,
     mode: ParsedTakeOrdersMode,
     price_cap: Float,
 ) -> Result<(Address, SimulationResult), RaindexError> {
-    let mut orderbook_candidates: HashMap<Address, Vec<TakeOrderCandidate>> = HashMap::new();
+    let mut raindex_candidates: HashMap<Address, Vec<TakeOrderCandidate>> = HashMap::new();
     for candidate in candidates {
-        orderbook_candidates
-            .entry(candidate.orderbook)
+        raindex_candidates
+            .entry(candidate.raindex)
             .or_default()
             .push(candidate);
     }
@@ -69,7 +69,7 @@ pub(crate) fn select_best_orderbook_simulation(
 
     let mut best_result: Option<(Address, SimulationResult)> = None;
 
-    for (orderbook, candidates) in orderbook_candidates {
+    for (raindex_addr, candidates) in raindex_candidates {
         let sim = if is_buy_mode {
             simulate_buy_over_candidates(candidates, target, price_cap)?
         } else {
@@ -95,10 +95,10 @@ pub(crate) fn select_best_orderbook_simulation(
                     match (sim_worst, best_worst) {
                         (Some(sw), Some(bw)) => match cmp_float(&sw, &bw)? {
                             std::cmp::Ordering::Less => true,
-                            std::cmp::Ordering::Equal => orderbook < *best_addr,
+                            std::cmp::Ordering::Equal => raindex_addr < *best_addr,
                             std::cmp::Ordering::Greater => false,
                         },
-                        _ => orderbook < *best_addr,
+                        _ => raindex_addr < *best_addr,
                     }
                 } else {
                     false
@@ -107,7 +107,7 @@ pub(crate) fn select_best_orderbook_simulation(
         };
 
         if is_better {
-            best_result = Some((orderbook, sim));
+            best_result = Some((raindex_addr, sim));
         }
     }
 
@@ -138,7 +138,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_best_orderbook_single_orderbook() {
+    fn test_select_best_raindex_single_raindex() {
         let ob1 = Address::from([0x11u8; 20]);
         let max_output = Float::parse("10".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
@@ -147,7 +147,7 @@ mod tests {
         let buy_target = Float::parse("10".to_string()).unwrap();
 
         let result =
-            select_best_orderbook_simulation(candidates, buy_up_to(buy_target), high_price_cap());
+            select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
 
         assert!(result.is_ok());
         let (addr, sim) = result.unwrap();
@@ -158,7 +158,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_best_orderbook_multiple_books_picks_best() {
+    fn test_select_best_raindex_multiple_books_picks_best() {
         let ob1 = Address::from([0x11u8; 20]);
         let ob2 = Address::from([0x22u8; 20]);
 
@@ -174,7 +174,7 @@ mod tests {
         let buy_target = Float::parse("100".to_string()).unwrap();
 
         let result =
-            select_best_orderbook_simulation(candidates, buy_up_to(buy_target), high_price_cap());
+            select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
 
         assert!(result.is_ok());
         let (winner, sim) = result.unwrap();
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_best_orderbook_skips_empty_sims() {
+    fn test_select_best_raindex_skips_empty_sims() {
         let ob1 = Address::from([0x11u8; 20]);
         let ob2 = Address::from([0x22u8; 20]);
 
@@ -200,13 +200,13 @@ mod tests {
         let buy_target = Float::zero().unwrap();
 
         let result =
-            select_best_orderbook_simulation(candidates, buy_up_to(buy_target), high_price_cap());
+            select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
 
         assert!(matches!(result, Err(RaindexError::NoLiquidity)));
     }
 
     #[test]
-    fn test_select_best_orderbook_all_empty_returns_no_liquidity() {
+    fn test_select_best_raindex_all_empty_returns_no_liquidity() {
         let ob1 = Address::from([0x11u8; 20]);
         let ob2 = Address::from([0x22u8; 20]);
 
@@ -222,14 +222,14 @@ mod tests {
         let buy_target = Float::zero().unwrap();
 
         let result =
-            select_best_orderbook_simulation(candidates, buy_up_to(buy_target), high_price_cap());
+            select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
 
         assert!(result.is_err());
         assert!(matches!(result, Err(RaindexError::NoLiquidity)));
     }
 
     #[test]
-    fn test_select_best_orderbook_price_cap_filters_expensive() {
+    fn test_select_best_raindex_price_cap_filters_expensive() {
         let ob_expensive = Address::from([0x11u8; 20]);
         let ob_cheap = Address::from([0x22u8; 20]);
 
@@ -246,20 +246,20 @@ mod tests {
         let buy_target = Float::parse("100".to_string()).unwrap();
         let price_cap = Float::parse("2".to_string()).unwrap();
 
-        let result = select_best_orderbook_simulation(candidates, buy_up_to(buy_target), price_cap);
+        let result = select_best_raindex_simulation(candidates, buy_up_to(buy_target), price_cap);
 
         assert!(result.is_ok());
         let (winner, sim) = result.unwrap();
         assert_eq!(
             winner, ob_cheap,
-            "Should pick the cheap orderbook since expensive is filtered by price cap"
+            "Should pick the cheap raindex since expensive is filtered by price cap"
         );
         let expected_output = Float::parse("50".to_string()).unwrap();
         assert!(sim.total_output.eq(expected_output).unwrap());
     }
 
     #[test]
-    fn test_select_best_orderbook_tiebreak_identical_totals_prefers_lower_address() {
+    fn test_select_best_raindex_tiebreak_identical_totals_prefers_lower_address() {
         let ob_higher = Address::from([0x22u8; 20]);
         let ob_lower = Address::from([0x11u8; 20]);
 
@@ -273,27 +273,24 @@ mod tests {
 
         for _ in 0..20 {
             let candidates = vec![higher_candidate.clone(), lower_candidate.clone()];
-            let result = select_best_orderbook_simulation(
-                candidates,
-                buy_up_to(buy_target),
-                high_price_cap(),
-            );
+            let result =
+                select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
             assert!(result.is_ok());
             let (winner, sim) = result.unwrap();
 
             assert_eq!(
                 winner, ob_lower,
                 "Tie-break rule: when total_output amounts and worst prices are equal, \
-                 prefer the lower orderbook address (0x{:x} < 0x{:x})",
+                 prefer the lower raindex address (0x{:x} < 0x{:x})",
                 ob_lower, ob_higher
             );
             assert_eq!(sim.legs.len(), 1);
-            assert_eq!(sim.legs[0].candidate.orderbook, ob_lower);
+            assert_eq!(sim.legs[0].candidate.raindex, ob_lower);
         }
     }
 
     #[test]
-    fn test_select_best_orderbook_tiebreak_identical_totals_prefers_lower_worst_price() {
+    fn test_select_best_raindex_tiebreak_identical_totals_prefers_lower_worst_price() {
         let ob_better_price = Address::from([0x22u8; 20]);
         let ob_worse_price = Address::from([0x11u8; 20]);
 
@@ -308,26 +305,23 @@ mod tests {
 
         for _ in 0..20 {
             let candidates = vec![worse_candidate.clone(), better_candidate.clone()];
-            let result = select_best_orderbook_simulation(
-                candidates,
-                buy_up_to(buy_target),
-                high_price_cap(),
-            );
+            let result =
+                select_best_raindex_simulation(candidates, buy_up_to(buy_target), high_price_cap());
             assert!(result.is_ok());
             let (winner, sim) = result.unwrap();
 
             assert_eq!(
                 winner, ob_better_price,
                 "Tie-break rule: when total_output amounts are equal, \
-                 prefer the orderbook with the lower worst price (ratio 0.9 < 1.1)"
+                 prefer the raindex with the lower worst price (ratio 0.9 < 1.1)"
             );
             assert_eq!(sim.legs.len(), 1);
-            assert_eq!(sim.legs[0].candidate.orderbook, ob_better_price);
+            assert_eq!(sim.legs[0].candidate.raindex, ob_better_price);
         }
     }
 
     #[test]
-    fn test_select_best_orderbook_spend_mode() {
+    fn test_select_best_raindex_spend_mode() {
         let ob1 = Address::from([0x11u8; 20]);
         let max_output = Float::parse("100".to_string()).unwrap();
         let ratio = Float::parse("2".to_string()).unwrap();
@@ -335,11 +329,8 @@ mod tests {
         let candidates = vec![candidate];
         let spend_budget = Float::parse("100".to_string()).unwrap();
 
-        let result = select_best_orderbook_simulation(
-            candidates,
-            spend_up_to(spend_budget),
-            high_price_cap(),
-        );
+        let result =
+            select_best_raindex_simulation(candidates, spend_up_to(spend_budget), high_price_cap());
 
         assert!(result.is_ok());
         let (addr, sim) = result.unwrap();
@@ -351,7 +342,7 @@ mod tests {
     }
 
     #[test]
-    fn test_select_best_orderbook_spend_mode_prefers_higher_output() {
+    fn test_select_best_raindex_spend_mode_prefers_higher_output() {
         let ob_bad_rate = Address::from([0x11u8; 20]);
         let ob_good_rate = Address::from([0x22u8; 20]);
 
@@ -367,17 +358,14 @@ mod tests {
         let candidates = vec![bad_rate_candidate, good_rate_candidate];
         let spend_budget = Float::parse("100".to_string()).unwrap();
 
-        let result = select_best_orderbook_simulation(
-            candidates,
-            spend_up_to(spend_budget),
-            high_price_cap(),
-        );
+        let result =
+            select_best_raindex_simulation(candidates, spend_up_to(spend_budget), high_price_cap());
 
         assert!(result.is_ok());
         let (winner, sim) = result.unwrap();
         assert_eq!(
             winner, ob_good_rate,
-            "Should pick orderbook with higher output (90) over one that can absorb more input but yields less output (50)"
+            "Should pick raindex with higher output (90) over one that can absorb more input but yields less output (50)"
         );
         let expected_output = Float::parse("90".to_string()).unwrap();
         assert!(sim.total_output.eq(expected_output).unwrap());

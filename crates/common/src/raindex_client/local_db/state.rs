@@ -3,8 +3,8 @@ use super::LocalDb;
 use crate::raindex_client::local_db::pipeline::runner::scheduler::NativeSyncHandle;
 #[cfg(target_family = "wasm")]
 use crate::raindex_client::local_db::pipeline::runner::scheduler::SchedulerHandle;
-use rain_orderbook_app_settings::network::NetworkCfg;
-use rain_orderbook_app_settings::yaml::orderbook::OrderbookYaml;
+use raindex_app_settings::network::NetworkCfg;
+use raindex_app_settings::yaml::raindex::RaindexYaml;
 #[cfg(target_family = "wasm")]
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -98,7 +98,7 @@ impl LocalDbState {
 }
 
 impl LocalDbState {
-    pub(crate) fn compute_chain_ids(yaml: &OrderbookYaml) -> HashSet<u32> {
+    pub(crate) fn compute_chain_ids(yaml: &RaindexYaml) -> HashSet<u32> {
         let syncs = match yaml.get_local_db_syncs() {
             Ok(s) => s,
             Err(_) => return HashSet::new(),
@@ -223,9 +223,9 @@ mod tests {
     use crate::local_db::query::{
         FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
     };
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::orderbook::{OrderbookYaml, OrderbookYamlValidation};
-    use rain_orderbook_app_settings::yaml::YamlParsable;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::raindex::{RaindexYaml, RaindexYamlValidation};
+    use raindex_app_settings::yaml::YamlParsable;
 
     struct NoopExec;
 
@@ -414,8 +414,8 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 1000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -423,8 +423,8 @@ orderbooks:
 "#,
             version = SpecVersion::current()
         );
-        let yaml = OrderbookYaml::new(vec![yaml_str], OrderbookYamlValidation::default())
-            .expect("valid yaml");
+        let yaml =
+            RaindexYaml::new(vec![yaml_str], RaindexYamlValidation::default()).expect("valid yaml");
         let ids = LocalDbState::compute_chain_ids(&yaml);
         assert_eq!(ids, HashSet::from([42161]));
         assert!(!ids.contains(&137));
@@ -442,8 +442,8 @@ networks:
     chain-id: 42161
 subgraphs:
   anvil: https://subgraph.example/anvil
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -451,8 +451,8 @@ orderbooks:
 "#,
             version = SpecVersion::current()
         );
-        let yaml = OrderbookYaml::new(vec![yaml_str], OrderbookYamlValidation::default())
-            .expect("valid yaml");
+        let yaml =
+            RaindexYaml::new(vec![yaml_str], RaindexYamlValidation::default()).expect("valid yaml");
         let ids = LocalDbState::compute_chain_ids(&yaml);
         assert!(ids.is_empty());
     }

@@ -25,7 +25,7 @@ pub struct FetchOrdersTokensFilter {
 #[derive(Debug, Clone, Default)]
 pub struct FetchOrdersArgs {
     pub chain_ids: Vec<u32>,
-    pub orderbook_addresses: Vec<Address>,
+    pub raindex_addresses: Vec<Address>,
     pub filter: FetchOrdersActiveFilter,
     pub owners: Vec<Address>,
     pub order_hash: Option<B256>,
@@ -43,7 +43,7 @@ pub struct LocalDbOrder {
     pub owner: Address,
     pub block_timestamp: u64,
     pub block_number: u64,
-    pub orderbook_address: Address,
+    pub raindex_address: Address,
     pub order_bytes: Bytes,
     pub transaction_hash: B256,
     pub inputs: Option<String>,
@@ -56,18 +56,18 @@ pub struct LocalDbOrder {
 
 const FIRST_ADD_CHAIN_IDS_CLAUSE: &str = "/*FIRST_ADD_CHAIN_IDS_CLAUSE*/";
 const FIRST_ADD_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
-const FIRST_ADD_ORDERBOOKS_CLAUSE: &str = "/*FIRST_ADD_ORDERBOOKS_CLAUSE*/";
-const FIRST_ADD_ORDERBOOKS_CLAUSE_BODY: &str = "AND oe.orderbook_address IN ({list})";
+const FIRST_ADD_RAINDEXES_CLAUSE: &str = "/*FIRST_ADD_RAINDEXES_CLAUSE*/";
+const FIRST_ADD_RAINDEXES_CLAUSE_BODY: &str = "AND oe.raindex_address IN ({list})";
 
 const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
 const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
-const TAKE_ORDERS_ORDERBOOKS_CLAUSE: &str = "/*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/";
-const TAKE_ORDERS_ORDERBOOKS_CLAUSE_BODY: &str = "AND t.orderbook_address IN ({list})";
+const TAKE_ORDERS_RAINDEXES_CLAUSE: &str = "/*TAKE_ORDERS_RAINDEXES_CLAUSE*/";
+const TAKE_ORDERS_RAINDEXES_CLAUSE_BODY: &str = "AND t.raindex_address IN ({list})";
 
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND entries.chain_id IN ({list})";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND entries.orderbook_address IN ({list})";
+const CLEAR_EVENTS_RAINDEXES_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXES_CLAUSE*/";
+const CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY: &str = "AND entries.raindex_address IN ({list})";
 const TX_HASH_CLAUSE: &str = "/*TX_HASH_CLAUSE*/";
 const TX_HASH_CLAUSE_BODY: &str = "AND oe.transaction_hash = {param}";
 const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
@@ -78,7 +78,7 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
     let prepared = bind_common_order_filters(&mut stmt, args)?;
 
     let chain_ids_iter = || prepared.chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || prepared.orderbooks.iter().cloned().map(SqlValue::from);
+    let raindexes_iter = || prepared.raindexes.iter().cloned().map(SqlValue::from);
 
     stmt.bind_list_clause(
         FIRST_ADD_CHAIN_IDS_CLAUSE,
@@ -97,19 +97,19 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
     )?;
 
     stmt.bind_list_clause(
-        FIRST_ADD_ORDERBOOKS_CLAUSE,
-        FIRST_ADD_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        FIRST_ADD_RAINDEXES_CLAUSE,
+        FIRST_ADD_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
     stmt.bind_list_clause(
-        TAKE_ORDERS_ORDERBOOKS_CLAUSE,
-        TAKE_ORDERS_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        TAKE_ORDERS_RAINDEXES_CLAUSE,
+        TAKE_ORDERS_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
     stmt.bind_list_clause(
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE,
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        CLEAR_EVENTS_RAINDEXES_CLAUSE,
+        CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
 
     let tx_hash_val = args.tx_hash.as_ref().map(|hash| SqlValue::from(*hash));
@@ -133,8 +133,8 @@ pub fn build_fetch_orders_stmt(args: &FetchOrdersArgs) -> Result<SqlStatement, S
 #[cfg(test)]
 mod tests {
     use super::super::fetch_orders_common::{
-        INPUT_TOKENS_CLAUSE, LATEST_ADD_CHAIN_IDS_CLAUSE, LATEST_ADD_ORDERBOOKS_CLAUSE,
-        MAIN_CHAIN_IDS_CLAUSE, MAIN_ORDERBOOKS_CLAUSE, ORDER_HASH_CLAUSE, ORDER_HASH_CLAUSE_BODY,
+        INPUT_TOKENS_CLAUSE, LATEST_ADD_CHAIN_IDS_CLAUSE, LATEST_ADD_RAINDEXES_CLAUSE,
+        MAIN_CHAIN_IDS_CLAUSE, MAIN_RAINDEXES_CLAUSE, ORDER_HASH_CLAUSE, ORDER_HASH_CLAUSE_BODY,
         OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE,
     };
     use super::*;
@@ -161,7 +161,7 @@ mod tests {
     fn owners_tokens_and_order_hash_filters_with_params() {
         let args = FetchOrdersArgs {
             chain_ids: vec![137, 1],
-            orderbook_addresses: vec![address!("0xabcdef0000000000000000000000000000000000")],
+            raindex_addresses: vec![address!("0xabcdef0000000000000000000000000000000000")],
             filter: FetchOrdersActiveFilter::Active,
             owners: vec![
                 address!("0xF3dEe5b36E3402893e6953A8670E37D329683ABB"),
@@ -194,7 +194,7 @@ mod tests {
         assert!(!stmt.sql.contains(OUTPUT_TOKENS_CLAUSE));
         assert!(!stmt.sql.contains(ORDER_HASH_CLAUSE));
 
-        // Params include active filter followed by chain/orderbook filters
+        // Params include active filter followed by chain/raindex filters
         assert!(stmt.params.len() >= 3);
         assert_eq!(stmt.params[0], SqlValue::Text("active".to_string()));
     }
@@ -354,10 +354,10 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_filters_lowercase_and_optional() {
+    fn raindex_filters_lowercase_and_optional() {
         let args = FetchOrdersArgs {
             chain_ids: vec![1],
-            orderbook_addresses: vec![
+            raindex_addresses: vec![
                 Address::from_str("0xAbCDeF0000000000000000000000000000000000").unwrap(),
                 Address::from_str("0xabcdef0000000000000000000000000000000000").unwrap(),
                 Address::from_str("0x0000000000000000000000000000000000000000").unwrap(),
@@ -368,11 +368,11 @@ mod tests {
         let stmt = build_fetch_orders_stmt(&args).unwrap();
 
         for marker in [
-            MAIN_ORDERBOOKS_CLAUSE,
-            LATEST_ADD_ORDERBOOKS_CLAUSE,
-            FIRST_ADD_ORDERBOOKS_CLAUSE,
-            TAKE_ORDERS_ORDERBOOKS_CLAUSE,
-            CLEAR_EVENTS_ORDERBOOKS_CLAUSE,
+            MAIN_RAINDEXES_CLAUSE,
+            LATEST_ADD_RAINDEXES_CLAUSE,
+            FIRST_ADD_RAINDEXES_CLAUSE,
+            TAKE_ORDERS_RAINDEXES_CLAUSE,
+            CLEAR_EVENTS_RAINDEXES_CLAUSE,
         ] {
             assert!(
                 !stmt.sql.contains(marker),
@@ -381,12 +381,12 @@ mod tests {
         }
 
         assert!(
-            stmt.sql.contains("AND oe.orderbook_address IN (?"),
-            "main orderbook filter missing"
+            stmt.sql.contains("AND oe.raindex_address IN (?"),
+            "main raindex filter missing"
         );
         assert!(
-            stmt.sql.contains("AND t.orderbook_address IN (?"),
-            "take_orders orderbook filter missing"
+            stmt.sql.contains("AND t.raindex_address IN (?"),
+            "take_orders raindex filter missing"
         );
 
         // Only the trimmed, lowercased address should appear in bound params.
@@ -401,26 +401,26 @@ mod tests {
             .collect();
         assert!(
             text_params.iter().any(|text| text.as_str() == lower_addr),
-            "expected lowercase orderbook address in params"
+            "expected lowercase raindex address in params"
         );
         for text in text_params {
             let lowered = text.to_ascii_lowercase();
             assert_eq!(
                 text.as_str(),
                 lowered.as_str(),
-                "orderbook param should be lowercase"
+                "raindex param should be lowercase"
             );
         }
 
-        // When orderbooks are omitted entirely, no orderbook clause should remain.
-        let args_no_orderbooks = FetchOrdersArgs {
+        // When raindexes are omitted entirely, no raindex clause should remain.
+        let args_no_raindexes = FetchOrdersArgs {
             chain_ids: vec![1],
             ..FetchOrdersArgs::default()
         };
-        let stmt_no_orderbooks = build_fetch_orders_stmt(&args_no_orderbooks).unwrap();
+        let stmt_no_raindexes = build_fetch_orders_stmt(&args_no_raindexes).unwrap();
         assert!(
-            !stmt_no_orderbooks.sql.contains("oe.orderbook_address IN ("),
-            "orderbook clause should not appear when list is empty"
+            !stmt_no_raindexes.sql.contains("oe.raindex_address IN ("),
+            "raindex clause should not appear when list is empty"
         );
     }
 

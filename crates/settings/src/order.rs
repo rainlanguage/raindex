@@ -9,7 +9,7 @@ use std::{
 use strict_yaml_rust::{strict_yaml::Hash, StrictYaml};
 use thiserror::Error;
 
-const ALLOWED_ORDER_KEYS: [&str; 5] = ["inputs", "oracle-url", "orderbook", "outputs", "rainlang"];
+const ALLOWED_ORDER_KEYS: [&str; 5] = ["inputs", "oracle-url", "raindex", "outputs", "rainlang"];
 const ALLOWED_ORDER_IO_KEYS: [&str; 2] = ["token", "vault-id"];
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 use yaml::{
@@ -55,7 +55,7 @@ pub struct OrderCfg {
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub rainlang: Option<Arc<RainlangCfg>>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub orderbook: Option<Arc<OrderbookCfg>>,
+    pub raindex: Option<Arc<RaindexCfg>>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     #[serde(rename = "oracle-url")]
     pub oracle_url: Option<String>,
@@ -349,14 +349,13 @@ impl OrderCfg {
                         }
                     }
 
-                    if let Some(orderbook_key) = optional_string(order_yaml, "orderbook") {
-                        let key =
-                            OrderbookCfg::parse_network_key(documents.clone(), &orderbook_key)?;
+                    if let Some(raindex_key) = optional_string(order_yaml, "raindex") {
+                        let key = RaindexCfg::parse_network_key(documents.clone(), &raindex_key)?;
 
                         if let Some(ref existing_key) = network_key {
                             if *existing_key != key {
                                 return Err(YamlError::ParseOrderConfigSourceError(
-                                    ParseOrderConfigSourceError::OrderbookNetworkDoesNotMatch {
+                                    ParseOrderConfigSourceError::RaindexNetworkDoesNotMatch {
                                         expected: existing_key.clone(),
                                         found: key.clone(),
                                     },
@@ -532,7 +531,7 @@ impl YamlParsableHash for OrderCfg {
         let mut orders = HashMap::new();
 
         let rainlangs = RainlangCfg::parse_all_from_yaml(documents.clone(), context);
-        let orderbooks = OrderbookCfg::parse_all_from_yaml(documents.clone(), context);
+        let raindexes = RaindexCfg::parse_all_from_yaml(documents.clone(), context);
         let tokens = TokenCfg::parse_all_from_yaml(documents.clone(), context);
 
         let tokens = if let Some(context) = context {
@@ -609,36 +608,36 @@ impl YamlParsableHash for OrderCfg {
                         None => None,
                     };
 
-                    let orderbook = match optional_string(order_yaml, "orderbook") {
-                        Some(orderbook_name) => {
-                            let orderbooks = orderbooks.as_ref().map_err(|e| YamlError::Field {
+                    let raindex = match optional_string(order_yaml, "raindex") {
+                        Some(raindex_name) => {
+                            let raindexes = raindexes.as_ref().map_err(|e| YamlError::Field {
                                 kind: FieldErrorKind::InvalidValue {
-                                    field: "orderbooks".to_string(),
+                                    field: "raindexes".to_string(),
                                     reason: e.to_string(),
                                 },
                                 location: "root".to_string(),
                             })?;
-                            let orderbook = Arc::new(
-                                orderbooks
-                                    .get(&orderbook_name)
+                            let raindex = Arc::new(
+                                raindexes
+                                    .get(&raindex_name)
                                     .ok_or_else(|| {
-                                        YamlError::KeyNotFound(orderbook_name.to_string())
+                                        YamlError::KeyNotFound(raindex_name.to_string())
                                     })?
                                     .clone(),
                             );
                             if let Some(n) = &network {
-                                if orderbook.network != *n {
+                                if raindex.network != *n {
                                     return Err(YamlError::ParseOrderConfigSourceError(
-                                        ParseOrderConfigSourceError::OrderbookNetworkDoesNotMatch {
+                                        ParseOrderConfigSourceError::RaindexNetworkDoesNotMatch {
                                             expected: n.key.clone(),
-                                            found: orderbook.network.key.clone(),
+                                            found: raindex.network.key.clone(),
                                         },
                                     ));
                                 }
                             } else {
-                                network = Some(orderbook.network.clone());
+                                network = Some(raindex.network.clone());
                             }
-                            Some(orderbook)
+                            Some(raindex)
                         }
                         None => None,
                     };
@@ -824,7 +823,7 @@ impl YamlParsableHash for OrderCfg {
                             ParseOrderConfigSourceError::NetworkNotFoundError(String::new()),
                         )?,
                         rainlang,
-                        orderbook,
+                        raindex,
                         oracle_url,
                     };
 
@@ -934,7 +933,7 @@ impl Default for OrderCfg {
             outputs: vec![],
             network: Arc::new(NetworkCfg::default()),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         }
     }
@@ -947,7 +946,7 @@ impl PartialEq for OrderCfg {
             && self.outputs == other.outputs
             && self.network == other.network
             && self.rainlang == other.rainlang
-            && self.orderbook == other.orderbook
+            && self.raindex == other.raindex
             && self.oracle_url == other.oracle_url
     }
 }
@@ -956,8 +955,8 @@ impl PartialEq for OrderCfg {
 pub enum ParseOrderConfigSourceError {
     #[error("Failed to parse rainlang")]
     RainlangParseError(ParseRainlangConfigSourceError),
-    #[error("Failed to parse orderbook")]
-    OrderbookParseError(ParseOrderbookConfigSourceError),
+    #[error("Failed to parse raindex")]
+    RaindexParseError(ParseRaindexConfigSourceError),
     #[error("Failed to parse token")]
     TokenParseError(ParseTokenConfigSourceError),
     #[error("Network not found for Order: {0}")]
@@ -966,8 +965,8 @@ pub enum ParseOrderConfigSourceError {
     NetworkNotMatch,
     #[error("Rainlang network does not match: expected {expected}, found {found}")]
     RainlangNetworkDoesNotMatch { expected: String, found: String },
-    #[error("Orderbook network does not match: expected {expected}, found {found}")]
-    OrderbookNetworkDoesNotMatch { expected: String, found: String },
+    #[error("Raindex network does not match: expected {expected}, found {found}")]
+    RaindexNetworkDoesNotMatch { expected: String, found: String },
     #[error(
         "Input token network with key: {key} does not match: expected {expected}, found {found}"
     )]
@@ -993,18 +992,18 @@ impl ParseOrderConfigSourceError {
         match self {
             ParseOrderConfigSourceError::RainlangParseError(err) =>
                 err.to_readable_msg(),
-            ParseOrderConfigSourceError::OrderbookParseError(err) =>
+            ParseOrderConfigSourceError::RaindexParseError(err) =>
                 err.to_readable_msg(),
             ParseOrderConfigSourceError::TokenParseError(err) =>
                 err.to_readable_msg(),
             ParseOrderConfigSourceError::NetworkNotFoundError(_) =>
-                "No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or orderbooks have valid networks.".to_string(),
+                "No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or raindexes have valid networks.".to_string(),
             ParseOrderConfigSourceError::NetworkNotMatch =>
-                "The networks specified in your order configuration do not match. All components (tokens, rainlangs, orderbooks) must use the same network.".to_string(),
+                "The networks specified in your order configuration do not match. All components (tokens, rainlangs, raindexes) must use the same network.".to_string(),
             ParseOrderConfigSourceError::RainlangNetworkDoesNotMatch { expected, found } =>
                 format!("Network mismatch in your YAML configuration: The rainlang is using network '{}' but the order is using network '{}'. Please ensure all components use the same network.", found, expected),
-            ParseOrderConfigSourceError::OrderbookNetworkDoesNotMatch { expected, found } =>
-                format!("Network mismatch in your YAML configuration: The orderbook is using network '{}' but the order is using network '{}'. Please ensure all components use the same network.", found, expected),
+            ParseOrderConfigSourceError::RaindexNetworkDoesNotMatch { expected, found } =>
+                format!("Network mismatch in your YAML configuration: The raindex is using network '{}' but the order is using network '{}'. Please ensure all components use the same network.", found, expected),
             ParseOrderConfigSourceError::InputTokenNetworkDoesNotMatch { key, expected, found } =>
                 format!("Network mismatch in your YAML configuration: The input token '{}' is using network '{}' but the order is using network '{}'. Please ensure all components use the same network.", key, found, expected),
             ParseOrderConfigSourceError::OutputTokenNetworkDoesNotMatch { key, expected, found } =>
@@ -1242,7 +1241,7 @@ orders: test
         );
         assert_eq!(
             error.to_readable_msg(),
-            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or orderbooks have valid networks."
+            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or raindexes have valid networks."
         );
 
         let yaml = r#"
@@ -1258,7 +1257,7 @@ orders:
         );
         assert_eq!(
             error.to_readable_msg(),
-            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or orderbooks have valid networks."
+            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or raindexes have valid networks."
         );
 
         let yaml = r#"
@@ -1274,7 +1273,7 @@ orders:
         );
         assert_eq!(
             error.to_readable_msg(),
-            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or orderbooks have valid networks."
+            "Order configuration error in your YAML: No network could be determined for this order. Please specify a network or ensure that tokens, rainlangs, or raindexes have valid networks."
         );
     }
 
@@ -1288,7 +1287,7 @@ orders:
         outputs:
             - token: usdc
         rainlang: mainnet
-        orderbook: mainnet
+        raindex: mainnet
         unknown-key: should-be-dropped
         another-unknown: also-dropped
 "#;
@@ -1312,7 +1311,7 @@ orders:
         assert!(order_hash.contains_key(&StrictYaml::String("inputs".to_string())));
         assert!(order_hash.contains_key(&StrictYaml::String("outputs".to_string())));
         assert!(order_hash.contains_key(&StrictYaml::String("rainlang".to_string())));
-        assert!(order_hash.contains_key(&StrictYaml::String("orderbook".to_string())));
+        assert!(order_hash.contains_key(&StrictYaml::String("raindex".to_string())));
         assert!(!order_hash.contains_key(&StrictYaml::String("unknown-key".to_string())));
         assert!(!order_hash.contains_key(&StrictYaml::String("another-unknown".to_string())));
     }

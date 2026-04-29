@@ -7,7 +7,7 @@ impl FetchVaultsArgs {
     pub fn from_filters(filters: GetVaultsFilters) -> Self {
         FetchVaultsArgs {
             chain_ids: Vec::new(),
-            orderbook_addresses: filters.orderbook_addresses.unwrap_or_default(),
+            raindex_addresses: filters.raindex_addresses.unwrap_or_default(),
             owners: filters.owners,
             tokens: filters.tokens.unwrap_or_default(),
             hide_zero_balance: filters.hide_zero_balance,
@@ -39,13 +39,13 @@ mod tests {
     fn from_filters_builds_args() {
         let owner = address!("0x0123456789ABCDEF0123456789ABCDEF01234567");
         let token = address!("0x89ABCDEF0123456789ABCDEF0123456789ABCDEF");
-        let orderbook1 = address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-        let orderbook2 = address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+        let raindex1 = address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        let raindex2 = address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
         let filters = GetVaultsFilters {
             owners: vec![owner],
             hide_zero_balance: true,
             tokens: Some(vec![token]),
-            orderbook_addresses: Some(vec![orderbook1, orderbook2]),
+            raindex_addresses: Some(vec![raindex1, raindex2]),
             only_active_orders: false,
         };
         let args = FetchVaultsArgs::from_filters(filters);
@@ -58,38 +58,38 @@ mod tests {
             vec![address!("0x89abcdef0123456789abcdef0123456789abcdef")]
         );
         assert!(args.hide_zero_balance);
-        assert_eq!(args.orderbook_addresses.len(), 2);
-        assert_eq!(args.orderbook_addresses[0], orderbook1);
-        assert_eq!(args.orderbook_addresses[1], orderbook2);
+        assert_eq!(args.raindex_addresses.len(), 2);
+        assert_eq!(args.raindex_addresses[0], raindex1);
+        assert_eq!(args.raindex_addresses[1], raindex2);
         assert!(!args.only_active_orders);
     }
 
     #[test]
-    fn from_filters_none_orderbook_addresses_becomes_empty_vec() {
+    fn from_filters_none_raindex_addresses_becomes_empty_vec() {
         let filters = GetVaultsFilters {
             owners: vec![],
             hide_zero_balance: false,
             tokens: None,
-            orderbook_addresses: None,
+            raindex_addresses: None,
             only_active_orders: false,
         };
         let args = FetchVaultsArgs::from_filters(filters);
-        assert!(args.orderbook_addresses.is_empty());
+        assert!(args.raindex_addresses.is_empty());
     }
 
     #[test]
-    fn from_filters_single_orderbook_address() {
-        let orderbook = address!("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF");
+    fn from_filters_single_raindex_address() {
+        let raindex = address!("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF");
         let filters = GetVaultsFilters {
             owners: vec![],
             hide_zero_balance: false,
             tokens: None,
-            orderbook_addresses: Some(vec![orderbook]),
+            raindex_addresses: Some(vec![raindex]),
             only_active_orders: false,
         };
         let args = FetchVaultsArgs::from_filters(filters);
-        assert_eq!(args.orderbook_addresses.len(), 1);
-        assert_eq!(args.orderbook_addresses[0], orderbook);
+        assert_eq!(args.raindex_addresses.len(), 1);
+        assert_eq!(args.raindex_addresses[0], raindex);
     }
 
     #[test]
@@ -98,7 +98,7 @@ mod tests {
             owners: vec![],
             hide_zero_balance: false,
             tokens: None,
-            orderbook_addresses: None,
+            raindex_addresses: None,
             only_active_orders: true,
         };
         let args = FetchVaultsArgs::from_filters(filters);
@@ -126,7 +126,7 @@ mod tests {
             args.tokens = vec![address!("0x00000000000000000000000000000000000000aa")];
             args.hide_zero_balance = true;
             args.chain_ids = vec![1, 137];
-            args.orderbook_addresses = vec![
+            args.raindex_addresses = vec![
                 Address::from([0x11; 20]),
                 Address::from([0x22; 20]),
                 Address::from([0x22; 20]),

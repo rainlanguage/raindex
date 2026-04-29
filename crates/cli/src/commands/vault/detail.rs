@@ -1,7 +1,7 @@
 use crate::{execute::Execute, subgraph::CliSubgraphArgs};
 use anyhow::Result;
 use clap::Args;
-use rain_orderbook_common::subgraph::SubgraphArgs;
+use raindex_common::subgraph::SubgraphArgs;
 use tracing::info;
 
 #[derive(Args, Clone)]
@@ -100,7 +100,7 @@ mod tests {
                         "orderHash": encode_prefixed(B256::random()),
                     }],
                     "balanceChanges": [],
-                    "orderbook": {
+                    "raindex": {
                         "id": encode_prefixed(B256::random()),
                     },
                     "balanceChanges": []

@@ -4,7 +4,7 @@ FROM (
   FROM take_orders t
   JOIN order_events oe
     ON oe.chain_id = ?1
-   AND oe.orderbook_address = ?2
+   AND oe.raindex_address = ?2
    AND oe.order_hash = ?3
    AND oe.event_type = 'AddOrderV3'
    AND oe.order_owner = t.order_owner
@@ -17,7 +17,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = ?1
-      AND oe2.orderbook_address = ?2
+      AND oe2.raindex_address = ?2
       AND oe2.order_hash = ?3
       AND oe2.event_type = 'AddOrderV3'
       AND oe2.order_owner = t.order_owner
@@ -32,7 +32,7 @@ FROM (
        )
    )
   WHERE t.chain_id = ?1
-    AND t.orderbook_address = ?2
+    AND t.raindex_address = ?2
 
   UNION ALL
 
@@ -40,7 +40,7 @@ FROM (
   FROM clear_v3_events c
   JOIN order_events oe
     ON oe.chain_id = ?1
-   AND oe.orderbook_address = ?2
+   AND oe.raindex_address = ?2
    AND oe.order_hash = c.alice_order_hash
    AND oe.event_type = 'AddOrderV3'
    AND (
@@ -51,7 +51,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = ?1
-      AND oe2.orderbook_address = ?2
+      AND oe2.raindex_address = ?2
       AND oe2.order_hash = c.alice_order_hash
       AND oe2.event_type = 'AddOrderV3'
        AND (
@@ -64,7 +64,7 @@ FROM (
        )
    )
   WHERE c.chain_id = ?1
-    AND c.orderbook_address = ?2
+    AND c.raindex_address = ?2
     AND c.alice_order_hash = ?3
 
   UNION ALL
@@ -73,7 +73,7 @@ FROM (
   FROM clear_v3_events c
   JOIN order_events oe
     ON oe.chain_id = ?1
-   AND oe.orderbook_address = ?2
+   AND oe.raindex_address = ?2
    AND oe.order_hash = c.bob_order_hash
    AND oe.event_type = 'AddOrderV3'
    AND (
@@ -84,7 +84,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = ?1
-      AND oe2.orderbook_address = ?2
+      AND oe2.raindex_address = ?2
       AND oe2.order_hash = c.bob_order_hash
       AND oe2.event_type = 'AddOrderV3'
        AND (
@@ -97,7 +97,7 @@ FROM (
        )
    )
   WHERE c.chain_id = ?1
-    AND c.orderbook_address = ?2
+    AND c.raindex_address = ?2
     AND c.bob_order_hash = ?3
 ) AS combined_trades
 WHERE 1=1

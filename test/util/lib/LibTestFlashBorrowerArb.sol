@@ -19,18 +19,18 @@ import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
 import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
-import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
-import {GenericPoolOrderBookV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolOrderBookV6FlashBorrower.sol";
+import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
+import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
-import {RealisticFlashLendingMockOrderBook} from "test/util/concrete/RealisticFlashLendingMockOrderBook.sol";
+import {RealisticFlashLendingMockRaindex} from "test/util/concrete/RealisticFlashLendingMockRaindex.sol";
 
 /// @dev Return value from `setup`. Caller keeps their own exchange reference.
 struct FlashBorrowerSetup {
-    GenericPoolOrderBookV6FlashBorrower arb;
+    GenericPoolRaindexV6FlashBorrower arb;
     MockToken inputToken;
     MockToken outputToken;
-    IRaindexV6 orderBook;
+    IRaindexV6 raindex;
     TakeOrdersConfigV5 takeOrdersConfig;
     bytes exchangeData;
 }
@@ -44,7 +44,7 @@ library LibTestFlashBorrowerArb {
     /// @param exchange The exchange contract address.
     /// @param amount Token amount for the swap (18 decimals). Used as
     /// exchangeInputAmount, swapAmount, and minimumIO (flash loan size).
-    /// The orderbook receives 10x amount of outputToken.
+    /// The raindex receives 10x amount of outputToken.
     function setup(Vm vm, address exchange, uint256 amount) internal returns (FlashBorrowerSetup memory) {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
@@ -52,14 +52,14 @@ library LibTestFlashBorrowerArb {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticFlashLendingMockOrderBook mockOb = new RealisticFlashLendingMockOrderBook();
-        vm.etch(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, address(mockOb).code);
-        IRaindexV6 orderBook = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
+        RealisticFlashLendingMockRaindex mockRaindex = new RealisticFlashLendingMockRaindex();
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
-        outputToken.mint(address(orderBook), 10 * amount);
+        outputToken.mint(address(raindex), 10 * amount);
         inputToken.mint(exchange, amount);
 
-        GenericPoolOrderBookV6FlashBorrower arb = new GenericPoolOrderBookV6FlashBorrower();
+        GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
 
         bytes memory exchangeData = abi.encode(
             exchange,
@@ -105,7 +105,7 @@ library LibTestFlashBorrowerArb {
             arb: arb,
             inputToken: inputToken,
             outputToken: outputToken,
-            orderBook: orderBook,
+            raindex: raindex,
             takeOrdersConfig: takeOrdersConfig,
             exchangeData: exchangeData
         });

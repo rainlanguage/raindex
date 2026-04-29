@@ -1,5 +1,5 @@
 import { cachedWritableStore } from '@rainlanguage/ui-components';
-import { type Address, type Hex } from '@rainlanguage/orderbook';
+import { type Address, type Hex } from '@rainlanguage/raindex';
 import { get, writable } from 'svelte/store';
 
 /**
@@ -133,15 +133,15 @@ export const activeTokens = cachedWritableStore<Address[]>(
 );
 
 /**
- * A persistent store that holds the currently selected orderbook addresses for filtering.
+ * A persistent store that holds the currently selected raindex addresses for filtering.
  *
  * This setting is saved to local storage and persists between sessions.
  *
  * @default [] - Empty array by default
- * @returns A writable store containing selected orderbook addresses mapped by address
+ * @returns A writable store containing selected raindex addresses mapped by address
  */
-export const activeOrderbookAddresses = cachedWritableStore<Address[]>(
-	'settings.activeOrderbookAddresses',
+export const activeRaindexAddresses = cachedWritableStore<Address[]>(
+	'settings.activeRaindexAddresses',
 	[],
 	JSON.stringify,
 	(str) => {

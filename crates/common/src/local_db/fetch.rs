@@ -6,7 +6,7 @@ use crate::{
 use alloy::primitives::{Address, U256};
 use alloy::rpc::types::Filter;
 use futures::{StreamExt, TryStreamExt};
-use rain_orderbook_bindings::topics::{ORDERBOOK_EVENT_TOPICS, STORE_SET_TOPICS};
+use raindex_bindings::topics::{RAINDEX_EVENT_TOPICS, STORE_SET_TOPICS};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
@@ -140,7 +140,7 @@ async fn collect_logs(
     Ok(events)
 }
 
-pub async fn fetch_orderbook_events(
+pub async fn fetch_raindex_events(
     rpc_client: &RpcClient,
     address: Address,
     from_block: u64,
@@ -151,7 +151,7 @@ pub async fn fetch_orderbook_events(
         .address(address)
         .from_block(from_block)
         .to_block(to_block)
-        .event_signature(ORDERBOOK_EVENT_TOPICS.to_vec());
+        .event_signature(RAINDEX_EVENT_TOPICS.to_vec());
     collect_logs(rpc_client, &filter, config).await
 }
 
@@ -443,7 +443,7 @@ mod tests {
         use alloy::rpc::types::FilterBlockError;
         use alloy::sol_types::SolEvent;
         use httpmock::prelude::*;
-        use rain_orderbook_bindings::{IInterpreterStoreV3::Set, IRaindexV6::AddOrderV3};
+        use raindex_bindings::{IInterpreterStoreV3::Set, IRaindexV6::AddOrderV3};
         use serde_json::json;
         use std::str::FromStr;
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -523,7 +523,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn fetch_orderbook_events_fetches_and_sorts() {
+        async fn fetch_raindex_events_fetches_and_sorts() {
             let server = MockServer::start();
 
             let response_body = json!({
@@ -590,7 +590,7 @@ mod tests {
             });
 
             let addr = Address::from_str("0x0000000000000000000000000000000000000abc").unwrap();
-            let events = fetch_orderbook_events(
+            let events = fetch_raindex_events(
                 &RpcClient::new_with_urls(vec![Url::parse(&server.url("/")).unwrap()]).unwrap(),
                 addr,
                 1,
@@ -757,10 +757,10 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn fetch_orderbook_events_returns_error_for_inverted_range() {
+        async fn fetch_raindex_events_returns_error_for_inverted_range() {
             let addr = Address::from_str("0x0000000000000000000000000000000000000abc").unwrap();
             let err =
-                fetch_orderbook_events(&RpcClient::mock(), addr, 10, 1, &FetchConfig::default())
+                fetch_raindex_events(&RpcClient::mock(), addr, 10, 1, &FetchConfig::default())
                     .await
                     .unwrap_err();
             match err {
@@ -776,7 +776,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn fetch_orderbook_events_sorts_numeric_log_index_within_block() {
+        async fn fetch_raindex_events_sorts_numeric_log_index_within_block() {
             let server = MockServer::start();
 
             let response_body = json!({
@@ -846,7 +846,7 @@ mod tests {
 
             let addr = Address::from_str("0x0000000000000000000000000000000000000abc").unwrap();
 
-            let events = fetch_orderbook_events(
+            let events = fetch_raindex_events(
                 &RpcClient::new_with_urls(vec![Url::parse(&server.url("/")).unwrap()]).unwrap(),
                 addr,
                 1,

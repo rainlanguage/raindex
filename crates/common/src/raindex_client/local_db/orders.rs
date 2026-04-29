@@ -10,7 +10,7 @@ use super::LocalDb;
 use crate::local_db::query::fetch_orders::LocalDbOrder;
 use crate::local_db::query::fetch_vaults::LocalDbVault;
 use crate::local_db::query::LocalDbQueryError;
-use crate::local_db::{query::fetch_orders::FetchOrdersArgs, OrderbookIdentifier};
+use crate::local_db::{query::fetch_orders::FetchOrdersArgs, RaindexIdentifier};
 use crate::raindex_client::local_db::query::fetch_orders::fetch_orders;
 use crate::raindex_client::ClientRef;
 use alloy::primitives::{Address, B256};
@@ -40,12 +40,12 @@ impl<'a> LocalDbOrders<'a> {
     async fn fetch_orders_by_tx_hash(
         &self,
         chain_id: u32,
-        orderbook: Address,
+        raindex: Address,
         tx_hash: B256,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
         let fetch_args = FetchOrdersArgs {
             chain_ids: vec![chain_id],
-            orderbook_addresses: vec![orderbook],
+            raindex_addresses: vec![raindex],
             tx_hash: Some(tx_hash),
             ..FetchOrdersArgs::default()
         };
@@ -139,12 +139,12 @@ impl OrdersDataSource for LocalDbOrders<'_> {
 
     async fn get_by_hash(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         order_hash: &B256,
     ) -> Result<Option<RaindexOrder>, RaindexError> {
         let fetch_args = FetchOrdersArgs {
-            chain_ids: vec![ob_id.chain_id],
-            orderbook_addresses: vec![ob_id.orderbook_address],
+            chain_ids: vec![raindex_id.chain_id],
+            raindex_addresses: vec![raindex_id.raindex_address],
             order_hash: Some(*order_hash),
             ..FetchOrdersArgs::default()
         };
@@ -162,51 +162,61 @@ impl OrdersDataSource for LocalDbOrders<'_> {
     async fn get_added_by_tx_hash(
         &self,
         chain_id: u32,
-        orderbook: Address,
+        raindex: Address,
         tx_hash: B256,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        self.fetch_orders_by_tx_hash(chain_id, orderbook, tx_hash)
+        self.fetch_orders_by_tx_hash(chain_id, raindex, tx_hash)
             .await
     }
 
     async fn get_removed_by_tx_hash(
         &self,
         chain_id: u32,
-        orderbook: Address,
+        raindex: Address,
         tx_hash: B256,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        self.fetch_orders_by_tx_hash(chain_id, orderbook, tx_hash)
+        self.fetch_orders_by_tx_hash(chain_id, raindex, tx_hash)
             .await
     }
 
     async fn trades_list(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         order_hash: &B256,
         start_timestamp: Option<u64>,
         end_timestamp: Option<u64>,
         _page: Option<u16>,
     ) -> Result<Vec<RaindexTrade>, RaindexError> {
-        let local_trades =
-            fetch_order_trades(self.db, ob_id, *order_hash, start_timestamp, end_timestamp).await?;
+        let local_trades = fetch_order_trades(
+            self.db,
+            raindex_id,
+            *order_hash,
+            start_timestamp,
+            end_timestamp,
+        )
+        .await?;
 
         local_trades
             .into_iter()
-            .map(|trade| RaindexTrade::try_from_local_db_trade(ob_id.chain_id, trade))
+            .map(|trade| RaindexTrade::try_from_local_db_trade(raindex_id.chain_id, trade))
             .collect()
     }
 
     async fn trades_count(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         order_hash: &B256,
         start_timestamp: Option<u64>,
         end_timestamp: Option<u64>,
     ) -> Result<u64, RaindexError> {
-        Ok(
-            fetch_order_trades_count(self.db, ob_id, *order_hash, start_timestamp, end_timestamp)
-                .await?,
+        Ok(fetch_order_trades_count(
+            self.db,
+            raindex_id,
+            *order_hash,
+            start_timestamp,
+            end_timestamp,
         )
+        .await?)
     }
 }
 
@@ -297,14 +307,14 @@ mod tests {
             let output_vault_id = U256::from_str("0x0b").unwrap();
             let input_token = address!("0x00000000000000000000000000000000000000aa");
             let output_token = address!("0x00000000000000000000000000000000000000bb");
-            let orderbook_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
+            let raindex_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
 
             let input_vault = LocalDbVault {
                 chain_id: 1,
                 vault_id: input_vault_id,
                 token: input_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token A".to_string(),
                 token_symbol: "TKNA".to_string(),
                 token_decimals: 18,
@@ -319,7 +329,7 @@ mod tests {
                 vault_id: output_vault_id,
                 token: output_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token B".to_string(),
                 token_symbol: "TKNB".to_string(),
                 token_decimals: 6,
@@ -336,7 +346,7 @@ mod tests {
                     "vaultId": input_vault.vault_id,
                     "token": input_vault.token,
                     "owner": input_vault.owner,
-                    "orderbookAddress": input_vault.orderbook_address,
+                    "raindexAddress": input_vault.raindex_address,
                     "tokenName": input_vault.token_name,
                     "tokenSymbol": input_vault.token_symbol,
                     "tokenDecimals": input_vault.token_decimals,
@@ -353,7 +363,7 @@ mod tests {
                     "vaultId": output_vault.vault_id,
                     "token": output_vault.token,
                     "owner": output_vault.owner,
-                    "orderbookAddress": output_vault.orderbook_address,
+                    "raindexAddress": output_vault.raindex_address,
                     "tokenName": output_vault.token_name,
                     "tokenSymbol": output_vault.token_symbol,
                     "tokenDecimals": output_vault.token_decimals,
@@ -369,7 +379,7 @@ mod tests {
                 owner,
                 block_timestamp: 123456,
                 block_number: 654321,
-                orderbook_address,
+                raindex_address,
                 order_bytes: order_bytes,
                 transaction_hash: transaction_hash.clone(),
                 inputs: Some(inputs_json.to_string()),
@@ -406,7 +416,7 @@ mod tests {
             assert!(order.active());
             assert_eq!(order.trades_count(), local_order.trade_count as u16);
             assert_eq!(order.meta(), Some(meta_str));
-            assert_eq!(order.orderbook(), orderbook_address.to_string());
+            assert_eq!(order.raindex(), raindex_address.to_string());
             let tx = order
                 .transaction()
                 .expect("transaction should be populated");
@@ -449,8 +459,8 @@ mod tests {
                 Some(input_vault.token_symbol.clone())
             );
             assert_eq!(
-                input_vaults[0].orderbook(),
-                input_vault.orderbook_address.to_string()
+                input_vaults[0].raindex(),
+                input_vault.raindex_address.to_string()
             );
 
             let output_vaults = order.outputs_list().items();
@@ -460,8 +470,8 @@ mod tests {
                 Some(output_vault.token_symbol.clone())
             );
             assert_eq!(
-                output_vaults[0].orderbook(),
-                output_vault.orderbook_address.to_string()
+                output_vaults[0].raindex(),
+                output_vault.raindex_address.to_string()
             );
         }
 
@@ -479,14 +489,14 @@ mod tests {
             let output_vault_id = U256::from_str("0x0b").unwrap();
             let input_token = address!("0x00000000000000000000000000000000000000aa");
             let output_token = address!("0x00000000000000000000000000000000000000bb");
-            let orderbook_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
+            let raindex_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
 
             let input_vault = LocalDbVault {
                 chain_id: 1,
                 vault_id: input_vault_id,
                 token: input_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token A".to_string(),
                 token_symbol: "TKNA".to_string(),
                 token_decimals: 18,
@@ -501,7 +511,7 @@ mod tests {
                 vault_id: output_vault_id,
                 token: output_token,
                 owner,
-                orderbook_address,
+                raindex_address,
                 token_name: "Token B".to_string(),
                 token_symbol: "TKNB".to_string(),
                 token_decimals: 6,
@@ -518,7 +528,7 @@ mod tests {
                     "vaultId": input_vault.vault_id,
                     "token": input_vault.token,
                     "owner": input_vault.owner,
-                    "orderbookAddress": input_vault.orderbook_address,
+                    "raindexAddress": input_vault.raindex_address,
                     "tokenName": input_vault.token_name,
                     "tokenSymbol": input_vault.token_symbol,
                     "tokenDecimals": input_vault.token_decimals,
@@ -535,7 +545,7 @@ mod tests {
                     "vaultId": output_vault.vault_id,
                     "token": output_vault.token,
                     "owner": output_vault.owner,
-                    "orderbookAddress": output_vault.orderbook_address,
+                    "raindexAddress": output_vault.raindex_address,
                     "tokenName": output_vault.token_name,
                     "tokenSymbol": output_vault.token_symbol,
                     "tokenDecimals": output_vault.token_decimals,
@@ -551,7 +561,7 @@ mod tests {
                 owner,
                 block_timestamp: 123456,
                 block_number: 654321,
-                orderbook_address,
+                raindex_address,
                 order_bytes: order_bytes.clone(),
                 transaction_hash: transaction_hash.clone(),
                 inputs: Some(inputs_json.to_string()),
@@ -571,7 +581,7 @@ mod tests {
 
             let order = client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(42161, orderbook_address),
+                    &RaindexIdentifier::new(42161, raindex_address),
                     order_hash.clone(),
                 )
                 .await
@@ -587,7 +597,7 @@ mod tests {
             assert!(order.active());
             assert_eq!(order.trades_count(), local_order.trade_count as u16);
             assert_eq!(order.meta(), Some(meta.to_string()));
-            assert_eq!(order.orderbook(), orderbook_address.to_string());
+            assert_eq!(order.raindex(), raindex_address.to_string());
         }
 
         #[wasm_bindgen_test]
@@ -599,7 +609,7 @@ mod tests {
                 b256!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
             let order_bytes =
                 bytes!("0x00000000000000000000000000000000000000000000000000000000000000ff");
-            let orderbook_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
+            let raindex_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
 
             let local_order = LocalDbOrder {
                 chain_id: 137,
@@ -607,7 +617,7 @@ mod tests {
                 owner,
                 block_timestamp: 123456,
                 block_number: 654321,
-                orderbook_address,
+                raindex_address,
                 order_bytes: order_bytes.clone(),
                 transaction_hash,
                 inputs: None,
@@ -627,7 +637,7 @@ mod tests {
             let orders = client
                 .get_add_orders_for_transaction_wasm_binding(
                     137,
-                    orderbook_address.to_string(),
+                    raindex_address.to_string(),
                     transaction_hash.to_string(),
                     Some(1),
                     Some(1),
@@ -656,7 +666,7 @@ mod tests {
                 b256!("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
             let order_bytes =
                 bytes!("0x00000000000000000000000000000000000000000000000000000000000000ee");
-            let orderbook_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
+            let raindex_address = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
 
             let local_order = LocalDbOrder {
                 chain_id: 137,
@@ -664,7 +674,7 @@ mod tests {
                 owner,
                 block_timestamp: 789012,
                 block_number: 210987,
-                orderbook_address,
+                raindex_address,
                 order_bytes: order_bytes.clone(),
                 transaction_hash,
                 inputs: None,
@@ -684,7 +694,7 @@ mod tests {
             let orders = client
                 .get_remove_orders_for_transaction_wasm_binding(
                     137,
-                    orderbook_address.to_string(),
+                    raindex_address.to_string(),
                     transaction_hash.to_string(),
                     Some(1),
                     Some(1),

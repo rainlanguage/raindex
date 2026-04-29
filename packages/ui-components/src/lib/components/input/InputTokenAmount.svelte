@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { InputAddon, Button } from 'flowbite-svelte';
-	import { Float } from '@rainlanguage/orderbook';
+	import { Float } from '@rainlanguage/raindex';
 
 	export let symbol: string | undefined = undefined;
 	export let maxValue: Float | undefined = undefined;

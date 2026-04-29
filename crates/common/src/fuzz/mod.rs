@@ -1,5 +1,5 @@
 pub use rain_interpreter_eval::trace::*;
-use rain_orderbook_app_settings::chart::ChartCfg;
+use raindex_app_settings::chart::ChartCfg;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

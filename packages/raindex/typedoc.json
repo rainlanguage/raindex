@@ -1,0 +1,28 @@
+{
+	"$schema": "https://typedoc.org/schema.json",
+	"entryPoints": ["./dist/esm/index.d.ts"],
+	"out": "./docs",
+	"name": "Raindex SDK Documentation",
+	"readme": "./README.md",
+	"includeVersion": false,
+	"excludeExternals": true,
+	"excludePrivate": true,
+	"excludeProtected": true,
+	"excludeNotDocumented": false,
+	"hideGenerator": true,
+	"theme": "default",
+	"navigationLinks": {
+		"GitHub": "https://github.com/rainlanguage/raindex",
+		"NPM": "https://www.npmjs.com/package/@rainlanguage/raindex"
+	},
+	"kindSortOrder": [
+		"Class",
+		"Function",
+		"Interface",
+		"Enum",
+		"Variable",
+		"Property",
+		"Method",
+		"Accessor"
+	]
+}

@@ -5,8 +5,8 @@ use crate::local_db::pipeline::adapters::bootstrap::BootstrapPipeline;
 use crate::local_db::pipeline::engine::SyncEngine;
 use crate::local_db::pipeline::{EventsPipeline, StatusBus, TokensPipeline, WindowPipeline};
 use crate::local_db::LocalDbError;
-use rain_orderbook_app_settings::orderbook::OrderbookCfg;
-use rain_orderbook_app_settings::remote::manifest::ManifestMap;
+use raindex_app_settings::raindex::RaindexCfg;
+use raindex_app_settings::remote::manifest::ManifestMap;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -18,7 +18,7 @@ pub type ManifestFuture = PinnedDbFuture<ManifestMap>;
 pub type DumpFuture = PinnedDbFuture<String>;
 
 pub type ManifestFetcher =
-    Arc<dyn Fn(&HashMap<String, OrderbookCfg>) -> ManifestFuture + Send + Sync>;
+    Arc<dyn Fn(&HashMap<String, RaindexCfg>) -> ManifestFuture + Send + Sync>;
 pub type DumpDownloader = Arc<dyn Fn(&Url) -> DumpFuture + Send + Sync>;
 pub type EngineBuilder<B, W, E, T, A, S> = Arc<
     dyn Fn(&RunnerTarget) -> Result<EnginePipelines<B, W, E, T, A, S>, LocalDbError> + Send + Sync,
@@ -64,9 +64,9 @@ where
 
     pub async fn fetch_manifests(
         &self,
-        orderbooks: &HashMap<String, OrderbookCfg>,
+        raindexes: &HashMap<String, RaindexCfg>,
     ) -> Result<ManifestMap, LocalDbError> {
-        (self.manifest_fetcher)(orderbooks).await
+        (self.manifest_fetcher)(raindexes).await
     }
 
     pub async fn download_dump(&self, url: &Url) -> Result<String, LocalDbError> {
@@ -123,9 +123,9 @@ where
 }
 
 pub fn default_manifest_fetcher() -> ManifestFetcher {
-    Arc::new(|orderbooks: &HashMap<String, OrderbookCfg>| {
-        let orderbooks = orderbooks.clone();
-        Box::pin(async move { get_manifests(&orderbooks).await })
+    Arc::new(|raindexes: &HashMap<String, RaindexCfg>| {
+        let raindexes = raindexes.clone();
+        Box::pin(async move { get_manifests(&raindexes).await })
     })
 }
 
@@ -150,15 +150,15 @@ mod tests {
     use crate::local_db::pipeline::{FinalityConfig, SyncConfig, SyncPhase, WindowOverrides};
     use crate::local_db::query::sql_statement_batch::SqlStatementBatch;
     use crate::local_db::query::LocalDbQueryExecutor;
-    use crate::local_db::{LocalDbError, OrderbookIdentifier};
+    use crate::local_db::{LocalDbError, RaindexIdentifier};
     use crate::rpc_client::LogEntryResponse;
     use alloy::primitives::{address, b256, Address, B256};
     use async_trait::async_trait;
-    use rain_orderbook_app_settings::local_db_manifest::MANIFEST_VERSION;
-    use rain_orderbook_app_settings::local_db_remotes::LocalDbRemoteCfg;
-    use rain_orderbook_app_settings::orderbook::OrderbookCfg;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::default_document;
+    use raindex_app_settings::local_db_manifest::MANIFEST_VERSION;
+    use raindex_app_settings::local_db_remotes::LocalDbRemoteCfg;
+    use raindex_app_settings::raindex::RaindexCfg;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::default_document;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -178,13 +178,13 @@ mod tests {
     fn sample_target() -> RunnerTarget {
         let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         RunnerTarget {
-            orderbook_key: "sample".to_string(),
+            raindex_key: "sample".to_string(),
             manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),
             network_key: "network-a".to_string(),
             inputs: SyncInputs {
-                ob_id: OrderbookIdentifier {
+                raindex_id: RaindexIdentifier {
                     chain_id: 1,
-                    orderbook_address: address!("0000000000000000000000000000000000000001"),
+                    raindex_address: address!("0000000000000000000000000000000000000001"),
                 },
                 metadata_rpcs: vec![Url::parse("https://rpc.example.com").unwrap()],
                 cfg: SyncConfig {
@@ -246,7 +246,7 @@ mod tests {
         async fn inspect_state<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _raindex_id: &RaindexIdentifier,
         ) -> Result<BootstrapState, LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -268,10 +268,10 @@ mod tests {
             Ok(())
         }
 
-        async fn clear_orderbook_data<DB>(
+        async fn clear_raindex_data<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
         ) -> Result<(), LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -307,7 +307,7 @@ mod tests {
         async fn compute<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
             _cfg: &SyncConfig,
             latest_block: u64,
         ) -> Result<(u64, u64), LocalDbError>
@@ -324,9 +324,9 @@ mod tests {
             Ok(0)
         }
 
-        async fn fetch_orderbook(
+        async fn fetch_raindex(
             &self,
-            _orderbook_address: Address,
+            _raindex_address: Address,
             _from_block: u64,
             _to_block: u64,
             _cfg: &crate::local_db::FetchConfig,
@@ -366,7 +366,7 @@ mod tests {
         async fn load_existing<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _raindex_id: &RaindexIdentifier,
             _token_addrs_lower: &[Address],
         ) -> Result<
             Vec<crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow>,
@@ -426,7 +426,7 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let manifest_map = Arc::new(HashMap::new());
         let counter_fetcher = counter.clone();
-        let fetcher: ManifestFetcher = Arc::new(move |_orderbooks| {
+        let fetcher: ManifestFetcher = Arc::new(move |_raindexes| {
             let counter = counter_fetcher.clone();
             let manifest_map = Arc::clone(&manifest_map);
             Box::pin(async move {
@@ -453,15 +453,15 @@ mod tests {
             }),
         );
 
-        let orderbooks: HashMap<String, OrderbookCfg> = HashMap::new();
-        let result = block_on(environment.fetch_manifests(&orderbooks)).expect("manifest map");
+        let raindexes: HashMap<String, RaindexCfg> = HashMap::new();
+        let result = block_on(environment.fetch_manifests(&raindexes)).expect("manifest map");
         assert!(result.is_empty());
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }
 
     #[test]
     fn fetch_manifests_propagates_errors() {
-        let fetcher: ManifestFetcher = Arc::new(|_orderbooks| {
+        let fetcher: ManifestFetcher = Arc::new(|_raindexes| {
             Box::pin(async { Err(LocalDbError::HttpStatus { status: 500 }) })
         });
         let downloader: DumpDownloader = Arc::new(|_url| Box::pin(async { Ok(String::new()) }));
@@ -479,8 +479,8 @@ mod tests {
                 ))
             }),
         );
-        let orderbooks: HashMap<String, OrderbookCfg> = HashMap::new();
-        let err = block_on(environment.fetch_manifests(&orderbooks)).unwrap_err();
+        let raindexes: HashMap<String, RaindexCfg> = HashMap::new();
+        let err = block_on(environment.fetch_manifests(&raindexes)).unwrap_err();
         match err {
             LocalDbError::HttpStatus { status } => assert_eq!(status, 500),
             other => panic!("unexpected error {other:?}"),
@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn download_dump_uses_environment_downloader() {
         let fetcher: ManifestFetcher =
-            Arc::new(|_orderbooks| Box::pin(async { Ok(HashMap::new()) }));
+            Arc::new(|_raindexes| Box::pin(async { Ok(HashMap::new()) }));
         let downloader: DumpDownloader =
             Arc::new(|_url| Box::pin(async { Ok("hello".to_string()) }));
         let environment = RunnerEnvironment::new(
@@ -516,7 +516,7 @@ mod tests {
     #[test]
     fn download_dump_propagates_errors() {
         let fetcher: ManifestFetcher =
-            Arc::new(|_orderbooks| Box::pin(async { Ok(HashMap::new()) }));
+            Arc::new(|_raindexes| Box::pin(async { Ok(HashMap::new()) }));
         let downloader: DumpDownloader = Arc::new(|_url| {
             Box::pin(async {
                 Err(LocalDbError::IoError(std::io::Error::other(
@@ -548,7 +548,7 @@ mod tests {
         let marker = Arc::new(AtomicUsize::new(0));
         let marker_clone = marker.clone();
         let environment = RunnerEnvironment::new(
-            Arc::new(|_orderbooks| Box::pin(async { Ok(HashMap::new()) })),
+            Arc::new(|_raindexes| Box::pin(async { Ok(HashMap::new()) })),
             Arc::new(|_url| Box::pin(async { Ok("dump".into()) })),
             Arc::new(move |_target: &RunnerTarget| {
                 marker_clone.fetch_add(1, Ordering::SeqCst);
@@ -608,7 +608,7 @@ mod tests {
             StubApply,
             StubStatus,
         > = RunnerEnvironment::new(
-            Arc::new(|_orderbooks| Box::pin(async { Ok(HashMap::new()) })),
+            Arc::new(|_raindexes| Box::pin(async { Ok(HashMap::new()) })),
             Arc::new(|_url| Box::pin(async { Ok(String::new()) })),
             builder,
         );
@@ -623,7 +623,7 @@ mod tests {
     fn runner_environment_clone_shares_dependencies() {
         let fetch_counter = Arc::new(AtomicUsize::new(0));
         let fetch_counter_clone = fetch_counter.clone();
-        let fetcher: ManifestFetcher = Arc::new(move |_orderbooks| {
+        let fetcher: ManifestFetcher = Arc::new(move |_raindexes| {
             let counter = fetch_counter_clone.clone();
             Box::pin(async move {
                 counter.fetch_add(1, Ordering::SeqCst);
@@ -689,8 +689,8 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: network-a
     subgraph: network-a
@@ -702,19 +702,19 @@ orderbooks:
     }
 
     #[cfg(not(target_family = "wasm"))]
-    fn update_remote_url(orderbooks: &mut HashMap<String, OrderbookCfg>, key: &str, url: &Url) {
-        if let Some(orderbook) = orderbooks.get_mut(key) {
+    fn update_remote_url(raindexes: &mut HashMap<String, RaindexCfg>, key: &str, url: &Url) {
+        if let Some(raindex) = raindexes.get_mut(key) {
             let remote = LocalDbRemoteCfg {
                 document: default_document(),
-                key: orderbook
+                key: raindex
                     .local_db_remote
                     .as_ref()
-                    .expect("orderbook remote present")
+                    .expect("raindex has remote")
                     .key
                     .clone(),
                 url: url.clone(),
             };
-            orderbook.local_db_remote = Some(Arc::new(remote));
+            raindex.local_db_remote = Some(Arc::new(remote));
         }
     }
 
@@ -725,11 +725,11 @@ orderbooks:
         let manifest_yaml = format!(
             r#"
 manifest-version: {version}
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x00000000000000000000000000000000000000a1"
         dump-url: "{base}/dump.sql.gz"
         end-block: 123
@@ -749,10 +749,10 @@ networks:
 
         let mut parsed = parse_runner_settings(&sample_settings_yaml()).expect("sample settings");
         let manifest_url = Url::parse(&server.base_url()).unwrap();
-        update_remote_url(&mut parsed.orderbooks, "ob-a", &manifest_url);
+        update_remote_url(&mut parsed.raindexes, "raindex-a", &manifest_url);
 
         let fetcher = default_manifest_fetcher();
-        let manifests = block_on(fetcher(&parsed.orderbooks)).expect("manifest map");
+        let manifests = block_on(fetcher(&parsed.raindexes)).expect("manifest map");
         assert_eq!(manifests.len(), 1);
         assert!(manifests.contains_key(&manifest_url));
     }

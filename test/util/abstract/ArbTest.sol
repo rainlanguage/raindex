@@ -7,16 +7,16 @@ import {Test} from "forge-std/Test.sol";
 import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import {Refundoor} from "test/util/concrete/Refundoor.sol";
 import {
-    FlashLendingMockOrderBook,
+    FlashLendingMockRaindex,
     OrderV4,
     TakeOrderConfigV4,
     IOV2,
     SignedContextV1,
     EvaluableV4
-} from "test/util/concrete/FlashLendingMockOrderBook.sol";
+} from "test/util/concrete/FlashLendingMockRaindex.sol";
 import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
-import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
+import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 contract Token is ERC20 {
     constructor() ERC20("Token", "TKN") {}
@@ -30,7 +30,7 @@ abstract contract ArbTest is Test {
     Token immutable iTakerInput;
     Token immutable iTakerOutput;
     address immutable iRefundoor;
-    FlashLendingMockOrderBook immutable iOrderBook;
+    FlashLendingMockRaindex immutable iRaindex;
     address payable immutable iArb;
 
     function buildArb() internal virtual returns (address payable);
@@ -45,12 +45,12 @@ abstract contract ArbTest is Test {
         vm.label(address(iTakerOutput), "iTakerOutput");
         iRefundoor = address(new Refundoor());
         vm.label(iRefundoor, "iRefundoor");
-        // Deploy the mock then etch its code at the deterministic orderbook
+        // Deploy the mock then etch its code at the deterministic raindex
         // address so that onFlashLoan's BadLender check passes.
-        FlashLendingMockOrderBook mockOb = new FlashLendingMockOrderBook();
-        vm.etch(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS, address(mockOb).code);
-        iOrderBook = FlashLendingMockOrderBook(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
-        vm.label(address(iOrderBook), "iOrderBook");
+        FlashLendingMockRaindex mockRaindex = new FlashLendingMockRaindex();
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        iRaindex = FlashLendingMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
+        vm.label(address(iRaindex), "iRaindex");
 
         iArb = buildArb();
         vm.label(iArb, "iArb");

@@ -4,10 +4,10 @@ mod compose;
 mod detail;
 mod list;
 mod listorderfrontmatterkeys;
-mod orderbook_address;
+mod raindex_address;
 mod remove;
 
-use crate::commands::order::orderbook_address::OrderbookAddress;
+use crate::commands::order::raindex_address::RaindexAddress;
 use crate::execute::Execute;
 use add::CliOrderAddArgs;
 use anyhow::Result;
@@ -44,10 +44,10 @@ pub enum Order {
     Calldata(AddOrderCalldata),
 
     #[command(
-        about = "Get the orderbook address for a given order",
-        alias = "ob-addr"
+        about = "Get the raindex address for a given order",
+        alias = "raindex-addr"
     )]
-    OrderbookAddress(OrderbookAddress),
+    RaindexAddress(RaindexAddress),
 
     #[command(about = "Get frontmatter keys from a dotrain file", alias = "keys")]
     ListOrderFrontmatterKeys(ListOrderFrontmatterKeys),
@@ -62,7 +62,7 @@ impl Execute for Order {
             Order::Remove(remove) => remove.execute().await,
             Order::Compose(compose) => compose.execute().await,
             Order::Calldata(calldata) => calldata.execute().await,
-            Order::OrderbookAddress(orderbook_address) => orderbook_address.execute().await,
+            Order::RaindexAddress(raindex_address) => raindex_address.execute().await,
             Order::ListOrderFrontmatterKeys(keys) => keys.execute().await,
         }
     }

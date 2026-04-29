@@ -51,7 +51,7 @@ impl SgTrade {
 mod tests {
     use super::*;
     use crate::types::common::{
-        SgBigInt, SgBytes, SgOrderbook, SgTradeEvent, SgTradeStructPartialOrder,
+        SgBigInt, SgBytes, SgRaindex, SgTradeEvent, SgTradeStructPartialOrder,
         SgTradeVaultBalanceChange, SgTransaction, SgVaultBalanceChangeVault,
     };
     use crate::utils::float::*;
@@ -185,7 +185,7 @@ mod tests {
                 block_number: SgBigInt("".to_string()),
                 timestamp: SgBigInt("".to_string()),
             },
-            orderbook: SgOrderbook {
+            raindex: SgRaindex {
                 id: SgBytes("".to_string()),
             },
             trade: SgTradeRef {
@@ -213,7 +213,7 @@ mod tests {
                 block_number: SgBigInt("".to_string()),
                 timestamp: SgBigInt("".to_string()),
             },
-            orderbook: SgOrderbook {
+            raindex: SgRaindex {
                 id: SgBytes("".to_string()),
             },
             trade: SgTradeRef {
@@ -241,7 +241,7 @@ mod tests {
                 order_hash: SgBytes("".to_string()),
             },
             timestamp: SgBigInt("".to_string()),
-            orderbook: SgOrderbook {
+            raindex: SgRaindex {
                 id: SgBytes("".to_string()),
             },
         }

@@ -2,13 +2,14 @@ use crate::local_db::query::fetch_last_synced_block::{
     fetch_last_synced_block_stmt, SyncStatusResponse,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 
 pub async fn fetch_last_synced_block<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
 ) -> Result<Vec<SyncStatusResponse>, LocalDbQueryError> {
-    exec.query_json(&fetch_last_synced_block_stmt(ob_id)).await
+    exec.query_json(&fetch_last_synced_block_stmt(raindex_id))
+        .await
 }
 
 #[cfg(target_family = "wasm")]
@@ -28,13 +29,13 @@ mod wasm {
         #[wasm_export(param_description = "JavaScript function to execute database queries")]
         db_callback: js_sys::Function,
         #[wasm_export(js_name = "chainId")] chain_id: u32,
-        #[wasm_export(js_name = "orderbookAddress", unchecked_param_type = "Address")]
-        orderbook_address: String,
+        #[wasm_export(js_name = "raindexAddress", unchecked_param_type = "Address")]
+        raindex_address: String,
     ) -> Result<Vec<SyncStatusResponse>, LocalDbError> {
         let exec = JsCallbackExecutor::from_ref(&db_callback);
         fetch_last_synced_block(
             &exec,
-            &OrderbookIdentifier::new(chain_id, Address::from_str(&orderbook_address)?),
+            &RaindexIdentifier::new(chain_id, Address::from_str(&raindex_address)?),
         )
         .await
         .map_err(LocalDbError::from)
@@ -54,14 +55,12 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn wrapper_uses_raw_sql_exactly() {
-        let expected_stmt =
-            fetch_last_synced_block_stmt(&OrderbookIdentifier::new(0, Address::ZERO));
+        let expected_stmt = fetch_last_synced_block_stmt(&RaindexIdentifier::new(0, Address::ZERO));
         let store = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
         let callback = create_sql_capturing_callback("[]", store.clone());
         let exec = JsCallbackExecutor::from_ref(&callback);
         let res =
-            super::fetch_last_synced_block(&exec, &OrderbookIdentifier::new(0, Address::ZERO))
-                .await;
+            super::fetch_last_synced_block(&exec, &RaindexIdentifier::new(0, Address::ZERO)).await;
         assert!(res.is_ok());
         assert_eq!(store.borrow().clone().0, expected_stmt.sql);
     }
