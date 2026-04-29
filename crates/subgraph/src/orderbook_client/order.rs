@@ -1,4 +1,9 @@
 use super::*;
+use alloy::{
+    hex,
+    primitives::{B256, U256},
+};
+use rain_math_float::Float;
 
 impl OrderbookSubgraphClient {
     /// Fetch single order
@@ -46,8 +51,11 @@ impl OrderbookSubgraphClient {
         let has_input_tokens = tokens.is_some_and(|tokens| !tokens.inputs.is_empty());
         let has_output_tokens = tokens.is_some_and(|tokens| !tokens.outputs.is_empty());
         let has_token_filters = has_input_tokens || has_output_tokens;
+        let has_positive_output_vault_balance =
+            filter_args.has_positive_output_vault_balance == Some(true);
 
-        let filters = if has_basic_filters || has_token_filters {
+        let filters = if has_basic_filters || has_token_filters || has_positive_output_vault_balance
+        {
             let mut filters = SgOrdersListQueryFilters {
                 owner_in: filter_args.owners.clone(),
                 active: filter_args.active,
@@ -61,12 +69,20 @@ impl OrderbookSubgraphClient {
                 let tokens = tokens.unwrap();
                 filters.inputs_ = Some(SgVaultTokenFilter {
                     token_in: tokens.inputs.clone(),
+                    vault_id_not: None,
+                    balance_gt: None,
                 });
             }
-            if has_output_tokens {
-                let tokens = tokens.unwrap();
+            if has_output_tokens || has_positive_output_vault_balance {
+                let output_tokens = tokens
+                    .map(|tokens| tokens.outputs.clone())
+                    .unwrap_or_default();
                 filters.outputs_ = Some(SgVaultTokenFilter {
-                    token_in: tokens.outputs.clone(),
+                    token_in: output_tokens,
+                    vault_id_not: has_positive_output_vault_balance
+                        .then(|| SgBytes(hex::encode_prefixed(B256::from(U256::ZERO)))),
+                    balance_gt: has_positive_output_vault_balance
+                        .then(|| SgBytes(Float::zero().expect("zero float").as_hex())),
                 });
             }
 
@@ -123,6 +139,7 @@ impl OrderbookSubgraphClient {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         })
         .await
     }
@@ -483,6 +500,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -517,6 +535,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -549,6 +568,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -575,6 +595,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -685,6 +706,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         }
     }
 
@@ -827,6 +849,7 @@ mod tests {
                 outputs: vec![],
             }),
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -863,6 +886,7 @@ mod tests {
                 outputs: vec![token_address.clone()],
             }),
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -875,6 +899,40 @@ mod tests {
                 .path("/")
                 .body_contains("\"outputs_\":")
                 .body_contains(format!("\"token_in\":[\"{}\"]", token_address));
+            then.status(200)
+                .json_body(json!({"data": {"orders": expected_orders}}));
+        });
+
+        let result = client.orders_list(filter_args, pagination_args).await;
+        assert!(result.is_ok());
+        let orders = result.unwrap();
+        assert_eq!(orders.len(), expected_orders.len());
+    }
+
+    #[tokio::test]
+    async fn test_orders_list_with_positive_output_vault_balance_filter() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let filter_args = SgOrdersListFilterArgs {
+            owners: vec![],
+            active: None,
+            order_hash: None,
+            tokens: None,
+            orderbooks: vec![],
+            has_positive_output_vault_balance: Some(true),
+        };
+        let pagination_args = SgPaginationArgs {
+            page: 1,
+            page_size: 10,
+        };
+        let expected_orders = vec![default_sg_order()];
+
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains("\"outputs_\":")
+                .body_contains("\"vaultId_not\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"")
+                .body_contains("\"balance_gt\":");
             then.status(200)
                 .json_body(json!({"data": {"orders": expected_orders}}));
         });
@@ -900,6 +958,7 @@ mod tests {
                 outputs: vec![token2.clone()],
             }),
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -939,6 +998,7 @@ mod tests {
                 outputs: vec![],
             }),
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -974,6 +1034,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![orderbook_address.clone()],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -1007,6 +1068,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![ob1.clone(), ob2.clone()],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
@@ -1038,6 +1100,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         };
         let pagination_args = SgPaginationArgs {
             page: 1,
