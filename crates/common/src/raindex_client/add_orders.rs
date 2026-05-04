@@ -20,13 +20,13 @@ enum PollError {
 impl RaindexClient {
     /// Fetches orders that were added in a specific transaction
     ///
-    /// Retrieves all orders created within a single blockchain transaction, useful
-    /// for tracking order deployment.
+    /// Retrieves all orders created within a single blockchain transaction across
+    /// all configured orderbooks for the given chain, useful for tracking order deployment.
     ///
     /// ## Examples
     ///
     /// ```javascript
-    /// const result = await client.getAddOrdersForTransaction(1, "0x1234567890abcdef1234567890abcdef12345678");
+    /// const result = await client.getAddOrdersForTransaction(1, "0xabc...");
     /// if (result.error) {
     ///   console.error("Cannot fetch added orders:", result.error.readableMsg);
     ///   return;
@@ -45,12 +45,6 @@ impl RaindexClient {
         #[wasm_export(js_name = "chainId", param_description = "Chain ID for the network")]
         chain_id: u32,
         #[wasm_export(
-            js_name = "orderbookAddress",
-            param_description = "Orderbook contract address",
-            unchecked_param_type = "Hex"
-        )]
-        orderbook_address: String,
-        #[wasm_export(
             js_name = "txHash",
             param_description = "Transaction hash",
             unchecked_param_type = "Hex"
@@ -67,11 +61,9 @@ impl RaindexClient {
         )]
         interval_ms: Option<u32>,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let orderbook_address = Address::from_str(&orderbook_address)?;
         let tx_hash = B256::from_str(&tx_hash)?;
         self.get_add_orders_for_transaction(
             chain_id,
-            orderbook_address,
             tx_hash,
             max_attempts.map(|v| v as usize),
             interval_ms.map(|v| v as u64),
@@ -80,15 +72,18 @@ impl RaindexClient {
     }
 }
 impl RaindexClient {
-    async fn get_add_orders_for_transaction(
+    pub async fn get_add_orders_for_transaction(
         &self,
         chain_id: u32,
-        orderbook_address: Address,
         tx_hash: B256,
         max_attempts: Option<usize>,
         interval_ms: Option<u64>,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
         let raindex_client = ClientRef::new(self.clone());
+
+        let orderbooks = self.orderbook_yaml.get_orderbooks_by_chain_id(chain_id)?;
+        let orderbook_addresses: Vec<Address> =
+            orderbooks.iter().map(|ob| ob.address).collect();
 
         let attempts = max_attempts
             .unwrap_or(DEFAULT_ADD_ORDER_POLL_ATTEMPTS)
@@ -100,14 +95,18 @@ impl RaindexClient {
                 let local_source = LocalDbOrders::new(&local_db, raindex_client.clone());
                 let local_result = retry_with_constant_interval(
                     || async {
-                        let orders = local_source
-                            .get_added_by_tx_hash(chain_id, orderbook_address, tx_hash)
-                            .await
-                            .map_err(PollError::Inner)?;
-                        if orders.is_empty() {
+                        let mut all_orders = Vec::new();
+                        for &orderbook_address in &orderbook_addresses {
+                            let orders = local_source
+                                .get_added_by_tx_hash(chain_id, orderbook_address, tx_hash)
+                                .await
+                                .map_err(PollError::Inner)?;
+                            all_orders.extend(orders);
+                        }
+                        if all_orders.is_empty() {
                             Err(PollError::Empty)
                         } else {
-                            Ok(orders)
+                            Ok(all_orders)
                         }
                     },
                     attempts,
@@ -132,20 +131,24 @@ impl RaindexClient {
                 let subgraph_source = SubgraphOrders::new(self);
                 let subgraph_result = retry_with_constant_interval(
                     || async {
-                        let orders = match subgraph_source
-                            .get_added_by_tx_hash(chain_id, orderbook_address, tx_hash)
-                            .await
-                        {
-                            Ok(orders) => orders,
-                            Err(RaindexError::OrderbookSubgraphClientError(
-                                rain_orderbook_subgraph_client::OrderbookSubgraphClientError::Empty,
-                            )) => return Err(PollError::Empty),
-                            Err(e) => return Err(PollError::Inner(e)),
-                        };
-                        if orders.is_empty() {
+                        let mut all_orders = Vec::new();
+                        for &orderbook_address in &orderbook_addresses {
+                            let orders = match subgraph_source
+                                .get_added_by_tx_hash(chain_id, orderbook_address, tx_hash)
+                                .await
+                            {
+                                Ok(orders) => orders,
+                                Err(RaindexError::OrderbookSubgraphClientError(
+                                    rain_orderbook_subgraph_client::OrderbookSubgraphClientError::Empty,
+                                )) => continue,
+                                Err(e) => return Err(PollError::Inner(e)),
+                            };
+                            all_orders.extend(orders);
+                        }
+                        if all_orders.is_empty() {
                             Err(PollError::Empty)
                         } else {
-                            Ok(orders)
+                            Ok(all_orders)
                         }
                     },
                     attempts,
@@ -178,9 +181,7 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
         use super::*;
-        use crate::raindex_client::tests::{
-            get_test_yaml, new_with_local_db, CHAIN_ID_1_ORDERBOOK_ADDRESS,
-        };
+        use crate::raindex_client::tests::{get_test_yaml, new_with_local_db};
         use crate::{
             local_db::query::{
                 fetch_orders::LocalDbOrder, FromDbJson, LocalDbQueryError, LocalDbQueryExecutor,
@@ -364,7 +365,6 @@ mod tests {
             let res = raindex_client
                 .get_add_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     None,
                     None,
@@ -549,7 +549,6 @@ mod tests {
             let res = raindex_client
                 .get_add_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(DEFAULT_ADD_ORDER_POLL_ATTEMPTS),
                     Some(10),
@@ -583,7 +582,6 @@ mod tests {
             let err = raindex_client
                 .get_add_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(DEFAULT_ADD_ORDER_POLL_ATTEMPTS),
                     Some(10),
@@ -603,8 +601,6 @@ mod tests {
         async fn test_get_transaction_add_orders_prefers_local_db() {
             let tx_hash =
                 b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
-            let orderbook_address =
-                Address::from_str("0x0987654321098765432109876543210987654321").unwrap();
             let owner = Address::from_str("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 
             let local_order = LocalDbOrder {
@@ -615,7 +611,10 @@ mod tests {
                 owner,
                 block_timestamp: 1_000,
                 block_number: 50,
-                orderbook_address,
+                orderbook_address: Address::from_str(
+                    "0x0987654321098765432109876543210987654321",
+                )
+                .unwrap(),
                 order_bytes: Bytes::from_str("0x01").unwrap(),
                 transaction_hash: tx_hash,
                 inputs: None,
@@ -651,7 +650,7 @@ mod tests {
             .await;
 
             let res = client
-                .get_add_orders_for_transaction(137, orderbook_address, tx_hash, Some(3), Some(1))
+                .get_add_orders_for_transaction(137, tx_hash, Some(3), Some(1))
                 .await
                 .unwrap();
 
@@ -671,8 +670,6 @@ mod tests {
         async fn test_get_transaction_add_orders_exhausts_local_without_fallback() {
             let tx_hash =
                 b256!("0x00000000000000000000000000000000000000000000000000000000cafebabe");
-            let orderbook_address =
-                Address::from_str("0x0987654321098765432109876543210987654321").unwrap();
 
             let local_exec = CountingJsonExec {
                 json: "[]".to_string(),
@@ -701,7 +698,7 @@ mod tests {
             .await;
 
             let err = client
-                .get_add_orders_for_transaction(137, orderbook_address, tx_hash, Some(2), Some(1))
+                .get_add_orders_for_transaction(137, tx_hash, Some(2), Some(1))
                 .await
                 .unwrap_err();
 

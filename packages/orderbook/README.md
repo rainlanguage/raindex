@@ -268,16 +268,14 @@ async function waitForOrderFromTx(
   client: RaindexClient,
   {
     chainId,
-    orderbookAddress,
     txHash
   }: {
     chainId: number;
-    orderbookAddress: string;
     txHash: string;
   }
 ) {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-    const result = await client.getAddOrdersForTransaction(chainId, orderbookAddress, txHash);
+    const result = await client.getAddOrdersForTransaction(chainId, txHash);
     if (result.error) throw new Error(result.error.readableMsg);
 
     if (result.value.length) {
@@ -291,7 +289,6 @@ async function waitForOrderFromTx(
 const txReceipt = await executeOrder(...);
 const raindexOrder = await waitForOrderFromTx(client, {
   chainId: 8453,
-  orderbookAddress: '0x52CEB8eBEf648744fFDDE89F7Bc9C3aC35944775',
   txHash: txReceipt.transactionHash
 });
 ```
