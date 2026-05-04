@@ -1,10 +1,12 @@
 use crate::local_db::pipeline::{StatusBus, SyncPhase};
 use crate::local_db::{LocalDbError, OrderbookIdentifier};
+use crate::raindex_client::local_db::{LocalDbSyncStatusStore, OrderbookSyncStatus};
 
 #[derive(Debug, Clone, Default)]
 pub struct TracingStatusBus {
     ob_id: Option<OrderbookIdentifier>,
     orderbook_key: Option<String>,
+    status_store: LocalDbSyncStatusStore,
 }
 
 impl TracingStatusBus {
@@ -12,13 +14,22 @@ impl TracingStatusBus {
         Self {
             ob_id: None,
             orderbook_key: None,
+            status_store: LocalDbSyncStatusStore::new(),
         }
     }
 
     pub fn with_ob_id(ob_id: OrderbookIdentifier) -> Self {
+        Self::with_ob_id_and_store(ob_id, LocalDbSyncStatusStore::new())
+    }
+
+    pub fn with_ob_id_and_store(
+        ob_id: OrderbookIdentifier,
+        status_store: LocalDbSyncStatusStore,
+    ) -> Self {
         Self {
             ob_id: Some(ob_id),
             orderbook_key: None,
+            status_store,
         }
     }
 
@@ -26,6 +37,7 @@ impl TracingStatusBus {
         Self {
             ob_id: Some(ob_id),
             orderbook_key: Some(key),
+            status_store: LocalDbSyncStatusStore::new(),
         }
     }
 }
@@ -48,6 +60,11 @@ impl StatusBus for TracingStatusBus {
             phase = %phase.to_message(),
             "sync phase"
         );
+
+        if let Some(ob_id) = &self.ob_id {
+            self.status_store
+                .record_orderbook_status(OrderbookSyncStatus::syncing(ob_id.clone(), phase));
+        }
 
         Ok(())
     }

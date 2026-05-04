@@ -13,7 +13,10 @@ use crate::local_db::query::LocalDbQueryExecutor;
 use crate::local_db::LocalDbError;
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
 use crate::raindex_client::local_db::pipeline::status::TracingStatusBus;
-use crate::raindex_client::local_db::{LocalDb, SyncReadiness};
+use crate::raindex_client::local_db::{
+    LocalDb, LocalDbStatus, LocalDbSyncStatusStore, NetworkSyncStatus, OrderbookSyncStatus,
+    SchedulerState, SyncReadiness,
+};
 use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use rain_orderbook_app_settings::network::NetworkCfg;
 use std::collections::HashMap;
@@ -50,6 +53,16 @@ impl NativeRunner for NativeClientRunner {
     }
 }
 
+#[derive(Clone)]
+struct NativeNetworkLoopContext {
+    stop_flag: Arc<AtomicBool>,
+    interval_ms: u64,
+    network_key: String,
+    chain_id: u32,
+    sync_readiness: SyncReadiness,
+    status_store: LocalDbSyncStatusStore,
+}
+
 pub struct NativeSyncHandle {
     stop_flag: Arc<AtomicBool>,
     thread_handle: Option<JoinHandle<()>>,
@@ -80,6 +93,7 @@ pub fn start(
     settings: ParsedRunnerSettings,
     db_path: PathBuf,
     sync_readiness: SyncReadiness,
+    status_store: LocalDbSyncStatusStore,
 ) -> Result<NativeSyncHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
     for ob in settings.orderbooks.values() {
@@ -98,6 +112,7 @@ pub fn start(
 
     let stop_flag = Arc::new(AtomicBool::new(false));
     let stop_flag_clone = Arc::clone(&stop_flag);
+    status_store.seed(&settings);
 
     let thread_handle = thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -152,7 +167,7 @@ pub fn start(
                         };
 
                         let leadership = DefaultLeadership::with_network_key(network.key.clone());
-                        let environment = default_environment();
+                        let environment = default_environment(status_store.clone());
 
                         let runner = match NativeClientRunner::from_config(
                             config,
@@ -177,11 +192,14 @@ pub fn start(
                         tokio::task::spawn_local(run_network_loop(
                             runner,
                             db_clone,
-                            stop,
-                            interval_ms,
-                            network.key.clone(),
-                            network.chain_id,
-                            sync_readiness.clone(),
+                            NativeNetworkLoopContext {
+                                stop_flag: stop,
+                                interval_ms,
+                                network_key: network.key.clone(),
+                                chain_id: network.chain_id,
+                                sync_readiness: sync_readiness.clone(),
+                                status_store: status_store.clone(),
+                            },
                         ));
                     }
 
@@ -205,13 +223,19 @@ pub fn start(
 async fn run_network_loop<R: NativeRunner>(
     mut runner: R,
     db: LocalDb,
-    stop_flag: Arc<AtomicBool>,
-    interval_ms: u64,
-    network_key: String,
-    chain_id: u32,
-    sync_readiness: SyncReadiness,
+    ctx: NativeNetworkLoopContext,
 ) {
+    let NativeNetworkLoopContext {
+        stop_flag,
+        interval_ms,
+        network_key,
+        chain_id,
+        sync_readiness,
+        status_store,
+    } = ctx;
+
     tracing::info!(network = %network_key, chain_id, "starting native sync loop");
+    status_store.record_network_status(NetworkSyncStatus::syncing(chain_id));
 
     loop {
         if stop_flag.load(Ordering::SeqCst) {
@@ -223,6 +247,11 @@ async fn run_network_loop<R: NativeRunner>(
                 RunOutcome::Report(report) => {
                     if report.failures.is_empty() {
                         sync_readiness.mark_ready(chain_id);
+                        status_store.record_chain_ready(chain_id);
+                        status_store.record_network_status(NetworkSyncStatus::active(
+                            chain_id,
+                            SchedulerState::Leader,
+                        ));
                         tracing::debug!(
                             network = %network_key,
                             chain_id,
@@ -231,6 +260,13 @@ async fn run_network_loop<R: NativeRunner>(
                         );
                     } else {
                         for failure in &report.failures {
+                            let msg = failure.error.to_readable_msg();
+                            status_store.record_orderbook_status(OrderbookSyncStatus::failure(
+                                failure.ob_id.clone(),
+                                msg.clone(),
+                            ));
+                            status_store
+                                .record_network_status(NetworkSyncStatus::failure(chain_id, msg));
                             tracing::warn!(
                                 network = %network_key,
                                 chain_id,
@@ -243,6 +279,10 @@ async fn run_network_loop<R: NativeRunner>(
                     }
                 }
                 RunOutcome::NotLeader => {
+                    status_store.record_network_status(NetworkSyncStatus::active(
+                        chain_id,
+                        SchedulerState::NotLeader,
+                    ));
                     tracing::debug!(
                         network = %network_key,
                         chain_id,
@@ -251,6 +291,12 @@ async fn run_network_loop<R: NativeRunner>(
                 }
             },
             Err(err) => {
+                status_store.record_network_status(NetworkSyncStatus::new(
+                    chain_id,
+                    LocalDbStatus::Failure,
+                    SchedulerState::Leader,
+                    Some(err.to_readable_msg()),
+                ));
                 tracing::error!(
                     network = %network_key,
                     chain_id,
@@ -393,6 +439,7 @@ mod tests {
             settings,
             PathBuf::from("/tmp/test.db"),
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
         assert!(result.is_err());
     }
@@ -459,11 +506,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    Arc::clone(&stop_flag),
-                    1,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: Arc::clone(&stop_flag),
+                        interval_ms: 1,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -498,11 +548,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    Arc::clone(&stop_flag),
-                    1,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: Arc::clone(&stop_flag),
+                        interval_ms: 1,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 tokio::time::sleep(std::time::Duration::from_millis(30)).await;
@@ -537,11 +590,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    Arc::clone(&stop_flag),
-                    1,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: Arc::clone(&stop_flag),
+                        interval_ms: 1,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 tokio::time::sleep(std::time::Duration::from_millis(30)).await;
@@ -573,11 +629,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    Arc::clone(&stop_flag),
-                    1,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: Arc::clone(&stop_flag),
+                        interval_ms: 1,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 tokio::time::sleep(std::time::Duration::from_millis(30)).await;
@@ -615,11 +674,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    Arc::clone(&stop_flag),
-                    1,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: Arc::clone(&stop_flag),
+                        interval_ms: 1,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 tokio::time::sleep(std::time::Duration::from_millis(20)).await;
@@ -653,11 +715,14 @@ mod tests {
                 tokio::task::spawn_local(run_network_loop(
                     runner,
                     noop_local_db(),
-                    stop_clone,
-                    10000,
-                    "test".to_string(),
-                    1,
-                    readiness.clone(),
+                    NativeNetworkLoopContext {
+                        stop_flag: stop_clone,
+                        interval_ms: 10000,
+                        network_key: "test".to_string(),
+                        chain_id: 1,
+                        sync_readiness: readiness.clone(),
+                        status_store: LocalDbSyncStatusStore::new(),
+                    },
                 ));
 
                 for _ in 0..200 {
