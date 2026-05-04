@@ -129,14 +129,28 @@ where
             {
                 Ok(map) => map,
                 Err(error) => {
-                    return Ok(RunOutcome::Report(RunReport {
-                        successes: Vec::new(),
-                        failures: vec![TargetFailure {
+                    let failure = match self.settings.raindexes.iter().next() {
+                        Some((key, raindex)) => TargetFailure {
+                            raindex_id: RaindexIdentifier::new(
+                                raindex.network.chain_id,
+                                raindex.address,
+                            ),
+                            raindex_key: Some(key.clone()),
+                            stage: TargetStage::ManifestFetch,
+                            error,
+                        },
+                        None => TargetFailure {
                             raindex_id: RaindexIdentifier::new(0, Address::ZERO),
                             raindex_key: None,
                             stage: TargetStage::ManifestFetch,
-                            error,
-                        }],
+                            error: LocalDbError::CustomError(format!(
+                                "no raindexes configured: {error}"
+                            )),
+                        },
+                    };
+                    return Ok(RunOutcome::Report(RunReport {
+                        successes: Vec::new(),
+                        failures: vec![failure],
                     }));
                 }
             };
@@ -1562,6 +1576,11 @@ raindexes:
         let failure = &report.failures[0];
         assert_eq!(failure.stage, TargetStage::ManifestFetch);
         matches!(&failure.error, LocalDbError::CustomError(message) if message == "manifest boom");
+        // Failure must identify the configured raindex (chain_id + address) so the
+        // UI shows real identity instead of a synthetic 0x000…000 placeholder.
+        assert_eq!(failure.raindex_id.chain_id, 42161);
+        assert_eq!(failure.raindex_id.raindex_address, RAINDEX_A);
+        assert_eq!(failure.raindex_key.as_deref(), Some("raindex-a"));
 
         assert!(!runner.manifests_loaded);
         assert!(!runner.has_provisioned_dumps);
