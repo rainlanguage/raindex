@@ -109,6 +109,7 @@ impl From<CliFilterArgs> for SgOrdersListFilterArgs {
             order_hash: val.order_hash.map(SgBytes),
             tokens,
             orderbooks: vec![],
+            has_positive_output_vault_balance: None,
         }
     }
 }

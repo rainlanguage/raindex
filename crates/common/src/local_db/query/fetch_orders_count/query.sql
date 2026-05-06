@@ -79,6 +79,7 @@ SELECT COUNT(*) AS orders_count FROM (
   /*ORDER_HASH_CLAUSE*/
   /*INPUT_TOKENS_CLAUSE*/
   /*OUTPUT_TOKENS_CLAUSE*/
+  /*POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE*/
   GROUP BY
     l.chain_id,
     COALESCE(la.order_hash, l.order_hash),

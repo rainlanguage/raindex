@@ -1,6 +1,6 @@
 use super::fetch_orders::FetchOrdersArgs;
 use crate::local_db::query::{SqlBuildError, SqlStatement, SqlValue};
-use alloy::primitives::Address;
+use alloy::primitives::{Address, U256};
 
 use super::fetch_orders::FetchOrdersActiveFilter;
 
@@ -44,6 +44,25 @@ pub(crate) const COMBINED_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
           OR
           (lower(io2.io_type) = 'output' AND io2.token IN ({output_list}))
         )
+    )";
+
+pub(crate) const POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE: &str =
+    "/*POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE*/";
+const POSITIVE_OUTPUT_VAULT_BALANCE_EXISTS_BODY: &str = "EXISTS (
+      SELECT 1 FROM order_ios io_balance
+      JOIN running_vault_balances vb_balance
+        ON vb_balance.chain_id = io_balance.chain_id
+       AND vb_balance.orderbook_address = io_balance.orderbook_address
+       AND vb_balance.owner = l.order_owner
+       AND vb_balance.token = io_balance.token
+       AND vb_balance.vault_id = io_balance.vault_id
+      WHERE io_balance.chain_id = l.chain_id
+        AND io_balance.orderbook_address = l.orderbook_address
+        AND io_balance.transaction_hash = la.transaction_hash
+        AND io_balance.log_index = la.log_index
+        AND lower(io_balance.io_type) = 'output'
+        AND io_balance.vault_id != {zero_vault_id}
+        AND FLOAT_GT_ZERO(vb_balance.balance)
     )";
 
 pub(crate) const MAIN_CHAIN_IDS_CLAUSE: &str = "/*MAIN_CHAIN_IDS_CLAUSE*/";
@@ -168,6 +187,16 @@ pub(crate) fn bind_common_order_filters(
             OUTPUT_TOKENS_CLAUSE_BODY,
             output_tokens.into_iter().map(SqlValue::from),
         )?;
+    }
+
+    if args.has_positive_output_vault_balance == Some(true) {
+        let zero_vault_id = stmt.push(SqlValue::from(U256::ZERO));
+        let exists =
+            POSITIVE_OUTPUT_VAULT_BALANCE_EXISTS_BODY.replace("{zero_vault_id}", &zero_vault_id);
+        let clause = format!("AND {exists}");
+        stmt.replace(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE, &clause)?;
+    } else {
+        stmt.replace(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE, "")?;
     }
 
     Ok(PreparedFilters {

@@ -26,6 +26,7 @@ impl From<GetOrdersFilters> for FetchOrdersArgs {
             order_hash: filters.order_hash,
             tokens,
             orderbook_addresses: filters.orderbook_addresses.unwrap_or_default(),
+            has_positive_output_vault_balance: filters.has_positive_output_vault_balance,
             ..FetchOrdersArgs::default()
         }
     }
@@ -63,6 +64,7 @@ mod tests {
                 outputs: None,
             }),
             orderbook_addresses: Some(vec![orderbook1, orderbook2]),
+            has_positive_output_vault_balance: Some(true),
         };
         let args: FetchOrdersArgs = filters.into();
         assert!(matches!(args.filter, FetchOrdersActiveFilter::Active));
@@ -84,6 +86,7 @@ mod tests {
         assert_eq!(args.orderbook_addresses.len(), 2);
         assert_eq!(args.orderbook_addresses[0], orderbook1);
         assert_eq!(args.orderbook_addresses[1], orderbook2);
+        assert_eq!(args.has_positive_output_vault_balance, Some(true));
     }
 
     #[test]
@@ -94,6 +97,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbook_addresses: None,
+            has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
         assert!(args.orderbook_addresses.is_empty());
@@ -108,6 +112,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             orderbook_addresses: Some(vec![orderbook]),
+            has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
         assert_eq!(args.orderbook_addresses.len(), 1);

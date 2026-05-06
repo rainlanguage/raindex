@@ -31,6 +31,7 @@ pub struct FetchOrdersArgs {
     pub order_hash: Option<B256>,
     pub tx_hash: Option<B256>,
     pub tokens: FetchOrdersTokensFilter,
+    pub has_positive_output_vault_balance: Option<bool>,
     pub page: Option<u16>,
     pub page_size: Option<u16>,
 }
@@ -135,7 +136,7 @@ mod tests {
     use super::super::fetch_orders_common::{
         INPUT_TOKENS_CLAUSE, LATEST_ADD_CHAIN_IDS_CLAUSE, LATEST_ADD_ORDERBOOKS_CLAUSE,
         MAIN_CHAIN_IDS_CLAUSE, MAIN_ORDERBOOKS_CLAUSE, ORDER_HASH_CLAUSE, ORDER_HASH_CLAUSE_BODY,
-        OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE,
+        OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE, POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE,
     };
     use super::*;
     use alloy::hex;
@@ -179,6 +180,7 @@ mod tests {
                 ],
                 outputs: vec![address!("0xF3dEe5b36E3402893e6953A8670E37D329683ABB")],
             },
+            has_positive_output_vault_balance: None,
             page: None,
             page_size: None,
         };
@@ -231,6 +233,38 @@ mod tests {
         assert!(stmt.sql.contains("AND lower(io2.io_type) = 'output'"));
         assert!(stmt.sql.contains("AND io2.token IN ("));
         assert!(!stmt.sql.contains("AND lower(io2.io_type) = 'input'"));
+    }
+
+    #[test]
+    fn positive_output_vault_balance_true_adds_exists_clause() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            has_positive_output_vault_balance: Some(true),
+            ..FetchOrdersArgs::default()
+        };
+
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+
+        assert!(!stmt.sql.contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(stmt.sql.contains("AND EXISTS ("));
+        assert!(stmt.sql.contains("lower(io_balance.io_type) = 'output'"));
+        assert!(stmt.sql.contains("io_balance.vault_id != "));
+        assert!(stmt.sql.contains("FLOAT_GT_ZERO(vb_balance.balance)"));
+    }
+
+    #[test]
+    fn positive_output_vault_balance_false_does_not_filter() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            has_positive_output_vault_balance: Some(false),
+            ..FetchOrdersArgs::default()
+        };
+
+        let stmt = build_fetch_orders_stmt(&args).unwrap();
+
+        assert!(!stmt.sql.contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(!stmt.sql.contains("io_balance.vault_id !="));
+        assert!(!stmt.sql.contains("FLOAT_GT_ZERO(vb_balance.balance)"));
     }
 
     #[test]
