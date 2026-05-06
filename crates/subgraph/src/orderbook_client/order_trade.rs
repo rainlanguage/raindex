@@ -80,9 +80,9 @@ impl OrderbookSubgraphClient {
 mod tests {
     use super::*;
     use crate::types::common::{
-        SgBigInt, SgBytes, SgErc20, SgOrderbook, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
-        SgTradeStructPartialOrder, SgTradeVaultBalanceChange, SgTransaction,
-        SgVaultBalanceChangeVault,
+        SgBigInt, SgBytes, SgErc20, SgOrderbook, SgSiblingTrade, SgSiblingTradeOrder, SgTradeEvent,
+        SgTradeEventTypename, SgTradeRef, SgTradeStructPartialOrder, SgTradeVaultBalanceChange,
+        SgTransaction, SgVaultBalanceChangeVault,
     };
     use crate::utils::float::*;
     use cynic::Id;
@@ -155,10 +155,23 @@ mod tests {
         }
     }
 
+    fn default_sg_sibling_trade() -> SgSiblingTrade {
+        SgSiblingTrade {
+            id: SgBytes("0xtrade_id_default".to_string()),
+            order: SgSiblingTradeOrder {
+                id: SgBytes("0xorder_id_for_trade_default".to_string()),
+                order_hash: SgBytes("0xorder_hash_for_trade_default".to_string()),
+                owner: SgBytes("0xorder_owner_default".to_string()),
+            },
+        }
+    }
+
     fn default_sg_trade_event() -> SgTradeEvent {
         SgTradeEvent {
+            __typename: "TakeOrder".to_string(),
             transaction: default_sg_transaction(),
             sender: SgBytes("0xsender_address_default".to_string()),
+            trades: vec![default_sg_sibling_trade()],
         }
     }
 
@@ -193,10 +206,19 @@ mod tests {
         );
 
         // Assert TradeEvent
+        assert_eq!(
+            actual.trade_event.__typename, expected.trade_event.__typename,
+            "Trade event __typename mismatch"
+        );
         assert_eq!(actual.trade_event.sender, expected.trade_event.sender);
         assert_eq!(
             actual.trade_event.transaction.id,
             expected.trade_event.transaction.id
+        );
+        assert_eq!(
+            actual.trade_event.trades.len(),
+            expected.trade_event.trades.len(),
+            "Trade event sibling trades count mismatch"
         );
 
         // Assert SgTradeStructPartialOrder

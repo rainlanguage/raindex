@@ -34,6 +34,8 @@ pub struct LocalDbOrderTrade {
     pub output_delta: String,
     pub output_running_balance: Option<String>,
     pub trade_id: String,
+    pub counterparty_order_hash: Option<String>,
+    pub counterparty_owner: Option<String>,
 }
 
 /// Builds the SQL statement for retrieving order trades within the specified window.

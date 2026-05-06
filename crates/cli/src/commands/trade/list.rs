@@ -260,13 +260,15 @@ mod tests {
                     },
                     "timestamp": "0",
                     "tradeEvent": {
+                        "__typename": "TakeOrder",
                         "sender": encode_prefixed(Address::random()),
                         "transaction": {
                             "id": encode_prefixed(B256::random()),
                             "blockNumber": "0",
                             "timestamp": "0",
                             "from": encode_prefixed(Address::random())
-                        }
+                        },
+                        "trades": []
                     },
                     "orderbook": {
                         "id": encode_prefixed(B256::random()),

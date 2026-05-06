@@ -234,6 +234,7 @@ mod tests {
                 order_hash: bytes.clone(),
             },
             trade_event: SgTradeEvent {
+                __typename: "TakeOrder".to_string(),
                 sender: bytes.clone(),
                 transaction: SgTransaction {
                     id: bytes.clone(),
@@ -241,6 +242,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
+                trades: vec![],
             },
             timestamp: bigint.clone(),
             orderbook: SgOrderbook { id: bytes.clone() },
@@ -303,6 +305,7 @@ mod tests {
                 order_hash: bytes.clone(),
             },
             trade_event: SgTradeEvent {
+                __typename: "TakeOrder".to_string(),
                 sender: bytes.clone(),
                 transaction: SgTransaction {
                     id: bytes.clone(),
@@ -310,6 +313,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: bigint.clone(),
                 },
+                trades: vec![],
             },
             timestamp: bigint.clone(),
             orderbook: SgOrderbook { id: bytes.clone() },

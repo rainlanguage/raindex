@@ -3,13 +3,27 @@
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { QKEY_ORDER_TRADES_LIST } from '../../queries/keys';
 	import { DEFAULT_PAGE_SIZE } from '../../queries/constants';
-	import { TableBodyCell, TableHeadCell } from 'flowbite-svelte';
+	import { Badge, TableBodyCell, TableHeadCell } from 'flowbite-svelte';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { BugOutline } from 'flowbite-svelte-icons';
 	import type { RaindexOrder, RaindexTrade } from '@rainlanguage/orderbook';
 	import TableTimeFilters from '../charts/TableTimeFilters.svelte';
 	import Tooltip from '../Tooltip.svelte';
+
+	type BadgeColor = 'blue' | 'pink' | 'dark';
+
+	function getTypeBadgeColor(type: string): BadgeColor {
+		const lowerType = type.toLowerCase();
+		if (lowerType.includes('clear')) return 'pink';
+		if (lowerType.includes('trade') || lowerType.includes('takeorder')) return 'blue';
+		return 'dark';
+	}
+
+	function getTradeTypeDisplayName(type: string): string {
+		if (type === 'Clear') return 'Clear';
+		return 'Take order';
+	}
 
 	export let order: RaindexOrder;
 	export let rpcs: string[] | undefined = undefined;
@@ -76,11 +90,12 @@
 		<TableTimeFilters bind:startTimestamp bind:endTimestamp />
 	</svelte:fragment>
 	<svelte:fragment slot="head">
-		<TableHeadCell padding="p-4" class="w-[15%]">Date</TableHeadCell>
-		<TableHeadCell padding="p-4" class="w-[20%]">Transaction</TableHeadCell>
-		<TableHeadCell padding="p-2" class="w-[18%]">Input</TableHeadCell>
-		<TableHeadCell padding="p-2" class="w-[18%]">Output</TableHeadCell>
-		<TableHeadCell padding="p-2" class="w-[25%]">IO Ratio</TableHeadCell>
+		<TableHeadCell padding="p-4" class="w-[14%]">Info</TableHeadCell>
+		<TableHeadCell padding="p-4" class="w-[16%]">Transaction</TableHeadCell>
+		<TableHeadCell padding="p-4" class="w-[16%]">Counterparty</TableHeadCell>
+		<TableHeadCell padding="p-2" class="w-[15%]">Input</TableHeadCell>
+		<TableHeadCell padding="p-2" class="w-[15%]">Output</TableHeadCell>
+		<TableHeadCell padding="p-2" class="w-[20%]">IO Ratio</TableHeadCell>
 		<TableHeadCell padding="p-0" class="w-[4%]"><span class="sr-only">Actions</span></TableHeadCell>
 	</svelte:fragment>
 
@@ -91,7 +106,16 @@
 		{@const oiRatio = Math.abs(outputAmt / inputAmt)}
 		{@const validRatio = Number.isFinite(ioRatio) && Number.isFinite(oiRatio)}
 		<TableBodyCell tdClass="px-4 py-2">
-			{formatTimestampSecondsAsLocal(BigInt(item.timestamp))}
+			<div class="flex flex-col gap-1 overflow-hidden">
+				<div class="flex">
+					<Badge color={getTypeBadgeColor(item.tradeEventType)}>
+						{getTradeTypeDisplayName(item.tradeEventType)}
+					</Badge>
+				</div>
+				<span class="text-xs text-gray-500 dark:text-gray-400">
+					{formatTimestampSecondsAsLocal(BigInt(item.timestamp))}
+				</span>
+			</div>
 		</TableBodyCell>
 		<TableBodyCell tdClass="px-4 py-2">
 			<div class="flex flex-col gap-1 text-sm">
@@ -104,6 +128,35 @@
 					<Hash type={HashType.Transaction} value={item.transaction.id} />
 				</div>
 			</div>
+		</TableBodyCell>
+		<TableBodyCell tdClass="px-4 py-2">
+			{#if item.counterparty}
+				<div class="flex flex-col gap-1 text-sm">
+					<div class="flex items-center gap-1">
+						<span class="text-gray-500 dark:text-gray-400">
+							{item.tradeEventType === 'Clear' ? 'Counterparty:' : 'Taker:'}
+						</span>
+						<Hash type={HashType.Wallet} value={item.counterparty.owner} />
+					</div>
+					{#if item.counterparty.orderHash}
+						<div class="flex items-center gap-1">
+							<span class="text-gray-500 dark:text-gray-400">Order:</span>
+							<a
+								href={`/orders/${order.chainId}-${order.orderbook}-${item.counterparty.orderHash}`}
+								class="text-blue-600 hover:underline dark:text-blue-400"
+							>
+								<Hash
+									type={HashType.Identifier}
+									value={item.counterparty.orderHash}
+									copyOnClick={false}
+								/>
+							</a>
+						</div>
+					{/if}
+				</div>
+			{:else}
+				<span class="text-gray-400">-</span>
+			{/if}
 		</TableBodyCell>
 		<TableBodyCell tdClass="p-2" data-testid="input">
 			<div class="flex flex-col overflow-hidden">

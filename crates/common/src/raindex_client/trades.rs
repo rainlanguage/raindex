@@ -16,6 +16,16 @@ use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
 
+#[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct RaindexCounterparty {
+    #[tsify(optional, type = "Hex")]
+    pub order_hash: Option<Bytes>,
+    #[tsify(type = "Address")]
+    pub owner: Address,
+}
+impl_wasm_traits!(RaindexCounterparty);
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 #[wasm_bindgen]
@@ -27,6 +37,8 @@ pub struct RaindexTrade {
     output_vault_balance_change: RaindexVaultBalanceChange,
     timestamp: U256,
     orderbook: Address,
+    trade_event_type: String,
+    counterparty: Option<RaindexCounterparty>,
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
@@ -60,6 +72,14 @@ impl RaindexTrade {
     pub fn orderbook(&self) -> String {
         self.orderbook.to_string()
     }
+    #[wasm_bindgen(getter = tradeEventType)]
+    pub fn trade_event_type(&self) -> String {
+        self.trade_event_type.clone()
+    }
+    #[wasm_bindgen(getter)]
+    pub fn counterparty(&self) -> Option<RaindexCounterparty> {
+        self.counterparty.clone()
+    }
 }
 #[cfg(not(target_family = "wasm"))]
 impl RaindexTrade {
@@ -83,6 +103,12 @@ impl RaindexTrade {
     }
     pub fn orderbook(&self) -> Address {
         self.orderbook
+    }
+    pub fn trade_event_type(&self) -> String {
+        self.trade_event_type.clone()
+    }
+    pub fn counterparty(&self) -> Option<RaindexCounterparty> {
+        self.counterparty.clone()
     }
 }
 
@@ -269,6 +295,28 @@ impl RaindexOrder {
 
 impl RaindexTrade {
     pub fn try_from_sg_trade(chain_id: u32, trade: SgTrade) -> Result<Self, RaindexError> {
+        let trade_event_type = trade.trade_event.__typename.clone();
+
+        let counterparty = if trade_event_type == "Clear" {
+            trade
+                .trade_event
+                .trades
+                .iter()
+                .find(|t| t.id != trade.id)
+                .map(|sibling| -> Result<RaindexCounterparty, RaindexError> {
+                    Ok(RaindexCounterparty {
+                        order_hash: Some(Bytes::from_str(&sibling.order.order_hash.0)?),
+                        owner: Address::from_str(&sibling.order.owner.0)?,
+                    })
+                })
+                .transpose()?
+        } else {
+            Some(RaindexCounterparty {
+                order_hash: None,
+                owner: Address::from_str(&trade.trade_event.sender.0)?,
+            })
+        };
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.id.0)?,
             order_hash: Bytes::from_str(&trade.order.order_hash.0)?,
@@ -285,6 +333,8 @@ impl RaindexTrade {
                 )?,
             timestamp: U256::from_str(&trade.timestamp.0)?,
             orderbook: Address::from_str(&trade.orderbook.id.0)?,
+            trade_event_type,
+            counterparty,
         })
     }
 
@@ -337,6 +387,26 @@ impl RaindexTrade {
             trade.block_timestamp,
         )?;
 
+        let trade_event_type = match trade.trade_kind.as_str() {
+            "clear" => "Clear",
+            _ => "TakeOrder",
+        }
+        .to_string();
+
+        let counterparty = trade
+            .counterparty_owner
+            .as_ref()
+            .map(|owner_str| {
+                let owner = Address::from_str(owner_str)?;
+                let order_hash = trade
+                    .counterparty_order_hash
+                    .as_ref()
+                    .map(|h| Bytes::from_str(h))
+                    .transpose()?;
+                Ok::<RaindexCounterparty, RaindexError>(RaindexCounterparty { order_hash, owner })
+            })
+            .transpose()?;
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.trade_id)?,
             order_hash: trade.order_hash.into(),
@@ -345,6 +415,8 @@ impl RaindexTrade {
             output_vault_balance_change: output_change,
             timestamp: U256::from(trade.block_timestamp),
             orderbook: trade.orderbook,
+            trade_event_type,
+            counterparty,
         })
     }
 }
@@ -506,6 +578,8 @@ mod test_helpers {
                 output_delta: OUTPUT_DELTA_HEX.into(),
                 output_running_balance: Some(OUTPUT_RUNNING_HEX.into()),
                 trade_id,
+                counterparty_order_hash: None,
+                counterparty_owner: Some(transaction_sender.to_string()),
             };
 
             LocalTradeFixture {
@@ -895,13 +969,24 @@ mod test_helpers {
             json!(              {
               "id": "0x0123",
               "tradeEvent": {
+                "__typename": "TakeOrder",
                 "transaction": {
                   "id": "0x0000000000000000000000000000000000000000000000000000000000000123",
                   "from": "0x0000000000000000000000000000000000000000",
                   "blockNumber": "0",
                   "timestamp": "0"
                 },
-                "sender": "sender1"
+                "sender": "0x0000000000000000000000000000000000000001",
+                "trades": [
+                  {
+                    "id": "0x0123",
+                    "order": {
+                      "id": "0x0123",
+                      "orderHash": "0x0123",
+                      "owner": "0x0000000000000000000000000000000000000099"
+                    }
+                  }
+                ]
               },
               "outputVaultBalanceChange": {
                 "id": "0x0000000000000000000000000000000000000000000000000000000000000123",
@@ -979,19 +1064,137 @@ mod test_helpers {
               }
             })
         }
+        fn get_clear_trade_json() -> Value {
+            json!({
+              "id": "0x0abc",
+              "tradeEvent": {
+                "__typename": "Clear",
+                "transaction": {
+                  "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                  "from": "0x0000000000000000000000000000000000000000",
+                  "blockNumber": "100",
+                  "timestamp": "1700000500"
+                },
+                "sender": "0x0000000000000000000000000000000000000009",
+                "trades": [
+                  {
+                    "id": "0x0abc",
+                    "order": {
+                      "id": "0x0abc",
+                      "orderHash": "0x0abc",
+                      "owner": "0x0000000000000000000000000000000000000077"
+                    }
+                  },
+                  {
+                    "id": "0x0def",
+                    "order": {
+                      "id": "0x0def",
+                      "orderHash": "0x0def",
+                      "owner": "0x0000000000000000000000000000000000000088"
+                    }
+                  }
+                ]
+              },
+              "outputVaultBalanceChange": {
+                "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": NEG2,
+                "newVaultBalance": F0,
+                "oldVaultBalance": F0,
+                "vault": {
+                  "id": "0x0abc",
+                  "vaultId": "0x0abc",
+                  "token": {
+                    "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                    "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                    "name": "Staked FLR",
+                    "symbol": "sFLR",
+                    "decimals": "18"
+                  }
+                },
+                "timestamp": "1700000500",
+                "transaction": {
+                  "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                  "from": "0x0000000000000000000000000000000000000000",
+                  "blockNumber": "100",
+                  "timestamp": "1700000500"
+                },
+                "orderbook": {
+                  "id": "0x1234567890abcdef1234567890abcdef12345678"
+                },
+                "trade": {
+                  "tradeEvent": {
+                    "__typename": "Clear"
+                  }
+                }
+              },
+              "order": {
+                "id": "0x0abc",
+                "orderHash": "0x0abc"
+              },
+              "inputVaultBalanceChange": {
+                "id": "0x0abc",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": F1,
+                "newVaultBalance": F0,
+                "oldVaultBalance": F0,
+                "vault": {
+                  "id": "0x0abc",
+                  "vaultId": "0x0abc",
+                  "token": {
+                    "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                    "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                    "name": "Wrapped Flare",
+                    "symbol": "WFLR",
+                    "decimals": "18"
+                  }
+                },
+                "timestamp": "1700000500",
+                "transaction": {
+                  "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                  "from": "0x0000000000000000000000000000000000000000",
+                  "blockNumber": "100",
+                  "timestamp": "1700000500"
+                },
+                "orderbook": {
+                  "id": "0x1234567890abcdef1234567890abcdef12345678"
+                },
+                "trade": {
+                  "tradeEvent": {
+                    "__typename": "Clear"
+                  }
+                }
+              },
+              "timestamp": "1700000500",
+              "orderbook": {
+                "id": "0x1234567890abcdef1234567890abcdef12345678"
+              }
+            })
+        }
         fn get_trades_json() -> Value {
             json!([
                 get_single_trade_json(),
               {
                 "id": "0x0234",
                 "tradeEvent": {
+                  "__typename": "TakeOrder",
                   "transaction": {
                     "id": "0x0000000000000000000000000000000000000000000000000000000000000234",
                     "from": "0x0000000000000000000000000000000000000001",
                     "blockNumber": "0",
                     "timestamp": "0"
                   },
-                  "sender": "sender2"
+                  "sender": "0x0000000000000000000000000000000000000002",
+                  "trades": [
+                    {
+                      "id": "0x0234",
+                      "order": {
+                        "id": "0x0234",
+                        "orderHash": "0x0234",
+                        "owner": "0x0000000000000000000000000000000000000098"
+                      }
+                    }
+                  ]
                 },
                 "outputVaultBalanceChange": {
                   "id": "0x0234",
@@ -1262,9 +1465,27 @@ mod test_helpers {
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
             assert_eq!(trade1.order_hash(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(trade1.trade_event_type(), "TakeOrder");
+            let cp1 = trade1
+                .counterparty()
+                .expect("TakeOrder should have counterparty");
+            assert_eq!(cp1.order_hash, None);
+            assert_eq!(
+                cp1.owner,
+                Address::from_str("0x0000000000000000000000000000000000000001").unwrap()
+            );
 
             let trade2 = trades[1].clone();
             assert_eq!(trade2.id(), Bytes::from_str("0x0234").unwrap());
+            assert_eq!(trade2.trade_event_type(), "TakeOrder");
+            let cp2 = trade2
+                .counterparty()
+                .expect("TakeOrder should have counterparty");
+            assert_eq!(cp2.order_hash, None);
+            assert_eq!(
+                cp2.owner,
+                Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
+            );
         }
 
         #[tokio::test]
@@ -1440,6 +1661,72 @@ mod test_helpers {
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
             assert_eq!(trade.order_hash(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(trade.trade_event_type(), "TakeOrder");
+            let cp = trade
+                .counterparty()
+                .expect("TakeOrder should have counterparty");
+            assert_eq!(cp.order_hash, None);
+            assert_eq!(
+                cp.owner,
+                Address::from_str("0x0000000000000000000000000000000000000001").unwrap()
+            );
+        }
+
+        #[tokio::test]
+        async fn test_get_order_trade_detail_clear_event() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg").body_contains("SgOrderTradeDetailQuery");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "trade": get_clear_trade_json()
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg").body_contains("SgOrderDetailByHashQuery");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "orders": [get_order1_json()]
+                    }
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg"),
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                    "http://localhost:3000",
+                )],
+                None,
+            )
+            .unwrap();
+            let order = raindex_client
+                .get_order_by_hash(
+                    &OrderbookIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+            let trade = order
+                .get_trade_detail(Bytes::from_str("0x0abc").unwrap())
+                .await
+                .unwrap();
+
+            assert_eq!(trade.id(), Bytes::from_str("0x0abc").unwrap());
+            assert_eq!(trade.trade_event_type(), "Clear");
+            let cp = trade
+                .counterparty()
+                .expect("Clear trade should have counterparty from sibling");
+            assert_eq!(cp.order_hash, Some(Bytes::from_str("0x0def").unwrap()));
+            assert_eq!(
+                cp.owner,
+                Address::from_str("0x0000000000000000000000000000000000000088").unwrap()
+            );
         }
 
         #[tokio::test]

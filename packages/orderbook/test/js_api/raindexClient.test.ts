@@ -389,13 +389,15 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				id: '0x07db8b3f3e7498f9d4d0e40b98f57c020d3d277516e86023a8200a20464d4895',
 				timestamp: '1632000000',
 				tradeEvent: {
+					__typename: 'TakeOrder',
 					sender: '0x0000000000000000000000000000000000000000',
 					transaction: {
 						id: BYTES32_ZERO,
 						from: '0x0000000000000000000000000000000000000000',
 						timestamp: '1632000000',
 						blockNumber: '0'
-					}
+					},
+					trades: []
 				},
 				outputVaultBalanceChange: {
 					amount: float100,
@@ -466,13 +468,15 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				id: '0x07db8b3f3e7498f9d4d0e40b98f57c020d3d277516e86023a8200a20464d4894',
 				timestamp: '1632000000',
 				tradeEvent: {
+					__typename: 'TakeOrder',
 					sender: '0x0000000000000000000000000000000000000000',
 					transaction: {
 						id: BYTES32_ZERO,
 						from: '0x0000000000000000000000000000000000000000',
 						timestamp: '1632000000',
 						blockNumber: '0'
-					}
+					},
+					trades: []
 				},
 				outputVaultBalanceChange: {
 					amount: '0x0000000000000000000000000000000000000000000000000000000000000001',
@@ -545,13 +549,15 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 				orderHash: BYTES32_0123
 			},
 			tradeEvent: {
+				__typename: 'TakeOrder',
 				sender: '0x0000000000000000000000000000000000000000',
 				transaction: {
 					id: BYTES32_0123,
 					from: '0x0000000000000000000000000000000000000000',
 					blockNumber: '0',
 					timestamp: '0'
-				}
+				},
+				trades: []
 			},
 			timestamp: '0',
 			orderbook: {
@@ -1122,6 +1128,12 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 					result[0].transaction.timestamp,
 					BigInt(mockOrderTradesList[0].tradeEvent.transaction.timestamp)
 				);
+				assert.equal(result[0].tradeEventType, 'TakeOrder');
+				assert.equal(
+					result[0].counterparty.owner,
+					mockOrderTradesList[0].tradeEvent.sender
+				);
+				assert.equal(result[0].counterparty.orderHash, undefined);
 			});
 
 			it('should get trade detail', async function () {
@@ -1207,6 +1219,9 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Raindex Client', async f
 					BigInt(mockTrade.tradeEvent.transaction.timestamp)
 				);
 				assert.equal(result.orderbook, mockTrade.orderbook.id.toLowerCase());
+				assert.equal(result.tradeEventType, 'TakeOrder');
+				assert.equal(result.counterparty.owner, mockTrade.tradeEvent.sender);
+				assert.equal(result.counterparty.orderHash, undefined);
 			});
 
 			it('should get trade count', async function () {

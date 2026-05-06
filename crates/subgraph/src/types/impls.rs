@@ -226,6 +226,7 @@ mod tests {
         SgTrade {
             id: SgBytes("".to_string()),
             trade_event: SgTradeEvent {
+                __typename: "TakeOrder".to_string(),
                 transaction: SgTransaction {
                     id: SgBytes("".to_string()),
                     from: SgBytes("".to_string()),
@@ -233,6 +234,7 @@ mod tests {
                     timestamp: SgBigInt("".to_string()),
                 },
                 sender: SgBytes("".to_string()),
+                trades: vec![],
             },
             output_vault_balance_change: output_trade_vault_balance_change,
             input_vault_balance_change: input_trade_vault_balance_change,

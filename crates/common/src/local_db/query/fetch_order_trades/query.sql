@@ -41,7 +41,9 @@ take_trades AS (
     t.taker_output AS input_delta,
     io_out.vault_id AS output_vault_id,
     io_out.token AS output_token,
-    FLOAT_NEGATE(t.taker_input) AS output_delta
+    FLOAT_NEGATE(t.taker_input) AS output_delta,
+    NULL AS counterparty_order_hash,
+    t.sender AS counterparty_owner
   FROM take_orders t
   JOIN params p
     ON t.chain_id = p.chain_id
@@ -104,7 +106,9 @@ clear_alice AS (
     a.alice_input AS input_delta,
     c.alice_output_vault_id AS output_vault_id,
     io_out.token AS output_token,
-    FLOAT_NEGATE(a.alice_output) AS output_delta
+    FLOAT_NEGATE(a.alice_output) AS output_delta,
+    c.bob_order_hash AS counterparty_order_hash,
+    c.bob_order_owner AS counterparty_owner
   FROM clear_v3_events c
   JOIN params p
     ON c.chain_id = p.chain_id
@@ -178,7 +182,9 @@ clear_bob AS (
     a.bob_input AS input_delta,
     c.bob_output_vault_id AS output_vault_id,
     io_out.token AS output_token,
-    FLOAT_NEGATE(a.bob_output) AS output_delta
+    FLOAT_NEGATE(a.bob_output) AS output_delta,
+    c.alice_order_hash AS counterparty_order_hash,
+    c.alice_order_owner AS counterparty_owner
   FROM clear_v3_events c
   JOIN params p
     ON c.chain_id = p.chain_id
@@ -262,7 +268,9 @@ trade_rows AS (
     ut.input_delta,
     ut.output_vault_id,
     ut.output_token,
-    ut.output_delta
+    ut.output_delta,
+    ut.counterparty_order_hash,
+    ut.counterparty_owner
   FROM unioned_trades ut
 ),
 trade_with_snapshots AS (
@@ -317,7 +325,9 @@ SELECT
     '0x' ||
     lower(replace(tws.transaction_hash, '0x', '')) ||
     printf('%016x', tws.log_index)
-  ) AS trade_id
+  ) AS trade_id,
+  tws.counterparty_order_hash,
+  tws.counterparty_owner
 FROM trade_with_snapshots tws
 LEFT JOIN vault_balance_changes vbc_input
   ON vbc_input.chain_id = tws.chain_id
