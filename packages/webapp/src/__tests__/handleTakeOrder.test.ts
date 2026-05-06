@@ -16,7 +16,6 @@ import type { TransactionManager } from '@rainlanguage/ui-components';
 const mockHandleTakeOrderModal = vi.fn();
 const mockHandleTransactionConfirmationModal = vi.fn().mockResolvedValue({ success: true });
 const mockErrToast = vi.fn();
-const mockAddToast = vi.fn();
 const mockCreateTakeOrderTransaction = vi.fn();
 const mockCreateApprovalTransaction = vi.fn();
 
@@ -69,7 +68,6 @@ const mockDeps: TakeOrderHandlerDependencies = {
 	handleTakeOrderModal: mockHandleTakeOrderModal,
 	handleTransactionConfirmationModal: mockHandleTransactionConfirmationModal,
 	errToast: mockErrToast,
-	addToast: mockAddToast,
 	manager: mockManager as unknown as TransactionManager,
 	account: MOCK_ACCOUNT_ADDRESS
 };
@@ -346,42 +344,38 @@ describe('handleTakeOrder', () => {
 		});
 	});
 
-	it('should show success toast after approval and not proceed with take order', async () => {
+	it('should automatically execute take order after approval confirmation', async () => {
 		const mockApprovalCalldata = '0xapprovalcalldata' as Hex;
+		const mockTakeCalldata = '0xtakecalldata' as Hex;
+		const mockTxHash = '0xapprovaltxhash' as Hex;
 
-		mockHandleTransactionConfirmationModal.mockResolvedValue({ success: true });
-
-		vi.mocked(mockOrder.getTakeCalldata).mockResolvedValue({
-			value: createMockApprovalResult(MOCK_TOKEN_ADDRESS, mockApprovalCalldata),
-			error: undefined
-		});
+		vi.mocked(mockOrder.getTakeCalldata)
+			.mockResolvedValueOnce({
+				value: createMockApprovalResult(MOCK_TOKEN_ADDRESS, mockApprovalCalldata),
+				error: undefined
+			})
+			.mockResolvedValueOnce({
+				value: createMockReadyResult(mockTakeCalldata, MOCK_ORDERBOOK_ADDRESS),
+				error: undefined
+			});
 
 		await handleTakeOrder(mockDeps);
 		await triggerOnSubmit();
 
-		expect(mockAddToast).toHaveBeenCalledWith({
-			message: "Approval successful! Click 'Take Order' again to proceed with fresh quotes.",
-			type: 'success',
-			color: 'green'
-		});
 		expect(mockHandleTransactionConfirmationModal).toHaveBeenCalledTimes(1);
-	});
 
-	it('should show error toast when approval is cancelled', async () => {
-		const mockApprovalCalldata = '0xapprovalcalldata' as Hex;
+		const onConfirmCall = mockHandleTransactionConfirmationModal.mock.calls[0][0].args.onConfirm;
+		await onConfirmCall(mockTxHash);
+		await flushPromises();
 
-		mockHandleTransactionConfirmationModal.mockResolvedValue({ success: false });
-
-		vi.mocked(mockOrder.getTakeCalldata).mockResolvedValue({
-			value: createMockApprovalResult(MOCK_TOKEN_ADDRESS, mockApprovalCalldata),
-			error: undefined
-		});
-
-		await handleTakeOrder(mockDeps);
-		await triggerOnSubmit();
-
-		expect(mockErrToast).toHaveBeenCalledWith('Approval was cancelled or failed');
-		expect(mockAddToast).not.toHaveBeenCalled();
+		expect(mockOrder.getTakeCalldata).toHaveBeenCalledTimes(2);
+		expect(mockHandleTransactionConfirmationModal).toHaveBeenCalledTimes(2);
+		expect(mockHandleTransactionConfirmationModal).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				modalTitle: 'Taking order for TEST',
+				closeOnConfirm: false
+			})
+		);
 	});
 
 	it('should call manager.createApprovalTransaction on approval confirmation', async () => {

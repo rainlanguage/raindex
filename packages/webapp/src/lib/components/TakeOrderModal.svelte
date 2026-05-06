@@ -25,7 +25,7 @@
 		mode: TakeOrdersMode;
 		amount: string;
 		priceCap: string;
-	}) => Promise<boolean>;
+	}) => Promise<void>;
 
 	type Direction = 'buy' | 'sell';
 
@@ -237,16 +237,14 @@
 			return;
 		}
 
-		const shouldClose = await onSubmit({
+		await onSubmit({
 			quote: selectedQuote,
 			mode: mode as TakeOrdersMode,
 			amount: amountStr.value as string,
 			priceCap: priceCapStr.value as string
 		});
 
-		if (shouldClose) {
-			handleClose();
-		}
+		handleClose();
 	}
 
 	$: pairOptions = quotes.map((q, i) => ({

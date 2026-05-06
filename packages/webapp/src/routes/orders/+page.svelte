@@ -26,7 +26,7 @@
 
 	const { manager } = useTransactions();
 	const { account } = useAccount();
-	const { errToast, addToast } = useToasts();
+	const { errToast } = useToasts();
 	const raindexClient = useRaindexClient();
 
 	const onTakeOrderCallback = (item: RaindexOrder) => {
@@ -36,7 +36,6 @@
 			handleTakeOrderModal,
 			handleTransactionConfirmationModal,
 			errToast,
-			addToast,
 			manager,
 			account: $account as Hex
 		});
