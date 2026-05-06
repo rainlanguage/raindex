@@ -7,6 +7,7 @@ use crate::local_db::pipeline::runner::environment::{
 };
 use crate::local_db::pipeline::runner::utils::RunnerTarget;
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
+use crate::raindex_client::local_db::LocalDbSyncStatusStore;
 use std::sync::Arc;
 
 #[cfg(target_family = "wasm")]
@@ -16,7 +17,9 @@ use crate::raindex_client::local_db::pipeline::status::ClientStatusBus;
 use crate::raindex_client::local_db::pipeline::status::TracingStatusBus;
 
 #[cfg(target_family = "wasm")]
-pub fn default_environment() -> RunnerEnvironment<
+pub fn default_environment(
+    status_store: LocalDbSyncStatusStore,
+) -> RunnerEnvironment<
     ClientBootstrapAdapter,
     DefaultWindowPipeline,
     DefaultEventsPipeline,
@@ -27,12 +30,15 @@ pub fn default_environment() -> RunnerEnvironment<
     RunnerEnvironment::new(
         default_manifest_fetcher(),
         default_dump_downloader(),
-        Arc::new(|target: &RunnerTarget| {
+        Arc::new(move |target: &RunnerTarget| {
             let events =
                 DefaultEventsPipeline::with_regular_rpcs(target.inputs.metadata_rpcs.clone())?;
             let tokens = DefaultTokensPipeline::new(target.inputs.metadata_rpcs.clone())?;
 
-            let status_bus = ClientStatusBus::with_ob_id(target.inputs.ob_id.clone());
+            let status_bus = ClientStatusBus::with_ob_id_and_store(
+                target.inputs.ob_id.clone(),
+                status_store.clone(),
+            );
 
             Ok(EnginePipelines::new(
                 ClientBootstrapAdapter::new(),
@@ -47,7 +53,9 @@ pub fn default_environment() -> RunnerEnvironment<
 }
 
 #[cfg(not(target_family = "wasm"))]
-pub fn default_environment() -> RunnerEnvironment<
+pub fn default_environment(
+    status_store: LocalDbSyncStatusStore,
+) -> RunnerEnvironment<
     ClientBootstrapAdapter,
     DefaultWindowPipeline,
     DefaultEventsPipeline,
@@ -58,12 +66,15 @@ pub fn default_environment() -> RunnerEnvironment<
     RunnerEnvironment::new(
         default_manifest_fetcher(),
         default_dump_downloader(),
-        Arc::new(|target: &RunnerTarget| {
+        Arc::new(move |target: &RunnerTarget| {
             let events =
                 DefaultEventsPipeline::with_regular_rpcs(target.inputs.metadata_rpcs.clone())?;
             let tokens = DefaultTokensPipeline::new(target.inputs.metadata_rpcs.clone())?;
 
-            let status_bus = TracingStatusBus::with_ob_id(target.inputs.ob_id.clone());
+            let status_bus = TracingStatusBus::with_ob_id_and_store(
+                target.inputs.ob_id.clone(),
+                status_store.clone(),
+            );
 
             Ok(EnginePipelines::new(
                 ClientBootstrapAdapter::new(),
@@ -115,7 +126,8 @@ mod tests {
 
     #[test]
     fn build_engine_uses_regular_rpcs() {
-        let env = default_environment();
+        let env =
+            default_environment(crate::raindex_client::local_db::LocalDbSyncStatusStore::new());
         let target = sample_target(vec![Url::parse("https://rpc.client.example/anvil").unwrap()]);
         let engine = env.build_engine(&target).expect("engine available");
 
@@ -132,7 +144,8 @@ mod tests {
 
     #[test]
     fn build_engine_requires_metadata_rpcs() {
-        let env = default_environment();
+        let env =
+            default_environment(crate::raindex_client::local_db::LocalDbSyncStatusStore::new());
         let target = sample_target(Vec::new());
         match env.build_engine(&target) {
             Err(LocalDbError::Rpc(RpcClientError::Config { message })) => {
@@ -145,7 +158,8 @@ mod tests {
 
     #[test]
     fn build_engine_preserves_rpc_order() {
-        let env = default_environment();
+        let env =
+            default_environment(crate::raindex_client::local_db::LocalDbSyncStatusStore::new());
         let target = sample_target(vec![
             Url::parse("https://alpha.client.example/rpc-one").unwrap(),
             Url::parse("https://beta.client.example/rpc-two").unwrap(),

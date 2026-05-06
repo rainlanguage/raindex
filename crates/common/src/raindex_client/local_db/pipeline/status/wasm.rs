@@ -1,6 +1,8 @@
 use crate::local_db::pipeline::{StatusBus, SyncPhase};
 use crate::local_db::{LocalDbError, OrderbookIdentifier};
-use crate::raindex_client::local_db::{OrderbookSyncStatus, SchedulerState};
+use crate::raindex_client::local_db::{
+    LocalDbSyncStatusStore, OrderbookSyncStatus, SchedulerState,
+};
 use js_sys::Function;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,18 +42,33 @@ fn emit_to_callback(status: OrderbookSyncStatus) {
 #[derive(Debug, Clone, Default)]
 pub struct ClientStatusBus {
     ob_id: Option<OrderbookIdentifier>,
+    status_store: LocalDbSyncStatusStore,
 }
 
 impl ClientStatusBus {
     pub fn new() -> Self {
-        Self { ob_id: None }
+        Self {
+            ob_id: None,
+            status_store: LocalDbSyncStatusStore::new(),
+        }
     }
 
     pub fn with_ob_id(ob_id: OrderbookIdentifier) -> Self {
-        Self { ob_id: Some(ob_id) }
+        Self::with_ob_id_and_store(ob_id, LocalDbSyncStatusStore::new())
+    }
+
+    pub fn with_ob_id_and_store(
+        ob_id: OrderbookIdentifier,
+        status_store: LocalDbSyncStatusStore,
+    ) -> Self {
+        Self {
+            ob_id: Some(ob_id),
+            status_store,
+        }
     }
 
     fn emit(&self, status: OrderbookSyncStatus) {
+        self.status_store.record_orderbook_status(status.clone());
         emit_to_callback(status);
     }
 
