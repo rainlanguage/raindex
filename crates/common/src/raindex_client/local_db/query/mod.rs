@@ -10,6 +10,7 @@ pub mod fetch_orders;
 pub mod fetch_orders_count;
 pub mod fetch_store_addresses;
 pub mod fetch_tables;
+pub mod fetch_trades_by_tx;
 pub mod fetch_transaction_by_hash;
 pub mod fetch_vault_balance_changes;
 pub mod fetch_vaults;
