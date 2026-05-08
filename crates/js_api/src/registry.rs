@@ -1692,5 +1692,52 @@ _ _: 0 0;
             let raindex_client = registry.get_raindex_client(None).await;
             assert!(raindex_client.is_ok());
         }
+
+        #[tokio::test]
+        async fn test_registry_client_orderbook_yaml_rpc_update_updates_client_networks() {
+            let server = MockServer::start_async().await;
+
+            let test_registry_content = format!(
+                "{}/settings.yaml\ntest-order {}/order.rain",
+                server.url(""),
+                server.url("")
+            );
+
+            server.mock(|when, then| {
+                when.method("GET").path("/registry.txt");
+                then.status(200).body(test_registry_content.clone());
+            });
+
+            server.mock(|when, then| {
+                when.method("GET").path("/settings.yaml");
+                then.status(200).body(mock_settings_content());
+            });
+
+            server.mock(|when, then| {
+                when.method("GET").path("/order.rain");
+                then.status(200).body(MOCK_DOTRAIN_SIMPLE);
+            });
+
+            let registry = DotrainRegistry::new(format!("{}/registry.txt", server.url("")))
+                .await
+                .unwrap();
+
+            let client = registry.get_raindex_client(None).await.unwrap();
+            let orderbook_yaml = client.get_orderbook_yaml();
+            orderbook_yaml
+                .update_network_rpcs(
+                    "base",
+                    vec!["https://base.example/registry-updated-rpc".to_string()],
+                )
+                .unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs.len(), 1);
+            assert_eq!(
+                base.rpcs[0].as_str(),
+                "https://base.example/registry-updated-rpc"
+            );
+        }
     }
 }

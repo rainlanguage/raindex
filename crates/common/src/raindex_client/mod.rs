@@ -974,6 +974,73 @@ orderbooks:
             }
         }
 
+        fn base_client_yaml(rpc: &str) -> String {
+            get_test_yaml(
+                "https://base.example/subgraph",
+                "https://polygon.example/subgraph",
+                rpc,
+                "https://polygon.example/rpc",
+            )
+            .replace("mainnet:", "base:")
+            .replace("network: mainnet", "network: base")
+            .replace("chain-id: 1", "chain-id: 8453")
+            .replace("network-id: 1", "network-id: 8453")
+            .replace("Ethereum Mainnet", "Base")
+            .replace("mainnet-orderbook:", "base-orderbook:")
+            .replace("mainnet-rainlang:", "base-rainlang:")
+        }
+
+        #[tokio::test]
+        async fn test_get_orderbook_yaml_update_network_rpcs_updates_client_networks() {
+            let client = RaindexClient::new(
+                vec![base_client_yaml("https://base.example/original-rpc")],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let orderbook_yaml = client.get_orderbook_yaml();
+            orderbook_yaml
+                .update_network_rpcs(
+                    "base",
+                    vec![
+                        "https://base.example/updated-rpc-1".to_string(),
+                        "https://base.example/updated-rpc-2".to_string(),
+                    ],
+                )
+                .unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs.len(), 2);
+            assert_eq!(base.rpcs[0].as_str(), "https://base.example/updated-rpc-1");
+            assert_eq!(base.rpcs[1].as_str(), "https://base.example/updated-rpc-2");
+        }
+
+        #[tokio::test]
+        async fn test_client_networks_unchanged_when_rpcs_not_updated() {
+            let client = RaindexClient::new(
+                vec![base_client_yaml("https://base.example/original-rpc")],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let orderbook_yaml = client.get_orderbook_yaml();
+            let yaml_network = orderbook_yaml.get_network("base").unwrap();
+            let client_networks = client.get_all_networks().unwrap();
+            let client_network = client_networks.get("base").unwrap();
+
+            assert_eq!(client_network.rpcs, yaml_network.rpcs);
+            assert_eq!(client_network.rpcs.len(), 1);
+            assert_eq!(
+                client_network.rpcs[0].as_str(),
+                "https://base.example/original-rpc"
+            );
+        }
+
         #[tokio::test]
         async fn test_create_fetches_remote_networks() {
             let server = MockServer::start_async().await;

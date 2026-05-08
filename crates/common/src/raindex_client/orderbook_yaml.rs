@@ -4,6 +4,13 @@ use rain_orderbook_app_settings::{
 };
 use std::collections::{HashMap, HashSet};
 
+impl RaindexClient {
+    /// Returns an OrderbookYaml backed by the same in-memory YAML documents used by this client.
+    pub fn get_orderbook_yaml(&self) -> OrderbookYaml {
+        self.orderbook_yaml.clone()
+    }
+}
+
 #[wasm_export]
 impl RaindexClient {
     /// Retrieves a list of unique chain IDs from all configured networks

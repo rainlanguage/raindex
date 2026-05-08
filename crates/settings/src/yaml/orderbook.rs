@@ -234,6 +234,14 @@ impl OrderbookYaml {
         let context = self.build_context();
         NetworkCfg::parse_from_yaml(self.documents.clone(), key, Some(&context))
     }
+    pub fn update_network_rpcs(
+        &self,
+        network_key: &str,
+        rpcs: Vec<String>,
+    ) -> Result<NetworkCfg, YamlError> {
+        let mut network = self.get_network(network_key)?;
+        network.update_rpcs(rpcs)
+    }
     pub fn get_network_by_chain_id(&self, chain_id: u32) -> Result<NetworkCfg, YamlError> {
         let networks = self.get_networks()?;
         for network in networks.values() {
@@ -618,6 +626,41 @@ mod tests {
 
         assert!(matches!(deserialized.profile, ContextProfile::Strict));
         assert_eq!(deserialized.documents.len(), 1);
+    }
+
+    #[test]
+    fn test_update_network_rpcs_mutates_backing_document() {
+        let ob = OrderbookYaml::new(vec![full_yaml()], OrderbookYamlValidation::default()).unwrap();
+        let updated = ob
+            .update_network_rpcs("mainnet", vec!["https://updated-rpc.example".to_string()])
+            .unwrap();
+
+        assert_eq!(updated.rpcs.len(), 1);
+        assert_eq!(updated.rpcs[0].as_str(), "https://updated-rpc.example/");
+
+        let reparsed = ob.get_network("mainnet").unwrap();
+        assert_eq!(reparsed.rpcs.len(), 1);
+        assert_eq!(reparsed.rpcs[0].as_str(), "https://updated-rpc.example/");
+    }
+
+    #[test]
+    fn test_update_network_rpcs_errors_for_missing_network() {
+        let ob = OrderbookYaml::new(vec![full_yaml()], OrderbookYamlValidation::default()).unwrap();
+        let err = ob
+            .update_network_rpcs("missing", vec!["https://updated-rpc.example".to_string()])
+            .unwrap_err();
+
+        assert!(matches!(err, YamlError::KeyNotFound(_)));
+    }
+
+    #[test]
+    fn test_update_network_rpcs_errors_for_invalid_rpc() {
+        let ob = OrderbookYaml::new(vec![full_yaml()], OrderbookYamlValidation::default()).unwrap();
+        let err = ob
+            .update_network_rpcs("mainnet", vec!["not a url".to_string()])
+            .unwrap_err();
+
+        assert!(matches!(err, YamlError::ParseNetworkConfigSourceError(_)));
     }
 
     fn full_yaml() -> String {
