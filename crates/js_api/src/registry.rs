@@ -1,6 +1,13 @@
 use crate::gui::{DotrainOrderGui, GuiError};
 use crate::yaml::{OrderbookYaml, OrderbookYamlError};
-use rain_orderbook_app_settings::gui::NameAndDescriptionCfg;
+use rain_orderbook_app_settings::{
+    gui::NameAndDescriptionCfg,
+    yaml::{
+        emitter::emit_documents,
+        orderbook::{OrderbookYaml as SettingsOrderbookYaml, OrderbookYamlValidation},
+        YamlParsable,
+    },
+};
 use rain_orderbook_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -557,6 +564,7 @@ impl DotrainRegistry {
     ///
     /// ```javascript
     /// const clientResult = await registry.getRaindexClient(
+    ///   privateSettings,
     ///   localDb.query.bind(localDb),
     ///   localDb.wipeAndRecreate.bind(localDb),
     ///   updateStatus,
@@ -576,6 +584,11 @@ impl DotrainRegistry {
     pub async fn get_raindex_client(
         &self,
         #[wasm_export(
+            js_name = "additionalSettings",
+            param_description = "Optional additional YAML setting strings to layer after the public registry settings"
+        )]
+        additional_settings: Option<Vec<String>>,
+        #[wasm_export(
             js_name = "queryCallback",
             param_description = "Optional JavaScript function to execute local database queries"
         )]
@@ -591,8 +604,9 @@ impl DotrainRegistry {
         )]
         status_callback: Option<js_sys::Function>,
     ) -> Result<RaindexClient, DotrainRegistryError> {
+        let sources = self.raindex_client_sources(additional_settings)?;
         let client = RaindexClient::new(
-            vec![self.settings.clone()],
+            sources,
             None,
             query_callback,
             wipe_callback,
@@ -607,14 +621,34 @@ impl DotrainRegistry {
 impl DotrainRegistry {
     pub async fn get_raindex_client(
         &self,
+        additional_settings: Option<Vec<String>>,
         db_path: Option<std::path::PathBuf>,
     ) -> Result<RaindexClient, DotrainRegistryError> {
-        let client = RaindexClient::new(vec![self.settings.clone()], None, db_path).await?;
+        let sources = self.raindex_client_sources(additional_settings)?;
+        let client = RaindexClient::new(sources, None, db_path).await?;
         Ok(client)
     }
 }
 
 impl DotrainRegistry {
+    fn raindex_client_sources(
+        &self,
+        additional_settings: Option<Vec<String>>,
+    ) -> Result<Vec<String>, DotrainRegistryError> {
+        let mut sources = vec![self.settings.clone()];
+        if let Some(additional) = additional_settings {
+            sources.extend(additional);
+        }
+        if sources.len() == 1 {
+            return Ok(sources);
+        }
+
+        let yaml = SettingsOrderbookYaml::new(sources, OrderbookYamlValidation::default())
+            .map_err(RaindexClientError::from)?;
+        let merged = emit_documents(&yaml.documents).map_err(RaindexClientError::from)?;
+        Ok(vec![merged])
+    }
+
     fn settings_sources(&self) -> Option<Vec<String>> {
         if self.settings.is_empty() {
             None
@@ -900,6 +934,31 @@ _ _: 1 1;
         )
     }
 
+    fn additional_base_rpc_settings() -> String {
+        format!(
+            r#"version: {}
+networks:
+  base:
+    rpcs:
+      - https://private.base.rpc
+    chain-id: 8453
+    currency: ETH
+"#,
+            SpecVersion::current()
+        )
+    }
+
+    fn mock_registry_with_settings(settings: String) -> DotrainRegistry {
+        DotrainRegistry {
+            registry_url: Url::parse("https://example.com/registry.txt").unwrap(),
+            registry: MOCK_REGISTRY_CONTENT.to_string(),
+            settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
+            settings,
+            order_urls: HashMap::new(),
+            orders: HashMap::new(),
+        }
+    }
+
     #[cfg(target_family = "wasm")]
     mod wasm_tests {
         use super::*;
@@ -1145,6 +1204,34 @@ _ _: 1 1;
             let not_found_error = DotrainRegistryError::OrderKeyNotFound("test-order".to_string());
             let readable = not_found_error.to_readable_msg();
             assert!(readable.contains("order key 'test-order' was not found"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_get_raindex_client_without_additional_settings_uses_public_settings() {
+            let registry = mock_registry_with_settings(mock_settings_content());
+
+            let client = registry
+                .get_raindex_client(None, None, None, None)
+                .await
+                .unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs[0].as_str(), "https://mainnet.base.org/");
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_get_raindex_client_additional_settings_override_base_rpcs() {
+            let registry = mock_registry_with_settings(mock_settings_content());
+
+            let client = registry
+                .get_raindex_client(Some(vec![additional_base_rpc_settings()]), None, None, None)
+                .await
+                .unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs[0].as_str(), "https://private.base.rpc/");
         }
     }
 
@@ -1689,8 +1776,33 @@ _ _: 0 0;
                 .await
                 .unwrap();
 
-            let raindex_client = registry.get_raindex_client(None).await;
+            let raindex_client = registry.get_raindex_client(None, None).await;
             assert!(raindex_client.is_ok());
+        }
+
+        #[tokio::test]
+        async fn test_get_raindex_client_without_additional_settings_uses_public_settings() {
+            let registry = mock_registry_with_settings(mock_settings_content());
+
+            let client = registry.get_raindex_client(None, None).await.unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs[0].as_str(), "https://mainnet.base.org/");
+        }
+
+        #[tokio::test]
+        async fn test_get_raindex_client_additional_settings_override_base_rpcs() {
+            let registry = mock_registry_with_settings(mock_settings_content());
+
+            let client = registry
+                .get_raindex_client(Some(vec![additional_base_rpc_settings()]), None)
+                .await
+                .unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            let base = networks.get("base").unwrap();
+            assert_eq!(base.rpcs[0].as_str(), "https://private.base.rpc/");
         }
     }
 }

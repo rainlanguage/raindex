@@ -546,12 +546,22 @@ const tokens = tokensResult.value; // TokenInfo[] with chain_id, address, decima
 
 #### Get a RaindexClient from registry settings
 
-Use `getRaindexClient()` to create a `RaindexClient` directly from the registry's shared settings, without manually bridging through `OrderbookYaml`:
+Use `getRaindexClient()` to create a `RaindexClient` directly from the registry's shared settings, without manually bridging through `OrderbookYaml`. Pass private settings strings as the first argument when a caller needs to layer local settings over the public registry settings:
 
 ```ts
 const clientResult = registry.getRaindexClient();
 if (clientResult.error) throw new Error(clientResult.error.readableMsg);
 const client = clientResult.value;
+
+const privateSettings = `
+version: 5
+networks:
+  base:
+    rpcs:
+      - https://private.base.rpc
+    chain-id: 8453
+`;
+const privateClientResult = registry.getRaindexClient([privateSettings]);
 
 // Use the client to query orders, vaults, etc.
 const ordersResult = await client.getOrders([8453]);

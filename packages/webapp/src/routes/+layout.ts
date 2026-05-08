@@ -77,6 +77,7 @@ export const load: LayoutLoad<LayoutData> = async ({ url }) => {
 	try {
 		if (!errorMessage && registry) {
 			const raindexClientRes = await registry.getRaindexClient(
+				undefined,
 				localDb?.query?.bind(localDb),
 				localDb?.wipeAndRecreate?.bind(localDb),
 				updateStatus

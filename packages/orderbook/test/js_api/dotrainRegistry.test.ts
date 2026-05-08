@@ -70,6 +70,16 @@ tokens:
     network: base
 `;
 
+const ADDITIONAL_BASE_RPC_SETTINGS = `
+version: ${SPEC_VERSION}
+networks:
+  base:
+    rpcs:
+      - https://private.base.rpc
+    chain-id: 8453
+    currency: ETH
+`;
+
 const MOCK_DOTRAIN_PREFIX = `
 version: ${SPEC_VERSION}
 gui:
@@ -511,6 +521,44 @@ test-order http://localhost:8231/order.rain`;
 			const raindexClient = extractWasmEncodedData(raindexClientResult);
 
 			assert.ok(raindexClient, 'RaindexClient instance should be returned');
+		});
+
+		it('should preserve public settings when no additional settings are provided', async () => {
+			const registryContent = `http://localhost:8231/settings.yaml
+test-order http://localhost:8231/order.rain`;
+
+			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
+			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
+			await mockServer.forGet('/order.rain').thenReply(200, MOCK_DOTRAIN_SIMPLE);
+
+			const registry = extractWasmEncodedData(
+				await DotrainRegistry.new('http://localhost:8231/registry.txt')
+			);
+
+			const raindexClient = extractWasmEncodedData(await registry.getRaindexClient());
+			const networks = extractWasmEncodedData(raindexClient.getAllNetworks());
+
+			assert.strictEqual(networks.get('base')?.rpcs[0], 'https://mainnet.base.org/');
+		});
+
+		it('should apply additional settings after registry settings', async () => {
+			const registryContent = `http://localhost:8231/settings.yaml
+test-order http://localhost:8231/order.rain`;
+
+			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
+			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
+			await mockServer.forGet('/order.rain').thenReply(200, MOCK_DOTRAIN_SIMPLE);
+
+			const registry = extractWasmEncodedData(
+				await DotrainRegistry.new('http://localhost:8231/registry.txt')
+			);
+
+			const raindexClient = extractWasmEncodedData(
+				await registry.getRaindexClient([ADDITIONAL_BASE_RPC_SETTINGS])
+			);
+			const networks = extractWasmEncodedData(raindexClient.getAllNetworks());
+
+			assert.strictEqual(networks.get('base')?.rpcs[0], 'https://private.base.rpc/');
 		});
 	});
 });
