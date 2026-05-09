@@ -2,7 +2,7 @@ use super::*;
 use crate::local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs;
 use crate::raindex_client::local_db::query::fetch_trades_by_tx::fetch_trades_by_tx;
 use alloy::primitives::{Address, B256};
-use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
+use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use std::str::FromStr;
 
 #[wasm_export]
@@ -21,10 +21,10 @@ impl RaindexClient {
         )]
         chain_ids: Option<ChainIds>,
         #[wasm_export(
-            js_name = "orderbookAddresses",
-            param_description = "Optional orderbook addresses to filter results"
+            js_name = "raindexAddresses",
+            param_description = "Optional raindex addresses to filter results"
         )]
-        orderbook_addresses: Option<Vec<String>>,
+        raindex_addresses: Option<Vec<String>>,
         #[wasm_export(
             js_name = "txHash",
             param_description = "Transaction hash",
@@ -33,7 +33,7 @@ impl RaindexClient {
         tx_hash: String,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let tx_hash = B256::from_str(&tx_hash)?;
-        let orderbook_addresses = orderbook_addresses
+        let raindex_addresses = raindex_addresses
             .map(|addresses| {
                 addresses
                     .into_iter()
@@ -41,7 +41,7 @@ impl RaindexClient {
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
-        self.get_trades_for_transaction(chain_ids, orderbook_addresses, tx_hash)
+        self.get_trades_for_transaction(chain_ids, raindex_addresses, tx_hash)
             .await
     }
 }
@@ -49,12 +49,12 @@ impl RaindexClient {
     pub async fn get_trades_for_transaction(
         &self,
         chain_ids: Option<ChainIds>,
-        orderbook_addresses: Option<Vec<Address>>,
+        raindex_addresses: Option<Vec<Address>>,
         tx_hash: B256,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
-        let orderbook_addresses_for_local_db = orderbook_addresses.clone().unwrap_or_default();
+        let raindex_addresses_for_local_db = raindex_addresses.clone().unwrap_or_default();
 
         let mut all_trades = Vec::new();
 
@@ -63,7 +63,7 @@ impl RaindexClient {
                 &db,
                 FetchTradesByTxArgs {
                     chain_ids: local_ids,
-                    orderbook_addresses: orderbook_addresses_for_local_db,
+                    raindex_addresses: raindex_addresses_for_local_db,
                     tx_hash,
                 },
             )
@@ -77,7 +77,7 @@ impl RaindexClient {
 
         if !sg_ids.is_empty() {
             let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
-            let orderbook_in = orderbook_addresses
+            let raindex_in = raindex_addresses
                 .as_deref()
                 .filter(|addresses| !addresses.is_empty())
                 .map(|addresses| {
@@ -93,11 +93,11 @@ impl RaindexClient {
                         args.iter().map(|arg| (arg.name.as_str(), *chain_id))
                     })
                     .collect();
-                let client = MultiOrderbookSubgraphClient::new(
+                let client = MultiRaindexSubgraphClient::new(
                     multi_subgraph_args.values().flatten().cloned().collect(),
                 );
                 let sg_trades = client
-                    .trades_by_transaction(tx_hash.to_string(), orderbook_in)
+                    .trades_by_transaction(tx_hash.to_string(), raindex_in)
                     .await?;
                 for trade_with_name in sg_trades {
                     let chain_id = name_to_chain_id
@@ -173,8 +173,8 @@ mod tests {
             assert_eq!(trade.chain_id(), 42161);
             assert_eq!(trade.order_hash(), fixture.order_hash.to_string());
             assert_eq!(
-                trade.orderbook().to_lowercase(),
-                fixture.orderbook_address.to_string().to_lowercase()
+                trade.raindex().to_lowercase(),
+                fixture.raindex_address.to_string().to_lowercase()
             );
         }
     }
@@ -226,7 +226,7 @@ mod tests {
             assert_eq!(trades[0].id(), Bytes::from_str("0x0123").unwrap());
             assert_eq!(trades[0].chain_id(), 1);
             assert_eq!(
-                trades[0].orderbook(),
+                trades[0].raindex(),
                 Address::from_str("0x1234567890123456789012345678901234567890").unwrap()
             );
         }

@@ -7,7 +7,7 @@ use crate::raindex_client::local_db::query::fetch_owner_trades::fetch_owner_trad
 use crate::raindex_client::local_db::query::fetch_owner_trades_count::fetch_owner_trades_count;
 use crate::raindex_client::{PaginationParams, TimeFilter};
 use alloy::primitives::Address;
-use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
+use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use std::str::FromStr;
 
 #[wasm_export]
@@ -26,10 +26,10 @@ impl RaindexClient {
         )]
         chain_ids: Option<ChainIds>,
         #[wasm_export(
-            js_name = "orderbookAddresses",
-            param_description = "Optional orderbook addresses to filter results"
+            js_name = "raindexAddresses",
+            param_description = "Optional raindex addresses to filter results"
         )]
-        orderbook_addresses: Option<Vec<String>>,
+        raindex_addresses: Option<Vec<String>>,
         #[wasm_export(
             js_name = "owner",
             param_description = "Owner address",
@@ -50,7 +50,7 @@ impl RaindexClient {
         time_filter: Option<TimeFilter>,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let owner = Address::from_str(&owner)?;
-        let orderbook_addresses = orderbook_addresses
+        let raindex_addresses = raindex_addresses
             .map(|addresses| {
                 addresses
                     .into_iter()
@@ -60,7 +60,7 @@ impl RaindexClient {
             .transpose()?;
         self.get_trades_for_owner(
             chain_ids,
-            orderbook_addresses,
+            raindex_addresses,
             owner,
             pagination.unwrap_or_default(),
             time_filter.unwrap_or_default(),
@@ -72,14 +72,14 @@ impl RaindexClient {
     pub async fn get_trades_for_owner(
         &self,
         chain_ids: Option<ChainIds>,
-        orderbook_addresses: Option<Vec<Address>>,
+        raindex_addresses: Option<Vec<Address>>,
         owner: Address,
         pagination: PaginationParams,
         time_filter: TimeFilter,
     ) -> Result<RaindexTradesListResult, RaindexError> {
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
-        let orderbook_addresses_for_local_db = orderbook_addresses.clone().unwrap_or_default();
+        let raindex_addresses_for_local_db = raindex_addresses.clone().unwrap_or_default();
 
         let mut all_trades = Vec::new();
         let mut total_count: Option<u64> = None;
@@ -90,7 +90,7 @@ impl RaindexClient {
                 FetchOwnerTradesArgs {
                     owner,
                     chain_ids: local_ids.clone(),
-                    orderbook_addresses: orderbook_addresses_for_local_db.clone(),
+                    raindex_addresses: raindex_addresses_for_local_db.clone(),
                     time_filter: time_filter.clone(),
                     pagination: pagination.clone(),
                 },
@@ -107,7 +107,7 @@ impl RaindexClient {
                     FetchOwnerTradesCountArgs {
                         owner,
                         chain_ids: local_ids,
-                        orderbook_addresses: orderbook_addresses_for_local_db,
+                        raindex_addresses: raindex_addresses_for_local_db,
                         time_filter: time_filter.clone(),
                     },
                 )
@@ -120,7 +120,7 @@ impl RaindexClient {
 
         if !sg_ids.is_empty() {
             let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
-            let orderbook_in = orderbook_addresses
+            let raindex_in = raindex_addresses
                 .as_deref()
                 .filter(|addresses| !addresses.is_empty())
                 .map(|addresses| {
@@ -136,7 +136,7 @@ impl RaindexClient {
                         args.iter().map(|arg| (arg.name.as_str(), *chain_id))
                     })
                     .collect();
-                let client = MultiOrderbookSubgraphClient::new(
+                let client = MultiRaindexSubgraphClient::new(
                     multi_subgraph_args.values().flatten().cloned().collect(),
                 );
                 let sg_trades = client
@@ -144,7 +144,7 @@ impl RaindexClient {
                         owner.to_string().to_lowercase(),
                         time_filter.start,
                         time_filter.end,
-                        orderbook_in,
+                        raindex_in,
                     )
                     .await;
                 for trade_with_name in sg_trades {

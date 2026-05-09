@@ -44,8 +44,8 @@ impl RaindexSubgraphClient {
     pub async fn trades_by_transaction(
         &self,
         tx_id: String,
-        orderbook_in: Option<Vec<String>>,
-    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        raindex_in: Option<Vec<String>>,
+    ) -> Result<Vec<SgTrade>, RaindexSubgraphClientError> {
         let mut all_trades = vec![];
         let mut page = 1;
 
@@ -60,7 +60,7 @@ impl RaindexSubgraphClient {
                         tx_id: tx_id.clone(),
                         first: pagination_variables.first,
                         skip: pagination_variables.skip,
-                        orderbook_in: orderbook_in.clone(),
+                        raindex_in: raindex_in.clone(),
                     },
                 )
                 .await?;
@@ -87,9 +87,9 @@ impl RaindexSubgraphClient {
         owner: String,
         start_timestamp: Option<u64>,
         end_timestamp: Option<u64>,
-        orderbook_in: Option<Vec<String>>,
+        raindex_in: Option<Vec<String>>,
         pagination_args: SgPaginationArgs,
-    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+    ) -> Result<Vec<SgTrade>, RaindexSubgraphClientError> {
         let pagination_variables = Self::parse_pagination_args(pagination_args);
         let data = self
             .query::<SgOwnerTradesListQuery, SgOwnerTradesQueryVariables>(
@@ -105,7 +105,7 @@ impl RaindexSubgraphClient {
                         end_timestamp
                             .map_or(SgBigInt(u64::MAX.to_string()), |v| SgBigInt(v.to_string())),
                     ),
-                    orderbook_in,
+                    raindex_in,
                 },
             )
             .await?;
@@ -118,8 +118,8 @@ impl RaindexSubgraphClient {
         owner: String,
         start_timestamp: Option<u64>,
         end_timestamp: Option<u64>,
-        orderbook_in: Option<Vec<String>>,
-    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        raindex_in: Option<Vec<String>>,
+    ) -> Result<Vec<SgTrade>, RaindexSubgraphClientError> {
         let mut all_trades = vec![];
         let mut page = 1;
 
@@ -129,7 +129,7 @@ impl RaindexSubgraphClient {
                     owner.clone(),
                     start_timestamp,
                     end_timestamp,
-                    orderbook_in.clone(),
+                    raindex_in.clone(),
                     SgPaginationArgs {
                         page,
                         page_size: ALL_PAGES_QUERY_PAGE_SIZE,
@@ -657,21 +657,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_trades_by_transaction_with_orderbook_filter() {
+    async fn test_trades_by_transaction_with_raindex_filter() {
         let sg_server = MockServer::start_async().await;
         let client = setup_client(&sg_server);
-        let tx_id = "0xtx_orderbook_filtered".to_string();
-        let orderbook = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string();
+        let tx_id = "0xtx_raindex_filtered".to_string();
+        let raindex = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string();
 
         sg_server.mock(|when, then| {
             when.method(POST)
                 .path("/")
-                .body_contains(format!("\"orderbookIn\":[\"{}\"]", orderbook));
+                .body_contains(format!("\"raindexIn\":[\"{}\"]", raindex));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
 
         let result = client
-            .trades_by_transaction(tx_id, Some(vec![orderbook]))
+            .trades_by_transaction(tx_id, Some(vec![raindex]))
             .await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -734,7 +734,7 @@ mod tests {
         let result = client.trades_by_transaction(tx_id, None).await;
         assert!(matches!(
             result,
-            Err(OrderbookSubgraphClientError::CynicClientError(_))
+            Err(RaindexSubgraphClientError::CynicClientError(_))
         ));
     }
 
@@ -823,11 +823,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_trades_by_owner_with_orderbook_filter() {
+    async fn test_trades_by_owner_with_raindex_filter() {
         let sg_server = MockServer::start_async().await;
         let client = setup_client(&sg_server);
         let owner = "0xowner_filtered".to_string();
-        let orderbook = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string();
+        let raindex = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef".to_string();
         let pagination_args = SgPaginationArgs {
             page: 1,
             page_size: 10,
@@ -836,12 +836,12 @@ mod tests {
         sg_server.mock(|when, then| {
             when.method(POST)
                 .path("/")
-                .body_contains(format!("\"orderbookIn\":[\"{}\"]", orderbook));
+                .body_contains(format!("\"raindexIn\":[\"{}\"]", raindex));
             then.status(200).json_body(json!({"data": {"trades": []}}));
         });
 
         let result = client
-            .trades_by_owner(owner, None, None, Some(vec![orderbook]), pagination_args)
+            .trades_by_owner(owner, None, None, Some(vec![raindex]), pagination_args)
             .await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -910,7 +910,7 @@ mod tests {
             .await;
         assert!(matches!(
             result,
-            Err(OrderbookSubgraphClientError::CynicClientError(_))
+            Err(RaindexSubgraphClientError::CynicClientError(_))
         ));
     }
 }

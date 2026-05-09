@@ -111,7 +111,7 @@ pub struct SgPaginationWithTxIdQueryVariables {
     pub skip: Option<i32>,
     pub tx_id: String,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub orderbook_in: Option<Vec<String>>,
+    pub raindex_in: Option<Vec<String>>,
 }
 
 #[derive(cynic::QueryVariables, Debug, Clone, Tsify)]
@@ -126,7 +126,7 @@ pub struct SgOwnerTradesQueryVariables {
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub timestamp_lte: Option<SgBigInt>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub orderbook_in: Option<Vec<String>>,
+    pub raindex_in: Option<Vec<String>>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Serialize, Clone, Tsify)]

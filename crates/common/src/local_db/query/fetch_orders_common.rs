@@ -52,12 +52,12 @@ const POSITIVE_OUTPUT_VAULT_BALANCE_EXISTS_BODY: &str = "EXISTS (
       SELECT 1 FROM order_ios io_balance
       JOIN running_vault_balances vb_balance
         ON vb_balance.chain_id = io_balance.chain_id
-       AND vb_balance.orderbook_address = io_balance.orderbook_address
+       AND vb_balance.raindex_address = io_balance.raindex_address
        AND vb_balance.owner = l.order_owner
        AND vb_balance.token = io_balance.token
        AND vb_balance.vault_id = io_balance.vault_id
       WHERE io_balance.chain_id = l.chain_id
-        AND io_balance.orderbook_address = l.orderbook_address
+        AND io_balance.raindex_address = l.raindex_address
         AND io_balance.transaction_hash = la.transaction_hash
         AND io_balance.log_index = la.log_index
         AND lower(io_balance.io_type) = 'output'

@@ -297,7 +297,7 @@ impl RaindexClient {
     ///
     /// The live status fields are maintained by the sync scheduler as it emits
     /// status updates. When a local DB handle is available, persisted
-    /// `lastSyncedBlock` watermark information is added per orderbook.
+    /// `lastSyncedBlock` watermark information is added per raindex.
     #[wasm_export(
         js_name = "getLocalDbSyncSnapshot",
         return_description = "Latest local DB sync status snapshot"
@@ -308,19 +308,19 @@ impl RaindexClient {
             return Ok(snapshot);
         };
 
-        for orderbook in &mut snapshot.orderbooks {
-            let stmt = fetch_last_synced_block_stmt(&orderbook.ob_id);
+        for raindex in &mut snapshot.raindexes {
+            let stmt = fetch_last_synced_block_stmt(&raindex.raindex_id);
             match db.query_json::<Vec<SyncStatusResponse>>(&stmt).await {
                 Ok(rows) => {
                     if let Some(row) = rows.into_iter().next() {
-                        orderbook.last_synced_block = Some(row.last_synced_block);
-                        orderbook.updated_at = row.updated_at;
+                        raindex.last_synced_block = Some(row.last_synced_block);
+                        raindex.updated_at = row.updated_at;
                     }
                 }
                 Err(err) => {
                     tracing::debug!(
-                        chain_id = orderbook.ob_id.chain_id,
-                        orderbook = %format!("{:#x}", orderbook.ob_id.orderbook_address),
+                        chain_id = raindex.raindex_id.chain_id,
+                        raindex = %format!("{:#x}", raindex.raindex_id.raindex_address),
                         error = %err,
                         "failed to read local DB sync watermark for snapshot"
                     );
@@ -937,8 +937,8 @@ local-db-sync:
         finality-depth: 12
         bootstrap-block-threshold: 100
         sync-interval-ms: 5000
-orderbooks:
-    arbitrum-orderbook:
+raindexes:
+    arbitrum-raindex:
         address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
         network: arbitrum
         subgraph: arbitrum
@@ -954,14 +954,14 @@ orderbooks:
             rows: Vec<SyncStatusResponse>,
             sync_status_store: LocalDbSyncStatusStore,
         ) -> RaindexClient {
-            let orderbook_yaml = OrderbookYaml::new(vec![yaml], OrderbookYamlValidation::default())
+            let raindex_yaml = RaindexYaml::new(vec![yaml], RaindexYamlValidation::default())
                 .expect("test yaml should parse");
             let sync_readiness = SyncReadiness::new();
             sync_readiness.mark_ready(42161);
             let mut configured_chains = std::collections::HashSet::new();
             configured_chains.insert(42161);
             RaindexClient {
-                orderbook_yaml,
+                raindex_yaml,
                 local_db_state: LocalDbState::new(
                     Some(LocalDb::new(SnapshotDbExec { rows })),
                     Arc::new(std::sync::Mutex::new(None)),
@@ -1106,7 +1106,7 @@ using-tokens-from:
             assert!(snapshot.healthy);
             assert_eq!(snapshot.status, LocalDbStatus::Active);
             assert!(snapshot.networks.is_empty());
-            assert!(snapshot.orderbooks.is_empty());
+            assert!(snapshot.raindexes.is_empty());
         }
 
         #[tokio::test]
@@ -1120,7 +1120,7 @@ using-tokens-from:
                 yaml,
                 vec![SyncStatusResponse {
                     chain_id: 42161,
-                    orderbook_address: "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string(),
+                    raindex_address: "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string(),
                     last_synced_block: 123_456,
                     updated_at: Some("2026-05-01 12:00:00".to_string()),
                 }],
@@ -1136,15 +1136,15 @@ using-tokens-from:
                 snapshot.networks[0].network_key,
                 Some("arbitrum".to_string())
             );
-            assert_eq!(snapshot.networks[0].orderbook_count, 1);
-            assert_eq!(snapshot.orderbooks.len(), 1);
+            assert_eq!(snapshot.networks[0].raindex_count, 1);
+            assert_eq!(snapshot.raindexes.len(), 1);
             assert_eq!(
-                snapshot.orderbooks[0].orderbook_key,
-                Some("arbitrum-orderbook".to_string())
+                snapshot.raindexes[0].raindex_key,
+                Some("arbitrum-raindex".to_string())
             );
-            assert_eq!(snapshot.orderbooks[0].last_synced_block, Some(123_456));
+            assert_eq!(snapshot.raindexes[0].last_synced_block, Some(123_456));
             assert_eq!(
-                snapshot.orderbooks[0].updated_at,
+                snapshot.raindexes[0].updated_at,
                 Some("2026-05-01 12:00:00".to_string())
             );
         }

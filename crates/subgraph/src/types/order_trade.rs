@@ -47,7 +47,7 @@ pub struct SgOwnerTradesListQuery {
             order_: { owner: $owner },
             timestamp_gte: $timestamp_gte,
             timestamp_lte: $timestamp_lte,
-            orderbook_in: $orderbook_in
+            raindex_in: $raindex_in
         }
     )]
     pub trades: Vec<SgTrade>,
@@ -67,7 +67,7 @@ pub struct SgTransactionTradesQuery {
         orderDirection: "desc",
         where: {
             tradeEvent_: { transaction: $tx_id },
-            orderbook_in: $orderbook_in
+            raindex_in: $raindex_in
         }
     )]
     pub trades: Vec<SgTrade>,

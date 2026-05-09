@@ -12,19 +12,19 @@ const END_TS_BODY: &str = "\nAND block_timestamp <= {param}\n";
 
 const CLEAR_ALICE_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_ALICE_CHAIN_IDS_CLAUSE*/";
 const CLEAR_ALICE_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_ALICE_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_ALICE_ORDERBOOKS_CLAUSE*/";
-const CLEAR_ALICE_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
+const CLEAR_ALICE_RAINDEXS_CLAUSE: &str = "/*CLEAR_ALICE_RAINDEXS_CLAUSE*/";
+const CLEAR_ALICE_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
 
 const CLEAR_BOB_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_BOB_CHAIN_IDS_CLAUSE*/";
 const CLEAR_BOB_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_BOB_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_BOB_ORDERBOOKS_CLAUSE*/";
-const CLEAR_BOB_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
+const CLEAR_BOB_RAINDEXS_CLAUSE: &str = "/*CLEAR_BOB_RAINDEXS_CLAUSE*/";
+const CLEAR_BOB_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
 
 #[derive(Debug, Clone)]
 pub struct FetchOwnerTradesCountArgs {
     pub owner: Address,
     pub chain_ids: Vec<u32>,
-    pub orderbook_addresses: Vec<Address>,
+    pub raindex_addresses: Vec<Address>,
     pub time_filter: TimeFilter,
 }
 
@@ -37,14 +37,14 @@ pub fn build_fetch_owner_trades_count_stmt(
         &mut stmt,
         args.owner,
         &args.chain_ids,
-        &args.orderbook_addresses,
+        &args.raindex_addresses,
         &args.time_filter,
         START_TS_BODY,
         END_TS_BODY,
     )?;
 
     let chain_ids_iter = || filters.chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || filters.orderbooks.iter().cloned().map(SqlValue::from);
+    let raindexs_iter = || filters.raindexs.iter().cloned().map(SqlValue::from);
 
     stmt.bind_list_clause(
         CLEAR_ALICE_CHAIN_IDS_CLAUSE,
@@ -52,9 +52,9 @@ pub fn build_fetch_owner_trades_count_stmt(
         chain_ids_iter(),
     )?;
     stmt.bind_list_clause(
-        CLEAR_ALICE_ORDERBOOKS_CLAUSE,
-        CLEAR_ALICE_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        CLEAR_ALICE_RAINDEXS_CLAUSE,
+        CLEAR_ALICE_RAINDEXS_CLAUSE_BODY,
+        raindexs_iter(),
     )?;
     stmt.bind_list_clause(
         CLEAR_BOB_CHAIN_IDS_CLAUSE,
@@ -62,9 +62,9 @@ pub fn build_fetch_owner_trades_count_stmt(
         chain_ids_iter(),
     )?;
     stmt.bind_list_clause(
-        CLEAR_BOB_ORDERBOOKS_CLAUSE,
-        CLEAR_BOB_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        CLEAR_BOB_RAINDEXS_CLAUSE,
+        CLEAR_BOB_RAINDEXS_CLAUSE_BODY,
+        raindexs_iter(),
     )?;
 
     Ok(stmt)
@@ -88,7 +88,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_count_stmt(&FetchOwnerTradesCountArgs {
             owner,
             chain_ids: vec![137, 1],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
         })
         .unwrap();
@@ -103,7 +103,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_count_stmt(&FetchOwnerTradesCountArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter {
                 start: Some(1000),
                 end: Some(2000),
@@ -122,7 +122,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_count_stmt(&FetchOwnerTradesCountArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
         })
         .unwrap();

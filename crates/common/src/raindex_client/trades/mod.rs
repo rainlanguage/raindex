@@ -1093,7 +1093,7 @@ mod test_helpers {
         use super::*;
         use crate::{
             local_db::RaindexIdentifier,
-            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS},
+            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS},
         };
         use alloy::primitives::{b256, Bytes};
         use httpmock::MockServer;
@@ -1200,7 +1200,7 @@ mod test_helpers {
                   }
               ],
               "raindex": {
-                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+                "id": CHAIN_ID_1_RAINDEX_ADDRESS
               },
               "active": true,
               "timestampAdded": "1739448802",
@@ -1446,7 +1446,7 @@ mod test_helpers {
                 .get_order_by_hash(
                     &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -1642,7 +1642,7 @@ mod test_helpers {
                 .get_order_by_hash(
                     &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
