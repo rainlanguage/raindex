@@ -268,7 +268,7 @@ impl RaindexOrder {
 }
 impl RaindexOrder {
     pub async fn get_trade_detail(&self, trade_id: Bytes) -> Result<RaindexTrade, RaindexError> {
-        let client = self.get_raindex_client()?;
+        let client = self.get_raindex_subgraph_client()?;
         RaindexTrade::try_from_sg_trade(
             self.chain_id(),
             client

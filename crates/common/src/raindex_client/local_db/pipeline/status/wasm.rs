@@ -118,25 +118,25 @@ mod tests {
     use crate::raindex_client::local_db::SchedulerState;
     use alloy::primitives::address;
 
-    fn test_ob_id() -> RaindexIdentifier {
+    fn test_raindex_id() -> RaindexIdentifier {
         RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
     #[test]
-    fn client_status_bus_default_has_no_ob_id() {
+    fn client_status_bus_default_has_no_raindex_id() {
         let bus = ClientStatusBus::new();
         assert!(bus.raindex_id.is_none());
     }
 
     #[test]
-    fn client_status_bus_with_ob_id_stores_identifier() {
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id.clone());
+    fn client_status_bus_with_raindex_id_stores_identifier() {
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id.clone());
         assert_eq!(bus.raindex_id, Some(raindex_id));
     }
 
     #[tokio::test]
-    async fn send_does_not_panic_without_ob_id() {
+    async fn send_does_not_panic_without_raindex_id() {
         let bus = ClientStatusBus::new();
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
@@ -144,47 +144,47 @@ mod tests {
 
     #[tokio::test]
     async fn send_skips_when_not_leader() {
-        let raindex_id = test_ob_id();
+        let raindex_id = test_raindex_id();
         set_scheduler_state(SchedulerState::NotLeader);
-        let bus = ClientStatusBus::with_ob_id(raindex_id);
+        let bus = ClientStatusBus::with_raindex_id(raindex_id);
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
         set_scheduler_state(SchedulerState::Leader);
     }
 
     #[tokio::test]
-    async fn send_returns_ok_when_leader_with_ob_id() {
+    async fn send_returns_ok_when_leader_with_raindex_id() {
         set_scheduler_state(SchedulerState::Leader);
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id);
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id);
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
     }
 
     #[test]
-    fn emit_active_does_not_panic_without_ob_id() {
+    fn emit_active_does_not_panic_without_raindex_id() {
         let bus = ClientStatusBus::new();
         bus.emit_active();
     }
 
     #[test]
-    fn emit_failure_does_not_panic_without_ob_id() {
+    fn emit_failure_does_not_panic_without_raindex_id() {
         let bus = ClientStatusBus::new();
         bus.emit_failure("test error".to_string());
     }
 
     #[test]
-    fn emit_active_with_ob_id_does_not_panic() {
+    fn emit_active_with_raindex_id_does_not_panic() {
         set_scheduler_state(SchedulerState::Leader);
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id);
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id);
         bus.emit_active();
     }
 
     #[test]
-    fn emit_failure_with_ob_id_does_not_panic() {
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id);
+    fn emit_failure_with_raindex_id_does_not_panic() {
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id);
         bus.emit_failure("test error".to_string());
     }
 
@@ -218,7 +218,7 @@ mod wasm_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
-    fn test_ob_id() -> RaindexIdentifier {
+    fn test_raindex_id() -> RaindexIdentifier {
         RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
@@ -243,8 +243,8 @@ mod wasm_tests {
         set_status_callback(Some(callback));
         set_scheduler_state(SchedulerState::Leader);
 
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id.clone());
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id.clone());
         bus.send(SyncPhase::FetchingLatestBlock).await.unwrap();
 
         set_status_callback(None);
@@ -270,8 +270,8 @@ mod wasm_tests {
         set_status_callback(Some(callback));
         set_scheduler_state(SchedulerState::NotLeader);
 
-        let raindex_id = test_ob_id();
-        let bus = ClientStatusBus::with_ob_id(raindex_id);
+        let raindex_id = test_raindex_id();
+        let bus = ClientStatusBus::with_raindex_id(raindex_id);
         bus.send(SyncPhase::FetchingLatestBlock).await.unwrap();
 
         set_status_callback(None);
