@@ -103,6 +103,32 @@ pub struct SgPaginationWithTimestampQueryVariables {
     pub timestamp_lte: Option<SgBigInt>,
 }
 
+#[derive(cynic::QueryVariables, Debug, Clone, Tsify)]
+pub struct SgPaginationWithTxIdQueryVariables {
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub first: Option<i32>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub skip: Option<i32>,
+    pub tx_id: String,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub orderbook_in: Option<Vec<String>>,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone, Tsify)]
+pub struct SgOwnerTradesQueryVariables {
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub first: Option<i32>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub skip: Option<i32>,
+    pub owner: SgBytes,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub timestamp_gte: Option<SgBigInt>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub timestamp_lte: Option<SgBigInt>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub orderbook_in: Option<Vec<String>>,
+}
+
 #[derive(cynic::QueryFragment, Debug, Serialize, Clone, Tsify)]
 #[cynic(graphql_type = "Raindex")]
 pub struct SgRaindex {
@@ -141,12 +167,20 @@ pub struct SgOrderWithSubgraphName {
 }
 impl_wasm_traits!(SgOrderWithSubgraphName);
 
+#[derive(Debug, Serialize, Deserialize, Clone, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct SgTradeWithSubgraphName {
+    pub trade: SgTrade,
+    pub subgraph_name: String,
+}
+
 #[derive(cynic::QueryFragment, Debug, Serialize, Clone, Tsify)]
 #[cynic(graphql_type = "Order")]
 #[serde(rename_all = "camelCase")]
 pub struct SgTradeStructPartialOrder {
     pub id: SgBytes,
     pub order_hash: SgBytes,
+    pub owner: SgBytes,
 }
 
 #[derive(cynic::QueryFragment, Debug, Serialize, Clone, Tsify)]

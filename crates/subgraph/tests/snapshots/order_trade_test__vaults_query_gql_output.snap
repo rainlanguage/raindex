@@ -51,6 +51,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
     order {
       id
       orderHash
+      owner
     }
     inputVaultBalanceChange {
       id

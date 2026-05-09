@@ -155,6 +155,7 @@
               set -euxo pipefail
               cd packages/raindex
               npm install --no-check
+              npm run format-check
               npm run build
               npm test
             '';

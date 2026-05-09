@@ -1,17 +1,21 @@
+mod get_by_owner;
+mod get_by_tx;
+
 use super::local_db::orders::LocalDbOrders;
 use super::orders::{OrdersDataSource, SubgraphOrders};
 use super::ClientRef;
 use super::*;
 use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
 use crate::local_db::RaindexIdentifier;
-use crate::raindex_client::QuerySource;
 use crate::raindex_client::{
     orders::RaindexOrder,
     transactions::RaindexTransaction,
     vaults::{LocalTradeBalanceInfo, LocalTradeTokenInfo, RaindexVaultBalanceChange},
 };
 use alloy::primitives::{Address, Bytes, B256, U256};
+use rain_math_float::Float;
 use raindex_subgraph_client::types::{common::SgTrade, Id};
+use std::ops::{Add, Div, Sub};
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
@@ -21,12 +25,16 @@ use wasm_bindgen_utils::prelude::js_sys::BigInt;
 #[wasm_bindgen]
 pub struct RaindexTrade {
     id: Bytes,
-    order_hash: Bytes,
+    chain_id: u32,
+    raindex: Address,
+    order_hash: B256,
+    owner: Address,
     transaction: RaindexTransaction,
     input_vault_balance_change: RaindexVaultBalanceChange,
     output_vault_balance_change: RaindexVaultBalanceChange,
     timestamp: U256,
-    raindex: Address,
+    io_ratio: Float,
+    formatted_io_ratio: String,
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
@@ -35,9 +43,21 @@ impl RaindexTrade {
     pub fn id(&self) -> String {
         self.id.to_string()
     }
+    #[wasm_bindgen(getter = chainId)]
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
+    pub fn raindex(&self) -> String {
+        self.raindex.to_string()
+    }
     #[wasm_bindgen(getter = orderHash, unchecked_return_type = "Hex")]
     pub fn order_hash(&self) -> String {
         self.order_hash.to_string()
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
+    pub fn owner(&self) -> String {
+        self.owner.to_string()
     }
     #[wasm_bindgen(getter)]
     pub fn transaction(&self) -> RaindexTransaction {
@@ -56,9 +76,13 @@ impl RaindexTrade {
         BigInt::from_str(&self.timestamp.to_string())
             .map_err(|e| RaindexError::JsError(e.to_string().into()))
     }
-    #[wasm_bindgen(getter, unchecked_return_type = "Address")]
-    pub fn raindex(&self) -> String {
-        self.raindex.to_string()
+    #[wasm_bindgen(getter = ioRatio)]
+    pub fn io_ratio(&self) -> Float {
+        self.io_ratio
+    }
+    #[wasm_bindgen(getter = formattedIoRatio)]
+    pub fn formatted_io_ratio(&self) -> String {
+        self.formatted_io_ratio.clone()
     }
 }
 #[cfg(not(target_family = "wasm"))]
@@ -66,8 +90,17 @@ impl RaindexTrade {
     pub fn id(&self) -> Bytes {
         self.id.clone()
     }
-    pub fn order_hash(&self) -> Bytes {
-        self.order_hash.clone()
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    pub fn raindex(&self) -> Address {
+        self.raindex
+    }
+    pub fn order_hash(&self) -> B256 {
+        self.order_hash
+    }
+    pub fn owner(&self) -> Address {
+        self.owner
     }
     pub fn transaction(&self) -> RaindexTransaction {
         self.transaction.clone()
@@ -81,8 +114,11 @@ impl RaindexTrade {
     pub fn timestamp(&self) -> U256 {
         self.timestamp
     }
-    pub fn raindex(&self) -> Address {
-        self.raindex
+    pub fn io_ratio(&self) -> Float {
+        self.io_ratio
+    }
+    pub fn formatted_io_ratio(&self) -> &str {
+        &self.formatted_io_ratio
     }
 }
 
@@ -91,7 +127,7 @@ impl RaindexOrder {
     /// Fetches trade history with optional time filtering
     ///
     /// Retrieves a chronological list of trades executed by an order within
-    /// an optional time range.
+    /// an optional time range, along with the total count and optional per-pair summary.
     ///
     /// ## Examples
     ///
@@ -101,13 +137,13 @@ impl RaindexOrder {
     ///   console.error("Cannot fetch trades:", result.error.readableMsg);
     ///   return;
     /// }
-    /// const trades = result.value;
-    /// // Do something with the trades
+    /// const { trades, totalCount, summary } = result.value;
     /// ```
     #[wasm_export(
         js_name = "getTradesList",
-        return_description = "Array of trade records with complete details",
-        unchecked_return_type = "RaindexTrade[]"
+        return_description = "Trades list result with total count and optional per-pair summary",
+        unchecked_return_type = "RaindexTradesListResult",
+        preserve_js_class
     )]
     pub async fn get_trades_list(
         &self,
@@ -126,25 +162,25 @@ impl RaindexOrder {
             param_description = "Optional page number (defaults to 1)"
         )]
         page: Option<u16>,
-    ) -> Result<Vec<RaindexTrade>, RaindexError> {
+    ) -> Result<RaindexTradesListResult, RaindexError> {
         let chain_id = self.chain_id();
         #[cfg(target_family = "wasm")]
-        let raindex_addr = Address::from_str(&self.raindex())?;
+        let raindex = Address::from_str(&self.raindex())?;
         #[cfg(not(target_family = "wasm"))]
-        let raindex_addr = self.raindex();
+        let raindex = self.raindex();
 
         #[cfg(target_family = "wasm")]
         let order_hash = B256::from_str(&self.order_hash())?;
         #[cfg(not(target_family = "wasm"))]
         let order_hash = B256::from_str(&self.order_hash().to_string())?;
 
-        let raindex_id = RaindexIdentifier::new(chain_id, raindex_addr);
+        let raindex_id = RaindexIdentifier::new(chain_id, raindex);
         let raindex_client = self.get_raindex_client();
 
-        match raindex_client.query_source(chain_id) {
+        let (trades, total_count) = match raindex_client.query_source(chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
-                local_source
+                let trades = local_source
                     .trades_list(
                         &raindex_id,
                         &order_hash,
@@ -152,11 +188,19 @@ impl RaindexOrder {
                         end_timestamp,
                         page,
                     )
-                    .await
+                    .await?;
+                let total_count = if page.is_some() {
+                    local_source
+                        .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
+                        .await?
+                } else {
+                    trades.len() as u64
+                };
+                (trades, total_count)
             }
             QuerySource::Subgraph => {
                 let subgraph_source = SubgraphOrders::new(&raindex_client);
-                subgraph_source
+                let trades = subgraph_source
                     .trades_list(
                         &raindex_id,
                         &order_hash,
@@ -164,9 +208,29 @@ impl RaindexOrder {
                         end_timestamp,
                         page,
                     )
-                    .await
+                    .await?;
+                let total_count = if page.is_some() {
+                    subgraph_source
+                        .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
+                        .await?
+                } else {
+                    trades.len() as u64
+                };
+                (trades, total_count)
             }
-        }
+        };
+
+        let summary = if page.is_some() {
+            None
+        } else {
+            Some(RaindexPairSummary::from_trades(&trades)?)
+        };
+
+        Ok(RaindexTradesListResult {
+            trades,
+            total_count,
+            summary,
+        })
     }
 
     /// Fetches detailed information for a specific trade
@@ -183,7 +247,6 @@ impl RaindexOrder {
     ///   return;
     /// }
     /// const trade = result.value;
-    /// // Do something with the trade
     /// ```
     #[wasm_export(
         js_name = "getTradeDetail",
@@ -202,74 +265,10 @@ impl RaindexOrder {
         let trade_id = Bytes::from_str(&trade_id)?;
         self.get_trade_detail(trade_id).await
     }
-
-    /// Counts total trades for an order within a time range
-    ///
-    /// Efficiently counts the total number of trades executed by an order without
-    /// fetching all trade details.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await order.getTradeCount();
-    /// if (result.error) {
-    ///   console.error("Cannot count trades:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const count = result.value;
-    /// // Do something with the count
-    /// ```
-    #[wasm_export(
-        js_name = "getTradeCount",
-        return_description = "Total trade count as number",
-        unchecked_return_type = "number"
-    )]
-    pub async fn get_trade_count(
-        &self,
-        #[wasm_export(
-            js_name = "startTimestamp",
-            param_description = "Optional start time filter (Unix timestamp in seconds)"
-        )]
-        start_timestamp: Option<u64>,
-        #[wasm_export(
-            js_name = "endTimestamp",
-            param_description = "Optional end time filter (Unix timestamp in seconds)"
-        )]
-        end_timestamp: Option<u64>,
-    ) -> Result<u64, RaindexError> {
-        let chain_id = self.chain_id();
-        #[cfg(target_family = "wasm")]
-        let raindex_addr = Address::from_str(&self.raindex())?;
-        #[cfg(not(target_family = "wasm"))]
-        let raindex_addr = self.raindex();
-
-        #[cfg(target_family = "wasm")]
-        let order_hash = B256::from_str(&self.order_hash())?;
-        #[cfg(not(target_family = "wasm"))]
-        let order_hash = self.order_hash();
-
-        let raindex_id = RaindexIdentifier::new(chain_id, raindex_addr);
-        let raindex_client = self.get_raindex_client();
-
-        match raindex_client.query_source(chain_id) {
-            QuerySource::LocalDb(local_db) => {
-                let local_source = LocalDbOrders::new(&local_db, ClientRef::clone(&raindex_client));
-                local_source
-                    .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
-                    .await
-            }
-            QuerySource::Subgraph => {
-                let subgraph_source = SubgraphOrders::new(&raindex_client);
-                subgraph_source
-                    .trades_count(&raindex_id, &order_hash, start_timestamp, end_timestamp)
-                    .await
-            }
-        }
-    }
 }
 impl RaindexOrder {
     pub async fn get_trade_detail(&self, trade_id: Bytes) -> Result<RaindexTrade, RaindexError> {
-        let client = self.get_raindex_subgraph_client()?;
+        let client = self.get_raindex_client()?;
         RaindexTrade::try_from_sg_trade(
             self.chain_id(),
             client
@@ -280,30 +279,55 @@ impl RaindexOrder {
 }
 
 impl RaindexTrade {
+    fn compute_io_ratio(
+        input_amount: Float,
+        output_amount: Float,
+    ) -> Result<(Float, String), RaindexError> {
+        if output_amount.eq(Float::zero()?)? {
+            let zero = Float::zero()?;
+            return Ok((zero, zero.format()?));
+        }
+
+        let neg_output = Float::zero()?.sub(output_amount)?;
+        let io_ratio = input_amount.div(neg_output)?;
+        let formatted_io_ratio = io_ratio.format()?;
+        Ok((io_ratio, formatted_io_ratio))
+    }
+
     pub fn try_from_sg_trade(chain_id: u32, trade: SgTrade) -> Result<Self, RaindexError> {
+        let input_vault_balance_change =
+            RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
+                chain_id,
+                trade.input_vault_balance_change,
+            )?;
+        let output_vault_balance_change =
+            RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
+                chain_id,
+                trade.output_vault_balance_change,
+            )?;
+
+        let (io_ratio, formatted_io_ratio) = Self::compute_io_ratio(
+            input_vault_balance_change.amount(),
+            output_vault_balance_change.amount(),
+        )?;
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.id.0)?,
-            order_hash: Bytes::from_str(&trade.order.order_hash.0)?,
-            transaction: RaindexTransaction::try_from(trade.trade_event.transaction)?,
-            input_vault_balance_change:
-                RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
-                    chain_id,
-                    trade.input_vault_balance_change,
-                )?,
-            output_vault_balance_change:
-                RaindexVaultBalanceChange::try_from_sg_trade_balance_change(
-                    chain_id,
-                    trade.output_vault_balance_change,
-                )?,
-            timestamp: U256::from_str(&trade.timestamp.0)?,
+            chain_id,
             raindex: Address::from_str(&trade.raindex.id.0)?,
+            order_hash: B256::from_str(&trade.order.order_hash.0)?,
+            owner: Address::from_str(&trade.order.owner.0)?,
+            transaction: RaindexTransaction::try_from(trade.trade_event.transaction)?,
+            input_vault_balance_change,
+            output_vault_balance_change,
+            timestamp: U256::from_str(&trade.timestamp.0)?,
+            io_ratio,
+            formatted_io_ratio,
         })
     }
 
-    pub(crate) fn try_from_local_db_trade(
-        chain_id: u32,
-        trade: LocalDbOrderTrade,
-    ) -> Result<Self, RaindexError> {
+    pub(crate) fn try_from_local_db_trade(trade: LocalDbOrderTrade) -> Result<Self, RaindexError> {
+        let chain_id = trade.chain_id;
         let transaction = RaindexTransaction::from_local_parts(
             trade.transaction_hash,
             trade.transaction_sender,
@@ -349,291 +373,618 @@ impl RaindexTrade {
             trade.block_timestamp,
         )?;
 
+        let (io_ratio, formatted_io_ratio) =
+            Self::compute_io_ratio(input_change.amount(), output_change.amount())?;
+
         Ok(RaindexTrade {
             id: Bytes::from_str(&trade.trade_id)?,
-            order_hash: trade.order_hash.into(),
+            chain_id,
+            raindex: trade.raindex,
+            order_hash: trade.order_hash,
+            owner: trade.order_owner,
             transaction,
             input_vault_balance_change: input_change,
             output_vault_balance_change: output_change,
             timestamp: U256::from(trade.block_timestamp),
-            raindex: trade.raindex,
+            io_ratio,
+            formatted_io_ratio,
         })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexPairSummary {
+    chain_id: u32,
+    input_token: Address,
+    output_token: Address,
+    total_input: Float,
+    formatted_total_input: String,
+    total_output: Float,
+    formatted_total_output: String,
+    average_io_ratio: Float,
+    formatted_average_io_ratio: String,
+    trade_count: u64,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexPairSummary {
+    #[wasm_bindgen(getter = chainId)]
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    #[wasm_bindgen(getter = inputToken, unchecked_return_type = "Address")]
+    pub fn input_token(&self) -> String {
+        self.input_token.to_string()
+    }
+    #[wasm_bindgen(getter = outputToken, unchecked_return_type = "Address")]
+    pub fn output_token(&self) -> String {
+        self.output_token.to_string()
+    }
+    #[wasm_bindgen(getter = totalInput)]
+    pub fn total_input(&self) -> Float {
+        self.total_input
+    }
+    #[wasm_bindgen(getter = formattedTotalInput)]
+    pub fn formatted_total_input(&self) -> String {
+        self.formatted_total_input.clone()
+    }
+    #[wasm_bindgen(getter = totalOutput)]
+    pub fn total_output(&self) -> Float {
+        self.total_output
+    }
+    #[wasm_bindgen(getter = formattedTotalOutput)]
+    pub fn formatted_total_output(&self) -> String {
+        self.formatted_total_output.clone()
+    }
+    #[wasm_bindgen(getter = averageIoRatio)]
+    pub fn average_io_ratio(&self) -> Float {
+        self.average_io_ratio
+    }
+    #[wasm_bindgen(getter = formattedAverageIoRatio)]
+    pub fn formatted_average_io_ratio(&self) -> String {
+        self.formatted_average_io_ratio.clone()
+    }
+    #[wasm_bindgen(getter = tradeCount)]
+    pub fn trade_count(&self) -> u64 {
+        self.trade_count
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexPairSummary {
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+    pub fn input_token(&self) -> Address {
+        self.input_token
+    }
+    pub fn output_token(&self) -> Address {
+        self.output_token
+    }
+    pub fn total_input(&self) -> Float {
+        self.total_input
+    }
+    pub fn formatted_total_input(&self) -> &str {
+        &self.formatted_total_input
+    }
+    pub fn total_output(&self) -> Float {
+        self.total_output
+    }
+    pub fn formatted_total_output(&self) -> &str {
+        &self.formatted_total_output
+    }
+    pub fn average_io_ratio(&self) -> Float {
+        self.average_io_ratio
+    }
+    pub fn formatted_average_io_ratio(&self) -> &str {
+        &self.formatted_average_io_ratio
+    }
+    pub fn trade_count(&self) -> u64 {
+        self.trade_count
+    }
+}
+
+impl RaindexPairSummary {
+    pub fn from_trades(trades: &[RaindexTrade]) -> Result<Vec<Self>, RaindexError> {
+        use std::collections::HashMap;
+
+        let mut buckets: HashMap<(u32, Address, Address), Vec<&RaindexTrade>> = HashMap::new();
+
+        for trade in trades {
+            #[cfg(target_family = "wasm")]
+            let input_token =
+                Address::from_str(&trade.input_vault_balance_change.token().address())?;
+            #[cfg(not(target_family = "wasm"))]
+            let input_token = trade.input_vault_balance_change.token().address();
+
+            #[cfg(target_family = "wasm")]
+            let output_token =
+                Address::from_str(&trade.output_vault_balance_change.token().address())?;
+            #[cfg(not(target_family = "wasm"))]
+            let output_token = trade.output_vault_balance_change.token().address();
+
+            let key = (trade.chain_id, input_token, output_token);
+            buckets.entry(key).or_default().push(trade);
+        }
+
+        let mut summaries = Vec::with_capacity(buckets.len());
+
+        for ((chain_id, input_token, output_token), bucket) in buckets {
+            let mut total_input = Float::zero()?;
+            let mut total_output = Float::zero()?;
+
+            let zero = Float::zero()?;
+            for trade in &bucket {
+                total_input = total_input.add(trade.input_vault_balance_change.amount())?;
+                let neg_output = zero.sub(trade.output_vault_balance_change.amount())?;
+                total_output = total_output.add(neg_output)?;
+            }
+
+            let formatted_total_input = total_input.format()?;
+            let formatted_total_output = total_output.format()?;
+
+            let average_io_ratio = if total_output.eq(Float::zero()?)? {
+                Float::zero()?
+            } else {
+                total_input.div(total_output)?
+            };
+            let formatted_average_io_ratio = average_io_ratio.format()?;
+
+            summaries.push(RaindexPairSummary {
+                chain_id,
+                input_token,
+                output_token,
+                total_input,
+                formatted_total_input,
+                total_output,
+                formatted_total_output,
+                average_io_ratio,
+                formatted_average_io_ratio,
+                trade_count: bucket.len() as u64,
+            });
+        }
+
+        summaries.sort_by(|a, b| {
+            (a.chain_id, a.input_token, a.output_token).cmp(&(
+                b.chain_id,
+                b.input_token,
+                b.output_token,
+            ))
+        });
+
+        Ok(summaries)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexTradesListResult {
+    trades: Vec<RaindexTrade>,
+    total_count: u64,
+    summary: Option<Vec<RaindexPairSummary>>,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexTradesListResult {
+    #[wasm_bindgen(getter, unchecked_return_type = "RaindexTrade[]")]
+    pub fn trades(&self) -> Vec<RaindexTrade> {
+        self.trades.clone()
+    }
+    #[wasm_bindgen(getter = totalCount)]
+    pub fn total_count(&self) -> u64 {
+        self.total_count
+    }
+    #[wasm_bindgen(getter, unchecked_return_type = "RaindexPairSummary[] | undefined")]
+    pub fn summary(&self) -> Option<Vec<RaindexPairSummary>> {
+        self.summary.clone()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexTradesListResult {
+    pub fn trades(&self) -> &[RaindexTrade] {
+        &self.trades
+    }
+    pub fn total_count(&self) -> u64 {
+        self.total_count
+    }
+    pub fn summary(&self) -> Option<&[RaindexPairSummary]> {
+        self.summary.as_deref()
     }
 }
 
 #[cfg(test)]
 mod test_helpers {
+    use super::*;
+
     #[cfg(target_family = "wasm")]
-    use super::*;
+    use crate::local_db::query::{
+        fetch_order_trades::LocalDbOrderTrade, fetch_orders::LocalDbOrder,
+        fetch_vaults::LocalDbVault,
+    };
+    #[cfg(target_family = "wasm")]
+    use alloy::primitives::{address, b256, bytes, Address, Bytes, B256, U256};
+    #[cfg(target_family = "wasm")]
+    use js_sys::Array;
+    #[cfg(target_family = "wasm")]
+    use serde_json::{self, json};
+    #[cfg(target_family = "wasm")]
+    use std::collections::HashMap;
+    #[cfg(target_family = "wasm")]
+    use std::str::FromStr;
+    #[cfg(target_family = "wasm")]
+    use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+    #[cfg(target_family = "wasm")]
+    use wasm_bindgen_utils::prelude::WasmEncodedResult;
+
+    #[cfg(target_family = "wasm")]
+    #[derive(Clone)]
+    pub(super) struct LocalTradeFixture {
+        pub(super) order: LocalDbOrder,
+        pub(super) input_vault: LocalDbVault,
+        pub(super) output_vault: LocalDbVault,
+        pub(super) trade: LocalDbOrderTrade,
+        pub(super) raindex_address: Address,
+        pub(super) order_hash: B256,
+        pub(super) input_token: Address,
+        pub(super) output_token: Address,
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(super) fn build_local_trade_fixture(
+        tx_hash: B256,
+        trade_log_index: u64,
+        trade_count: u64,
+    ) -> LocalTradeFixture {
+        const CHAIN_ID: u32 = 42161;
+        let raindex_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
+        let order_hash =
+            b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
+        let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let input_vault_id = U256::from_str("0x01").unwrap();
+        let output_vault_id = U256::from_str("0x02").unwrap();
+        let input_token = address!("0x00000000000000000000000000000000000000aa");
+        let output_token = address!("0x00000000000000000000000000000000000000bb");
+        const INPUT_DELTA_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000001";
+        const INPUT_RUNNING_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000003";
+        const OUTPUT_DELTA_HEX: &str =
+            "0x00000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffe";
+        const OUTPUT_RUNNING_HEX: &str =
+            "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+        let tx_hash_hex = format!("{tx_hash:#x}");
+        let trade_id = format!(
+            "0x{}{:016x}",
+            tx_hash_hex.trim_start_matches("0x"),
+            trade_log_index
+        )
+        .to_lowercase();
+
+        let order_bytes =
+            bytes!("0x00000000000000000000000000000000000000000000000000000000000000ff");
+        let transaction_hash = tx_hash;
+        let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+
+        let input_vault = LocalDbVault {
+            chain_id: 42161,
+            vault_id: input_vault_id,
+            token: input_token,
+            owner,
+            raindex_address,
+            token_name: "Token A".to_string(),
+            token_symbol: "TKNA".to_string(),
+            token_decimals: 18,
+            balance: INPUT_RUNNING_HEX.to_string(),
+            input_orders: Some(format!("0x01:{}:0", order_hash)),
+            output_orders: None,
+        };
+
+        let output_vault = LocalDbVault {
+            chain_id: 42161,
+            vault_id: output_vault_id,
+            token: output_token,
+            owner,
+            raindex_address,
+            token_name: "Token B".to_string(),
+            token_symbol: "TKNB".to_string(),
+            token_decimals: 6,
+            balance: OUTPUT_RUNNING_HEX.to_string(),
+            input_orders: None,
+            output_orders: Some(format!("0x01:{}:0", order_hash)),
+        };
+
+        let order_inputs_payload = serde_json::to_string(&vec![json!({
+            "ioIndex": 0,
+            "vault": input_vault.clone()
+        })])
+        .unwrap();
+
+        let order_outputs_payload = serde_json::to_string(&vec![json!({
+            "ioIndex": 0,
+            "vault": output_vault.clone()
+        })])
+        .unwrap();
+
+        let order = LocalDbOrder {
+            chain_id: CHAIN_ID,
+            order_hash: order_hash.clone(),
+            owner,
+            block_timestamp: 1_700_000_010,
+            block_number: 123_456,
+            raindex_address,
+            order_bytes: order_bytes.clone(),
+            transaction_hash,
+            inputs: Some(order_inputs_payload),
+            outputs: Some(order_outputs_payload),
+            trade_count,
+            active: true,
+            meta: Some(Bytes::from_str("0x1234").unwrap()),
+        };
+
+        let trade = LocalDbOrderTrade {
+            chain_id: CHAIN_ID,
+            trade_kind: "take".into(),
+            raindex: raindex_address,
+            order_hash: order_hash.clone(),
+            order_owner: owner,
+            order_nonce: "0".into(),
+            transaction_hash,
+            log_index: trade_log_index,
+            block_number: 123_460,
+            block_timestamp: 1_700_000_000,
+            transaction_sender,
+            input_vault_id,
+            input_token,
+            input_token_name: Some("Token A".into()),
+            input_token_symbol: Some("TKNA".into()),
+            input_token_decimals: Some(18),
+            input_delta: INPUT_DELTA_HEX.into(),
+            input_running_balance: Some(INPUT_RUNNING_HEX.into()),
+            output_vault_id,
+            output_token,
+            output_token_name: Some("Token B".into()),
+            output_token_symbol: Some("TKNB".into()),
+            output_token_decimals: Some(6),
+            output_delta: OUTPUT_DELTA_HEX.into(),
+            output_running_balance: Some(OUTPUT_RUNNING_HEX.into()),
+            trade_id,
+        };
+
+        LocalTradeFixture {
+            order,
+            input_vault,
+            output_vault,
+            trade,
+            raindex_address,
+            order_hash,
+            input_token,
+            output_token,
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub(super) fn make_local_db_trades_callback(
+        orders: Vec<LocalDbOrder>,
+        vaults: Vec<LocalDbVault>,
+        trades: Vec<LocalDbOrderTrade>,
+        trade_count: u64,
+    ) -> js_sys::Function {
+        let orders_json = serde_json::to_string(&orders).unwrap();
+        let orders_result = WasmEncodedResult::Success::<String> {
+            value: orders_json,
+            error: None,
+        };
+        let orders_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&orders_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let trades_json = serde_json::to_string(&trades).unwrap();
+        let trades_result = WasmEncodedResult::Success::<String> {
+            value: trades_json,
+            error: None,
+        };
+        let trades_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trades_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let trade_count_rows =
+            serde_json::to_string(&vec![json!({ "trade_count": trade_count })]).unwrap();
+        let trade_count_result = WasmEncodedResult::Success::<String> {
+            value: trade_count_rows,
+            error: None,
+        };
+        let trade_count_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trade_count_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let empty_result = WasmEncodedResult::Success::<String> {
+            value: "[]".to_string(),
+            error: None,
+        };
+        let empty_payload =
+            js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&empty_result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+        let mut vault_payloads = HashMap::new();
+        for vault in vaults.into_iter() {
+            let lookup = format!("{:#x}", vault.vault_id).to_ascii_lowercase();
+            let json = serde_json::to_string(&vec![vault]).unwrap();
+            let result = WasmEncodedResult::Success::<String> {
+                value: json,
+                error: None,
+            };
+            let payload = js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&result).unwrap())
+                .unwrap()
+                .as_string()
+                .unwrap();
+            vault_payloads.insert(lookup, payload);
+        }
+
+        let callback = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
+            if sql.contains("FROM order_events")
+                && (sql.contains("json_group_array") || sql.contains("GROUP_CONCAT("))
+                && (sql.contains("ios.io_type = 'input'")
+                    || sql.contains("lower(ios.io_type) = 'input'"))
+            {
+                return js_sys::JSON::parse(&orders_payload).unwrap();
+            }
+
+            if sql.contains("SELECT COUNT(*) AS trade_count") {
+                return js_sys::JSON::parse(&trade_count_payload).unwrap();
+            }
+
+            if sql.contains(" AS trade_kind") {
+                return js_sys::JSON::parse(&trades_payload).unwrap();
+            }
+
+            if sql.contains("?3 AS vault_id") {
+                if !params.is_undefined() && !params.is_null() {
+                    let params_array = Array::from(&params);
+                    if let Some(vault_id_val) = params_array.get(2).as_string() {
+                        let vault_id = vault_id_val.to_ascii_lowercase();
+                        if let Some(payload) = vault_payloads.get(&vault_id) {
+                            return js_sys::JSON::parse(payload).unwrap();
+                        }
+                    }
+                }
+            }
+
+            js_sys::JSON::parse(&empty_payload).unwrap()
+        }) as Box<dyn FnMut(String, JsValue) -> JsValue>);
+
+        callback.into_js_value().dyn_into().unwrap()
+    }
+
     #[cfg(not(target_family = "wasm"))]
-    use super::*;
+    mod native_tests {
+        use super::*;
+        use raindex_subgraph_client::utils::float::F1;
+
+        #[test]
+        fn compute_io_ratio_returns_zero_for_zero_output() {
+            let (ratio, formatted_ratio) =
+                RaindexTrade::compute_io_ratio(F1, Float::zero().unwrap()).unwrap();
+
+            assert!(ratio.eq(Float::zero().unwrap()).unwrap());
+            assert_eq!(formatted_ratio, "0");
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub(super) fn get_sg_trade_json(owner: &str) -> serde_json::Value {
+        use raindex_subgraph_client::utils::float::*;
+        serde_json::json!({
+            "id": "0x0123",
+            "tradeEvent": {
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "sender": "0xsender1"
+            },
+            "outputVaultBalanceChange": {
+                "id": "0xovbc1",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": NEG2,
+                "newVaultBalance": F0,
+                "oldVaultBalance": F2,
+                "vault": {
+                    "id": "0xvault_out",
+                    "vaultId": "0x01",
+                    "token": {
+                        "id": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                        "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                        "name": "Staked FLR",
+                        "symbol": "sFLR",
+                        "decimals": "18"
+                    }
+                },
+                "timestamp": "1700000000",
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "raindex": {
+                    "id": "0x1234567890123456789012345678901234567890"
+                },
+                "trade": {
+                    "tradeEvent": {
+                        "__typename": "TakeOrder"
+                    }
+                }
+            },
+            "order": {
+                "id": "0x0123",
+                "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
+                "owner": owner
+            },
+            "inputVaultBalanceChange": {
+                "id": "0xivbc1",
+                "__typename": "TradeVaultBalanceChange",
+                "amount": F1,
+                "newVaultBalance": F1,
+                "oldVaultBalance": F0,
+                "vault": {
+                    "id": "0xvault_in",
+                    "vaultId": "0x02",
+                    "token": {
+                        "id": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                        "address": "0x1d80c49bbbcd1c0911346656b529df9e5c2f783d",
+                        "name": "Wrapped Flare",
+                        "symbol": "WFLR",
+                        "decimals": "18"
+                    }
+                },
+                "timestamp": "1700000000",
+                "transaction": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                    "from": "0x0000000000000000000000000000000000000000",
+                    "blockNumber": "100",
+                    "timestamp": "1700000000"
+                },
+                "raindex": {
+                    "id": "0x1234567890123456789012345678901234567890"
+                },
+                "trade": {
+                    "tradeEvent": {
+                        "__typename": "TakeOrder"
+                    }
+                }
+            },
+            "timestamp": "1700000000",
+            "raindex": {
+                "id": "0x1234567890123456789012345678901234567890"
+            }
+        })
+    }
 
     #[cfg(target_family = "wasm")]
     mod wasm_tests {
         use super::*;
-        use crate::local_db::query::{
-            fetch_order_trades::LocalDbOrderTrade, fetch_orders::LocalDbOrder,
-            fetch_vaults::LocalDbVault,
-        };
         use crate::raindex_client::tests::{
             get_local_db_test_yaml, new_test_client_with_db_callback,
         };
-        use alloy::primitives::{address, b256, bytes, Address, Bytes, B256, U256};
-        use js_sys::Array;
         use raindex_subgraph_client::utils::float::{F1, F2, F3, NEG2};
-        use serde_json::{self, json};
-        use std::collections::HashMap;
-        use std::str::FromStr;
-        use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
         use wasm_bindgen_test::wasm_bindgen_test;
-        use wasm_bindgen_utils::prelude::WasmEncodedResult;
-
-        #[derive(Clone)]
-        struct LocalTradeFixture {
-            order: LocalDbOrder,
-            input_vault: LocalDbVault,
-            output_vault: LocalDbVault,
-            trade: LocalDbOrderTrade,
-            raindex_address: Address,
-            order_hash: B256,
-            input_token: Address,
-            output_token: Address,
-        }
-
-        fn build_local_trade_fixture(
-            tx_hash: B256,
-            trade_log_index: u64,
-            trade_count: u64,
-        ) -> LocalTradeFixture {
-            const CHAIN_ID: u32 = 42161;
-            let raindex_address = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
-            let order_hash =
-                b256!("0x0000000000000000000000000000000000000000000000000000000000000abc");
-            let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-            let input_vault_id = U256::from_str("0x01").unwrap();
-            let output_vault_id = U256::from_str("0x02").unwrap();
-            let input_token = address!("0x00000000000000000000000000000000000000aa");
-            let output_token = address!("0x00000000000000000000000000000000000000bb");
-            const INPUT_DELTA_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000001";
-            const INPUT_RUNNING_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000003";
-            const OUTPUT_DELTA_HEX: &str =
-                "0x00000000fffffffffffffffffffffffffffffffffffffffffffffffffffffffe";
-            const OUTPUT_RUNNING_HEX: &str =
-                "0x0000000000000000000000000000000000000000000000000000000000000001";
-
-            let tx_hash_hex = format!("{tx_hash:#x}");
-            let trade_id = format!(
-                "0x{}{:016x}",
-                tx_hash_hex.trim_start_matches("0x"),
-                trade_log_index
-            )
-            .to_lowercase();
-
-            let order_bytes =
-                bytes!("0x00000000000000000000000000000000000000000000000000000000000000ff");
-            let transaction_hash = tx_hash;
-            let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
-
-            let input_vault = LocalDbVault {
-                chain_id: 42161,
-                vault_id: input_vault_id,
-                token: input_token,
-                owner,
-                raindex_address,
-                token_name: "Token A".to_string(),
-                token_symbol: "TKNA".to_string(),
-                token_decimals: 18,
-                balance: INPUT_RUNNING_HEX.to_string(),
-                input_orders: Some(format!("0x01:{}:0", order_hash)),
-                output_orders: None,
-            };
-
-            let output_vault = LocalDbVault {
-                chain_id: 42161,
-                vault_id: output_vault_id,
-                token: output_token,
-                owner,
-                raindex_address,
-                token_name: "Token B".to_string(),
-                token_symbol: "TKNB".to_string(),
-                token_decimals: 6,
-                balance: OUTPUT_RUNNING_HEX.to_string(),
-                input_orders: None,
-                output_orders: Some(format!("0x01:{}:0", order_hash)),
-            };
-
-            let order_inputs_payload = serde_json::to_string(&vec![json!({
-                "ioIndex": 0,
-                "vault": input_vault.clone()
-            })])
-            .unwrap();
-
-            let order_outputs_payload = serde_json::to_string(&vec![json!({
-                "ioIndex": 0,
-                "vault": output_vault.clone()
-            })])
-            .unwrap();
-
-            let order = LocalDbOrder {
-                chain_id: CHAIN_ID,
-                order_hash: order_hash.clone(),
-                owner,
-                block_timestamp: 1_700_000_010,
-                block_number: 123_456,
-                raindex_address,
-                order_bytes: order_bytes.clone(),
-                transaction_hash,
-                inputs: Some(order_inputs_payload),
-                outputs: Some(order_outputs_payload),
-                trade_count,
-                active: true,
-                meta: Some(Bytes::from_str("0x1234").unwrap()),
-            };
-
-            let trade = LocalDbOrderTrade {
-                trade_kind: "take".into(),
-                raindex: raindex_address,
-                order_hash: order_hash.clone(),
-                order_owner: owner,
-                order_nonce: "0".into(),
-                transaction_hash,
-                log_index: trade_log_index,
-                block_number: 123_460,
-                block_timestamp: 1_700_000_000,
-                transaction_sender,
-                input_vault_id,
-                input_token,
-                input_token_name: Some("Token A".into()),
-                input_token_symbol: Some("TKNA".into()),
-                input_token_decimals: Some(18),
-                input_delta: INPUT_DELTA_HEX.into(),
-                input_running_balance: Some(INPUT_RUNNING_HEX.into()),
-                output_vault_id,
-                output_token,
-                output_token_name: Some("Token B".into()),
-                output_token_symbol: Some("TKNB".into()),
-                output_token_decimals: Some(6),
-                output_delta: OUTPUT_DELTA_HEX.into(),
-                output_running_balance: Some(OUTPUT_RUNNING_HEX.into()),
-                trade_id,
-            };
-
-            LocalTradeFixture {
-                order,
-                input_vault,
-                output_vault,
-                trade,
-                raindex_address,
-                order_hash,
-                input_token,
-                output_token,
-            }
-        }
-
-        fn make_local_db_trades_callback(
-            orders: Vec<LocalDbOrder>,
-            vaults: Vec<LocalDbVault>,
-            trades: Vec<LocalDbOrderTrade>,
-            trade_count: u64,
-        ) -> js_sys::Function {
-            let orders_json = serde_json::to_string(&orders).unwrap();
-            let orders_result = WasmEncodedResult::Success::<String> {
-                value: orders_json,
-                error: None,
-            };
-            let orders_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&orders_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let trades_json = serde_json::to_string(&trades).unwrap();
-            let trades_result = WasmEncodedResult::Success::<String> {
-                value: trades_json,
-                error: None,
-            };
-            let trades_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&trades_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let trade_count_rows =
-                serde_json::to_string(&vec![json!({ "trade_count": trade_count })]).unwrap();
-            let trade_count_result = WasmEncodedResult::Success::<String> {
-                value: trade_count_rows,
-                error: None,
-            };
-            let trade_count_payload = js_sys::JSON::stringify(
-                &serde_wasm_bindgen::to_value(&trade_count_result).unwrap(),
-            )
-            .unwrap()
-            .as_string()
-            .unwrap();
-
-            let empty_result = WasmEncodedResult::Success::<String> {
-                value: "[]".to_string(),
-                error: None,
-            };
-            let empty_payload =
-                js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&empty_result).unwrap())
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-
-            let mut vault_payloads = HashMap::new();
-            for vault in vaults.into_iter() {
-                let lookup = format!("{:#x}", vault.vault_id).to_ascii_lowercase();
-                let json = serde_json::to_string(&vec![vault]).unwrap();
-                let result = WasmEncodedResult::Success::<String> {
-                    value: json,
-                    error: None,
-                };
-                let payload =
-                    js_sys::JSON::stringify(&serde_wasm_bindgen::to_value(&result).unwrap())
-                        .unwrap()
-                        .as_string()
-                        .unwrap();
-                vault_payloads.insert(lookup, payload);
-            }
-
-            let callback = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
-                if sql.contains("FROM order_events")
-                    && (sql.contains("json_group_array") || sql.contains("GROUP_CONCAT("))
-                    && (sql.contains("ios.io_type = 'input'")
-                        || sql.contains("lower(ios.io_type) = 'input'"))
-                {
-                    return js_sys::JSON::parse(&orders_payload).unwrap();
-                }
-
-                if sql.contains("SELECT COUNT(*) AS trade_count") {
-                    return js_sys::JSON::parse(&trade_count_payload).unwrap();
-                }
-
-                if sql.contains(" AS trade_kind") {
-                    return js_sys::JSON::parse(&trades_payload).unwrap();
-                }
-
-                if sql.contains("?3 AS vault_id") {
-                    if !params.is_undefined() && !params.is_null() {
-                        let params_array = Array::from(&params);
-                        if let Some(vault_id_val) = params_array.get(2).as_string() {
-                            let vault_id = vault_id_val.to_ascii_lowercase();
-                            if let Some(payload) = vault_payloads.get(&vault_id) {
-                                return js_sys::JSON::parse(payload).unwrap();
-                            }
-                        }
-                    }
-                }
-
-                js_sys::JSON::parse(&empty_payload).unwrap()
-            })
-                as Box<dyn FnMut(String, JsValue) -> JsValue>);
-
-            callback.into_js_value().dyn_into().unwrap()
-        }
 
         #[wasm_bindgen_test]
         async fn test_get_trades_list_local_db_path() {
@@ -663,8 +1014,10 @@ mod test_helpers {
                 .await
                 .unwrap();
 
-            let trades = order.get_trades_list(None, None, None).await.unwrap();
+            let result = order.get_trades_list(None, None, None).await.unwrap();
 
+            assert_eq!(result.total_count(), 1);
+            let trades = result.trades();
             assert_eq!(trades.len(), 1);
 
             let trade = trades.first().unwrap();
@@ -733,42 +1086,6 @@ mod test_helpers {
                 fixture.output_token.to_string().to_lowercase()
             );
         }
-
-        #[wasm_bindgen_test]
-        async fn test_get_trade_count_local_db_path() {
-            let fixture = build_local_trade_fixture(
-                b256!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
-                3,
-                7,
-            );
-
-            let callback = make_local_db_trades_callback(
-                vec![fixture.order.clone()],
-                vec![fixture.input_vault.clone(), fixture.output_vault.clone()],
-                vec![fixture.trade.clone()],
-                7,
-            );
-            let client = new_test_client_with_db_callback(
-                vec![get_local_db_test_yaml()],
-                callback,
-                vec![42161],
-            );
-
-            let order = client
-                .get_order_by_hash(
-                    &RaindexIdentifier::new(42161, fixture.raindex_address),
-                    fixture.order_hash.clone(),
-                )
-                .await
-                .unwrap();
-
-            let count = order
-                .get_trade_count(Some(1_699_999_900), Some(1_700_000_900))
-                .await
-                .unwrap();
-
-            assert_eq!(count, 7);
-        }
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -776,7 +1093,7 @@ mod test_helpers {
         use super::*;
         use crate::{
             local_db::RaindexIdentifier,
-            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS},
+            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS},
         };
         use alloy::primitives::{b256, Bytes};
         use httpmock::MockServer;
@@ -883,7 +1200,7 @@ mod test_helpers {
                   }
               ],
               "raindex": {
-                "id": CHAIN_ID_1_RAINDEX_ADDRESS
+                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
               },
               "active": true,
               "timestampAdded": "1739448802",
@@ -950,7 +1267,8 @@ mod test_helpers {
               },
               "order": {
                 "id": "0x0123",
-                "orderHash": "0x0123"
+                "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000123",
+                "owner": "0x0000000000000000000000000000000000000000"
               },
               "inputVaultBalanceChange": {
                 "id": "0x0123",
@@ -1040,7 +1358,8 @@ mod test_helpers {
                 },
                 "order": {
                   "id": "0x0234",
-                  "orderHash": "0x0234"
+                  "orderHash": "0x0000000000000000000000000000000000000000000000000000000000000234",
+                  "owner": "0x0000000000000000000000000000000000000001"
                 },
                 "inputVaultBalanceChange": {
                   "id": "0x0234",
@@ -1127,13 +1446,15 @@ mod test_helpers {
                 .get_order_by_hash(
                     &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
                 .await
                 .unwrap();
-            let trades = order.get_trades_list(None, None, None).await.unwrap();
+            let result = order.get_trades_list(None, None, None).await.unwrap();
+            assert_eq!(result.total_count(), 2);
+            let trades = result.trades();
             assert_eq!(trades.len(), 2);
 
             let tx_hash =
@@ -1273,7 +1594,13 @@ mod test_helpers {
                 trade1.raindex(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
-            assert_eq!(trade1.order_hash(), Bytes::from_str("0x0123").unwrap());
+            assert_eq!(
+                trade1.order_hash(),
+                B256::from_str(
+                    "0x0000000000000000000000000000000000000000000000000000000000000123"
+                )
+                .unwrap()
+            );
 
             let trade2 = trades[1].clone();
             assert_eq!(trade2.id(), Bytes::from_str("0x0234").unwrap());
@@ -1315,7 +1642,7 @@ mod test_helpers {
                 .get_order_by_hash(
                     &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -1451,63 +1778,13 @@ mod test_helpers {
                 trade.raindex(),
                 Address::from_str("0x1234567890abcdef1234567890abcdef12345678").unwrap()
             );
-            assert_eq!(trade.order_hash(), Bytes::from_str("0x0123").unwrap());
-        }
-
-        #[tokio::test]
-        async fn test_get_order_trades_count() {
-            let sg_server = MockServer::start_async().await;
-            sg_server.mock(|when, then| {
-                when.path("/sg")
-                    .body_contains("\"first\":200")
-                    .body_contains("\"skip\":0");
-                then.status(200).json_body_obj(&json!({
-                  "data": {
-                    "trades": get_trades_json()
-                  }
-                }));
-            });
-            sg_server.mock(|when, then| {
-                when.path("/sg")
-                    .body_contains("\"first\":200")
-                    .body_contains("\"skip\":200");
-                then.status(200).json_body_obj(&json!({
-                    "data": { "trades": [] }
-                }));
-            });
-            sg_server.mock(|when, then| {
-                when.path("/sg").body_contains("SgOrderDetailByHashQuery");
-                then.status(200).json_body_obj(&json!({
-                    "data": {
-                        "orders": [get_order1_json()]
-                    }
-                }));
-            });
-
-            let raindex_client = RaindexClient::new(
-                vec![get_test_yaml(
-                    &sg_server.url("/sg"),
-                    "http://localhost:3000",
-                    "http://localhost:3000",
-                    "http://localhost:3000",
-                )],
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-            let order = raindex_client
-                .get_order_by_hash(
-                    &RaindexIdentifier::new(
-                        1,
-                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
-                    ),
-                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+            assert_eq!(
+                trade.order_hash(),
+                B256::from_str(
+                    "0x0000000000000000000000000000000000000000000000000000000000000123"
                 )
-                .await
-                .unwrap();
-            let count = order.get_trade_count(None, None).await.unwrap();
-            assert_eq!(count, 2);
+                .unwrap()
+            );
         }
     }
 }

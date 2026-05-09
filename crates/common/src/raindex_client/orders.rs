@@ -47,6 +47,7 @@ use raindex_subgraph_client::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Cursor, str::FromStr};
 use tsify::Tsify;
+use wasm_bindgen_utils::impl_wasm_traits;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
 
@@ -3087,7 +3088,8 @@ mod tests {
                 },
                 "order": {
                     "id": "0x557147dd0daa80d5beff0023fe6a3505469b2b8c4406ce1ab873e1a652572dd4",
-                    "orderHash": "0x557147dd0daa80d5beff0023fe6a3505469b2b8c4406ce1ab873e1a652572dd4"
+                    "orderHash": "0x557147dd0daa80d5beff0023fe6a3505469b2b8c4406ce1ab873e1a652572dd4",
+                    "owner": "0xf08bcbce72f62c95dcb7c07dcb5ed26acfcfbc11"
                 },
                 "raindex": {
                     "id": CHAIN_ID_1_RAINDEX_ADDRESS

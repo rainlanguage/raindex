@@ -74,6 +74,7 @@ mod tests {
             order: SgTradeStructPartialOrder {
                 id: SgBytes(order_id_str.to_string()),
                 order_hash: SgBytes(format!("0xhash_{}", order_id_str)),
+                owner: SgBytes("0xowner_default".to_string()),
             },
             raindex: SgRaindex {
                 id: SgBytes("0xraindex_default".to_string()),

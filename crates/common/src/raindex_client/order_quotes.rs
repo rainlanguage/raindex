@@ -10,6 +10,7 @@ use raindex_quote::{
 };
 use raindex_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
+use wasm_bindgen_utils::impl_wasm_traits;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
 #[serde(rename_all = "camelCase")]
