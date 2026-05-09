@@ -1,5 +1,13 @@
-use crate::local_db::{query::LocalDbQueryError, LocalDbError};
-use crate::raindex_client::local_db::{LocalDb, SyncReadiness};
+use crate::local_db::{
+    query::{
+        fetch_last_synced_block::{fetch_last_synced_block_stmt, SyncStatusResponse},
+        LocalDbQueryError, LocalDbQueryExecutor,
+    },
+    LocalDbError,
+};
+use crate::raindex_client::local_db::{
+    LocalDb, LocalDbSyncSnapshot, LocalDbSyncStatusStore, SyncReadiness,
+};
 use crate::{
     add_order::AddOrderArgsError, deposit::DepositError, dotrain_order::DotrainOrderError,
     meta::TryDecodeRainlangSourceError, transaction::WritableTransactionExecuteError,
@@ -163,7 +171,11 @@ impl RaindexClient {
 
         let sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
         let sync_readiness = SyncReadiness::new();
+        let sync_status_store = LocalDbSyncStatusStore::new();
         let has_syncs = !sync_configured_chains.is_empty();
+        if !has_syncs {
+            sync_status_store.reset();
+        }
 
         let local_db = if has_syncs {
             let cb = query_callback
@@ -186,6 +198,7 @@ impl RaindexClient {
                 db,
                 status_callback,
                 sync_readiness.clone(),
+                sync_status_store.clone(),
             )?;
             Rc::new(RefCell::new(Some(handle)))
         } else {
@@ -201,6 +214,7 @@ impl RaindexClient {
                 scheduler,
                 sync_readiness,
                 sync_configured_chains,
+                sync_status_store,
             ),
         })
     }
@@ -280,6 +294,44 @@ impl RaindexClient {
         let networks = self.resolve_networks(chain_ids)?;
         Ok(self.local_db_state.classify_chains(&networks))
     }
+
+    /// Returns the latest known local DB sync status snapshot.
+    ///
+    /// The live status fields are maintained by the sync scheduler as it emits
+    /// status updates. When a local DB handle is available, persisted
+    /// `lastSyncedBlock` watermark information is added per orderbook.
+    #[wasm_export(
+        js_name = "getLocalDbSyncSnapshot",
+        return_description = "Latest local DB sync status snapshot"
+    )]
+    pub async fn get_local_db_sync_snapshot(&self) -> Result<LocalDbSyncSnapshot, RaindexError> {
+        let mut snapshot = self.local_db_state.sync_status_store.snapshot();
+        let Some(db) = self.local_db_state.local_db() else {
+            return Ok(snapshot);
+        };
+
+        for orderbook in &mut snapshot.orderbooks {
+            let stmt = fetch_last_synced_block_stmt(&orderbook.ob_id);
+            match db.query_json::<Vec<SyncStatusResponse>>(&stmt).await {
+                Ok(rows) => {
+                    if let Some(row) = rows.into_iter().next() {
+                        orderbook.last_synced_block = Some(row.last_synced_block);
+                        orderbook.updated_at = row.updated_at;
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        chain_id = orderbook.ob_id.chain_id,
+                        orderbook = %format!("{:#x}", orderbook.ob_id.orderbook_address),
+                        error = %err,
+                        "failed to read local DB sync watermark for snapshot"
+                    );
+                }
+            }
+        }
+
+        Ok(snapshot)
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
@@ -300,7 +352,11 @@ impl RaindexClient {
 
         let sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
         let sync_readiness = SyncReadiness::new();
+        let sync_status_store = LocalDbSyncStatusStore::new();
         let has_syncs = !sync_configured_chains.is_empty();
+        if !has_syncs {
+            sync_status_store.reset();
+        }
 
         let (local_db, scheduler) = if has_syncs {
             let path =
@@ -313,6 +369,7 @@ impl RaindexClient {
                 settings,
                 path.clone(),
                 sync_readiness.clone(),
+                sync_status_store.clone(),
             )?;
             let executor = crate::local_db::executor::RusqliteExecutor::new(&path);
             (Some(LocalDb::new(executor)), Some(handle))
@@ -327,6 +384,7 @@ impl RaindexClient {
                 Arc::new(std::sync::Mutex::new(scheduler)),
                 sync_readiness,
                 sync_configured_chains,
+                sync_status_store,
             ),
         })
     }
@@ -811,6 +869,7 @@ accounts:
                 Rc::new(RefCell::new(None)),
                 sync_readiness,
                 db_chain_ids,
+                LocalDbSyncStatusStore::new(),
             ),
         }
     }
@@ -818,8 +877,102 @@ accounts:
     #[cfg(not(target_family = "wasm"))]
     mod native_tests {
         use super::*;
+        use crate::local_db::pipeline::runner::utils::parse_runner_settings;
+        use crate::local_db::query::{FromDbJson, SqlStatement, SqlStatementBatch};
+        use crate::raindex_client::local_db::LocalDbStatus;
         use httpmock::MockServer;
         use std::str::FromStr;
+
+        #[derive(Clone)]
+        struct SnapshotDbExec {
+            rows: Vec<SyncStatusResponse>,
+        }
+
+        #[async_trait::async_trait]
+        impl crate::local_db::query::LocalDbQueryExecutor for SnapshotDbExec {
+            async fn execute_batch(&self, _: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+
+            async fn query_json<T>(&self, _: &SqlStatement) -> Result<T, LocalDbQueryError>
+            where
+                T: FromDbJson,
+            {
+                let value = serde_json::to_value(&self.rows)
+                    .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))?;
+                serde_json::from_value(value)
+                    .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
+            }
+
+            async fn query_text(&self, _: &SqlStatement) -> Result<String, LocalDbQueryError> {
+                Ok(String::new())
+            }
+
+            async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+        }
+
+        fn local_db_snapshot_yaml() -> String {
+            format!(
+                r#"
+version: {spec_version}
+networks:
+    arbitrum:
+        rpcs:
+            - https://arb.example/rpc
+        chain-id: 42161
+        label: Arbitrum
+        network-id: 42161
+        currency: ETH
+subgraphs:
+    arbitrum: https://arb.example/subgraph
+local-db-remotes:
+    remote: https://remote.example/manifest
+local-db-sync:
+    arbitrum:
+        batch-size: 10
+        max-concurrent-batches: 2
+        retry-attempts: 1
+        retry-delay-ms: 1
+        rate-limit-delay-ms: 1
+        finality-depth: 12
+        bootstrap-block-threshold: 100
+        sync-interval-ms: 5000
+orderbooks:
+    arbitrum-orderbook:
+        address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
+        network: arbitrum
+        subgraph: arbitrum
+        local-db-remote: remote
+        deployment-block: 1
+"#,
+                spec_version = SpecVersion::current()
+            )
+        }
+
+        fn client_with_snapshot_db(
+            yaml: String,
+            rows: Vec<SyncStatusResponse>,
+            sync_status_store: LocalDbSyncStatusStore,
+        ) -> RaindexClient {
+            let orderbook_yaml = OrderbookYaml::new(vec![yaml], OrderbookYamlValidation::default())
+                .expect("test yaml should parse");
+            let sync_readiness = SyncReadiness::new();
+            sync_readiness.mark_ready(42161);
+            let mut configured_chains = std::collections::HashSet::new();
+            configured_chains.insert(42161);
+            RaindexClient {
+                orderbook_yaml,
+                local_db_state: LocalDbState::new(
+                    Some(LocalDb::new(SnapshotDbExec { rows })),
+                    Arc::new(std::sync::Mutex::new(None)),
+                    sync_readiness,
+                    configured_chains,
+                    sync_status_store,
+                ),
+            }
+        }
 
         #[tokio::test]
         async fn test_create_fetches_remote_networks() {
@@ -932,6 +1085,70 @@ using-tokens-from:
             assert_eq!(token.network.chain_id, 123);
             assert_eq!(token.network.key, "test-network");
             assert_eq!(token.decimals, Some(18));
+        }
+
+        #[tokio::test]
+        async fn get_local_db_sync_snapshot_returns_not_configured_without_syncs() {
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    "https://mainnet.example/subgraph",
+                    "https://polygon.example/subgraph",
+                    "https://mainnet.example/rpc",
+                    "https://polygon.example/rpc",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let snapshot = client.get_local_db_sync_snapshot().await.unwrap();
+
+            assert!(!snapshot.configured);
+            assert!(snapshot.healthy);
+            assert_eq!(snapshot.status, LocalDbStatus::Active);
+            assert!(snapshot.networks.is_empty());
+            assert!(snapshot.orderbooks.is_empty());
+        }
+
+        #[tokio::test]
+        async fn get_local_db_sync_snapshot_includes_config_and_db_watermark() {
+            let yaml = local_db_snapshot_yaml();
+            let settings = parse_runner_settings(&yaml).expect("settings should parse");
+            let sync_status_store = LocalDbSyncStatusStore::new();
+            sync_status_store.seed(&settings);
+
+            let client = client_with_snapshot_db(
+                yaml,
+                vec![SyncStatusResponse {
+                    chain_id: 42161,
+                    orderbook_address: "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string(),
+                    last_synced_block: 123_456,
+                    updated_at: Some("2026-05-01 12:00:00".to_string()),
+                }],
+                sync_status_store,
+            );
+
+            let snapshot = client.get_local_db_sync_snapshot().await.unwrap();
+
+            assert!(snapshot.configured);
+            assert_eq!(snapshot.networks.len(), 1);
+            assert_eq!(snapshot.networks[0].chain_id, 42161);
+            assert_eq!(
+                snapshot.networks[0].network_key,
+                Some("arbitrum".to_string())
+            );
+            assert_eq!(snapshot.networks[0].orderbook_count, 1);
+            assert_eq!(snapshot.orderbooks.len(), 1);
+            assert_eq!(
+                snapshot.orderbooks[0].orderbook_key,
+                Some("arbitrum-orderbook".to_string())
+            );
+            assert_eq!(snapshot.orderbooks[0].last_synced_block, Some(123_456));
+            assert_eq!(
+                snapshot.orderbooks[0].updated_at,
+                Some("2026-05-01 12:00:00".to_string())
+            );
         }
     }
 

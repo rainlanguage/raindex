@@ -300,7 +300,8 @@ impl
     >
 {
     pub fn new(settings_yaml: String) -> Result<Self, LocalDbError> {
-        let environment = default_environment();
+        let environment =
+            default_environment(crate::raindex_client::local_db::LocalDbSyncStatusStore::new());
         Self::with_environment(settings_yaml, environment, DefaultLeadership::new())
     }
 }
@@ -318,7 +319,8 @@ impl
     >
 {
     pub fn new(settings_yaml: String) -> Result<Self, LocalDbError> {
-        let environment = default_environment();
+        let environment =
+            default_environment(crate::raindex_client::local_db::LocalDbSyncStatusStore::new());
         Self::with_environment(settings_yaml, environment, DefaultLeadership::new())
     }
 }

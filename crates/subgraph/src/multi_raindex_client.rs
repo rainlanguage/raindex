@@ -219,6 +219,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             raindexes: vec![],
+            has_positive_output_vault_balance: None,
         }
     }
 

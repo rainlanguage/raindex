@@ -27,7 +27,7 @@ mod tests {
     use super::super::fetch_orders::FetchOrdersActiveFilter;
     use super::super::fetch_orders_common::{
         INPUT_TOKENS_CLAUSE, LATEST_ADD_CHAIN_IDS_CLAUSE, MAIN_CHAIN_IDS_CLAUSE, ORDER_HASH_CLAUSE,
-        OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE,
+        OUTPUT_TOKENS_CLAUSE, OWNERS_CLAUSE, POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE,
     };
     use super::*;
     use alloy::primitives::{address, b256, Address};
@@ -171,6 +171,22 @@ mod tests {
             exists_count, 2,
             "should have two separate EXISTS subqueries when tokens differ"
         );
+    }
+
+    #[test]
+    fn builds_count_with_positive_output_vault_balance_filter() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![1],
+            has_positive_output_vault_balance: Some(true),
+            ..FetchOrdersArgs::default()
+        };
+
+        let stmt = build_fetch_orders_count_stmt(&args).unwrap();
+
+        assert!(!stmt.sql.contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(stmt.sql.contains("AND EXISTS ("));
+        assert!(stmt.sql.contains("lower(io_balance.io_type) = 'output'"));
+        assert!(stmt.sql.contains("FLOAT_GT_ZERO(vb_balance.balance)"));
     }
 
     #[test]

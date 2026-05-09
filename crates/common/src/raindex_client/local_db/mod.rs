@@ -20,14 +20,16 @@ pub mod orders;
 pub mod pipeline;
 pub mod query;
 mod state;
-mod status;
+pub(crate) mod status;
 pub mod transactions;
 pub mod vaults;
 
 pub use state::SyncReadiness;
 pub(crate) use state::{ClassifiedChains, LocalDbState, QuerySource};
 pub use status::{
-    LocalDbStatus, LocalDbStatusSnapshot, NetworkSyncStatus, RaindexSyncStatus, SchedulerState,
+    LocalDbStatus, LocalDbStatusSnapshot, LocalDbSyncSnapshot, LocalDbSyncStatusStore,
+    NetworkSyncStatus, NetworkSyncStatusSnapshot, RaindexSyncStatus, RaindexSyncStatusSnapshot,
+    SchedulerState,
 };
 
 #[cfg(target_family = "wasm")]

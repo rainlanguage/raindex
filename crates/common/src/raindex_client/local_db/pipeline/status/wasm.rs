@@ -1,6 +1,6 @@
 use crate::local_db::pipeline::{StatusBus, SyncPhase};
 use crate::local_db::{LocalDbError, RaindexIdentifier};
-use crate::raindex_client::local_db::{RaindexSyncStatus, SchedulerState};
+use crate::raindex_client::local_db::{LocalDbSyncStatusStore, RaindexSyncStatus, SchedulerState};
 use js_sys::Function;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -40,20 +40,33 @@ fn emit_to_callback(status: RaindexSyncStatus) {
 #[derive(Debug, Clone, Default)]
 pub struct ClientStatusBus {
     raindex_id: Option<RaindexIdentifier>,
+    status_store: LocalDbSyncStatusStore,
 }
 
 impl ClientStatusBus {
     pub fn new() -> Self {
-        Self { raindex_id: None }
+        Self {
+            raindex_id: None,
+            status_store: LocalDbSyncStatusStore::new(),
+        }
     }
 
-    pub fn with_ob_id(raindex_id: RaindexIdentifier) -> Self {
+    pub fn with_raindex_id(raindex_id: RaindexIdentifier) -> Self {
+        Self::with_raindex_id_and_store(raindex_id, LocalDbSyncStatusStore::new())
+    }
+
+    pub fn with_raindex_id_and_store(
+        raindex_id: RaindexIdentifier,
+        status_store: LocalDbSyncStatusStore,
+    ) -> Self {
         Self {
             raindex_id: Some(raindex_id),
+            status_store,
         }
     }
 
     fn emit(&self, status: RaindexSyncStatus) {
+        self.status_store.record_raindex_status(status.clone());
         emit_to_callback(status);
     }
 

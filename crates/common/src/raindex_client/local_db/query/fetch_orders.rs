@@ -26,6 +26,7 @@ impl From<GetOrdersFilters> for FetchOrdersArgs {
             order_hash: filters.order_hash,
             tokens,
             raindex_addresses: filters.raindex_addresses.unwrap_or_default(),
+            has_positive_output_vault_balance: filters.has_positive_output_vault_balance,
             ..FetchOrdersArgs::default()
         }
     }
@@ -63,6 +64,7 @@ mod tests {
                 outputs: None,
             }),
             raindex_addresses: Some(vec![raindex1, raindex2]),
+            has_positive_output_vault_balance: Some(true),
         };
         let args: FetchOrdersArgs = filters.into();
         assert!(matches!(args.filter, FetchOrdersActiveFilter::Active));
@@ -84,6 +86,7 @@ mod tests {
         assert_eq!(args.raindex_addresses.len(), 2);
         assert_eq!(args.raindex_addresses[0], raindex1);
         assert_eq!(args.raindex_addresses[1], raindex2);
+        assert_eq!(args.has_positive_output_vault_balance, Some(true));
     }
 
     #[test]
@@ -94,6 +97,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             raindex_addresses: None,
+            has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
         assert!(args.raindex_addresses.is_empty());
@@ -108,6 +112,7 @@ mod tests {
             order_hash: None,
             tokens: None,
             raindex_addresses: Some(vec![raindex]),
+            has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
         assert_eq!(args.raindex_addresses.len(), 1);

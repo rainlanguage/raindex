@@ -1,4 +1,4 @@
-use super::LocalDb;
+use super::{LocalDb, LocalDbSyncStatusStore};
 #[cfg(not(target_family = "wasm"))]
 use crate::raindex_client::local_db::pipeline::runner::scheduler::NativeSyncHandle;
 #[cfg(target_family = "wasm")]
@@ -32,6 +32,7 @@ pub(crate) struct LocalDbState {
     pub(crate) scheduler: Arc<Mutex<Option<NativeSyncHandle>>>,
     pub(crate) sync_readiness: SyncReadiness,
     pub(crate) sync_configured_chains: HashSet<u32>,
+    pub(crate) sync_status_store: LocalDbSyncStatusStore,
 }
 
 impl Default for LocalDbState {
@@ -47,6 +48,7 @@ impl Default for LocalDbState {
             scheduler: Arc::new(Mutex::new(None)),
             sync_readiness: SyncReadiness::new(),
             sync_configured_chains: HashSet::new(),
+            sync_status_store: LocalDbSyncStatusStore::new(),
         }
     }
 }
@@ -58,12 +60,14 @@ impl LocalDbState {
         scheduler: Rc<RefCell<Option<SchedulerHandle>>>,
         sync_readiness: SyncReadiness,
         sync_configured_chains: HashSet<u32>,
+        sync_status_store: LocalDbSyncStatusStore,
     ) -> Self {
         Self {
             db: Rc::new(RefCell::new(db)),
             scheduler,
             sync_readiness,
             sync_configured_chains,
+            sync_status_store,
         }
     }
 
@@ -79,12 +83,14 @@ impl LocalDbState {
         scheduler: Arc<Mutex<Option<NativeSyncHandle>>>,
         sync_readiness: SyncReadiness,
         sync_configured_chains: HashSet<u32>,
+        sync_status_store: LocalDbSyncStatusStore,
     ) -> Self {
         Self {
             db: Arc::new(Mutex::new(db)),
             scheduler,
             sync_readiness,
             sync_configured_chains,
+            sync_status_store,
         }
     }
 
@@ -125,6 +131,10 @@ impl LocalDbState {
             }
         }
         QuerySource::Subgraph
+    }
+
+    pub(crate) fn local_db(&self) -> Option<LocalDb> {
+        self.db()
     }
 
     pub(crate) fn classify_chains(&self, networks: &[NetworkCfg]) -> ClassifiedChains {
@@ -273,6 +283,7 @@ mod tests {
             Arc::new(Mutex::new(None)),
             readiness,
             configured.iter().copied().collect(),
+            LocalDbSyncStatusStore::new(),
         )
     }
 

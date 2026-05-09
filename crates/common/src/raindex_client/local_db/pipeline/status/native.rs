@@ -1,10 +1,12 @@
 use crate::local_db::pipeline::{StatusBus, SyncPhase};
 use crate::local_db::{LocalDbError, RaindexIdentifier};
+use crate::raindex_client::local_db::{LocalDbSyncStatusStore, RaindexSyncStatus};
 
 #[derive(Debug, Clone, Default)]
 pub struct TracingStatusBus {
     raindex_id: Option<RaindexIdentifier>,
     raindex_key: Option<String>,
+    status_store: LocalDbSyncStatusStore,
 }
 
 impl TracingStatusBus {
@@ -12,20 +14,30 @@ impl TracingStatusBus {
         Self {
             raindex_id: None,
             raindex_key: None,
+            status_store: LocalDbSyncStatusStore::new(),
         }
     }
 
-    pub fn with_ob_id(raindex_id: RaindexIdentifier) -> Self {
+    pub fn with_raindex_id(raindex_id: RaindexIdentifier) -> Self {
+        Self::with_raindex_id_and_store(raindex_id, LocalDbSyncStatusStore::new())
+    }
+
+    pub fn with_raindex_id_and_store(
+        raindex_id: RaindexIdentifier,
+        status_store: LocalDbSyncStatusStore,
+    ) -> Self {
         Self {
             raindex_id: Some(raindex_id),
             raindex_key: None,
+            status_store,
         }
     }
 
-    pub fn with_ob_id_and_key(raindex_id: RaindexIdentifier, key: String) -> Self {
+    pub fn with_raindex_id_and_key(raindex_id: RaindexIdentifier, key: String) -> Self {
         Self {
             raindex_id: Some(raindex_id),
             raindex_key: Some(key),
+            status_store: LocalDbSyncStatusStore::new(),
         }
     }
 }
@@ -34,7 +46,7 @@ impl TracingStatusBus {
 impl StatusBus for TracingStatusBus {
     async fn send(&self, phase: SyncPhase) -> Result<(), LocalDbError> {
         let chain_id = self.raindex_id.as_ref().map(|id| id.chain_id).unwrap_or(0);
-        let ob_addr = self
+        let raindex_addr = self
             .raindex_id
             .as_ref()
             .map(|id| format!("{:#x}", id.raindex_address))
@@ -43,11 +55,16 @@ impl StatusBus for TracingStatusBus {
 
         tracing::debug!(
             chain_id = chain_id,
-            raindex = %ob_addr,
+            raindex = %raindex_addr,
             key = key,
             phase = %phase.to_message(),
             "sync phase"
         );
+
+        if let Some(raindex_id) = &self.raindex_id {
+            self.status_store
+                .record_raindex_status(RaindexSyncStatus::syncing(raindex_id.clone(), phase));
+        }
 
         Ok(())
     }
@@ -60,20 +77,20 @@ mod tests {
     use crate::local_db::RaindexIdentifier;
     use alloy::primitives::address;
 
-    fn test_ob_id() -> RaindexIdentifier {
+    fn test_raindex_id() -> RaindexIdentifier {
         RaindexIdentifier::new(1, address!("0000000000000000000000000000000000001234"))
     }
 
     #[tokio::test]
     async fn tracing_status_bus_send_returns_ok() {
-        let raindex_id = test_ob_id();
-        let bus = TracingStatusBus::with_ob_id(raindex_id);
+        let raindex_id = test_raindex_id();
+        let bus = TracingStatusBus::with_raindex_id(raindex_id);
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
-    async fn tracing_status_bus_send_without_ob_id_returns_ok() {
+    async fn tracing_status_bus_send_without_raindex_id_returns_ok() {
         let bus = TracingStatusBus::new();
         let result = bus.send(SyncPhase::FetchingLatestBlock).await;
         assert!(result.is_ok());

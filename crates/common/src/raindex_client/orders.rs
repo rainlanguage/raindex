@@ -1331,6 +1331,7 @@ impl RaindexClient {
                 outputs: Some(vec![buy_token]),
             }),
             raindex_addresses: None,
+            has_positive_output_vault_balance: None,
         };
 
         let ids = Some(vec![chain_id]);
@@ -1375,6 +1376,8 @@ pub struct GetOrdersFilters {
     pub tokens: Option<GetOrdersTokenFilter>,
     #[tsify(optional, type = "Address[]")]
     pub raindex_addresses: Option<Vec<Address>>,
+    #[tsify(optional)]
+    pub has_positive_output_vault_balance: Option<bool>,
 }
 impl_wasm_traits!(GetOrdersFilters);
 
@@ -1428,6 +1431,7 @@ impl TryFrom<GetOrdersFilters> for SgOrdersListFilterArgs {
                         .collect()
                 })
                 .unwrap_or_default(),
+            has_positive_output_vault_balance: filters.has_positive_output_vault_balance,
         })
     }
 }
@@ -2059,6 +2063,7 @@ mod tests {
                     address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
                     address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"),
                 ]),
+                has_positive_output_vault_balance: None,
             };
 
             let sg_filter_args: SgOrdersListFilterArgs = filters.try_into().unwrap();
@@ -2084,6 +2089,7 @@ mod tests {
                 order_hash: None,
                 tokens: None,
                 raindex_addresses: None,
+                has_positive_output_vault_balance: None,
             };
 
             let sg_filter_args: SgOrdersListFilterArgs = filters.try_into().unwrap();
@@ -2104,6 +2110,7 @@ mod tests {
                 raindex_addresses: Some(vec![address!(
                     "0xDeaDbEEfDeaDbEEfDeaDbEEfDeaDbEEfDeaDbEEf"
                 )]),
+                has_positive_output_vault_balance: None,
             };
 
             let sg_filter_args: SgOrdersListFilterArgs = filters.try_into().unwrap();
@@ -2439,6 +2446,7 @@ mod tests {
                 order_hash: None,
                 tokens: None,
                 raindex_addresses: None,
+                has_positive_output_vault_balance: None,
             };
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
