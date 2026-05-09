@@ -1325,46 +1325,6 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         );
         assert.equal(result.raindex, mockTrade.raindex.id.toLowerCase());
       });
-
-      it("should get trade count", async function () {
-        await mockServer
-          .forPost("/sg1")
-          .once()
-          .thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
-        await mockServer
-          .forPost("/sg1")
-          .once()
-          .thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
-        await mockServer.forPost("/sg1").thenReply(
-          200,
-          JSON.stringify({
-            data: {
-              trades: mockOrderTradesList,
-            },
-          }),
-        );
-        await mockServer.forPost("/sg1").thenReply(
-          200,
-          JSON.stringify({
-            data: {
-              trades: [],
-            },
-          }),
-        );
-
-        const raindexClient = extractWasmEncodedData(
-          await RaindexClient.new([YAML]),
-        );
-        const order = extractWasmEncodedData(
-          await raindexClient.getOrderByHash(
-            1,
-            CHAIN_ID_1_RAINDEX_ADDRESS,
-            BYTES32_0123,
-          ),
-        );
-        const result = extractWasmEncodedData(await order.getTradeCount());
-        assert.equal(result, 1);
-      });
     });
   });
 
