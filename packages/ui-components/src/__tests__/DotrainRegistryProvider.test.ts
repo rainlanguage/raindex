@@ -29,7 +29,7 @@ describe('DotrainRegistryProvider', () => {
 			getAllOrderDetails: vi.fn(() => wasmErrorResult),
 			getOrderKeys: vi.fn(() => ({ value: [], error: undefined })),
 			getDeploymentDetails: vi.fn(() => wasmErrorResult),
-			getGui: vi.fn(async () => wasmErrorResult),
+			getOrderBuilder: vi.fn(async () => wasmErrorResult),
 			getOrderbookYaml: vi.fn(() => wasmErrorResult),
 			getRaindexClient: vi.fn(async () => wasmErrorResult),
 			registryUrl,

@@ -6,7 +6,7 @@ use crate::{
     accounts::AccountCfg, local_db_remotes::LocalDbRemoteCfg, local_db_sync::LocalDbSyncCfg,
     metaboard::MetaboardCfg, remote_networks::RemoteNetworksCfg, remote_tokens::RemoteTokensCfg,
     sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, ChartCfg, DeploymentCfg,
-    GuiCfg, NetworkCfg, OrderCfg, OrderbookCfg, RainlangCfg, ScenarioCfg, TokenCfg,
+    NetworkCfg, OrderBuilderCfg, OrderCfg, OrderbookCfg, RainlangCfg, ScenarioCfg, TokenCfg,
 };
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::{strict_yaml::Hash, StrictYaml, StrictYamlEmitter};
@@ -24,7 +24,7 @@ const CANONICAL_ROOT_KEYS: &[&str] = &[
     "scenarios",
     "deployments",
     "charts",
-    "gui",
+    "builder",
     "accounts",
     "remote-networks",
     "remote-tokens",
@@ -52,7 +52,7 @@ pub fn validate_and_emit_documents(
     LocalDbRemoteCfg::parse_all_from_yaml(documents.to_vec(), context)?;
     LocalDbSyncCfg::parse_all_from_yaml(documents.to_vec(), context)?;
 
-    GuiCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
+    OrderBuilderCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
     RemoteTokensCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
 
     validate_string_field::<SpecVersion>(documents)?;

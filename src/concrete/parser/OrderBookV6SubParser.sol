@@ -4,10 +4,10 @@ pragma solidity =0.8.25;
 
 import {
     LibParseOperand,
-    BaseRainterpreterSubParser,
+    BaseRainlangSubParser,
     OperandV2,
     IParserToolingV1
-} from "rain.interpreter/abstract/BaseRainterpreterSubParser.sol";
+} from "rain.interpreter/abstract/BaseRainlangSubParser.sol";
 import {LibConvert} from "rain.lib.typecast/LibConvert.sol";
 import {LibUint256Matrix} from "rain.solmem/lib/LibUint256Matrix.sol";
 
@@ -73,7 +73,7 @@ import {ISubParserToolingV1} from "rain.sol.codegen/interface/ISubParserToolingV
 /// @notice Sub-parser that provides orderbook-specific context words (sender,
 /// order hash, vault IO, deposit/withdraw, signed context, etc.) to the
 /// Rain interpreter.
-contract OrderBookV6SubParser is BaseRainterpreterSubParser {
+contract OrderBookV6SubParser is BaseRainlangSubParser {
     using LibUint256Matrix for uint256[][];
 
     /// @inheritdoc IDescribedByMetaV1
@@ -81,17 +81,17 @@ contract OrderBookV6SubParser is BaseRainterpreterSubParser {
         return DESCRIBED_BY_META_HASH;
     }
 
-    /// @inheritdoc BaseRainterpreterSubParser
+    /// @inheritdoc BaseRainlangSubParser
     function subParserParseMeta() internal pure virtual override returns (bytes memory) {
         return SUB_PARSER_PARSE_META;
     }
 
-    /// @inheritdoc BaseRainterpreterSubParser
+    /// @inheritdoc BaseRainlangSubParser
     function subParserWordParsers() internal pure virtual override returns (bytes memory) {
         return SUB_PARSER_WORD_PARSERS;
     }
 
-    /// @inheritdoc BaseRainterpreterSubParser
+    /// @inheritdoc BaseRainlangSubParser
     function subParserOperandHandlers() internal pure virtual override returns (bytes memory) {
         return SUB_PARSER_OPERAND_HANDLERS;
     }

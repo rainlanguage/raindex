@@ -11,7 +11,7 @@ import {
 import { readable, writable } from 'svelte/store';
 import {
 	DotrainRegistry,
-	type DotrainOrderGui,
+	type RaindexOrderBuilder,
 	type NameAndDescriptionCfg
 } from '@rainlanguage/orderbook';
 import { REGISTRY_URL } from '$lib/constants';
@@ -32,13 +32,18 @@ async function createRegistry(): Promise<DotrainRegistry> {
 	});
 }
 
-async function getGui(
+async function getBuilder(
 	rl: DotrainRegistry,
 	serializedState?: string,
 	stateCallback?: (state: string) => void
-): Promise<DotrainOrderGui> {
+): Promise<RaindexOrderBuilder> {
 	return retry(async () => {
-		const result = await rl.getGui('fixed-limit', 'base', serializedState, stateCallback ?? null);
+		const result = await rl.getOrderBuilder(
+			'fixed-limit',
+			'base',
+			serializedState,
+			stateCallback ?? null
+		);
 		if (result.error) {
 			throw new Error(result.error.readableMsg ?? result.error.msg);
 		}
@@ -46,23 +51,23 @@ async function getGui(
 	});
 }
 
-async function createConfiguredGui(
+async function createConfiguredBuilder(
 	rl: DotrainRegistry,
 	stateCallback?: (state: string) => void
-): Promise<DotrainOrderGui> {
-	const gui = await getGui(rl, undefined, stateCallback);
-	const token1Result = await gui.setSelectToken('token1', TOKEN1_ADDRESS);
+): Promise<RaindexOrderBuilder> {
+	const builder = await getBuilder(rl, undefined, stateCallback);
+	const token1Result = await builder.setSelectToken('token1', TOKEN1_ADDRESS);
 	if (token1Result.error) {
 		throw new Error('setSelectToken token1: ' + token1Result.error.msg);
 	}
-	const token2Result = await gui.setSelectToken('token2', TOKEN2_ADDRESS);
+	const token2Result = await builder.setSelectToken('token2', TOKEN2_ADDRESS);
 	if (token2Result.error) {
 		throw new Error('setSelectToken token2: ' + token2Result.error.msg);
 	}
-	gui.setVaultId('output', 'token2', '234');
-	gui.setVaultId('input', 'token1', '123');
-	gui.setFieldValue('fixed-io', '10');
-	return gui;
+	builder.setVaultId('output', 'token2', '234');
+	builder.setVaultId('input', 'token1', '123');
+	builder.setFieldValue('fixed-io', '10');
+	return builder;
 }
 
 const { mockPageStore } = await vi.hoisted(() => import('@rainlanguage/ui-components'));
@@ -111,12 +116,12 @@ beforeAll(async () => {
 	registry = await createRegistry();
 });
 
-describe('GUI deployment args isolation tests', () => {
+describe('Builder deployment args isolation tests', () => {
 	it(
-		'standalone GUI without callback produces deployment args',
+		'standalone builder without callback produces deployment args',
 		async () => {
-			const gui = await createConfiguredGui(registry);
-			const result = await gui.getDeploymentTransactionArgs(ACCOUNT);
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			const args = result.value!;
 			expect(args).toBeDefined();
@@ -128,11 +133,11 @@ describe('GUI deployment args isolation tests', () => {
 	);
 
 	it(
-		'standalone GUI with noop state callback produces deployment args',
+		'standalone builder with noop state callback produces deployment args',
 		async () => {
 			const callback = vi.fn();
-			const gui = await createConfiguredGui(registry, callback);
-			const result = await gui.getDeploymentTransactionArgs(ACCOUNT);
+			const builder = await createConfiguredBuilder(registry, callback);
+			const result = await builder.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			const args = result.value!;
 			expect(args).toBeDefined();
@@ -145,8 +150,8 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateAddOrderCalldata works standalone',
 		async () => {
-			const gui = await createConfiguredGui(registry);
-			const result = await gui.generateAddOrderCalldata();
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateAddOrderCalldata();
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
 		},
@@ -156,8 +161,8 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateApprovalCalldatas works standalone',
 		async () => {
-			const gui = await createConfiguredGui(registry);
-			const result = await gui.generateApprovalCalldatas(ACCOUNT);
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateApprovalCalldatas(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
 		},
@@ -167,8 +172,8 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'generateDepositCalldatas works standalone',
 		async () => {
-			const gui = await createConfiguredGui(registry);
-			const result = await gui.generateDepositCalldatas();
+			const builder = await createConfiguredBuilder(registry);
+			const result = await builder.generateDepositCalldatas();
 			expect(result.error).toBeUndefined();
 			expect(result.value).toBeDefined();
 		},
@@ -178,13 +183,13 @@ describe('GUI deployment args isolation tests', () => {
 	it(
 		'serializeState and restore produce deployment args',
 		async () => {
-			const gui1 = await createConfiguredGui(registry);
-			const serialized = gui1.serializeState();
+			const builder1 = await createConfiguredBuilder(registry);
+			const serialized = builder1.serializeState();
 			expect(serialized.error).toBeUndefined();
 
-			const gui2 = await getGui(registry, serialized.value);
+			const builder2 = await getBuilder(registry, serialized.value);
 
-			const result = await gui2.getDeploymentTransactionArgs(ACCOUNT);
+			const result = await builder2.getDeploymentTransactionArgs(ACCOUNT);
 			expect(result.error).toBeUndefined();
 			const args = result.value!;
 			expect(args).toBeDefined();
@@ -261,10 +266,10 @@ describe('Full Deployment Tests', () => {
 			});
 			const screen = render(Page);
 
-			// Wait for the gui provider to be in the document
+			// Wait for the builder provider to be in the document
 			await waitFor(
 				() => {
-					expect(screen.getByTestId('gui-provider')).toBeInTheDocument();
+					expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
 				},
 				{ timeout: 30000 }
 			);
@@ -336,11 +341,28 @@ describe('Full Deployment Tests', () => {
 				{ timeout: 5000 }
 			);
 
+			const getDeploymentArgs = async () => {
+				if (!registry) {
+					throw new Error('Registry not initialized');
+				}
+				const builderResult = await registry.getOrderBuilder('fixed-limit', 'base');
+				if (builderResult.error) {
+					throw new Error(builderResult.error.readableMsg ?? builderResult.error.msg);
+				}
+				const builder = builderResult.value;
+				await builder.setSelectToken('token1', '0x000000000000012def132e61759048be5b5c6033');
+				await builder.setSelectToken('token2', '0x00000000000007c8612ba63df8ddefd9e6077c97');
+				builder.setVaultId('output', 'token2', '234');
+				builder.setVaultId('input', 'token1', '123');
+				builder.setFieldValue('fixed-io', '10');
+				const args = await builder.getDeploymentTransactionArgs(
+					'0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E'
+				);
+				return args.value;
+			};
 			await new Promise((resolve) => setTimeout(resolve, 10000));
 
-			const gui = await createConfiguredGui(registry);
-			const standaloneArgs = await gui.getDeploymentTransactionArgs(ACCOUNT);
-			const args = standaloneArgs.value;
+			const args = await getDeploymentArgs();
 
 			// @ts-expect-error mock is not typed
 			const callArgs = handleTransactionConfirmationModal.mock.calls.at(-1)?.[0] as
@@ -393,10 +415,10 @@ describe('Full Deployment Tests', () => {
 
 	// 		const screen = render(Page);
 
-	// 		// Wait for the gui provider to be in the document
+	// 		// Wait for the builder provider to be in the document
 	// 		await waitFor(
 	// 			() => {
-	// 				expect(screen.getByTestId('gui-provider')).toBeInTheDocument();
+	// 				expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
 	// 			},
 	// 			{ timeout: 300000 }
 	// 		);
@@ -488,19 +510,19 @@ describe('Full Deployment Tests', () => {
 	// 		);
 
 	// 		const getDeploymentArgs = async () => {
-	// 			const gui = (await DotrainOrderGui.newWithDeployment(auctionOrder, 'base'))
-	// 				.value as DotrainOrderGui;
-	// 			await gui.setSelectToken('input', '0x000000000000012def132e61759048be5b5c6033');
-	// 			await gui.setSelectToken('output', '0x00000000000007c8612ba63df8ddefd9e6077c97');
-	// 			gui.setVaultId('output', 'output', '0x123');
-	// 			gui.setVaultId('input', 'input', '0x234');
-	// 			gui.setFieldValue('time-per-amount-epoch', '60');
-	// 			gui.setFieldValue('amount-per-epoch', '10');
-	// 			gui.setFieldValue('max-trade-amount', '100');
-	// 			gui.setFieldValue('min-trade-amount', '1');
-	// 			gui.setFieldValue('baseline', '10');
-	// 			gui.setFieldValue('initial-io', '10');
-	// 			const args = await gui.getDeploymentTransactionArgs(
+	// 			const builder = (await RaindexOrderBuilder.newWithDeployment(auctionOrder, 'base'))
+	// 				.value as RaindexOrderBuilder;
+	// 			await builder.setSelectToken('input', '0x000000000000012def132e61759048be5b5c6033');
+	// 			await builder.setSelectToken('output', '0x00000000000007c8612ba63df8ddefd9e6077c97');
+	// 			builder.setVaultId('output', 'output', '0x123');
+	// 			builder.setVaultId('input', 'input', '0x234');
+	// 			builder.setFieldValue('time-per-amount-epoch', '60');
+	// 			builder.setFieldValue('amount-per-epoch', '10');
+	// 			builder.setFieldValue('max-trade-amount', '100');
+	// 			builder.setFieldValue('min-trade-amount', '1');
+	// 			builder.setFieldValue('baseline', '10');
+	// 			builder.setFieldValue('initial-io', '10');
+	// 			const args = await builder.getDeploymentTransactionArgs(
 	// 				'0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E'
 	// 			);
 	// 			return args.value;
@@ -555,10 +577,10 @@ describe('Full Deployment Tests', () => {
 
 	// 		const screen = render(Page);
 
-	// 		// Wait for the gui provider to be in the document
+	// 		// Wait for the builder provider to be in the document
 	// 		await waitFor(
 	// 			() => {
-	// 				expect(screen.getByTestId('gui-provider')).toBeInTheDocument();
+	// 				expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
 	// 			},
 	// 			{ timeout: 300000 }
 	// 		);
@@ -636,18 +658,18 @@ describe('Full Deployment Tests', () => {
 	// 		);
 
 	// 		const getDeploymentArgs = async () => {
-	// 			const gui = (await DotrainOrderGui.newWithDeployment(dynamicSpreadOrder, 'base'))
-	// 				.value as DotrainOrderGui;
-	// 			await gui.setSelectToken('token1', '0x000000000000012def132e61759048be5b5c6033');
-	// 			await gui.setSelectToken('token2', '0x00000000000007c8612ba63df8ddefd9e6077c97');
-	// 			gui.setVaultId('output', 'token2', '0x123');
-	// 			gui.setVaultId('input', 'token1', '0x234');
-	// 			gui.setFieldValue('amount-is-fast-exit', '1');
-	// 			gui.setFieldValue('not-amount-is-fast-exit', '0');
-	// 			gui.setFieldValue('initial-io', '100');
-	// 			gui.setFieldValue('max-amount', '1000');
-	// 			gui.setFieldValue('min-amount', '10');
-	// 			const args = await gui.getDeploymentTransactionArgs(
+	// 			const builder = (await RaindexOrderBuilder.newWithDeployment(dynamicSpreadOrder, 'base'))
+	// 				.value as RaindexOrderBuilder;
+	// 			await builder.setSelectToken('token1', '0x000000000000012def132e61759048be5b5c6033');
+	// 			await builder.setSelectToken('token2', '0x00000000000007c8612ba63df8ddefd9e6077c97');
+	// 			builder.setVaultId('output', 'token2', '0x123');
+	// 			builder.setVaultId('input', 'token1', '0x234');
+	// 			builder.setFieldValue('amount-is-fast-exit', '1');
+	// 			builder.setFieldValue('not-amount-is-fast-exit', '0');
+	// 			builder.setFieldValue('initial-io', '100');
+	// 			builder.setFieldValue('max-amount', '1000');
+	// 			builder.setFieldValue('min-amount', '10');
+	// 			const args = await builder.getDeploymentTransactionArgs(
 	// 				'0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E'
 	// 			);
 	// 			return args.value;

@@ -1,15 +1,19 @@
 <script lang="ts">
-	import { type GuiDepositCfg, type TokenDeposit, type TokenInfo } from '@rainlanguage/orderbook';
+	import {
+		type OrderBuilderDepositCfg,
+		type TokenDeposit,
+		type TokenInfo
+	} from '@rainlanguage/orderbook';
 	import { Input } from 'flowbite-svelte';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';
 	import { CloseCircleSolid } from 'flowbite-svelte-icons';
 	import { onMount } from 'svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 
-	export let deposit: GuiDepositCfg;
+	export let deposit: OrderBuilderDepositCfg;
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	let error: string = '';
 	let currentDeposit: TokenDeposit | undefined;
@@ -21,11 +25,11 @@
 	});
 
 	const getCurrentDeposit = () => {
-		const deposits = gui.getDeposits();
+		const deposits = builder.getDeposits();
 		if (deposits.error) {
 			throw new Error(deposits.error.msg);
 		}
-		return deposits.value.find((d) => d.token === deposit.token?.key);
+		return deposits.value.find((d: TokenDeposit) => d.token === deposit.token?.key);
 	};
 
 	const setCurrentDeposit = () => {
@@ -41,7 +45,7 @@
 	const getTokenSymbol = async () => {
 		if (!deposit.token?.key) return;
 		try {
-			let result = await gui.getTokenInfo(deposit.token?.key);
+			let result = await builder.getTokenInfo(deposit.token?.key);
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}
@@ -57,7 +61,7 @@
 	async function handlePresetClick(preset: string) {
 		if (deposit.token?.key) {
 			inputValue = preset;
-			await gui.setDeposit(deposit.token?.key, preset);
+			await builder.setDeposit(deposit.token?.key, preset);
 
 			try {
 				currentDeposit = getCurrentDeposit();
@@ -71,7 +75,7 @@
 		if (deposit.token?.key) {
 			if (e.currentTarget instanceof HTMLInputElement) {
 				inputValue = e.currentTarget.value;
-				await gui.setDeposit(deposit.token.key, e.currentTarget.value);
+				await builder.setDeposit(deposit.token.key, e.currentTarget.value);
 				try {
 					currentDeposit = getCurrentDeposit();
 				} catch (e) {

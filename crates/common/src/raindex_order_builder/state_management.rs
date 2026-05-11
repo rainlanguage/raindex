@@ -1,11 +1,11 @@
 use super::*;
 use rain_metadata::types::dotrain::{
-    gui_state_v1::{DotrainGuiStateV1, ShortenedTokenCfg, ValueCfg},
+    order_builder_state_v1::{OrderBuilderStateV1, ShortenedTokenCfg, ValueCfg},
     source_v1::DotrainSourceV1,
 };
 use rain_orderbook_app_settings::{
-    gui::GuiDepositCfg,
     order::{OrderIOCfg, VaultType},
+    order_builder::OrderBuilderDepositCfg,
     token::TokenCfg,
 };
 use sha2::{Digest, Sha256};
@@ -14,40 +14,40 @@ use std::{
     sync::{Arc, RwLock},
 };
 use strict_yaml_rust::StrictYaml;
-use wasm_bindgen::JsValue;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct AllGuiConfig {
-    pub field_definitions_without_defaults: Vec<GuiFieldDefinitionCfg>,
-    pub field_definitions_with_defaults: Vec<GuiFieldDefinitionCfg>,
-    pub deposits: Vec<GuiDepositCfg>,
+pub struct AllBuilderConfig {
+    pub field_definitions_without_defaults: Vec<OrderBuilderFieldDefinitionCfg>,
+    pub field_definitions_with_defaults: Vec<OrderBuilderFieldDefinitionCfg>,
+    pub deposits: Vec<OrderBuilderDepositCfg>,
     pub order_inputs: Vec<OrderIOCfg>,
     pub order_outputs: Vec<OrderIOCfg>,
 }
-impl_wasm_traits!(AllGuiConfig);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-struct SerializedGuiState {
-    field_values: BTreeMap<String, GuiPresetCfg>,
-    deposits: BTreeMap<String, GuiPresetCfg>,
+struct SerializedBuilderState {
+    field_values: BTreeMap<String, OrderBuilderPresetCfg>,
+    deposits: BTreeMap<String, OrderBuilderPresetCfg>,
     select_tokens: BTreeMap<String, TokenCfg>,
     vault_ids: BTreeMap<(VaultType, String), Option<String>>,
     dotrain_hash: String,
     selected_deployment: String,
 }
 
-#[wasm_export]
-impl DotrainOrderGui {
-    fn create_preset(value: &field_values::PairValue, default_value: String) -> GuiPresetCfg {
+impl RaindexOrderBuilder {
+    fn create_preset(
+        value: &field_values::PairValue,
+        default_value: String,
+    ) -> OrderBuilderPresetCfg {
         if value.is_preset {
-            GuiPresetCfg {
+            OrderBuilderPresetCfg {
                 id: value.value.clone(),
                 name: None,
                 value: default_value,
             }
         } else {
-            GuiPresetCfg {
+            OrderBuilderPresetCfg {
                 id: "".to_string(),
                 name: None,
                 value: value.value.clone(),
@@ -55,7 +55,7 @@ impl DotrainOrderGui {
         }
     }
 
-    fn preset_to_pair_value(preset: GuiPresetCfg) -> field_values::PairValue {
+    fn preset_to_pair_value(preset: OrderBuilderPresetCfg) -> field_values::PairValue {
         if !preset.id.is_empty() {
             field_values::PairValue {
                 is_preset: true,
@@ -73,7 +73,7 @@ impl DotrainOrderGui {
         documents: Vec<Arc<RwLock<StrictYaml>>>,
         order_key: &str,
         is_input: bool,
-    ) -> Result<BTreeMap<(VaultType, String), Option<String>>, GuiError> {
+    ) -> Result<BTreeMap<(VaultType, String), Option<String>>, RaindexOrderBuilderError> {
         let mut vault_ids = BTreeMap::new();
         let r#type = if is_input {
             VaultType::Input
@@ -86,14 +86,14 @@ impl DotrainOrderGui {
         Ok(vault_ids)
     }
 
-    #[wasm_export(skip)]
-    pub fn generate_dotrain_gui_state_instance_v1(&self) -> Result<DotrainGuiStateV1, GuiError> {
+    pub fn generate_dotrain_builder_state_instance_v1(
+        &self,
+    ) -> Result<OrderBuilderStateV1, RaindexOrderBuilderError> {
         let trimmed_dotrain = self
             .dotrain_order
             .generate_dotrain_for_deployment(&self.selected_deployment)?;
         let dotrain_hash = DotrainSourceV1(trimmed_dotrain.clone()).hash();
 
-        // Use normalized deposit amounts (resolve presets to actual values)
         let deposits = self
             .get_deposits()?
             .into_iter()
@@ -109,13 +109,11 @@ impl DotrainOrderGui {
             })
             .collect();
 
-        // Prefer the resolved tokens from the current deployment (captures user selections)
         let select_tokens = {
             let mut result = BTreeMap::new();
             let deployment = self.get_current_deployment()?;
             let network_key = deployment.deployment.order.network.key.clone();
 
-            // Build a key->address map from inputs/outputs that reflects current state
             let mut resolved = HashMap::new();
             for io in deployment
                 .deployment
@@ -129,8 +127,7 @@ impl DotrainOrderGui {
                 }
             }
 
-            // Emit only the tokens configured for selection in this deployment
-            if let Some(st) = GuiCfg::parse_select_tokens(
+            if let Some(st) = OrderBuilderCfg::parse_select_tokens(
                 self.dotrain_order.dotrain_yaml().documents,
                 &self.selected_deployment,
             )? {
@@ -149,8 +146,6 @@ impl DotrainOrderGui {
             result
         };
 
-        // Convert vault_ids to "{io_type}_{index}" keys where index matches IO position
-        // in the order's inputs/outputs arrays for deterministic reconstruction.
         let deployment = self.get_current_deployment()?;
         let mut vault_ids = BTreeMap::new();
         for (i, input) in deployment.deployment.order.inputs.iter().enumerate() {
@@ -164,7 +159,6 @@ impl DotrainOrderGui {
             vault_ids.insert(key, value);
         }
 
-        // Convert field values to ValueCfg with normalized value and optional preset ID
         let field_values = self
             .field_values
             .iter()
@@ -173,7 +167,6 @@ impl DotrainOrderGui {
                 Ok((
                     k.clone(),
                     ValueCfg {
-                        // Preserve preset linkage if applicable; otherwise use the binding key
                         id: if v.is_preset {
                             v.value.clone()
                         } else {
@@ -184,9 +177,9 @@ impl DotrainOrderGui {
                     },
                 ))
             })
-            .collect::<Result<_, GuiError>>()?;
+            .collect::<Result<_, RaindexOrderBuilderError>>()?;
 
-        Ok(DotrainGuiStateV1 {
+        Ok(OrderBuilderStateV1 {
             dotrain_hash,
             field_values,
             deposits,
@@ -196,50 +189,20 @@ impl DotrainOrderGui {
         })
     }
 
-    /// Exports the complete GUI state as a compressed, encoded string.
-    ///
-    /// Serializes all current configuration including field values, deposits,
-    /// selected tokens, and vault IDs into a compact format for persistence
-    /// or sharing. The output is gzipped and base64-encoded.
-    ///
-    /// ## State Contents
-    ///
-    /// - Field values with preset information
-    /// - Deposit amounts with preset references
-    /// - Selected token configurations
-    /// - Vault ID assignments
-    /// - Configuration hash for validation
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = gui.serializeState();
-    /// if (result.error) {
-    ///   console.error("Serialization error:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const state = result.value;
-    /// // Do something with the state
-    /// ```
-    #[wasm_export(
-        js_name = "serializeState",
-        unchecked_return_type = "string",
-        return_description = "Compressed, base64-encoded state data"
-    )]
-    pub fn serialize_state(&self) -> Result<String, GuiError> {
+    pub fn serialize_state(&self) -> Result<String, RaindexOrderBuilderError> {
         let mut field_values = BTreeMap::new();
         for (k, v) in self.field_values.iter() {
             let preset = if v.is_preset {
-                let presets = GuiCfg::parse_field_presets(
+                let presets = OrderBuilderCfg::parse_field_presets(
                     self.dotrain_order.dotrain_yaml().documents.clone(),
                     &self.selected_deployment,
                     k,
                 )?
-                .ok_or(GuiError::BindingHasNoPresets(k.clone()))?;
+                .ok_or(RaindexOrderBuilderError::BindingHasNoPresets(k.clone()))?;
                 presets
                     .iter()
                     .find(|preset| preset.id == v.value)
-                    .ok_or(GuiError::InvalidPreset)?
+                    .ok_or(RaindexOrderBuilderError::InvalidPreset)?
                     .clone()
             } else {
                 Self::create_preset(v, String::default())
@@ -254,7 +217,7 @@ impl DotrainOrderGui {
         }
 
         let mut select_tokens: BTreeMap<String, TokenCfg> = BTreeMap::new();
-        if let Some(st) = GuiCfg::parse_select_tokens(
+        if let Some(st) = OrderBuilderCfg::parse_select_tokens(
             self.dotrain_order.dotrain_yaml().documents.clone(),
             &self.selected_deployment,
         )? {
@@ -285,7 +248,7 @@ impl DotrainOrderGui {
             false,
         )?);
 
-        let state = SerializedGuiState {
+        let state = SerializedBuilderState {
             field_values: field_values.clone(),
             deposits: deposits.clone(),
             select_tokens: select_tokens.clone(),
@@ -302,62 +265,28 @@ impl DotrainOrderGui {
         Ok(URL_SAFE.encode(compressed))
     }
 
-    /// Restores a GUI instance from previously serialized state.
-    ///
-    /// Creates a new GUI instance with all configuration restored from a saved state.
-    /// The provided dotrain should be the full template that was used when
-    /// serializing the state. Hash validation is performed against its
-    /// trimmed-for-deployment form to keep the template user-agnostic.
-    ///
-    /// ## Security
-    ///
-    /// The function validates that the dotrain content hasn't changed by comparing
-    /// hashes. This prevents state injection attacks and ensures consistency.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await DotrainOrderGui.newFromState(dotrainYaml, savedState);
-    /// if (result.error) {
-    ///   console.error("Restore failed:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const gui = result.value;
-    /// // Do something with the gui
-    /// ```
-    #[wasm_export(
-        js_name = "newFromState",
-        preserve_js_class,
-        return_description = "Fully restored GUI instance"
-    )]
     pub async fn new_from_state(
-        #[wasm_export(param_description = "Must match the original dotrain content exactly")]
         dotrain: String,
-        #[wasm_export(
-            param_description = "Optional additional YAML configuration strings to merge with the frontmatter"
-        )]
         settings: Option<Vec<String>>,
-        #[wasm_export(param_description = "Previously serialized state string")] serialized: String,
-        #[wasm_export(param_description = "Optional callback for future state changes")]
-        state_update_callback: Option<js_sys::Function>,
-    ) -> Result<DotrainOrderGui, GuiError> {
+        serialized: String,
+    ) -> Result<RaindexOrderBuilder, RaindexOrderBuilderError> {
         let compressed = URL_SAFE.decode(serialized)?;
 
         let mut decoder = GzDecoder::new(&compressed[..]);
         let mut bytes = Vec::new();
         decoder.read_to_end(&mut bytes)?;
-        let state: SerializedGuiState = bincode::deserialize(&bytes)?;
+        let state: SerializedBuilderState = bincode::deserialize(&bytes)?;
 
         let dotrain_order = DotrainOrder::create_with_profile(
             dotrain.clone(),
             settings,
-            ContextProfile::gui(state.selected_deployment.clone()),
+            ContextProfile::builder(state.selected_deployment.clone()),
         )
         .await?;
 
-        let original_dotrain_hash = DotrainOrderGui::compute_state_hash(&dotrain_order)?;
+        let original_dotrain_hash = RaindexOrderBuilder::compute_state_hash(&dotrain_order)?;
         if original_dotrain_hash != state.dotrain_hash {
-            return Err(GuiError::DotrainMismatch);
+            return Err(RaindexOrderBuilderError::DotrainMismatch);
         }
 
         let field_values = state
@@ -372,34 +301,33 @@ impl DotrainOrderGui {
             .map(|(k, v)| (k, Self::preset_to_pair_value(v)))
             .collect::<BTreeMap<_, _>>();
 
-        let dotrain_order_gui = DotrainOrderGui {
+        let builder = RaindexOrderBuilder {
             dotrain_order,
             field_values,
             deposits,
             selected_deployment: state.selected_deployment.clone(),
             dotrain_hash: original_dotrain_hash,
-            state_update_callback,
         };
 
-        let deployment_select_tokens = GuiCfg::parse_select_tokens(
-            dotrain_order_gui.dotrain_order.dotrain_yaml().documents,
+        let deployment_select_tokens = OrderBuilderCfg::parse_select_tokens(
+            builder.dotrain_order.dotrain_yaml().documents,
             &state.selected_deployment,
         )?;
         for (key, token) in state.select_tokens {
             let select_tokens = deployment_select_tokens
                 .as_ref()
-                .ok_or(GuiError::SelectTokensNotSet)?;
+                .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)?;
             if !select_tokens.iter().any(|token| token.key == key) {
-                return Err(GuiError::TokenNotInSelectTokens(key));
+                return Err(RaindexOrderBuilderError::TokenNotInSelectTokens(key));
             }
-            if dotrain_order_gui.is_select_token_set(key.clone())? {
+            if builder.is_select_token_set(key.clone())? {
                 TokenCfg::remove_record_from_yaml(
-                    dotrain_order_gui.dotrain_order.orderbook_yaml().documents,
+                    builder.dotrain_order.orderbook_yaml().documents,
                     &key,
                 )?;
             }
             TokenCfg::add_record_to_yaml(
-                dotrain_order_gui.dotrain_order.orderbook_yaml().documents,
+                builder.dotrain_order.orderbook_yaml().documents,
                 &key,
                 &token.network.key,
                 &token.address.to_string(),
@@ -410,102 +338,21 @@ impl DotrainOrderGui {
         }
 
         let order_key = DeploymentCfg::parse_order_key(
-            dotrain_order_gui.dotrain_order.dotrain_yaml().documents,
+            builder.dotrain_order.dotrain_yaml().documents,
             &state.selected_deployment,
         )?;
         for ((is_input, index), vault_id) in state.vault_ids {
-            dotrain_order_gui
+            builder
                 .dotrain_order
                 .dotrain_yaml()
-                .get_order_for_gui_deployment(&order_key, &state.selected_deployment)
+                .get_order_for_builder_deployment(&order_key, &state.selected_deployment)
                 .and_then(|mut order| order.update_vault_id(is_input, index, vault_id))?;
         }
 
-        Ok(dotrain_order_gui)
+        Ok(builder)
     }
 
-    /// Manually triggers the state update callback.
-    ///
-    /// Calls the registered state update callback with the current serialized state.
-    /// This is typically called automatically after state-changing operations,
-    /// but can be triggered manually if needed.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// // Manual state update trigger
-    /// const result = gui.executeStateUpdateCallback();
-    /// if (result.error) {
-    ///   console.error("Callback error:", result.error.readableMsg);
-    /// }
-    /// ```
-    #[wasm_export(
-        js_name = "executeStateUpdateCallback",
-        unchecked_return_type = "void",
-        return_description = "Callback executed successfully or no callback registered"
-    )]
-    pub fn execute_state_update_callback(&self) -> Result<(), GuiError> {
-        if let Some(callback) = &self.state_update_callback {
-            let state = to_js_value(&self.serialize_state()?)?;
-            callback.call1(&JsValue::UNDEFINED, &state).map_err(|e| {
-                GuiError::JsError(format!("Failed to execute state update callback: {:?}", e))
-            })?;
-        }
-        Ok(())
-    }
-
-    /// Gets comprehensive configuration for complete UI initialization.
-    ///
-    /// Provides all configuration data needed to build a complete order interface,
-    /// organized by requirement type for progressive UI construction.
-    ///
-    /// ## Configuration Structure
-    ///
-    /// - `fieldDefinitionsWithoutDefaults` - Required fields needing user input
-    /// - `fieldDefinitionsWithDefaults` - Optional fields with fallback values
-    /// - `deposits` - Deposit configurations with tokens and presets
-    /// - `orderInputs` - Input token configurations
-    /// - `orderOutputs` - Output token configurations
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = gui.getAllGuiConfig();
-    /// if (result.error) {
-    ///   console.error("Error:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const config = result.value;
-    ///
-    /// // Build required fields section
-    /// config.fieldDefinitionsWithoutDefaults.forEach(field => {
-    ///   // Do something with the fields
-    /// });
-    ///
-    /// // Build optional fields section
-    /// if (config.fieldDefinitionsWithDefaults.length > 0) {
-    ///   // Do something with the fields
-    /// }
-    ///
-    /// // Build deposits section
-    /// config.deposits.forEach(deposit => {
-    ///   // Do something with the deposits
-    /// });
-    ///
-    /// // Show order preview
-    /// config.orderInputs.forEach(input => {
-    ///   // Do something with the order inputs
-    /// });
-    /// config.orderOutputs.forEach(output => {
-    ///   // Do something with the order outputs
-    /// });
-    /// ```
-    #[wasm_export(
-        js_name = "getAllGuiConfig",
-        unchecked_return_type = "AllGuiConfig",
-        return_description = "Complete configuration package"
-    )]
-    pub fn get_all_gui_config(&self) -> Result<AllGuiConfig, GuiError> {
+    pub fn get_all_builder_config(&self) -> Result<AllBuilderConfig, RaindexOrderBuilderError> {
         let deployment = self.get_current_deployment()?;
 
         let field_definitions_without_defaults = self.get_all_field_definitions(Some(false))?;
@@ -514,7 +361,7 @@ impl DotrainOrderGui {
         let order_inputs = deployment.deployment.order.inputs.clone();
         let order_outputs = deployment.deployment.order.outputs.clone();
 
-        Ok(AllGuiConfig {
+        Ok(AllBuilderConfig {
             field_definitions_without_defaults,
             field_definitions_with_defaults,
             deposits,
@@ -522,9 +369,10 @@ impl DotrainOrderGui {
             order_outputs,
         })
     }
-}
-impl DotrainOrderGui {
-    pub fn compute_state_hash(dotrain_order: &DotrainOrder) -> Result<String, GuiError> {
+
+    pub fn compute_state_hash(
+        dotrain_order: &DotrainOrder,
+    ) -> Result<String, RaindexOrderBuilderError> {
         let yaml = emitter::emit_documents(&dotrain_order.dotrain_yaml().documents)?;
 
         let rain_document = RainDocument::create(dotrain_order.dotrain()?, None, None, None);
@@ -541,23 +389,21 @@ impl DotrainOrderGui {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gui::{
+    use crate::dotrain::RainDocument;
+    use crate::dotrain_order::DotrainOrder;
+    use crate::raindex_order_builder::{
         field_values::FieldValue,
-        tests::{get_yaml, initialize_gui_with_select_tokens},
+        tests::{get_yaml, initialize_builder_with_select_tokens},
     };
     use alloy::primitives::{Address, U256};
-    use js_sys::{eval, Reflect};
     use rain_orderbook_app_settings::{
         network::NetworkCfg, order::VaultType, yaml::YamlParsableHash,
     };
-    use rain_orderbook_common::dotrain::RainDocument;
-    use rain_orderbook_common::dotrain_order::DotrainOrder;
     use std::str::FromStr;
-    use wasm_bindgen_test::wasm_bindgen_test;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByy0aXWzwh4Ev4qgKH6AL6JttNKY1Bqx4p_wJ2v1pmLxPtxzbs7JvTfJadd4A5wtubfkC0w0FU-AxDCyJhPBgaGlTJEXQCkCyq1H3R4776t3qDZiRTGncieiQN37AvSlDMu6zoQ7Zb7YyHLJKBX1KHTxNmKHxIGSjNToWr_5ATRfGMbHTEJ59ApyP9nh20LPqm61zy_Jabe425akI4hto6xqpqpp2z9A4-pv2Cn8tQbxvLGddTvDRX3tBGMyao6Z4xV7vus4k8iq9Oq7_0_1F5RRV-JLU-zRkIn9inJ5AjfkymPKAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGZKYKlbVV5aVVJeUl5mYUlyQaJZcGVgVmmuhZNBVmSxQYRFortnaLmPsWGyrTgsLFJzUpNLdMGG6qakFuTkV-am5pUAADgqxtfKAQAA";
 
-    fn encode_state(state: &SerializedGuiState) -> String {
+    fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         encoder.write_all(&bytes).unwrap();
@@ -565,10 +411,10 @@ mod tests {
         URL_SAFE.encode(compressed)
     }
 
-    async fn configured_gui() -> DotrainOrderGui {
-        let mut gui = initialize_gui_with_select_tokens().await;
+    async fn configured_builder() -> RaindexOrderBuilder {
+        let mut builder = initialize_builder_with_select_tokens().await;
 
-        gui.add_record_to_yaml(
+        builder.add_record_to_yaml(
             "token3".to_string(),
             "some-network".to_string(),
             "0x1234567890123456789012345678901234567890".to_string(),
@@ -576,53 +422,60 @@ mod tests {
             "Token 3".to_string(),
             "TKN3".to_string(),
         );
-        gui.set_deposit("token3".to_string(), "100".to_string())
+        builder
+            .set_deposit("token3".to_string(), "100".to_string())
             .await
             .unwrap();
-        gui.set_field_value("binding-1".to_string(), "100".to_string())
+        builder
+            .set_field_value("binding-1".to_string(), "100".to_string())
             .unwrap();
-        gui.set_field_value("binding-2".to_string(), "0".to_string())
+        builder
+            .set_field_value("binding-2".to_string(), "0".to_string())
             .unwrap();
-        gui.set_vault_id(
-            VaultType::Input,
-            "token1".to_string(),
-            Some("199".to_string()),
-        )
-        .unwrap();
-        gui.set_vault_id(
-            VaultType::Output,
-            "token2".to_string(),
-            Some("299".to_string()),
-        )
-        .unwrap();
+        builder
+            .set_vault_id(
+                VaultType::Input,
+                "token1".to_string(),
+                Some("199".to_string()),
+            )
+            .unwrap();
+        builder
+            .set_vault_id(
+                VaultType::Output,
+                "token2".to_string(),
+                Some("299".to_string()),
+            )
+            .unwrap();
 
-        gui
+        builder
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_compute_state_hash_changes_on_content_change() {
         let dotrain = get_yaml();
         let order1 = DotrainOrder::create(dotrain.clone(), None).await.unwrap();
-        let original_hash = DotrainOrderGui::compute_state_hash(&order1).unwrap();
+        let original_hash = RaindexOrderBuilder::compute_state_hash(&order1).unwrap();
 
         let modified = dotrain.replace("Select token deployment", "Select token deployment v2");
         let order2 = DotrainOrder::create(modified, None).await.unwrap();
-        let modified_hash = DotrainOrderGui::compute_state_hash(&order2).unwrap();
+        let modified_hash = RaindexOrderBuilder::compute_state_hash(&order2).unwrap();
         assert_ne!(original_hash, modified_hash);
 
         let order3 = DotrainOrder::create(get_yaml(), None).await.unwrap();
-        let repeated_hash = DotrainOrderGui::compute_state_hash(&order3).unwrap();
+        let repeated_hash = RaindexOrderBuilder::compute_state_hash(&order3).unwrap();
         assert_eq!(original_hash, repeated_hash);
     }
 
-    #[wasm_bindgen_test]
-    async fn test_generate_dotrain_gui_state_instance_v1_contents() {
-        let gui = configured_gui().await;
-        let state = gui.generate_dotrain_gui_state_instance_v1().unwrap();
+    #[tokio::test]
+    async fn test_generate_dotrain_builder_state_instance_v1_contents() {
+        let builder = configured_builder().await;
+        let state = builder
+            .generate_dotrain_builder_state_instance_v1()
+            .unwrap();
 
-        let trimmed = gui
+        let trimmed = builder
             .dotrain_order
-            .generate_dotrain_for_deployment(&gui.selected_deployment)
+            .generate_dotrain_for_deployment(&builder.selected_deployment)
             .unwrap();
         let expected_hash = DotrainSourceV1(trimmed).hash();
         assert_eq!(state.dotrain_hash, expected_hash);
@@ -651,25 +504,25 @@ mod tests {
         );
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_serialize_state() {
-        let gui = configured_gui().await;
-        let state = gui.serialize_state().unwrap();
+        let builder = configured_builder().await;
+        let state = builder.serialize_state().unwrap();
         assert!(!state.is_empty());
         assert_eq!(state, SERIALIZED_STATE);
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_new_from_state() {
-        let gui =
-            DotrainOrderGui::new_from_state(get_yaml(), None, SERIALIZED_STATE.to_string(), None)
+        let builder =
+            RaindexOrderBuilder::new_from_state(get_yaml(), None, SERIALIZED_STATE.to_string())
                 .await
                 .unwrap();
 
-        assert!(gui.is_select_token_set("token3".to_string()).unwrap());
-        assert_eq!(gui.get_deposits().unwrap()[0].amount, "100");
+        assert!(builder.is_select_token_set("token3".to_string()).unwrap());
+        assert_eq!(builder.get_deposits().unwrap()[0].amount, "100");
         assert_eq!(
-            gui.get_field_value("binding-1".to_string()).unwrap(),
+            builder.get_field_value("binding-1".to_string()).unwrap(),
             FieldValue {
                 field: "binding-1".to_string(),
                 value: "100".to_string(),
@@ -677,14 +530,14 @@ mod tests {
             }
         );
         assert_eq!(
-            gui.get_field_value("binding-2".to_string()).unwrap(),
+            builder.get_field_value("binding-2".to_string()).unwrap(),
             FieldValue {
                 field: "binding-2".to_string(),
                 value: "0".to_string(),
                 is_preset: true,
             }
         );
-        let vault_ids = gui.get_vault_ids().unwrap().0;
+        let vault_ids = builder.get_vault_ids().unwrap().0;
         assert_eq!(
             vault_ids.get("input").unwrap()["token1"],
             Some(U256::from(199))
@@ -695,7 +548,7 @@ mod tests {
         );
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
             version: 5
@@ -735,7 +588,7 @@ mod tests {
                 select-token-deployment:
                     order: test
                     scenario: test
-            gui:
+            builder:
                 name: Test
                 description: Fixed limit order
                 deployments:
@@ -751,50 +604,52 @@ mod tests {
         #test
         "#;
 
-        let err = DotrainOrderGui::new_from_state(
+        let err = RaindexOrderBuilder::new_from_state(
             dotrain.to_string(),
             None,
             SERIALIZED_STATE.to_string(),
-            None,
         )
         .await
         .unwrap_err();
-        assert_eq!(err.to_string(), GuiError::DotrainMismatch.to_string());
+        assert_eq!(
+            err.to_string(),
+            RaindexOrderBuilderError::DotrainMismatch.to_string()
+        );
         assert_eq!(
             err.to_readable_msg(),
             "There was a mismatch in the dotrain configuration. Please check your YAML configuration for consistency."
         );
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_new_from_state_rejects_unknown_select_token_key() {
         let dotrain = get_yaml();
-        let documents = DotrainOrderGui::get_yaml_documents(&dotrain, None).unwrap();
+        let documents = RaindexOrderBuilder::get_yaml_documents(&dotrain, None).unwrap();
         let token = TokenCfg::parse_from_yaml(documents.clone(), "token1", None).unwrap();
 
         let dotrain_order = DotrainOrder::create(dotrain.clone(), None).await.unwrap();
-        let serialized_state = encode_state(&SerializedGuiState {
+        let serialized_state = encode_state(&SerializedBuilderState {
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
             select_tokens: BTreeMap::from([("token1".to_string(), token)]),
             vault_ids: BTreeMap::new(),
-            dotrain_hash: DotrainOrderGui::compute_state_hash(&dotrain_order).unwrap(),
+            dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),
         });
 
-        let err = DotrainOrderGui::new_from_state(dotrain, None, serialized_state, None)
+        let err = RaindexOrderBuilder::new_from_state(dotrain, None, serialized_state)
             .await
             .unwrap_err();
         assert_eq!(
             err.to_string(),
-            GuiError::TokenNotInSelectTokens("token1".to_string()).to_string()
+            RaindexOrderBuilderError::TokenNotInSelectTokens("token1".to_string()).to_string()
         );
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_new_from_state_replaces_existing_select_token_record() {
         let dotrain = get_yaml();
-        let documents = DotrainOrderGui::get_yaml_documents(&dotrain, None).unwrap();
+        let documents = RaindexOrderBuilder::get_yaml_documents(&dotrain, None).unwrap();
         TokenCfg::add_record_to_yaml(
             documents.clone(),
             "token3",
@@ -831,25 +686,24 @@ mod tests {
         let dotrain_order = DotrainOrder::create(dotrain_with_existing_token.clone(), None)
             .await
             .unwrap();
-        let serialized_state = encode_state(&SerializedGuiState {
+        let serialized_state = encode_state(&SerializedBuilderState {
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
             select_tokens: BTreeMap::from([("token3".to_string(), replacement_token.clone())]),
             vault_ids: BTreeMap::new(),
-            dotrain_hash: DotrainOrderGui::compute_state_hash(&dotrain_order).unwrap(),
+            dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),
         });
 
-        let gui = DotrainOrderGui::new_from_state(
+        let builder = RaindexOrderBuilder::new_from_state(
             dotrain_with_existing_token,
             None,
             serialized_state,
-            None,
         )
         .await
         .unwrap();
 
-        let restored_token = gui
+        let restored_token = builder
             .dotrain_order
             .orderbook_yaml()
             .get_token("token3")
@@ -859,12 +713,12 @@ mod tests {
         assert_eq!(restored_token.label, replacement_token.label);
     }
 
-    #[wasm_bindgen_test]
+    #[tokio::test]
     async fn test_serialize_state_errors_on_missing_preset() {
-        let gui = initialize_gui_with_select_tokens().await;
-        let mut gui = gui;
+        let builder = initialize_builder_with_select_tokens().await;
+        let mut builder = builder;
 
-        gui.field_values.insert(
+        builder.field_values.insert(
             "binding-2".to_string(),
             field_values::PairValue {
                 is_preset: true,
@@ -872,80 +726,10 @@ mod tests {
             },
         );
 
-        let err = gui.serialize_state().unwrap_err();
-        assert_eq!(err.to_string(), GuiError::InvalidPreset.to_string());
-    }
-
-    #[wasm_bindgen_test]
-    async fn test_execute_state_update_callback_noop_without_callback() {
-        let gui = initialize_gui_with_select_tokens().await;
-        assert!(gui.execute_state_update_callback().is_ok());
-    }
-
-    #[wasm_bindgen_test]
-    async fn test_execute_state_update_callback() {
-        eval(
-            r#"
-            globalThis.callbackCalled = false;
-            globalThis.receivedState = null;
-            globalThis.testCallback = function(state) {
-                globalThis.callbackCalled = true;
-                globalThis.receivedState = state;
-            };
-        "#,
-        )
-        .unwrap();
-
-        let global = js_sys::global();
-        let callback_js = Reflect::get(&global, &JsValue::from_str("testCallback"))
-            .expect("should have testCallback function on globalThis")
-            .dyn_into::<js_sys::Function>()
-            .expect("testCallback should be a function");
-
-        let mut gui = DotrainOrderGui::new_with_deployment(
-            get_yaml(),
-            None,
-            "some-deployment".to_string(),
-            Some(callback_js.clone()),
-        )
-        .await
-        .unwrap();
-
-        let callback_called = Reflect::get(&global, &JsValue::from_str("callbackCalled"))
-            .expect("should have callbackCalled flag on globalThis");
-        assert_eq!(callback_called, JsValue::from_bool(false));
-
-        gui.set_deposit("token1".to_string(), "100".to_string())
-            .await
-            .unwrap();
-        gui.set_field_value("binding-1".to_string(), "100".to_string())
-            .unwrap();
-        gui.set_field_value("binding-2".to_string(), "582.1".to_string())
-            .unwrap();
-        gui.set_vault_id(
-            VaultType::Input,
-            "token1".to_string(),
-            Some("199".to_string()),
-        )
-        .unwrap();
-        gui.set_vault_id(
-            VaultType::Output,
-            "token2".to_string(),
-            Some("299".to_string()),
-        )
-        .unwrap();
-
-        let callback_called = Reflect::get(&global, &JsValue::from_str("callbackCalled"))
-            .expect("should have callbackCalled flag on globalThis");
-        assert_eq!(callback_called, JsValue::from_bool(true));
-
-        let received_state_js = Reflect::get(&global, &JsValue::from_str("receivedState"))
-            .expect("should have receivedState on globalThis");
-        assert!(received_state_js.is_string());
-        let received_state_rust: String = received_state_js.as_string().unwrap();
-        assert!(!received_state_rust.is_empty());
-
-        let expected_state = gui.serialize_state().unwrap();
-        assert_eq!(received_state_rust, expected_state);
+        let err = builder.serialize_state().unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            RaindexOrderBuilderError::InvalidPreset.to_string()
+        );
     }
 }

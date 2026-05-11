@@ -4,7 +4,7 @@ This package is the SvelteKit web application for exploring and interacting with
 
 - Browsing orders, trades and vaults across networks
 - Viewing order detail and performing actions (remove, deposit, withdraw)
-- Deploying “algorithmic orders” from a dotrain registry via a guided GUI
+- Deploying “algorithmic orders” from a dotrain registry via a guided builder
 - Managing wallet connection and transaction flows
 
 
@@ -66,7 +66,7 @@ nix develop -c npm run dev
   - Loads a dotrain registry (`?registry=` query param or default `REGISTRY_URL`), validates orders, and shows valid/invalid sections.
   - Nested routes:
     - `/deploy/[orderName]` — loads the dotrain and order details
-    - `/deploy/[orderName]/[deploymentKey]` — fetches deployment detail with `DotrainOrderGui.getDeploymentDetail`, then renders a GUI for composing calldata
+    - `/deploy/[orderName]/[deploymentKey]` — fetches deployment detail with `RaindexOrderBuilder.getDeploymentDetail`, then renders a builder for composing calldata
 - `/license` — Static license information.
 
 
@@ -77,7 +77,7 @@ nix develop -c npm run dev
   - `+layout.svelte` — Provider composition and app shell (sidebar + content area).
   - `orders/` — Orders list and dynamic order detail.
   - `vaults/` — Vaults list and dynamic vault detail.
-  - `deploy/` — Registry load/validation, order selection, and deployment GUI routes.
+  - `deploy/` — Registry load/validation, order selection, and deployment builder routes.
 - `src/lib/`
   - `components/` — App‑specific wrappers (Sidebar, modals, loaders, error page, etc.).
   - `services/` — Side‑effectful helpers (wallet init, transactions, modal helpers, deposit/withdraw flows).

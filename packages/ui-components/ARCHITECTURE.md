@@ -6,7 +6,7 @@ This package is the reusable Svelte component library for building Rain Orderboo
 ## Overview
 
 - Purpose
-  - Provide a cohesive, app‑ready set of Svelte components and helpers for Orderbook features: tables, detail views, charts, deployment GUI, toasts, and transaction UX.
+  - Provide a cohesive, app‑ready set of Svelte components and helpers for Orderbook features: tables, detail views, charts, deployment builder, toasts, and transaction UX.
   - Ship provider and hook contexts so apps can wire wallet, client, registry, toasts, and transaction state consistently.
 - Targets
   - Svelte 4 components, packaged with `svelte-package` for consumption in SvelteKit/Vite apps.
@@ -44,9 +44,9 @@ The library exposes lightweight provider components that set Svelte contexts, pl
 - Toasts
   - `ToastProvider` — provides a toasts store and renders `ToastDetail` instances.
   - `useToasts()` — returns `{ toasts, addToast, removeToast, errToast }`.
-- GUI (deploy flows)
-  - `GuiProvider` — provides a `DotrainOrderGui` instance for deployment flows.
-  - `useGui()` — retrieves the GUI instance; integrates with deployment components.
+- Builder (deploy flows)
+  - `RaindexOrderBuilderProvider` — provides a `RaindexOrderBuilder` instance for deployment flows.
+  - `useRaindexOrderBuilder()` — retrieves the builder instance; integrates with deployment components.
 
 Notes
 
@@ -62,7 +62,7 @@ Notes
   - `OrderDetail`, `VaultDetail`, `TanstackOrderQuote`, `TanstackPageContentDetail`, `Hash`, `OrderOrVaultHash`.
 - Charts
   - `LightweightChart`, `TanstackLightweightChartLine`, `OrderTradesChart`, `VaultBalanceChart` with time helpers and themes.
-- Deployment GUI
+- Deployment Builder
   - `OrderPage`, `DeploymentsSection`, `DeploymentSteps`, `TokenIOInput`, `FieldDefinitionInput`, `SelectToken`, `DisclaimerModal`, `ValidOrdersSection`, `InvalidOrdersSection`.
   - Services: dotrain registry fetch/validate/share (`registry.ts`, `loadRegistryUrl.ts`, `handleShareChoices.ts`).
 - Wallet UX & general UI
@@ -91,8 +91,8 @@ Notes
 `src/lib/index.ts` re‑exports by category:
 
 - Components: tables, detail views, charts, editors, inputs, icons, wallet/connectivity, UI primitives.
-- Providers: `GuiProvider`, `RaindexClientProvider`, `WalletProvider`, `RegistryProvider`, `ToastProvider`, `TransactionProvider`.
-- Hooks: `useGui`, `useRaindexClient`, `useAccount`, `useRegistry`, `useToasts`, `useTransactions`.
+- Providers: `RaindexOrderBuilderProvider`, `RaindexClientProvider`, `WalletProvider`, `RegistryProvider`, `ToastProvider`, `TransactionProvider`.
+- Hooks: `useRaindexOrderBuilder`, `useRaindexClient`, `useAccount`, `useRegistry`, `useToasts`, `useTransactions`.
 - Types: app stores, modal/transaction/toast/order typings.
 - Functions: time helpers, explorer link, TanStack invalidation helpers, mocks for tests.
 - Constants: query keys, default page sizes/intervals, chart/code editor themes.
@@ -104,7 +104,7 @@ Notes
 ## Directory Layout
 
 - `src/lib/components/` — Svelte components grouped by domain (`tables`, `detail`, `charts`, `deployment`, `transactions`, `wallet`, `input`, etc.).
-- `src/lib/providers/` — Context providers for GUI, client, wallet, registry, toasts, transactions.
+- `src/lib/providers/` — Context providers for builder, client, wallet, registry, toasts, transactions.
 - `src/lib/hooks/` — Accessors for provider contexts.
 - `src/lib/models/` — State models such as `TransactionStore`.
 - `src/lib/types/` — Type helpers and enums.
@@ -161,7 +161,7 @@ export default {
 - Ensure the Query Client is available in context before mounting `TransactionProvider`.
 - Pass a valid `wagmi` `Config` to `TransactionProvider` and ensure wallet connectors are initialized at the app level.
 - Include this package in Tailwind `content` globs to avoid missing styles.
-- For deployment flows, pass a `DotrainOrderGui` via `GuiProvider` and use the registry helpers to load/validate dotrain entries.
+- For deployment flows, pass a `RaindexOrderBuilder` via `RaindexOrderBuilderProvider` and use the registry helpers to load/validate dotrain entries.
 
 This document explains what `packages/ui-components` is for, how providers and components are organized, how to build and test the package, and how it integrates with the rest of the Rain Orderbook workspace.
 

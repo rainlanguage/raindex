@@ -4,12 +4,12 @@ import {
 	fetchRegistryDotrains,
 	validateOrders
 } from '../lib/services/registry';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { RaindexOrderBuilder } from '@rainlanguage/orderbook';
 import type { Mock } from 'vitest';
 
-// Mock the DotrainOrderGui dependency
+// Mock the RaindexOrderBuilder dependency
 vi.mock('@rainlanguage/orderbook', () => ({
-	DotrainOrderGui: {
+	RaindexOrderBuilder: {
 		getOrderDetails: vi.fn()
 	}
 }));
@@ -128,8 +128,8 @@ describe('validateOrders', () => {
 			{ name: 'another-valid.rain', dotrain: 'another valid content' }
 		];
 
-		// Set up mock responses for the DotrainOrderGui
-		(DotrainOrderGui.getOrderDetails as Mock)
+		// Set up mock responses for the RaindexOrderBuilder
+		(RaindexOrderBuilder.getOrderDetails as Mock)
 			.mockResolvedValueOnce({
 				value: { name: 'Valid Order', description: 'A valid order' },
 				error: null
@@ -146,11 +146,11 @@ describe('validateOrders', () => {
 		// Call the function with our test data
 		const result = await validateOrders(registryDotrains);
 
-		// Verify DotrainOrderGui was called correctly
-		expect(DotrainOrderGui.getOrderDetails).toHaveBeenCalledTimes(3);
-		expect(DotrainOrderGui.getOrderDetails).toHaveBeenCalledWith('valid dotrain content');
-		expect(DotrainOrderGui.getOrderDetails).toHaveBeenCalledWith('invalid dotrain content');
-		expect(DotrainOrderGui.getOrderDetails).toHaveBeenCalledWith('another valid content');
+		// Verify RaindexOrderBuilder was called correctly
+		expect(RaindexOrderBuilder.getOrderDetails).toHaveBeenCalledTimes(3);
+		expect(RaindexOrderBuilder.getOrderDetails).toHaveBeenCalledWith('valid dotrain content');
+		expect(RaindexOrderBuilder.getOrderDetails).toHaveBeenCalledWith('invalid dotrain content');
+		expect(RaindexOrderBuilder.getOrderDetails).toHaveBeenCalledWith('another valid content');
 
 		// Verify the valid orders are processed correctly
 		expect(result.validOrders).toHaveLength(2);
@@ -171,8 +171,8 @@ describe('validateOrders', () => {
 		// Input data
 		const registryDotrains = [{ name: 'error.rain', dotrain: 'will throw error' }];
 
-		// Mock the DotrainOrderGui to throw an exception
-		(DotrainOrderGui.getOrderDetails as Mock).mockRejectedValueOnce(
+		// Mock the RaindexOrderBuilder to throw an exception
+		(RaindexOrderBuilder.getOrderDetails as Mock).mockRejectedValueOnce(
 			new Error('Unexpected parsing error')
 		);
 
@@ -190,8 +190,8 @@ describe('validateOrders', () => {
 		// Input data
 		const registryDotrains = [{ name: 'string-error.rain', dotrain: 'will throw string' }];
 
-		// Mock the DotrainOrderGui to throw a string instead of an Error
-		(DotrainOrderGui.getOrderDetails as Mock).mockRejectedValueOnce('String error message');
+		// Mock the RaindexOrderBuilder to throw a string instead of an Error
+		(RaindexOrderBuilder.getOrderDetails as Mock).mockRejectedValueOnce('String error message');
 
 		// Call the function
 		const result = await validateOrders(registryDotrains);
@@ -208,7 +208,7 @@ describe('validateOrders', () => {
 
 		expect(result.validOrders).toEqual([]);
 		expect(result.invalidOrders).toEqual([]);
-		expect(DotrainOrderGui.getOrderDetails).not.toHaveBeenCalled();
+		expect(RaindexOrderBuilder.getOrderDetails).not.toHaveBeenCalled();
 	});
 
 	it('should handle mixed validation results correctly', async () => {
@@ -221,7 +221,7 @@ describe('validateOrders', () => {
 		];
 
 		// Set up mock responses
-		(DotrainOrderGui.getOrderDetails as Mock)
+		(RaindexOrderBuilder.getOrderDetails as Mock)
 			.mockResolvedValueOnce({
 				value: { orderName: 'Order 1', description: 'Description 1' },
 				error: null

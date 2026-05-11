@@ -2,17 +2,17 @@
 	import { Input } from 'flowbite-svelte';
 	import {
 		type FieldValue,
-		type GuiFieldDefinitionCfg,
-		type GuiPresetCfg
+		type OrderBuilderFieldDefinitionCfg,
+		type OrderBuilderPresetCfg
 	} from '@rainlanguage/orderbook';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';
 	import { onMount } from 'svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 
-	export let fieldDefinition: GuiFieldDefinitionCfg;
+	export let fieldDefinition: OrderBuilderFieldDefinitionCfg;
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	let currentValue: FieldValue | undefined;
 	let inputValue: string | null = currentValue?.value
@@ -21,7 +21,7 @@
 
 	onMount(() => {
 		try {
-			const result = gui.getFieldValue(fieldDefinition.binding);
+			const result = builder.getFieldValue(fieldDefinition.binding);
 			if (result.error) {
 				throw new Error(result.error.msg);
 			}
@@ -32,11 +32,11 @@
 		}
 	});
 
-	async function handlePresetClick(preset: GuiPresetCfg) {
+	async function handlePresetClick(preset: OrderBuilderPresetCfg) {
 		inputValue = preset.value;
-		gui.setFieldValue(fieldDefinition.binding, inputValue);
+		builder.setFieldValue(fieldDefinition.binding, inputValue);
 
-		const result = gui.getFieldValue(fieldDefinition.binding);
+		const result = builder.getFieldValue(fieldDefinition.binding);
 		if (result.error) {
 			throw new Error(result.error.msg);
 		}
@@ -45,9 +45,9 @@
 
 	async function handleCustomInputChange(value: string) {
 		inputValue = value;
-		gui.setFieldValue(fieldDefinition.binding, inputValue);
+		builder.setFieldValue(fieldDefinition.binding, inputValue);
 
-		const result = gui.getFieldValue(fieldDefinition.binding);
+		const result = builder.getFieldValue(fieldDefinition.binding);
 		if (result.error) {
 			throw new Error(result.error.msg);
 		}

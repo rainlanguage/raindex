@@ -2,11 +2,11 @@
 	import { Input } from 'flowbite-svelte';
 	import { type OrderIOCfg, type TokenInfo, type VaultType } from '@rainlanguage/orderbook';
 	import { onMount } from 'svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 	import type { TokenBalance } from '$lib/types/tokenBalance';
 	import VaultIdInformation from './VaultIdInformation.svelte';
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	export let label: 'Input' | 'Output';
 	export let vault: OrderIOCfg;
@@ -19,7 +19,7 @@
 	onMount(() => {
 		if (!vault.token?.key) return;
 
-		const result = gui.getVaultIds();
+		const result = builder.getVaultIds();
 		if (result.error) {
 			error = result.error.msg;
 			return;
@@ -35,7 +35,7 @@
 	const handleGetTokenInfo = async () => {
 		if (!vault.token?.key) return;
 		try {
-			let result = await gui.getTokenInfo(vault.token?.key);
+			let result = await builder.getTokenInfo(vault.token?.key);
 			if (result.error) {
 				error = result.error.msg;
 				return;
@@ -56,7 +56,7 @@
 		}
 		error = '';
 		try {
-			gui.setVaultId(label.toLowerCase() as VaultType, vault.token.key, inputValue);
+			builder.setVaultId(label.toLowerCase() as VaultType, vault.token.key, inputValue);
 		} catch (e) {
 			const errorMessage = (e as Error).message ? (e as Error).message : 'Error setting vault ID.';
 			error = errorMessage;
