@@ -2565,8 +2565,11 @@ checksum = "829d955a0bb380ef178a640b91779e3987da38c9aea133b20614cfed8cdea9c6"
 dependencies = [
  "bitflags 2.9.1",
  "crossterm_winapi",
+ "mio",
  "parking_lot",
  "rustix 0.38.44",
+ "signal-hook",
+ "signal-hook-mio",
  "winapi",
 ]
 
@@ -5313,9 +5316,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.30.1"
+version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
+checksum = "0c10584274047cb335c23d3e61bcef8e323adae7c5c8c760540f73610177fc3f"
 dependencies = [
  "pkg-config",
  "vcpkg",
@@ -5568,6 +5571,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
 dependencies = [
  "libc",
+ "log",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.59.0",
 ]
@@ -6718,6 +6722,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rain-interpreter-eval"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "eyre",
+ "foundry-evm",
+ "once_cell",
+ "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
+ "rain_interpreter_bindings",
+ "reqwest 0.11.27",
+ "revm 24.0.1",
+ "revm 25.0.0",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "wasm-bindgen-utils 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "rain-math-float"
 version = "0.1.0"
 dependencies = [
@@ -6815,6 +6838,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "rain_interpreter_bindings"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+]
+
+[[package]]
+name = "rain_interpreter_dispair"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
+ "rain_interpreter_bindings",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.19",
+]
+
+[[package]]
+name = "rain_interpreter_parser"
+version = "0.1.0"
+dependencies = [
+ "alloy",
+ "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
+ "rain_interpreter_bindings",
+ "rain_interpreter_dispair",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
+name = "rain_interpreter_test_fixtures"
+version = "0.0.0"
+dependencies = [
+ "alloy",
+ "getrandom 0.2.16",
+ "serde_json",
+]
+
+[[package]]
 name = "rain_orderbook_app_settings"
 version = "0.0.0-alpha.0"
 dependencies = [
@@ -6859,7 +6927,10 @@ dependencies = [
  "chrono",
  "clap",
  "comfy-table",
+ "console",
+ "crossterm",
  "csv",
+ "dialoguer",
  "flate2",
  "futures",
  "httpmock",
@@ -6869,10 +6940,11 @@ dependencies = [
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_common",
+ "rain_orderbook_js_api",
  "rain_orderbook_quote",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
- "rainlang_bindings",
+ "reqwest 0.12.20",
  "rusqlite",
  "rust-bigint",
  "serde",
@@ -6909,19 +6981,19 @@ dependencies = [
  "once_cell",
  "proptest",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
+ "rain-interpreter-eval",
  "rain-math-float",
  "rain-metaboard-subgraph",
  "rain-metadata 0.0.2-alpha.6",
  "rain-metadata-bindings",
+ "rain_interpreter_bindings",
+ "rain_interpreter_dispair",
+ "rain_interpreter_parser",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_quote",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
- "rainlang-eval",
- "rainlang_bindings",
- "rainlang_dispair",
- "rainlang_parser",
  "reqwest 0.12.20",
  "rusqlite",
  "serde",
@@ -6931,7 +7003,6 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.9",
  "strict-yaml-rust",
- "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tower",
@@ -7007,19 +7078,17 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
- "futures",
  "getrandom 0.2.16",
  "httpmock",
  "once_cell",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
+ "rain-interpreter-eval",
  "rain-math-float",
- "rain-metadata 0.0.2-alpha.6",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_common",
  "rain_orderbook_subgraph_client",
  "rain_orderbook_test_fixtures",
- "rainlang-eval",
  "reqwest 0.12.20",
  "serde",
  "serde_json",
@@ -7082,58 +7151,8 @@ dependencies = [
  "alloy",
  "getrandom 0.2.16",
  "rain-math-float",
- "rainlang_test_fixtures",
+ "rain_interpreter_test_fixtures",
  "serde_json",
-]
-
-[[package]]
-name = "rainlang-eval"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "eyre",
- "foundry-evm",
- "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
- "rainlang_bindings",
- "revm 24.0.1",
- "revm 25.0.0",
- "serde",
- "thiserror 1.0.69",
- "wasm-bindgen-utils 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "rainlang_bindings"
-version = "0.1.0"
-dependencies = [
- "alloy",
-]
-
-[[package]]
-name = "rainlang_dispair"
-version = "0.1.0"
-dependencies = [
- "alloy",
-]
-
-[[package]]
-name = "rainlang_parser"
-version = "0.1.0"
-dependencies = [
- "alloy",
- "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
- "rainlang_bindings",
- "rainlang_dispair",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "rainlang_test_fixtures"
-version = "0.0.0"
-dependencies = [
- "alloy",
- "getrandom 0.2.16",
 ]
 
 [[package]]
@@ -8030,9 +8049,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.32.1"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+checksum = "b838eba278d213a8beaf485bd313fd580ca4505a00d5871caeb1457c55322cae"
 dependencies = [
  "bitflags 2.9.1",
  "fallible-iterator",
@@ -8747,6 +8766,27 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
+name = "signal-hook-mio"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b75a19a7a740b25bc7944bdee6172368f988763b744e3d4dfe753f6b4ece40cc"
+dependencies = [
+ "libc",
+ "mio",
+ "signal-hook",
+]
 
 [[package]]
 name = "signal-hook-registry"
