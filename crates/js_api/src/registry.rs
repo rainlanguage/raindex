@@ -1,5 +1,6 @@
 use crate::raindex_order_builder::{RaindexOrderBuilder, RaindexOrderBuilderWasmError};
 use crate::yaml::{OrderbookYaml, OrderbookYamlError};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use rain_orderbook_app_settings::order_builder::NameAndDescriptionCfg;
 use rain_orderbook_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
 use reqwest;
@@ -142,6 +143,8 @@ pub enum DotrainRegistryError {
     InvalidRegistryFormat(String),
     #[error("HTTP request failed: {0}")]
     HttpError(String),
+    #[error("Invalid data URI: {0}")]
+    DataUriError(String),
     #[error("Invalid URL: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
@@ -175,6 +178,9 @@ impl DotrainRegistryError {
             }
             DotrainRegistryError::HttpError(msg) => {
                 format!("Network error: {}", msg)
+            }
+            DotrainRegistryError::DataUriError(msg) => {
+                format!("Invalid data URI: {}", msg)
             }
             DotrainRegistryError::UrlParseError(err) => {
                 format!("Invalid URL format: {}. Please ensure the URL is properly formatted.", err)
@@ -675,6 +681,10 @@ impl DotrainRegistry {
     }
 
     async fn fetch_url_content(url: &Url) -> Result<String, DotrainRegistryError> {
+        if url.scheme() == "data" {
+            return Self::decode_data_uri_content(url);
+        }
+
         let response = reqwest::get(url.as_str())
             .await
             .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?;
@@ -692,6 +702,32 @@ impl DotrainRegistry {
             .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))
     }
 
+    fn decode_data_uri_content(url: &Url) -> Result<String, DotrainRegistryError> {
+        let data_uri = url
+            .as_str()
+            .strip_prefix("data:")
+            .ok_or_else(|| DotrainRegistryError::DataUriError("missing data scheme".to_string()))?;
+        let (metadata, payload) = data_uri.split_once(',').ok_or_else(|| {
+            DotrainRegistryError::DataUriError("missing metadata/payload separator".to_string())
+        })?;
+        let is_base64 = metadata
+            .split(';')
+            .any(|part| part.eq_ignore_ascii_case("base64"));
+
+        if !is_base64 {
+            return Err(DotrainRegistryError::DataUriError(
+                "payload must be base64 encoded".to_string(),
+            ));
+        }
+
+        let bytes = BASE64_STANDARD.decode(payload).map_err(|_| {
+            DotrainRegistryError::DataUriError("invalid base64 payload".to_string())
+        })?;
+        String::from_utf8(bytes).map_err(|_| {
+            DotrainRegistryError::DataUriError("decoded payload is not valid UTF-8".to_string())
+        })
+    }
+
     async fn fetch_settings(settings_url: &Url) -> Result<String, DotrainRegistryError> {
         Self::fetch_url_content(settings_url).await
     }
@@ -707,12 +743,7 @@ impl DotrainRegistry {
             let key_clone = key.clone();
             let url_clone = url.clone();
             futures.push(async move {
-                let content = reqwest::get(url_clone.as_str())
-                    .await
-                    .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?
-                    .text()
-                    .await
-                    .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?;
+                let content = Self::fetch_url_content(&url_clone).await?;
                 Ok::<(String, String), DotrainRegistryError>((key_clone, content))
             });
         }
@@ -738,6 +769,14 @@ mod tests {
     const MOCK_REGISTRY_CONTENT: &str = r#"https://example.com/settings.yaml
 fixed-limit https://example.com/fixed-limit.rain
 auction-dca https://example.com/auction-dca.rain"#;
+
+    fn base64_data_uri(media_type: &str, content: &str) -> String {
+        format!(
+            "data:{};base64,{}",
+            media_type,
+            BASE64_STANDARD.encode(content)
+        )
+    }
 
     fn mock_settings_content() -> String {
         format!(
@@ -1314,6 +1353,43 @@ _ _: 1 1;
         }
 
         #[tokio::test]
+        async fn test_fetch_url_content_base64_data_uri() {
+            let url = Url::parse(&base64_data_uri("text/plain", "test content")).unwrap();
+            let content = DotrainRegistry::fetch_url_content(&url).await.unwrap();
+
+            assert_eq!(content, "test content");
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_malformed_data_uri() {
+            let url = Url::parse("data:text/plain;base64,not-valid-base64").unwrap();
+            let result = DotrainRegistry::fetch_url_content(&url).await;
+
+            assert!(result.is_err());
+            match result.err().unwrap() {
+                DotrainRegistryError::DataUriError(msg) => {
+                    assert!(msg.contains("invalid base64 payload"));
+                    assert!(!msg.contains("not-valid-base64"));
+                }
+                _ => panic!("Expected DataUriError"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_rejects_non_base64_data_uri() {
+            let url = Url::parse("data:text/plain,test%20content").unwrap();
+            let result = DotrainRegistry::fetch_url_content(&url).await;
+
+            assert!(result.is_err());
+            match result.err().unwrap() {
+                DotrainRegistryError::DataUriError(msg) => {
+                    assert!(msg.contains("payload must be base64 encoded"));
+                }
+                _ => panic!("Expected DataUriError"),
+            }
+        }
+
+        #[tokio::test]
         async fn test_fetch_settings() {
             let server = MockServer::start_async().await;
 
@@ -1366,6 +1442,51 @@ _ _: 1 1;
             assert_ne!(order1_content, order2_content);
             assert!(order1_content.contains("_ _: 0 0;"));
             assert!(order2_content.contains("_ _: 1 1;"));
+        }
+
+        #[tokio::test]
+        async fn test_new_constructor_with_data_uri_registry_and_settings() {
+            let server = MockServer::start_async().await;
+
+            server.mock(|when, then| {
+                when.method("GET").path("/order.rain");
+                then.status(200).body(get_first_dotrain_content());
+            });
+
+            let settings_uri = base64_data_uri("application/yaml", &mock_settings_content());
+            let test_registry_content = format!(
+                "{}\nfirst-order {}/order.rain",
+                settings_uri,
+                server.url("")
+            );
+            let registry_uri = base64_data_uri("text/plain", &test_registry_content);
+
+            let registry = DotrainRegistry::new(registry_uri).await.unwrap();
+
+            assert_eq!(registry.registry(), test_registry_content);
+            assert_eq!(registry.settings(), mock_settings_content());
+            assert_eq!(registry.order_urls.len(), 1);
+            assert_eq!(registry.orders.len(), 1);
+            assert!(registry.order_urls.contains_key("first-order"));
+            assert_eq!(
+                registry.orders.get("first-order").unwrap(),
+                &get_first_dotrain_content()
+            );
+        }
+
+        #[tokio::test]
+        async fn test_fetch_orders_supports_data_uri_order_content() {
+            let order_urls: HashMap<String, Url> = vec![(
+                "order1".to_string(),
+                Url::parse(&base64_data_uri("text/plain", &get_first_dotrain_content())).unwrap(),
+            )]
+            .into_iter()
+            .collect();
+
+            let orders = DotrainRegistry::fetch_orders(&order_urls).await.unwrap();
+
+            assert_eq!(orders.len(), 1);
+            assert_eq!(orders.get("order1").unwrap(), &get_first_dotrain_content());
         }
 
         #[tokio::test]
