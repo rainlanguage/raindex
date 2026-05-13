@@ -45,6 +45,7 @@ matching_clears AS (
   /*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/
   /*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/
   /*CLEAR_EVENTS_TAKERS_CLAUSE*/
+  /*CLEAR_EVENTS_ORDER_HASHES_CLAUSE*/
 ),
 take_trades AS (
   SELECT
@@ -77,6 +78,7 @@ take_trades AS (
         oe.block_number < mt.block_number
      OR (oe.block_number = mt.block_number AND oe.log_index <= mt.log_index)
    )
+   /*TAKE_TRADES_ORDER_HASHES_CLAUSE*/
    AND NOT EXISTS (
      SELECT 1
      FROM order_events newer
@@ -139,6 +141,7 @@ clear_alice AS (
         oe.block_number < mc.block_number
      OR (oe.block_number = mc.block_number AND oe.log_index <= mc.log_index)
    )
+   /*CLEAR_ALICE_ORDER_HASHES_CLAUSE*/
    AND NOT EXISTS (
      SELECT 1
      FROM order_events newer
@@ -212,6 +215,7 @@ clear_bob AS (
         oe.block_number < mc.block_number
      OR (oe.block_number = mc.block_number AND oe.log_index <= mc.log_index)
    )
+   /*CLEAR_BOB_ORDER_HASHES_CLAUSE*/
    AND NOT EXISTS (
      SELECT 1
      FROM order_events newer
@@ -374,6 +378,7 @@ LEFT JOIN erc20_tokens tok_out
 WHERE 1 = 1
 /*OWNERS_CLAUSE*/
 /*ORDER_HASH_CLAUSE*/
+/*ORDER_HASHES_CLAUSE*/
 /*START_TS_CLAUSE*/
 /*END_TS_CLAUSE*/
 /*INPUT_TOKENS_CLAUSE*/

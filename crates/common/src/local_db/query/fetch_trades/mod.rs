@@ -19,10 +19,21 @@ const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/
 const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
 const CLEAR_EVENTS_TAKERS_CLAUSE: &str = "/*CLEAR_EVENTS_TAKERS_CLAUSE*/";
 const CLEAR_EVENTS_TAKERS_CLAUSE_BODY: &str = "AND c.sender IN ({list})";
+const CLEAR_EVENTS_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_EVENTS_ORDER_HASHES_CLAUSE*/";
+const CLEAR_EVENTS_ORDER_HASHES_CLAUSE_BODY: &str =
+    "AND (c.alice_order_hash IN ({list}) OR c.bob_order_hash IN ({list}))";
+const TAKE_TRADES_ORDER_HASHES_CLAUSE: &str = "/*TAKE_TRADES_ORDER_HASHES_CLAUSE*/";
+const TAKE_TRADES_ORDER_HASHES_CLAUSE_BODY: &str = "AND oe.order_hash IN ({list})";
+const CLEAR_ALICE_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_ALICE_ORDER_HASHES_CLAUSE*/";
+const CLEAR_ALICE_ORDER_HASHES_CLAUSE_BODY: &str = "AND mc.alice_order_hash IN ({list})";
+const CLEAR_BOB_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_BOB_ORDER_HASHES_CLAUSE*/";
+const CLEAR_BOB_ORDER_HASHES_CLAUSE_BODY: &str = "AND mc.bob_order_hash IN ({list})";
 const OWNERS_CLAUSE: &str = "/*OWNERS_CLAUSE*/";
 const OWNERS_CLAUSE_BODY: &str = "AND tws.order_owner IN ({list})";
 const ORDER_HASH_CLAUSE: &str = "/*ORDER_HASH_CLAUSE*/";
 const ORDER_HASH_CLAUSE_BODY: &str = "AND tws.order_hash = {param}";
+const ORDER_HASHES_CLAUSE: &str = "/*ORDER_HASHES_CLAUSE*/";
+const ORDER_HASHES_CLAUSE_BODY: &str = "AND tws.order_hash IN ({list})";
 const START_TS_CLAUSE: &str = "/*START_TS_CLAUSE*/";
 const START_TS_BODY: &str = "AND tws.block_timestamp >= {param}";
 const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
@@ -48,6 +59,7 @@ pub struct FetchTradesArgs {
     pub owners: Vec<Address>,
     pub takers: Vec<Address>,
     pub order_hash: Option<B256>,
+    pub order_hashes: Vec<B256>,
     pub tokens: FetchTradesTokensFilter,
     pub time_filter: TimeFilter,
     pub pagination: PaginationParams,
@@ -113,6 +125,35 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
         ORDER_HASH_CLAUSE,
         ORDER_HASH_CLAUSE_BODY,
         args.order_hash.map(SqlValue::from),
+    )?;
+    let mut order_hashes = args.order_hashes.clone();
+    order_hashes.sort();
+    order_hashes.dedup();
+    let order_hashes_iter = || order_hashes.iter().cloned().map(SqlValue::from);
+    stmt.bind_list_clause(
+        CLEAR_EVENTS_ORDER_HASHES_CLAUSE,
+        CLEAR_EVENTS_ORDER_HASHES_CLAUSE_BODY,
+        order_hashes_iter(),
+    )?;
+    stmt.bind_list_clause(
+        TAKE_TRADES_ORDER_HASHES_CLAUSE,
+        TAKE_TRADES_ORDER_HASHES_CLAUSE_BODY,
+        order_hashes_iter(),
+    )?;
+    stmt.bind_list_clause(
+        CLEAR_ALICE_ORDER_HASHES_CLAUSE,
+        CLEAR_ALICE_ORDER_HASHES_CLAUSE_BODY,
+        order_hashes_iter(),
+    )?;
+    stmt.bind_list_clause(
+        CLEAR_BOB_ORDER_HASHES_CLAUSE,
+        CLEAR_BOB_ORDER_HASHES_CLAUSE_BODY,
+        order_hashes_iter(),
+    )?;
+    stmt.bind_list_clause(
+        ORDER_HASHES_CLAUSE,
+        ORDER_HASHES_CLAUSE_BODY,
+        order_hashes_iter(),
     )?;
 
     if let (Some(start), Some(end)) = (args.time_filter.start, args.time_filter.end) {
@@ -240,7 +281,10 @@ fn bind_token_filters(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::{hex, primitives::address};
+    use alloy::{
+        hex,
+        primitives::{address, b256},
+    };
 
     #[test]
     fn builds_with_chain_ids() {
@@ -331,6 +375,36 @@ mod tests {
             stmt.params[3],
             SqlValue::Text(hex::encode_prefixed(taker_b))
         );
+    }
+
+    #[test]
+    fn builds_with_batch_order_hash_filters() {
+        let hash_a = b256!("0x1111111111111111111111111111111111111111111111111111111111111111");
+        let hash_b = b256!("0x2222222222222222222222222222222222222222222222222222222222222222");
+        let stmt = build_fetch_trades_stmt(&FetchTradesArgs {
+            order_hashes: vec![hash_b, hash_a, hash_a],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert!(stmt
+            .sql
+            .contains("c.alice_order_hash IN (?1, ?2) OR c.bob_order_hash IN (?1, ?2)"));
+        assert!(stmt.sql.contains("oe.order_hash IN (?3, ?4)"));
+        assert!(stmt.sql.contains("mc.alice_order_hash IN (?5, ?6)"));
+        assert!(stmt.sql.contains("mc.bob_order_hash IN (?7, ?8)"));
+        assert!(stmt.sql.contains("tws.order_hash IN (?9, ?10)"));
+        assert!(!stmt.sql.contains(ORDER_HASHES_CLAUSE));
+        assert!(!stmt.sql.contains(TAKE_TRADES_ORDER_HASHES_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_ALICE_ORDER_HASHES_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_BOB_ORDER_HASHES_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_EVENTS_ORDER_HASHES_CLAUSE));
+        assert_eq!(stmt.params[0], SqlValue::Text(hex::encode_prefixed(hash_a)));
+        assert_eq!(stmt.params[1], SqlValue::Text(hex::encode_prefixed(hash_b)));
+        assert_eq!(stmt.params[6], SqlValue::Text(hex::encode_prefixed(hash_a)));
+        assert_eq!(stmt.params[7], SqlValue::Text(hex::encode_prefixed(hash_b)));
+        assert_eq!(stmt.params[8], SqlValue::Text(hex::encode_prefixed(hash_a)));
+        assert_eq!(stmt.params[9], SqlValue::Text(hex::encode_prefixed(hash_b)));
     }
 
     #[test]

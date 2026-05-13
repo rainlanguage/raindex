@@ -155,6 +155,8 @@ pub struct SgTradeOrderFilter {
     #[cynic(rename = "orderHash", skip_serializing_if = "Option::is_none")]
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub order_hash: Option<SgBytes>,
+    #[cynic(rename = "orderHash_in", skip_serializing_if = "Vec::is_empty")]
+    pub order_hash_in: Vec<SgBytes>,
 }
 
 #[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]

@@ -1,8 +1,13 @@
 mod get_all;
+mod get_by_order_hashes;
 mod get_by_owner;
 mod get_by_tx;
 
 pub use get_all::{GetTradesFilters, GetTradesTokenFilter};
+pub use get_by_order_hashes::{
+    GetTradesByOrderHashesFilters, OrderHashes, RaindexOrderHashTrades,
+    RaindexTradesByOrderHashResult,
+};
 
 use super::local_db::orders::LocalDbOrders;
 use super::orders::{OrdersDataSource, SubgraphOrders};

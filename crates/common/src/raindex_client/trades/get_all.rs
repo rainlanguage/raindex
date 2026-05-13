@@ -96,6 +96,7 @@ impl From<GetTradesFilters> for SgTradesListQueryFilters {
                     .map(|owner| SgBytes(owner.to_string()))
                     .collect(),
                 order_hash: filters.order_hash.map(|hash| SgBytes(hash.to_string())),
+                order_hash_in: Vec::new(),
             });
         }
 
@@ -131,7 +132,9 @@ fn local_trades_pagination(
     }
 }
 
-fn normalize_trade_tokens(mut tokens: SgTradesTokensFilterArgs) -> SgTradesTokensFilterArgs {
+pub(super) fn normalize_trade_tokens(
+    mut tokens: SgTradesTokensFilterArgs,
+) -> SgTradesTokensFilterArgs {
     tokens.inputs.sort_unstable();
     tokens.inputs.dedup();
     tokens.outputs.sort_unstable();
@@ -139,7 +142,10 @@ fn normalize_trade_tokens(mut tokens: SgTradesTokensFilterArgs) -> SgTradesToken
     tokens
 }
 
-fn sg_trade_matches_token_filter(trade: &SgTrade, tokens: &SgTradesTokensFilterArgs) -> bool {
+pub(super) fn sg_trade_matches_token_filter(
+    trade: &SgTrade,
+    tokens: &SgTradesTokensFilterArgs,
+) -> bool {
     let has_inputs = !tokens.inputs.is_empty();
     let has_outputs = !tokens.outputs.is_empty();
     let input_token = trade
@@ -246,6 +252,7 @@ impl RaindexClient {
                     owners: filters.owners.clone(),
                     takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
+                    order_hashes: Vec::new(),
                     tokens: local_tokens.clone(),
                     time_filter: filters.time_filter.clone().unwrap_or_default(),
                     pagination: local_pagination,
@@ -276,6 +283,7 @@ impl RaindexClient {
                     owners: filters.owners.clone(),
                     takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
+                    order_hashes: Vec::new(),
                     tokens: local_tokens,
                     time_filter: filters.time_filter.clone().unwrap_or_default(),
                     pagination: PaginationParams::default(),
