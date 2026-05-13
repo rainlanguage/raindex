@@ -1,0 +1,641 @@
+use super::*;
+use crate::local_db::query::fetch_trades::{
+    extract_trades_count, FetchTradesArgs, FetchTradesTokensFilter,
+};
+use crate::raindex_client::local_db::query::fetch_trades::{fetch_trades, fetch_trades_count};
+use crate::utils::timing::Timing;
+use rain_orderbook_subgraph_client::types::common::{
+    SgBigInt, SgBytes, SgTrade, SgTradeOrderFilter, SgTradesListQueryFilters,
+    SgTradesTokensFilterArgs,
+};
+use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
+use tsify::Tsify;
+use wasm_bindgen_utils::impl_wasm_traits;
+
+const DEFAULT_PAGE_SIZE: u16 = 100;
+
+#[derive(Serialize, Deserialize, Debug, Clone, Tsify, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTradesTokenFilter {
+    #[cfg_attr(target_family = "wasm", tsify(optional, type = "Address[]"))]
+    pub inputs: Option<Vec<Address>>,
+    #[cfg_attr(target_family = "wasm", tsify(optional, type = "Address[]"))]
+    pub outputs: Option<Vec<Address>>,
+}
+impl_wasm_traits!(GetTradesTokenFilter);
+
+#[derive(Serialize, Deserialize, Debug, Clone, Tsify, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GetTradesFilters {
+    #[tsify(optional, type = "Address[]")]
+    pub owners: Vec<Address>,
+    #[tsify(optional, type = "Hex")]
+    pub order_hash: Option<B256>,
+    #[tsify(optional)]
+    pub tokens: Option<GetTradesTokenFilter>,
+    #[tsify(optional, type = "Address[]")]
+    pub orderbook_addresses: Option<Vec<Address>>,
+    #[tsify(optional)]
+    pub time_filter: Option<TimeFilter>,
+}
+impl_wasm_traits!(GetTradesFilters);
+
+impl From<GetTradesTokenFilter> for Option<SgTradesTokensFilterArgs> {
+    fn from(filter: GetTradesTokenFilter) -> Self {
+        let inputs: Vec<String> = filter
+            .inputs
+            .unwrap_or_default()
+            .into_iter()
+            .map(|token| token.to_string().to_lowercase())
+            .collect();
+        let outputs: Vec<String> = filter
+            .outputs
+            .unwrap_or_default()
+            .into_iter()
+            .map(|token| token.to_string().to_lowercase())
+            .collect();
+
+        if inputs.is_empty() && outputs.is_empty() {
+            None
+        } else {
+            Some(SgTradesTokensFilterArgs { inputs, outputs })
+        }
+    }
+}
+
+impl From<GetTradesFilters> for SgTradesListQueryFilters {
+    fn from(filters: GetTradesFilters) -> Self {
+        let time_filter = filters.time_filter.unwrap_or_default();
+        let mut sg_filters = SgTradesListQueryFilters {
+            timestamp_gte: Some(
+                time_filter
+                    .start
+                    .map_or(SgBigInt("0".to_string()), |v| SgBigInt(v.to_string())),
+            ),
+            timestamp_lte: Some(
+                time_filter
+                    .end
+                    .map_or(SgBigInt(u64::MAX.to_string()), |v| SgBigInt(v.to_string())),
+            ),
+            orderbook_in: filters
+                .orderbook_addresses
+                .unwrap_or_default()
+                .into_iter()
+                .map(|address| address.to_string().to_lowercase())
+                .collect(),
+            ..Default::default()
+        };
+
+        if !filters.owners.is_empty() || filters.order_hash.is_some() {
+            sg_filters.order_ = Some(SgTradeOrderFilter {
+                owner_in: filters
+                    .owners
+                    .into_iter()
+                    .map(|owner| SgBytes(owner.to_string()))
+                    .collect(),
+                order_hash: filters.order_hash.map(|hash| SgBytes(hash.to_string())),
+            });
+        }
+
+        sg_filters
+    }
+}
+
+fn local_trades_pagination(
+    has_subgraph_sources: bool,
+    page_number: u16,
+    page_size: u16,
+) -> (PaginationParams, bool) {
+    if has_subgraph_sources {
+        (PaginationParams::default(), false)
+    } else {
+        (
+            PaginationParams {
+                page: Some(page_number),
+                page_size: Some(page_size),
+            },
+            true,
+        )
+    }
+}
+
+fn normalize_trade_tokens(mut tokens: SgTradesTokensFilterArgs) -> SgTradesTokensFilterArgs {
+    tokens.inputs.sort_unstable();
+    tokens.inputs.dedup();
+    tokens.outputs.sort_unstable();
+    tokens.outputs.dedup();
+    tokens
+}
+
+fn sg_trade_matches_token_filter(trade: &SgTrade, tokens: &SgTradesTokensFilterArgs) -> bool {
+    let has_inputs = !tokens.inputs.is_empty();
+    let has_outputs = !tokens.outputs.is_empty();
+    let input_token = trade
+        .input_vault_balance_change
+        .vault
+        .token
+        .address
+        .0
+        .to_lowercase();
+    let output_token = trade
+        .output_vault_balance_change
+        .vault
+        .token
+        .address
+        .0
+        .to_lowercase();
+
+    if has_inputs && has_outputs && tokens.inputs == tokens.outputs {
+        tokens.inputs.contains(&input_token) || tokens.outputs.contains(&output_token)
+    } else {
+        (!has_inputs || tokens.inputs.contains(&input_token))
+            && (!has_outputs || tokens.outputs.contains(&output_token))
+    }
+}
+
+#[wasm_export]
+impl RaindexClient {
+    #[wasm_export(
+        js_name = "getTrades",
+        return_description = "Trades list result with total count and per-pair summary",
+        unchecked_return_type = "RaindexTradesListResult",
+        preserve_js_class
+    )]
+    pub async fn get_trades(
+        &self,
+        #[wasm_export(
+            js_name = "chainIds",
+            param_description = "Specific blockchain networks to query (optional, queries all networks if not specified)"
+        )]
+        chain_ids: Option<ChainIds>,
+        #[wasm_export(
+            param_description = "Filtering criteria including owners, order hash, token addresses, orderbooks, and time range"
+        )]
+        filters: Option<GetTradesFilters>,
+        #[wasm_export(param_description = "Page number for pagination (optional, defaults to 1)")]
+        page: Option<u16>,
+        #[wasm_export(
+            js_name = "pageSize",
+            param_description = "Number of items per page (optional, defaults to 100)"
+        )]
+        page_size: Option<u16>,
+    ) -> Result<RaindexTradesListResult, RaindexError> {
+        let route_started = Timing::now();
+        let filters = filters.unwrap_or_default();
+        let page_number = page.unwrap_or(1).max(1);
+        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
+        let ids = chain_ids.map(|ChainIds(ids)| ids);
+        let requested_chain_ids_count = ids.as_ref().map_or(0, Vec::len);
+        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+        let local_chain_ids_count = local_ids.len();
+        let subgraph_chain_ids_count = sg_ids.len();
+        let input_tokens_count = filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.inputs.as_ref())
+            .map_or(0, Vec::len);
+        let output_tokens_count = filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.outputs.as_ref())
+            .map_or(0, Vec::len);
+        let orderbooks_count = filters.orderbook_addresses.as_ref().map_or(0, Vec::len);
+
+        let mut all_trades = Vec::new();
+        let mut total_count: u64 = 0;
+        let mut local_fetch_ms = None;
+        let mut local_count_ms = None;
+        let mut local_rows = 0usize;
+        let mut local_total_count = 0u64;
+        let mut local_query_paginated = false;
+        let mut subgraph_fetch_ms = None;
+        let mut subgraph_rows_before_token_filter = 0usize;
+        let mut subgraph_rows_after_token_filter = 0usize;
+
+        if let Some(db) = local_db {
+            let (local_pagination, is_local_query_paginated) =
+                local_trades_pagination(!sg_ids.is_empty(), page_number, page_size);
+            local_query_paginated = is_local_query_paginated;
+            let local_tokens = filters
+                .tokens
+                .clone()
+                .map(|tokens| FetchTradesTokensFilter {
+                    inputs: tokens.inputs.unwrap_or_default(),
+                    outputs: tokens.outputs.unwrap_or_default(),
+                })
+                .unwrap_or_default();
+            let local_fetch_started = Timing::now();
+            let local_trades = match fetch_trades(
+                &db,
+                FetchTradesArgs {
+                    chain_ids: local_ids.clone(),
+                    orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
+                    owners: filters.owners.clone(),
+                    order_hash: filters.order_hash,
+                    tokens: local_tokens.clone(),
+                    time_filter: filters.time_filter.clone().unwrap_or_default(),
+                    pagination: local_pagination,
+                },
+            )
+            .await
+            {
+                Ok(trades) => trades,
+                Err(err) => {
+                    tracing::error!(
+                        elapsed_ms = local_fetch_started.elapsed_ms(),
+                        local_chain_ids_count,
+                        error = %err,
+                        "getTrades local DB fetch failed"
+                    );
+                    return Err(err.into());
+                }
+            };
+            local_fetch_ms = Some(local_fetch_started.elapsed_ms());
+            local_rows = local_trades.len();
+
+            let local_count_started = Timing::now();
+            let count_rows = match fetch_trades_count(
+                &db,
+                FetchTradesArgs {
+                    chain_ids: local_ids,
+                    orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
+                    owners: filters.owners.clone(),
+                    order_hash: filters.order_hash,
+                    tokens: local_tokens,
+                    time_filter: filters.time_filter.clone().unwrap_or_default(),
+                    pagination: PaginationParams::default(),
+                },
+            )
+            .await
+            {
+                Ok(count_rows) => count_rows,
+                Err(err) => {
+                    tracing::error!(
+                        elapsed_ms = local_count_started.elapsed_ms(),
+                        local_chain_ids_count,
+                        error = %err,
+                        "getTrades local DB count failed"
+                    );
+                    return Err(err.into());
+                }
+            };
+            local_count_ms = Some(local_count_started.elapsed_ms());
+            local_total_count = extract_trades_count(&count_rows);
+            total_count += local_total_count;
+            all_trades.extend(
+                local_trades
+                    .into_iter()
+                    .map(RaindexTrade::try_from_local_db_trade)
+                    .collect::<Result<Vec<_>, _>>()?,
+            );
+            tracing::debug!(
+                local_chain_ids_count,
+                rows = local_rows,
+                total_count = local_total_count,
+                fetch_ms = local_fetch_ms,
+                count_ms = local_count_ms,
+                "getTrades local DB completed"
+            );
+        }
+
+        if !sg_ids.is_empty() {
+            let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
+            let sg_filters: SgTradesListQueryFilters = filters.clone().into();
+            let sg_token_filter = filters
+                .tokens
+                .clone()
+                .and_then(Option::<SgTradesTokensFilterArgs>::from)
+                .map(normalize_trade_tokens);
+            let name_to_chain_id: std::collections::HashMap<&str, u32> = multi_subgraph_args
+                .iter()
+                .flat_map(|(chain_id, args)| args.iter().map(|arg| (arg.name.as_str(), *chain_id)))
+                .collect();
+            let client = MultiOrderbookSubgraphClient::new(
+                multi_subgraph_args.values().flatten().cloned().collect(),
+            );
+            let subgraph_fetch_started = Timing::now();
+            let sg_trades = match client.trades_list_all(sg_filters).await {
+                Ok(trades) => trades,
+                Err(err) => {
+                    tracing::error!(
+                        elapsed_ms = subgraph_fetch_started.elapsed_ms(),
+                        subgraph_chain_ids_count,
+                        error = %err,
+                        "getTrades subgraph fetch failed"
+                    );
+                    return Err(err.into());
+                }
+            };
+            subgraph_fetch_ms = Some(subgraph_fetch_started.elapsed_ms());
+            subgraph_rows_before_token_filter = sg_trades.len();
+            let sg_trades: Vec<_> = if let Some(tokens) = sg_token_filter {
+                let filtered_trades: Vec<_> = sg_trades
+                    .into_iter()
+                    .filter(|trade| sg_trade_matches_token_filter(&trade.trade, &tokens))
+                    .collect();
+                total_count += filtered_trades.len() as u64;
+                subgraph_rows_after_token_filter = filtered_trades.len();
+                filtered_trades
+            } else {
+                total_count += sg_trades.len() as u64;
+                subgraph_rows_after_token_filter = sg_trades.len();
+                sg_trades
+            };
+            for trade_with_name in sg_trades {
+                let chain_id = name_to_chain_id
+                    .get(trade_with_name.subgraph_name.as_str())
+                    .copied()
+                    .ok_or(RaindexError::SubgraphNotFound(
+                        trade_with_name.subgraph_name.clone(),
+                        trade_with_name.trade.id.0.clone(),
+                    ))?;
+                all_trades.push(RaindexTrade::try_from_sg_trade(
+                    chain_id,
+                    trade_with_name.trade,
+                )?);
+            }
+            tracing::debug!(
+                subgraph_chain_ids_count,
+                rows_before_token_filter = subgraph_rows_before_token_filter,
+                rows_after_token_filter = subgraph_rows_after_token_filter,
+                fetch_ms = subgraph_fetch_ms,
+                "getTrades subgraph completed"
+            );
+        }
+
+        let merge_started = Timing::now();
+        all_trades.sort_by(|a, b| b.timestamp.cmp(&a.timestamp).then_with(|| a.id.cmp(&b.id)));
+        let offset = if local_query_paginated && subgraph_chain_ids_count == 0 {
+            0
+        } else {
+            ((page_number - 1) as usize) * (page_size as usize)
+        };
+        let limit = page_size as usize;
+        let merged_rows_before_pagination = all_trades.len();
+        let trades: Vec<_> = all_trades.into_iter().skip(offset).take(limit).collect();
+        let returned_rows = trades.len();
+        let summary = RaindexPairSummary::from_trades(&trades)?;
+        let merge_sort_page_ms = merge_started.elapsed_ms();
+        tracing::debug!(
+            page = page_number,
+            page_size,
+            requested_chain_ids_count,
+            local_chain_ids_count,
+            subgraph_chain_ids_count,
+            owners_count = filters.owners.len(),
+            orderbooks_count,
+            has_order_hash = filters.order_hash.is_some(),
+            has_time_filter = filters.time_filter.is_some(),
+            input_tokens_count,
+            output_tokens_count,
+            local_fetch_ms,
+            local_count_ms,
+            local_query_paginated,
+            local_rows,
+            local_total_count,
+            subgraph_fetch_ms,
+            subgraph_rows_before_token_filter,
+            subgraph_rows_after_token_filter,
+            merged_rows_before_pagination,
+            returned_rows,
+            total_count,
+            merge_sort_page_ms,
+            total_ms = route_started.elapsed_ms(),
+            "getTrades completed"
+        );
+        Ok(RaindexTradesListResult {
+            trades,
+            total_count,
+            summary: Some(summary),
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy::primitives::{address, b256};
+    use rain_orderbook_subgraph_client::types::common::{
+        SgErc20, SgOrderbook, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
+        SgTradeStructPartialOrder, SgTradeVaultBalanceChange, SgTransaction,
+        SgVaultBalanceChangeVault,
+    };
+
+    #[test]
+    fn local_trades_pagination_is_applied_for_local_only_queries() {
+        let (pagination, is_paginated) = local_trades_pagination(false, 2, 25);
+
+        assert!(is_paginated);
+        assert_eq!(pagination.page, Some(2));
+        assert_eq!(pagination.page_size, Some(25));
+    }
+
+    #[test]
+    fn local_trades_pagination_is_deferred_for_mixed_source_queries() {
+        let (pagination, is_paginated) = local_trades_pagination(true, 2, 25);
+
+        assert!(!is_paginated);
+        assert_eq!(pagination.page, None);
+        assert_eq!(pagination.page_size, None);
+    }
+
+    #[test]
+    fn maps_trade_filters_to_subgraph_filters() {
+        let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let orderbook = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let order_hash =
+            b256!("0x0000000000000000000000000000000000000000000000000000000000abcdef");
+
+        let filters: SgTradesListQueryFilters = GetTradesFilters {
+            owners: vec![owner],
+            order_hash: Some(order_hash),
+            orderbook_addresses: Some(vec![orderbook]),
+            time_filter: Some(TimeFilter {
+                start: Some(10),
+                end: Some(20),
+            }),
+            ..Default::default()
+        }
+        .into();
+
+        let order_filter = filters.order_.unwrap();
+        assert_eq!(order_filter.owner_in, vec![SgBytes(owner.to_string())]);
+        assert_eq!(
+            order_filter.order_hash,
+            Some(SgBytes(order_hash.to_string()))
+        );
+        assert_eq!(filters.orderbook_in, vec![format!("{orderbook:#x}")]);
+        assert_eq!(filters.timestamp_gte, Some(SgBigInt("10".to_string())));
+        assert_eq!(filters.timestamp_lte, Some(SgBigInt("20".to_string())));
+    }
+
+    #[test]
+    fn deserializes_partial_filters_without_owners() {
+        let json = serde_json::json!({
+            "tokens": {
+                "inputs": ["0x1111111111111111111111111111111111111111"]
+            }
+        });
+
+        let filters: GetTradesFilters = serde_json::from_value(json).unwrap();
+
+        assert!(filters.owners.is_empty());
+        assert!(filters.tokens.is_some());
+    }
+
+    #[test]
+    fn maps_token_filters_to_subgraph_candidate_filter_without_unsupported_child_nesting() {
+        let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let orderbook = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let token_a = address!("0x1111111111111111111111111111111111111111");
+        let token_b = address!("0x2222222222222222222222222222222222222222");
+        let filters: SgTradesListQueryFilters = GetTradesFilters {
+            owners: vec![owner],
+            orderbook_addresses: Some(vec![orderbook]),
+            time_filter: Some(TimeFilter {
+                start: Some(10),
+                end: Some(20),
+            }),
+            tokens: Some(GetTradesTokenFilter {
+                inputs: Some(vec![token_b, token_a, token_a]),
+                outputs: Some(vec![token_a, token_b]),
+            }),
+            ..Default::default()
+        }
+        .into();
+
+        let order_filter = filters.order_.as_ref().unwrap();
+        assert_eq!(order_filter.owner_in, vec![SgBytes(owner.to_string())]);
+        assert_eq!(filters.timestamp_gte, Some(SgBigInt("10".to_string())));
+        assert_eq!(filters.timestamp_lte, Some(SgBigInt("20".to_string())));
+        assert_eq!(filters.orderbook_in, vec![format!("{orderbook:#x}")]);
+        assert!(filters.or.is_none());
+        assert!(filters.input_vault_balance_change_.is_none());
+        assert!(filters.output_vault_balance_change_.is_none());
+    }
+
+    fn test_sg_trade(input_token: Address, output_token: Address) -> SgTrade {
+        fn erc20(token: Address) -> SgErc20 {
+            SgErc20 {
+                id: SgBytes(token.to_string()),
+                address: SgBytes(token.to_string()),
+                name: Some("Token".to_string()),
+                symbol: Some("TKN".to_string()),
+                decimals: Some(SgBigInt("18".to_string())),
+            }
+        }
+
+        fn balance_change(token: Address) -> SgTradeVaultBalanceChange {
+            SgTradeVaultBalanceChange {
+                id: SgBytes(format!("{}-change", token)),
+                __typename: "TradeVaultBalanceChange".to_string(),
+                amount: SgBytes("0x01".to_string()),
+                new_vault_balance: SgBytes("0x01".to_string()),
+                old_vault_balance: SgBytes("0x00".to_string()),
+                vault: SgVaultBalanceChangeVault {
+                    id: SgBytes(format!("{}-vault", token)),
+                    vault_id: SgBytes("0x01".to_string()),
+                    token: erc20(token),
+                },
+                timestamp: SgBigInt("10".to_string()),
+                transaction: SgTransaction {
+                    id: SgBytes(
+                        "0x0000000000000000000000000000000000000000000000000000000000000001"
+                            .to_string(),
+                    ),
+                    from: SgBytes("0x0000000000000000000000000000000000000000".to_string()),
+                    block_number: SgBigInt("1".to_string()),
+                    timestamp: SgBigInt("10".to_string()),
+                },
+                orderbook: SgOrderbook {
+                    id: SgBytes("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+                },
+                trade: SgTradeRef {
+                    trade_event: SgTradeEventTypename {
+                        __typename: "TakeOrder".to_string(),
+                    },
+                },
+            }
+        }
+
+        SgTrade {
+            id: SgBytes(
+                "0x0000000000000000000000000000000000000000000000000000000000000001".to_string(),
+            ),
+            trade_event: SgTradeEvent {
+                transaction: SgTransaction {
+                    id: SgBytes(
+                        "0x0000000000000000000000000000000000000000000000000000000000000001"
+                            .to_string(),
+                    ),
+                    from: SgBytes("0x0000000000000000000000000000000000000000".to_string()),
+                    block_number: SgBigInt("1".to_string()),
+                    timestamp: SgBigInt("10".to_string()),
+                },
+                sender: SgBytes("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+            },
+            output_vault_balance_change: balance_change(output_token),
+            order: SgTradeStructPartialOrder {
+                id: SgBytes("0xorder".to_string()),
+                order_hash: SgBytes(
+                    "0x0000000000000000000000000000000000000000000000000000000000000001"
+                        .to_string(),
+                ),
+                owner: SgBytes("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()),
+            },
+            input_vault_balance_change: balance_change(input_token),
+            timestamp: SgBigInt("10".to_string()),
+            orderbook: SgOrderbook {
+                id: SgBytes("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
+            },
+        }
+    }
+
+    #[test]
+    fn same_token_post_filter_matches_either_input_or_output_token() {
+        let token_a = address!("0x1111111111111111111111111111111111111111");
+        let token_b = address!("0x2222222222222222222222222222222222222222");
+        let token_c = address!("0x3333333333333333333333333333333333333333");
+        let tokens = normalize_trade_tokens(SgTradesTokensFilterArgs {
+            inputs: vec![token_a.to_string(), token_b.to_string()],
+            outputs: vec![token_b.to_string(), token_a.to_string()],
+        });
+
+        assert!(sg_trade_matches_token_filter(
+            &test_sg_trade(token_a, token_c),
+            &tokens
+        ));
+        assert!(sg_trade_matches_token_filter(
+            &test_sg_trade(token_c, token_b),
+            &tokens
+        ));
+        assert!(!sg_trade_matches_token_filter(
+            &test_sg_trade(token_c, token_c),
+            &tokens
+        ));
+    }
+
+    #[test]
+    fn directional_post_filter_requires_matching_input_and_output_tokens() {
+        let input = address!("0x1111111111111111111111111111111111111111");
+        let output = address!("0x2222222222222222222222222222222222222222");
+        let other = address!("0x3333333333333333333333333333333333333333");
+        let tokens = normalize_trade_tokens(SgTradesTokensFilterArgs {
+            inputs: vec![input.to_string()],
+            outputs: vec![output.to_string()],
+        });
+
+        assert!(sg_trade_matches_token_filter(
+            &test_sg_trade(input, output),
+            &tokens
+        ));
+        assert!(!sg_trade_matches_token_filter(
+            &test_sg_trade(input, other),
+            &tokens
+        ));
+        assert!(!sg_trade_matches_token_filter(
+            &test_sg_trade(other, output),
+            &tokens
+        ));
+    }
+}

@@ -1,5 +1,8 @@
+mod get_all;
 mod get_by_owner;
 mod get_by_tx;
+
+pub use get_all::{GetTradesFilters, GetTradesTokenFilter};
 
 use super::local_db::orders::LocalDbOrders;
 use super::orders::{OrdersDataSource, SubgraphOrders};

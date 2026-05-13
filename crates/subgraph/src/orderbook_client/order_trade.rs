@@ -116,6 +116,81 @@ impl OrderbookSubgraphClient {
         Ok(data.trades)
     }
 
+    /// Fetch a single page of trades matching the provided filters.
+    ///
+    /// The filters are passed directly to the subgraph `trades` query and
+    /// pagination is converted with `parse_pagination_args`. Results are ordered
+    /// by timestamp descending by the GraphQL query. Subgraph query errors are
+    /// returned as `OrderbookSubgraphClientError`.
+    pub async fn trades_list(
+        &self,
+        filters: SgTradesListQueryFilters,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        let pagination_variables = Self::parse_pagination_args(pagination_args);
+        let data = self
+            .query::<SgTradesListQuery, SgTradesListQueryVariables>(SgTradesListQueryVariables {
+                first: pagination_variables.first,
+                skip: pagination_variables.skip,
+                filters: Some(filters),
+            })
+            .await?;
+
+        Ok(data.trades)
+    }
+
+    async fn fetch_all_trades_pages(
+        &self,
+        filters: SgTradesListQueryFilters,
+    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        let mut all_pages_merged = vec![];
+        let mut page: u16 = 1;
+
+        loop {
+            let page_data = self
+                .trades_list(
+                    filters.clone(),
+                    SgPaginationArgs {
+                        page,
+                        page_size: ALL_PAGES_QUERY_PAGE_SIZE,
+                    },
+                )
+                .await?;
+            let batch_len = page_data.len();
+            all_pages_merged.extend(page_data);
+            if batch_len < ALL_PAGES_QUERY_PAGE_SIZE as usize {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(all_pages_merged)
+    }
+
+    /// Fetch all trades matching the provided filters across every page.
+    ///
+    /// This repeatedly calls `trades_list` using the standard all-pages query page
+    /// size until a partial page is returned. Any subgraph query error encountered
+    /// while fetching a page is propagated.
+    pub async fn trades_list_all(
+        &self,
+        filters: SgTradesListQueryFilters,
+    ) -> Result<Vec<SgTrade>, OrderbookSubgraphClientError> {
+        self.fetch_all_trades_pages(filters).await
+    }
+
+    /// Count all trades matching the provided filters.
+    ///
+    /// This walks every page with `fetch_all_trades_pages` and returns the number
+    /// of matching trades. Any subgraph query error encountered while fetching
+    /// pages is propagated.
+    pub async fn trades_count(
+        &self,
+        filters: SgTradesListQueryFilters,
+    ) -> Result<u32, OrderbookSubgraphClientError> {
+        Ok(self.fetch_all_trades_pages(filters).await?.len() as u32)
+    }
+
     pub async fn trades_by_owner_all(
         &self,
         owner: String,

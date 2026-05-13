@@ -1,7 +1,8 @@
 use crate::{
     types::common::{
         SgErc20WithSubgraphName, SgOrderWithSubgraphName, SgOrdersListFilterArgs,
-        SgTradeWithSubgraphName, SgVaultWithSubgraphName, SgVaultsListFilterArgs,
+        SgTradeWithSubgraphName, SgTradesListQueryFilters, SgVaultWithSubgraphName,
+        SgVaultsListFilterArgs,
     },
     OrderbookSubgraphClient, OrderbookSubgraphClientError, SgPaginationArgs,
 };
@@ -21,6 +22,17 @@ impl_wasm_traits!(MultiSubgraphArgs);
 pub struct MultiOrderbookSubgraphClient {
     subgraphs: Vec<MultiSubgraphArgs>,
 }
+
+fn sort_trades(trades: &mut [SgTradeWithSubgraphName]) {
+    trades.sort_by(|a, b| {
+        let a_timestamp = a.trade.timestamp.0.parse::<i64>().unwrap_or(0);
+        let b_timestamp = b.trade.timestamp.0.parse::<i64>().unwrap_or(0);
+        b_timestamp
+            .cmp(&a_timestamp)
+            .then_with(|| a.trade.id.0.cmp(&b.trade.id.0))
+    });
+}
+
 impl MultiOrderbookSubgraphClient {
     pub fn new(subgraphs: Vec<MultiSubgraphArgs>) -> Self {
         Self { subgraphs }
@@ -237,6 +249,171 @@ impl MultiOrderbookSubgraphClient {
             .collect()
     }
 
+    /// Fetches the general filtered trades list across every configured subgraph.
+    ///
+    /// This backs the SDK-level `RaindexClient.getTrades` API. Order-specific trade
+    /// history still uses `OrderbookSubgraphClient::order_trades_list`.
+    pub async fn trades_list(
+        &self,
+        filters: SgTradesListQueryFilters,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgTradeWithSubgraphName>, OrderbookSubgraphClientError> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let subgraph_name = subgraph.name.clone();
+            let filters = filters.clone();
+            let pagination_args = pagination_args.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url.clone());
+                let result = client
+                    .trades_list(filters, pagination_args)
+                    .await
+                    .map(|trades| {
+                        trades
+                            .into_iter()
+                            .map(|trade| SgTradeWithSubgraphName {
+                                trade,
+                                subgraph_name: subgraph_name.clone(),
+                            })
+                            .collect::<Vec<_>>()
+                    });
+                (subgraph_name, url, result)
+            }
+        });
+
+        let results = join_all(futures).await;
+        let mut all_trades = Vec::new();
+        let mut last_error = None;
+        let mut any_success = false;
+        for (subgraph_name, url, result) in results {
+            match result {
+                Ok(items) => {
+                    any_success = true;
+                    all_trades.extend(items);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subgraph = %subgraph_name,
+                        url = %url,
+                        error = %e,
+                        "failed to fetch trades from subgraph"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+        if !any_success {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
+
+        sort_trades(&mut all_trades);
+        Ok(all_trades)
+    }
+
+    /// Fetches all filtered trades across every configured subgraph.
+    ///
+    /// This is used when callers need to merge and paginate across multiple data
+    /// sources after fetching. Order-specific trade history still uses
+    /// `OrderbookSubgraphClient::order_trades_list`.
+    pub async fn trades_list_all(
+        &self,
+        filters: SgTradesListQueryFilters,
+    ) -> Result<Vec<SgTradeWithSubgraphName>, OrderbookSubgraphClientError> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let subgraph_name = subgraph.name.clone();
+            let filters = filters.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url.clone());
+                let result = client.trades_list_all(filters).await.map(|trades| {
+                    trades
+                        .into_iter()
+                        .map(|trade| SgTradeWithSubgraphName {
+                            trade,
+                            subgraph_name: subgraph_name.clone(),
+                        })
+                        .collect::<Vec<_>>()
+                });
+                (subgraph_name, url, result)
+            }
+        });
+
+        let results = join_all(futures).await;
+        let mut all_trades = Vec::new();
+        let mut last_error = None;
+        let mut any_success = false;
+        for (subgraph_name, url, result) in results {
+            match result {
+                Ok(items) => {
+                    any_success = true;
+                    all_trades.extend(items);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subgraph = %subgraph_name,
+                        url = %url,
+                        error = %e,
+                        "failed to fetch all trades from subgraph"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+        if !any_success {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
+
+        sort_trades(&mut all_trades);
+        Ok(all_trades)
+    }
+
+    pub async fn trades_count(
+        &self,
+        filters: SgTradesListQueryFilters,
+    ) -> Result<u32, OrderbookSubgraphClientError> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let subgraph_name = subgraph.name.clone();
+            let filters = filters.clone();
+            async move {
+                let client = self.get_orderbook_subgraph_client(url.clone());
+                (subgraph_name, url, client.trades_count(filters).await)
+            }
+        });
+
+        let results = join_all(futures).await;
+        let mut total: u32 = 0;
+        let mut last_error = None;
+        let mut any_success = false;
+        for (subgraph_name, url, result) in results {
+            match result {
+                Ok(count) => {
+                    any_success = true;
+                    total += count;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        subgraph = %subgraph_name,
+                        url = %url,
+                        error = %e,
+                        "failed to count trades from subgraph"
+                    );
+                    last_error = Some(e);
+                }
+            }
+        }
+        if !any_success {
+            if let Some(e) = last_error {
+                return Err(e);
+            }
+        }
+        Ok(total)
+    }
+
     pub async fn tokens_list(
         &self,
     ) -> Result<Vec<SgErc20WithSubgraphName>, OrderbookSubgraphClientError> {
@@ -280,10 +457,12 @@ impl MultiOrderbookSubgraphClient {
 mod tests {
     use super::*;
     use crate::cynic_client::CynicClientError;
+    use crate::orderbook_client::ALL_PAGES_QUERY_PAGE_SIZE;
     use crate::types::common::{
         SgBigInt, SgBytes, SgErc20, SgOrder, SgOrderbook, SgOrdersListFilterArgs, SgTrade,
         SgTradeEvent, SgTradeEventTypename, SgTradeRef, SgTradeStructPartialOrder,
-        SgTradeVaultBalanceChange, SgTransaction, SgVault, SgVaultBalanceChangeVault,
+        SgTradeVaultBalanceChange, SgTradesListQueryFilters, SgTransaction, SgVault,
+        SgVaultBalanceChangeVault,
     };
     use crate::utils::float::*;
     use httpmock::prelude::*;
@@ -939,6 +1118,406 @@ mod tests {
                 id: SgBytes("0xorderbook_id_default".to_string()),
             },
         }
+    }
+
+    fn sample_sg_trade(id: &str, timestamp: &str) -> SgTrade {
+        SgTrade {
+            id: SgBytes(id.to_string()),
+            timestamp: SgBigInt(timestamp.to_string()),
+            ..default_sg_trade()
+        }
+    }
+
+    fn default_trade_filters() -> SgTradesListQueryFilters {
+        SgTradesListQueryFilters::default()
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_no_subgraphs() {
+        let client = MultiOrderbookSubgraphClient::new(vec![]);
+        let trades = client
+            .trades_list(
+                default_trade_filters(),
+                SgPaginationArgs {
+                    page: 1,
+                    page_size: 10,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(trades.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_multiple_subgraphs_merge() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trade_s1 = sample_sg_trade("0xtrade_old", "100");
+        let trade_s2 = sample_sg_trade("0xtrade_new", "200");
+        server1.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains("\"first\":10")
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains("\"first\":10")
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s2]}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two".to_string(),
+            },
+        ]);
+
+        let trades = client
+            .trades_list(
+                default_trade_filters(),
+                SgPaginationArgs {
+                    page: 1,
+                    page_size: 10,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(trades.len(), 2);
+        let names: std::collections::HashSet<_> = trades
+            .iter()
+            .map(|trade| trade.subgraph_name.as_str())
+            .collect();
+        assert!(names.contains("sg_one"));
+        assert!(names.contains("sg_two"));
+        assert_eq!(trades[0].trade.id.0, "0xtrade_new");
+        assert_eq!(trades[1].trade.id.0, "0xtrade_old");
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_one_subgraph_errors_others_succeed() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trade_s1 = default_sg_trade();
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let trades = client
+            .trades_list(
+                default_trade_filters(),
+                SgPaginationArgs {
+                    page: 1,
+                    page_size: 10,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].subgraph_name, "sg_one");
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_every_subgraph_errors() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one_err".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let result = client
+            .trades_list(
+                default_trade_filters(),
+                SgPaginationArgs {
+                    page: 1,
+                    page_size: 10,
+                },
+            )
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_all_multiple_subgraphs_merge() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trade_s1 = sample_sg_trade("0xtrade_old", "100");
+        let trade_s2 = sample_sg_trade("0xtrade_new", "200");
+        server1.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s2]}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two".to_string(),
+            },
+        ]);
+
+        let trades = client
+            .trades_list_all(default_trade_filters())
+            .await
+            .unwrap();
+        assert_eq!(trades.len(), 2);
+        let names: std::collections::HashSet<_> = trades
+            .iter()
+            .map(|trade| trade.subgraph_name.as_str())
+            .collect();
+        assert!(names.contains("sg_one"));
+        assert!(names.contains("sg_two"));
+        assert_eq!(trades[0].trade.id.0, "0xtrade_new");
+        assert_eq!(trades[1].trade.id.0, "0xtrade_old");
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_all_one_subgraph_errors_others_succeed() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trade_s1 = default_sg_trade();
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"trades": [trade_s1]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let trades = client
+            .trades_list_all(default_trade_filters())
+            .await
+            .unwrap();
+        assert_eq!(trades.len(), 1);
+        assert_eq!(trades[0].subgraph_name, "sg_one");
+    }
+
+    #[tokio::test]
+    async fn test_trades_list_all_every_subgraph_errors() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one_err".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let result = client.trades_list_all(default_trade_filters()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_trades_count_no_subgraphs() {
+        let client = MultiOrderbookSubgraphClient::new(vec![]);
+        let count = client.trades_count(default_trade_filters()).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_trades_count_multiple_subgraphs_sum() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trades_s1 = vec![default_sg_trade(), default_sg_trade()];
+        let trades_s2 = vec![default_sg_trade(), default_sg_trade(), default_sg_trade()];
+        server1.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": trades_s1}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"trades": trades_s2}}));
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two".to_string(),
+            },
+        ]);
+
+        let count = client.trades_count(default_trade_filters()).await.unwrap();
+        assert_eq!(count, 5);
+    }
+
+    #[tokio::test]
+    async fn test_trades_count_one_subgraph_errors_others_succeed() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let trades_s1 = vec![default_sg_trade(), default_sg_trade()];
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"trades": trades_s1}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let count = client.trades_count(default_trade_filters()).await.unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_trades_count_all_subgraphs_error() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiOrderbookSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_one_err".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_two_err".to_string(),
+            },
+        ]);
+
+        let result = client.trades_count(default_trade_filters()).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

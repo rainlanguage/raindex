@@ -10,6 +10,14 @@ pub struct SgOrdersTokensFilterArgs {
 }
 impl_wasm_traits!(SgOrdersTokensFilterArgs);
 
+#[derive(Debug, Clone, Serialize, Deserialize, Tsify, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct SgTradesTokensFilterArgs {
+    pub inputs: Vec<String>,
+    pub outputs: Vec<String>,
+}
+impl_wasm_traits!(SgTradesTokensFilterArgs);
+
 #[derive(cynic::QueryVariables, Debug, Clone, Tsify)]
 pub struct SgIdQueryVariables<'a> {
     #[cfg_attr(target_family = "wasm", tsify(type = "string"))]
@@ -127,6 +135,72 @@ pub struct SgOwnerTradesQueryVariables {
     pub timestamp_lte: Option<SgBigInt>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub orderbook_in: Option<Vec<String>>,
+}
+
+#[derive(cynic::QueryVariables, Debug, Clone, Tsify)]
+pub struct SgTradesListQueryVariables {
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub first: Option<i32>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub skip: Option<i32>,
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub filters: Option<SgTradesListQueryFilters>,
+}
+
+#[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
+#[cynic(graphql_type = "Order_filter")]
+pub struct SgTradeOrderFilter {
+    #[cynic(rename = "owner_in", skip_serializing_if = "Vec::is_empty")]
+    pub owner_in: Vec<SgBytes>,
+    #[cynic(rename = "orderHash", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub order_hash: Option<SgBytes>,
+}
+
+#[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
+#[cynic(graphql_type = "Vault_filter")]
+pub struct SgTradeVaultTokenFilter {
+    #[cynic(rename = "token_in", skip_serializing_if = "Vec::is_empty")]
+    pub token_in: Vec<String>,
+}
+
+#[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
+#[cynic(graphql_type = "TradeVaultBalanceChange_filter")]
+pub struct SgTradeVaultBalanceChangeTokenFilter {
+    #[cynic(rename = "vault_", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub vault_: Option<SgTradeVaultTokenFilter>,
+}
+
+#[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
+#[cynic(graphql_type = "Trade_filter")]
+pub struct SgTradesListQueryFilters {
+    #[cynic(rename = "order_", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub order_: Option<SgTradeOrderFilter>,
+    #[cynic(rename = "timestamp_gte", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub timestamp_gte: Option<SgBigInt>,
+    #[cynic(rename = "timestamp_lte", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub timestamp_lte: Option<SgBigInt>,
+    #[cynic(rename = "orderbook_in", skip_serializing_if = "Vec::is_empty")]
+    pub orderbook_in: Vec<String>,
+    #[cynic(
+        rename = "inputVaultBalanceChange_",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub input_vault_balance_change_: Option<SgTradeVaultBalanceChangeTokenFilter>,
+    #[cynic(
+        rename = "outputVaultBalanceChange_",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub output_vault_balance_change_: Option<SgTradeVaultBalanceChangeTokenFilter>,
+    #[cynic(rename = "or", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub or: Option<Vec<SgTradesListQueryFilters>>,
 }
 
 #[derive(cynic::QueryFragment, Debug, Serialize, Clone, Tsify)]
