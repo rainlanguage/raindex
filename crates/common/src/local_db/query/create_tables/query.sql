@@ -258,9 +258,11 @@ CREATE INDEX idx_order_ios_token ON order_ios(chain_id, orderbook_address, token
 
 CREATE INDEX idx_take_orders_owner ON take_orders(chain_id, orderbook_address, order_owner);
 CREATE INDEX idx_take_orders_block ON take_orders(chain_id, orderbook_address, block_number);
+CREATE INDEX idx_take_orders_sender_time ON take_orders(chain_id, orderbook_address, sender, block_timestamp DESC, block_number DESC, log_index DESC);
 
 CREATE INDEX idx_clear_events_alice_bob ON clear_v3_events(chain_id, orderbook_address, alice_order_hash, bob_order_hash);
 CREATE INDEX idx_clear_events_block ON clear_v3_events(chain_id, orderbook_address, block_number);
+CREATE INDEX idx_clear_events_sender_time ON clear_v3_events(chain_id, orderbook_address, sender, block_timestamp DESC, block_number DESC, log_index DESC);
 CREATE INDEX idx_clear_alice_vaults ON clear_v3_events(chain_id, orderbook_address, alice_input_vault_id, alice_output_vault_id);
 CREATE INDEX idx_clear_bob_vaults ON clear_v3_events(chain_id, orderbook_address, bob_input_vault_id, bob_output_vault_id);
 

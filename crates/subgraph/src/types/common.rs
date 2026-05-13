@@ -173,6 +173,13 @@ pub struct SgTradeVaultBalanceChangeTokenFilter {
 }
 
 #[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
+#[cynic(graphql_type = "TradeEvent_filter")]
+pub struct SgTradeEventFilter {
+    #[cynic(rename = "sender_in", skip_serializing_if = "Vec::is_empty")]
+    pub sender_in: Vec<SgBytes>,
+}
+
+#[derive(cynic::InputObject, Debug, Clone, Tsify, Default)]
 #[cynic(graphql_type = "Trade_filter")]
 pub struct SgTradesListQueryFilters {
     #[cynic(rename = "order_", skip_serializing_if = "Option::is_none")]
@@ -198,6 +205,9 @@ pub struct SgTradesListQueryFilters {
     )]
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub output_vault_balance_change_: Option<SgTradeVaultBalanceChangeTokenFilter>,
+    #[cynic(rename = "tradeEvent_", skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(target_family = "wasm", tsify(optional))]
+    pub trade_event_: Option<SgTradeEventFilter>,
     #[cynic(rename = "or", skip_serializing_if = "Option::is_none")]
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub or: Option<Vec<SgTradesListQueryFilters>>,

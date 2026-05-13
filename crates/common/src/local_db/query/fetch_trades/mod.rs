@@ -10,11 +10,15 @@ const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
 const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
 const TAKE_ORDERS_ORDERBOOKS_CLAUSE: &str = "/*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/";
 const TAKE_ORDERS_ORDERBOOKS_CLAUSE_BODY: &str = "AND t.orderbook_address IN ({list})";
+const TAKE_ORDERS_TAKERS_CLAUSE: &str = "/*TAKE_ORDERS_TAKERS_CLAUSE*/";
+const TAKE_ORDERS_TAKERS_CLAUSE_BODY: &str = "AND t.sender IN ({list})";
 
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
 const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/";
 const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
+const CLEAR_EVENTS_TAKERS_CLAUSE: &str = "/*CLEAR_EVENTS_TAKERS_CLAUSE*/";
+const CLEAR_EVENTS_TAKERS_CLAUSE_BODY: &str = "AND c.sender IN ({list})";
 const OWNERS_CLAUSE: &str = "/*OWNERS_CLAUSE*/";
 const OWNERS_CLAUSE_BODY: &str = "AND tws.order_owner IN ({list})";
 const ORDER_HASH_CLAUSE: &str = "/*ORDER_HASH_CLAUSE*/";
@@ -42,6 +46,7 @@ pub struct FetchTradesArgs {
     pub chain_ids: Vec<u32>,
     pub orderbook_addresses: Vec<Address>,
     pub owners: Vec<Address>,
+    pub takers: Vec<Address>,
     pub order_hash: Option<B256>,
     pub tokens: FetchTradesTokensFilter,
     pub time_filter: TimeFilter,
@@ -81,6 +86,20 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
         CLEAR_EVENTS_ORDERBOOKS_CLAUSE,
         CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY,
         orderbooks_iter(),
+    )?;
+    let mut takers = args.takers.clone();
+    takers.sort();
+    takers.dedup();
+    let takers_iter = || takers.iter().cloned().map(SqlValue::from);
+    stmt.bind_list_clause(
+        TAKE_ORDERS_TAKERS_CLAUSE,
+        TAKE_ORDERS_TAKERS_CLAUSE_BODY,
+        takers_iter(),
+    )?;
+    stmt.bind_list_clause(
+        CLEAR_EVENTS_TAKERS_CLAUSE,
+        CLEAR_EVENTS_TAKERS_CLAUSE_BODY,
+        takers_iter(),
     )?;
     let mut owners = args.owners.clone();
     owners.sort();
@@ -279,6 +298,39 @@ mod tests {
         assert!(stmt.sql.contains("tws.output_token IN (?2)"));
         assert_eq!(stmt.params[0], SqlValue::Text(hex::encode_prefixed(input)));
         assert_eq!(stmt.params[1], SqlValue::Text(hex::encode_prefixed(output)));
+    }
+
+    #[test]
+    fn builds_with_taker_filters() {
+        let taker_a = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let taker_b = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let stmt = build_fetch_trades_stmt(&FetchTradesArgs {
+            takers: vec![taker_b, taker_a, taker_a],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert!(stmt.sql.contains("t.sender IN (?1, ?2)"));
+        assert!(stmt.sql.contains("c.sender IN (?3, ?4)"));
+        assert!(!stmt.sql.contains("tws.transaction_sender IN"));
+        assert!(!stmt.sql.contains(TAKE_ORDERS_TAKERS_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_EVENTS_TAKERS_CLAUSE));
+        assert_eq!(
+            stmt.params[0],
+            SqlValue::Text(hex::encode_prefixed(taker_a))
+        );
+        assert_eq!(
+            stmt.params[1],
+            SqlValue::Text(hex::encode_prefixed(taker_b))
+        );
+        assert_eq!(
+            stmt.params[2],
+            SqlValue::Text(hex::encode_prefixed(taker_a))
+        );
+        assert_eq!(
+            stmt.params[3],
+            SqlValue::Text(hex::encode_prefixed(taker_b))
+        );
     }
 
     #[test]

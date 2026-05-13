@@ -19,6 +19,7 @@ matching_take_orders AS (
   WHERE 1 = 1
   /*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/
   /*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/
+  /*TAKE_ORDERS_TAKERS_CLAUSE*/
 ),
 matching_clears AS (
   SELECT
@@ -43,6 +44,7 @@ matching_clears AS (
   WHERE 1 = 1
   /*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/
   /*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/
+  /*CLEAR_EVENTS_TAKERS_CLAUSE*/
 ),
 take_trades AS (
   SELECT

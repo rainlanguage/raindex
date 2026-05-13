@@ -5,7 +5,7 @@ use crate::local_db::query::fetch_trades::{
 use crate::raindex_client::local_db::query::fetch_trades::{fetch_trades, fetch_trades_count};
 use crate::utils::timing::Timing;
 use rain_orderbook_subgraph_client::types::common::{
-    SgBigInt, SgBytes, SgTrade, SgTradeOrderFilter, SgTradesListQueryFilters,
+    SgBigInt, SgBytes, SgTrade, SgTradeEventFilter, SgTradeOrderFilter, SgTradesListQueryFilters,
     SgTradesTokensFilterArgs,
 };
 use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
@@ -29,6 +29,8 @@ impl_wasm_traits!(GetTradesTokenFilter);
 pub struct GetTradesFilters {
     #[tsify(optional, type = "Address[]")]
     pub owners: Vec<Address>,
+    #[tsify(optional, type = "Address[]")]
+    pub takers: Vec<Address>,
     #[tsify(optional, type = "Hex")]
     pub order_hash: Option<B256>,
     #[tsify(optional)]
@@ -94,6 +96,16 @@ impl From<GetTradesFilters> for SgTradesListQueryFilters {
                     .map(|owner| SgBytes(owner.to_string()))
                     .collect(),
                 order_hash: filters.order_hash.map(|hash| SgBytes(hash.to_string())),
+            });
+        }
+
+        if !filters.takers.is_empty() {
+            sg_filters.trade_event_ = Some(SgTradeEventFilter {
+                sender_in: filters
+                    .takers
+                    .into_iter()
+                    .map(|taker| SgBytes(taker.to_string()))
+                    .collect(),
             });
         }
 
@@ -199,6 +211,7 @@ impl RaindexClient {
             .as_ref()
             .and_then(|tokens| tokens.outputs.as_ref())
             .map_or(0, Vec::len);
+        let takers_count = filters.takers.len();
         let orderbooks_count = filters.orderbook_addresses.as_ref().map_or(0, Vec::len);
 
         let mut all_trades = Vec::new();
@@ -231,6 +244,7 @@ impl RaindexClient {
                     chain_ids: local_ids.clone(),
                     orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
                     owners: filters.owners.clone(),
+                    takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
                     tokens: local_tokens.clone(),
                     time_filter: filters.time_filter.clone().unwrap_or_default(),
@@ -260,6 +274,7 @@ impl RaindexClient {
                     chain_ids: local_ids,
                     orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
                     owners: filters.owners.clone(),
+                    takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
                     tokens: local_tokens,
                     time_filter: filters.time_filter.clone().unwrap_or_default(),
@@ -383,6 +398,7 @@ impl RaindexClient {
             local_chain_ids_count,
             subgraph_chain_ids_count,
             owners_count = filters.owners.len(),
+            takers_count,
             orderbooks_count,
             has_order_hash = filters.order_hash.is_some(),
             has_time_filter = filters.time_filter.is_some(),
@@ -442,12 +458,14 @@ mod tests {
     #[test]
     fn maps_trade_filters_to_subgraph_filters() {
         let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let taker = address!("0xcccccccccccccccccccccccccccccccccccccccc");
         let orderbook = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         let order_hash =
             b256!("0x0000000000000000000000000000000000000000000000000000000000abcdef");
 
         let filters: SgTradesListQueryFilters = GetTradesFilters {
             owners: vec![owner],
+            takers: vec![taker],
             order_hash: Some(order_hash),
             orderbook_addresses: Some(vec![orderbook]),
             time_filter: Some(TimeFilter {
@@ -463,6 +481,11 @@ mod tests {
         assert_eq!(
             order_filter.order_hash,
             Some(SgBytes(order_hash.to_string()))
+        );
+        let trade_event_filter = filters.trade_event_.unwrap();
+        assert_eq!(
+            trade_event_filter.sender_in,
+            vec![SgBytes(taker.to_string())]
         );
         assert_eq!(filters.orderbook_in, vec![format!("{orderbook:#x}")]);
         assert_eq!(filters.timestamp_gte, Some(SgBigInt("10".to_string())));
@@ -512,6 +535,7 @@ mod tests {
         assert!(filters.or.is_none());
         assert!(filters.input_vault_balance_change_.is_none());
         assert!(filters.output_vault_balance_change_.is_none());
+        assert!(filters.trade_event_.is_none());
     }
 
     fn test_sg_trade(input_token: Address, output_token: Address) -> SgTrade {

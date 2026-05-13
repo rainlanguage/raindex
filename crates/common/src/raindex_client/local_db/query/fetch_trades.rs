@@ -4,21 +4,117 @@ use crate::local_db::query::fetch_trades::{
     build_fetch_trades_count_stmt, build_fetch_trades_stmt, FetchTradesArgs,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
+use crate::utils::timing::Timing;
 
 pub async fn fetch_trades<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
     args: FetchTradesArgs,
 ) -> Result<Vec<LocalDbOrderTrade>, LocalDbQueryError> {
+    let started = Timing::now();
+    let chain_ids_count = args.chain_ids.len();
+    let orderbooks_count = args.orderbook_addresses.len();
+    let owners_count = args.owners.len();
+    let takers_count = args.takers.len();
+    let input_tokens_count = args.tokens.inputs.len();
+    let output_tokens_count = args.tokens.outputs.len();
+    let has_order_hash = args.order_hash.is_some();
+    let has_time_filter = args.time_filter.start.is_some() || args.time_filter.end.is_some();
+    let page = args.pagination.page;
+    let page_size = args.pagination.page_size;
     let stmt = build_fetch_trades_stmt(&args)?;
-    exec.query_json(&stmt).await
+    match exec.query_json::<Vec<LocalDbOrderTrade>>(&stmt).await {
+        Ok(trades) => {
+            tracing::info!(
+                chain_ids_count,
+                orderbooks_count,
+                owners_count,
+                takers_count,
+                input_tokens_count,
+                output_tokens_count,
+                has_order_hash,
+                has_time_filter,
+                page,
+                page_size,
+                params_count = stmt.params().len(),
+                rows = trades.len(),
+                duration_ms = started.elapsed_ms(),
+                "local DB getTrades fetch completed"
+            );
+            Ok(trades)
+        }
+        Err(err) => {
+            tracing::error!(
+                chain_ids_count,
+                orderbooks_count,
+                owners_count,
+                takers_count,
+                input_tokens_count,
+                output_tokens_count,
+                has_order_hash,
+                has_time_filter,
+                page,
+                page_size,
+                params_count = stmt.params().len(),
+                duration_ms = started.elapsed_ms(),
+                error = %err,
+                "local DB getTrades fetch failed"
+            );
+            Err(err)
+        }
+    }
 }
 
 pub async fn fetch_trades_count<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
     args: FetchTradesArgs,
 ) -> Result<Vec<LocalDbTradeCountRow>, LocalDbQueryError> {
+    let started = Timing::now();
+    let chain_ids_count = args.chain_ids.len();
+    let orderbooks_count = args.orderbook_addresses.len();
+    let owners_count = args.owners.len();
+    let takers_count = args.takers.len();
+    let input_tokens_count = args.tokens.inputs.len();
+    let output_tokens_count = args.tokens.outputs.len();
+    let has_order_hash = args.order_hash.is_some();
+    let has_time_filter = args.time_filter.start.is_some() || args.time_filter.end.is_some();
     let stmt = build_fetch_trades_count_stmt(&args)?;
-    exec.query_json(&stmt).await
+    match exec.query_json::<Vec<LocalDbTradeCountRow>>(&stmt).await {
+        Ok(rows) => {
+            tracing::info!(
+                chain_ids_count,
+                orderbooks_count,
+                owners_count,
+                takers_count,
+                input_tokens_count,
+                output_tokens_count,
+                has_order_hash,
+                has_time_filter,
+                params_count = stmt.params().len(),
+                rows = rows.len(),
+                trade_count = rows.first().map(|row| row.trade_count),
+                duration_ms = started.elapsed_ms(),
+                "local DB getTrades count completed"
+            );
+            Ok(rows)
+        }
+        Err(err) => {
+            tracing::error!(
+                chain_ids_count,
+                orderbooks_count,
+                owners_count,
+                takers_count,
+                input_tokens_count,
+                output_tokens_count,
+                has_order_hash,
+                has_time_filter,
+                params_count = stmt.params().len(),
+                duration_ms = started.elapsed_ms(),
+                error = %err,
+                "local DB getTrades count failed"
+            );
+            Err(err)
+        }
+    }
 }
 
 #[cfg(all(test, target_family = "wasm"))]
