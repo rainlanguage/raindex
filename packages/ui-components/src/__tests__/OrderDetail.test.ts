@@ -445,38 +445,38 @@ describe('OrderDetail', () => {
 		});
 	});
 
-	it('renders the GUI state tab with formatted JSON when present', async () => {
+	it('renders the builder state tab with formatted JSON when present', async () => {
 		const user = userEvent.setup();
-		const guiState = JSON.stringify({ foo: 'bar' });
-		resolveOrder({ dotrainGuiState: guiState });
+		const builderState = JSON.stringify({ foo: 'bar' });
+		resolveOrder({ orderBuilderState: builderState });
 
 		render(OrderDetail, {
 			props: defaultProps,
 			context: new Map([['$$_queryClient', queryClient]])
 		});
 
-		const guiTab = await screen.findByText('Gui State');
-		await user.click(guiTab);
+		const builderTab = await screen.findByText('Builder State');
+		await user.click(builderTab);
 
 		await waitFor(() => {
-			expect(screen.getByTestId('gui-state-json')).toHaveTextContent('"foo": "bar"');
+			expect(screen.getByTestId('builder-state-json')).toHaveTextContent('"foo": "bar"');
 		});
 	});
 
-	it('handles invalid GUI state JSON gracefully', async () => {
+	it('handles invalid builder state JSON gracefully', async () => {
 		const user = userEvent.setup();
-		resolveOrder({ dotrainGuiState: '{invalid' });
+		resolveOrder({ orderBuilderState: '{invalid' });
 
 		render(OrderDetail, {
 			props: defaultProps,
 			context: new Map([['$$_queryClient', queryClient]])
 		});
 
-		const guiTab = await screen.findByText('Gui State');
-		await user.click(guiTab);
+		const builderTab = await screen.findByText('Builder State');
+		await user.click(builderTab);
 
 		await waitFor(() => {
-			expect(screen.getByTestId('gui-state-json')).toHaveTextContent('Invalid GUI state');
+			expect(screen.getByTestId('builder-state-json')).toHaveTextContent('Invalid builder state');
 		});
 	});
 

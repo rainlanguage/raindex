@@ -1,6 +1,7 @@
-use crate::gui::{DotrainOrderGui, GuiError};
+use crate::raindex_order_builder::{RaindexOrderBuilder, RaindexOrderBuilderWasmError};
 use crate::yaml::{RaindexYaml, RaindexYamlError};
-use raindex_app_settings::gui::NameAndDescriptionCfg;
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
+use raindex_app_settings::order_builder::NameAndDescriptionCfg;
 use raindex_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
 use reqwest;
 use serde::{Deserialize, Serialize};
@@ -44,7 +45,7 @@ use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
 /// 1. **Registry Creation** → Fetches and parses registry file
 /// 2. **List Orders** → Get available order strategies with metadata
 /// 3. **List Deployments** → Get deployment options for selected order
-/// 4. **Create GUI** → Instantiate DotrainOrderGui with merged content
+/// 4. **Create Builder** → Instantiate RaindexOrderBuilder with merged content
 ///
 /// ## Examples
 ///
@@ -58,8 +59,8 @@ use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
 /// // Get deployments for specific order
 /// const deployments = await registry.getDeploymentDetails("fixed-limit");
 ///
-/// // Create GUI instance
-/// const gui = await registry.getGui("fixed-limit", "mainnet", stateCallback);
+/// // Create order builder instance
+/// const builder = await registry.getOrderBuilder("fixed-limit", "mainnet", stateCallback);
 /// ```
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[wasm_bindgen]
@@ -111,7 +112,7 @@ pub struct DotrainRegistry {
     /// - **Value**: Raw dotrain content fetched from the corresponding URL
     ///
     /// This content is fetched in parallel during registry initialization and stored
-    /// for quick access. It gets merged with `settings` content when creating GUIs.
+    /// for quick access. It gets merged with `settings` content when creating builders.
     orders: HashMap<String, String>,
 }
 
@@ -142,10 +143,12 @@ pub enum DotrainRegistryError {
     InvalidRegistryFormat(String),
     #[error("HTTP request failed: {0}")]
     HttpError(String),
+    #[error("Invalid data URI: {0}")]
+    DataUriError(String),
     #[error("Invalid URL: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
-    GuiError(#[from] GuiError),
+    BuilderError(#[from] RaindexOrderBuilderWasmError),
     #[error(transparent)]
     RaindexYamlError(#[from] RaindexYamlError),
     #[error(transparent)]
@@ -176,10 +179,13 @@ impl DotrainRegistryError {
             DotrainRegistryError::HttpError(msg) => {
                 format!("Network error: {}", msg)
             }
+            DotrainRegistryError::DataUriError(msg) => {
+                format!("Invalid data URI: {}", msg)
+            }
             DotrainRegistryError::UrlParseError(err) => {
                 format!("Invalid URL format: {}. Please ensure the URL is properly formatted.", err)
             }
-            DotrainRegistryError::GuiError(err) => err.to_readable_msg(),
+            DotrainRegistryError::BuilderError(err) => err.to_readable_msg(),
             DotrainRegistryError::RaindexYamlError(err) => err.to_readable_msg(),
             DotrainRegistryError::RaindexClientError(err) => err.to_readable_msg(),
         }
@@ -327,7 +333,7 @@ impl DotrainRegistry {
         let settings = self.settings_sources();
 
         for (order_key, dotrain) in &self.orders {
-            match DotrainOrderGui::get_order_details(dotrain.clone(), settings.clone()) {
+            match RaindexOrderBuilder::get_order_details(dotrain.clone(), settings.clone()) {
                 Ok(details) => {
                     valid.insert(order_key.clone(), details);
                 }
@@ -408,30 +414,30 @@ impl DotrainRegistry {
             .ok_or(DotrainRegistryError::OrderKeyNotFound(order_key.clone()))?;
         let settings = self.settings_sources();
         let deployment_details =
-            DotrainOrderGui::get_deployment_details(dotrain.clone(), settings.clone())?;
+            RaindexOrderBuilder::get_deployment_details(dotrain.clone(), settings.clone())?;
         Ok(deployment_details)
     }
 
-    /// Creates a DotrainOrderGui instance for a specific order and deployment.
+    /// Creates a RaindexOrderBuilder instance for a specific order and deployment.
     ///
-    /// This is a convenience method that combines getting a DotrainOrder and creating a GUI.
+    /// This is a convenience method that combines getting a DotrainOrder and creating a builder.
     ///
     /// ## Examples
     ///
     /// ```javascript
     /// // Simple usage without state callback
-    /// const result = await registry.getGui("fixed-limit", "mainnet-deployment");
+    /// const result = await registry.getOrderBuilder("fixed-limit", "mainnet-deployment");
     /// if (result.error) {
-    ///   console.error("Failed to create GUI:", result.error.readableMsg);
+    ///   console.error("Failed to create order builder:", result.error.readableMsg);
     ///   return;
     /// }
-    /// const gui = result.value;
+    /// const builder = result.value;
     ///
     /// // Usage with state update callback for auto-saving
     /// const stateCallback = (newState) => {
-    ///   localStorage.setItem('gui-state', JSON.stringify(newState));
+    ///   localStorage.setItem('builder-state', JSON.stringify(newState));
     /// };
-    /// const resultWithCallback = await registry.getGui(
+    /// const resultWithCallback = await registry.getOrderBuilder(
     ///   "fixed-limit",
     ///   "mainnet-deployment",
     ///   undefined,
@@ -439,8 +445,8 @@ impl DotrainRegistry {
     /// );
     ///
     /// // Usage restoring from serialized state (with optional callback)
-    /// const savedState = localStorage.getItem('gui-state');
-    /// const resultFromState = await registry.getGui(
+    /// const savedState = localStorage.getItem('builder-state');
+    /// const resultFromState = await registry.getOrderBuilder(
     ///   "fixed-limit",
     ///   "mainnet-deployment",
     ///   savedState,
@@ -448,45 +454,45 @@ impl DotrainRegistry {
     /// );
     /// ```
     #[wasm_export(
-        js_name = "getGui",
+        js_name = "getOrderBuilder",
         preserve_js_class,
-        unchecked_return_type = "DotrainOrderGui",
-        return_description = "DotrainOrderGui instance for the specified order and deployment"
+        unchecked_return_type = "RaindexOrderBuilder",
+        return_description = "RaindexOrderBuilder instance for the specified order and deployment"
     )]
-    pub async fn get_gui(
+    pub async fn get_order_builder(
         &self,
         #[wasm_export(
             js_name = "orderKey",
-            param_description = "Order key to fetch the GUI for"
+            param_description = "Order key to fetch the order builder for"
         )]
         order_key: String,
         #[wasm_export(
             js_name = "deploymentKey",
-            param_description = "Deployment key to create the GUI for"
+            param_description = "Deployment key to create the order builder for"
         )]
         deployment_key: String,
         #[wasm_export(
             js_name = "serializedState",
-            param_description = "Optional serialized GUI state string used to restore form progress before falling back to deployment defaults"
+            param_description = "Optional serialized builder state string used to restore form progress before falling back to deployment defaults"
         )]
         serialized_state: Option<String>,
         #[wasm_export(
             js_name = "stateUpdateCallback",
             param_description = "Optional function called on state changes. \
             After a state change (deposit, field value, vault id, select token, etc.), the callback is called with the new state. \
-            This is useful for auto-saving the state of the GUI across sessions."
+            This is useful for auto-saving the state of the builder across sessions."
         )]
         state_update_callback: Option<js_sys::Function>,
-    ) -> Result<DotrainOrderGui, DotrainRegistryError> {
+    ) -> Result<RaindexOrderBuilder, DotrainRegistryError> {
         let dotrain = self
             .orders
             .get(&order_key)
             .ok_or(DotrainRegistryError::OrderKeyNotFound(order_key.clone()))?;
         let settings = self.settings_sources();
 
-        let gui_result = match serialized_state {
+        let result = match serialized_state {
             Some(serialized_state) => {
-                match DotrainOrderGui::new_from_state(
+                match RaindexOrderBuilder::new_from_state(
                     dotrain.clone(),
                     settings.clone(),
                     serialized_state,
@@ -494,9 +500,9 @@ impl DotrainRegistry {
                 )
                 .await
                 {
-                    Ok(gui) => Ok(gui),
+                    Ok(builder) => Ok(builder),
                     Err(_) => {
-                        DotrainOrderGui::new_with_deployment(
+                        RaindexOrderBuilder::new_with_deployment(
                             dotrain.clone(),
                             settings.clone(),
                             deployment_key,
@@ -507,7 +513,7 @@ impl DotrainRegistry {
                 }
             }
             None => {
-                DotrainOrderGui::new_with_deployment(
+                RaindexOrderBuilder::new_with_deployment(
                     dotrain.clone(),
                     settings.clone(),
                     deployment_key,
@@ -517,8 +523,8 @@ impl DotrainRegistry {
             }
         };
 
-        let gui = gui_result.map_err(DotrainRegistryError::GuiError)?;
-        Ok(gui)
+        let builder = result.map_err(DotrainRegistryError::BuilderError)?;
+        Ok(builder)
     }
 
     /// Creates an RaindexYaml instance from the registry's shared settings.
@@ -675,6 +681,10 @@ impl DotrainRegistry {
     }
 
     async fn fetch_url_content(url: &Url) -> Result<String, DotrainRegistryError> {
+        if url.scheme() == "data" {
+            return Self::decode_data_uri_content(url);
+        }
+
         let response = reqwest::get(url.as_str())
             .await
             .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?;
@@ -692,6 +702,32 @@ impl DotrainRegistry {
             .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))
     }
 
+    fn decode_data_uri_content(url: &Url) -> Result<String, DotrainRegistryError> {
+        let data_uri = url
+            .as_str()
+            .strip_prefix("data:")
+            .ok_or_else(|| DotrainRegistryError::DataUriError("missing data scheme".to_string()))?;
+        let (metadata, payload) = data_uri.split_once(',').ok_or_else(|| {
+            DotrainRegistryError::DataUriError("missing metadata/payload separator".to_string())
+        })?;
+        let is_base64 = metadata
+            .split(';')
+            .any(|part| part.eq_ignore_ascii_case("base64"));
+
+        if !is_base64 {
+            return Err(DotrainRegistryError::DataUriError(
+                "payload must be base64 encoded".to_string(),
+            ));
+        }
+
+        let bytes = BASE64_STANDARD.decode(payload).map_err(|_| {
+            DotrainRegistryError::DataUriError("invalid base64 payload".to_string())
+        })?;
+        String::from_utf8(bytes).map_err(|_| {
+            DotrainRegistryError::DataUriError("decoded payload is not valid UTF-8".to_string())
+        })
+    }
+
     async fn fetch_settings(settings_url: &Url) -> Result<String, DotrainRegistryError> {
         Self::fetch_url_content(settings_url).await
     }
@@ -707,12 +743,7 @@ impl DotrainRegistry {
             let key_clone = key.clone();
             let url_clone = url.clone();
             futures.push(async move {
-                let content = reqwest::get(url_clone.as_str())
-                    .await
-                    .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?
-                    .text()
-                    .await
-                    .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?;
+                let content = Self::fetch_url_content(&url_clone).await?;
                 Ok::<(String, String), DotrainRegistryError>((key_clone, content))
             });
         }
@@ -738,6 +769,14 @@ mod tests {
     const MOCK_REGISTRY_CONTENT: &str = r#"https://example.com/settings.yaml
 fixed-limit https://example.com/fixed-limit.rain
 auction-dca https://example.com/auction-dca.rain"#;
+
+    fn base64_data_uri(media_type: &str, content: &str) -> String {
+        format!(
+            "data:{};base64,{}",
+            media_type,
+            BASE64_STANDARD.encode(content)
+        )
+    }
 
     fn mock_settings_content() -> String {
         format!(
@@ -799,13 +838,13 @@ tokens:
     fn mock_dotrain_prefix() -> String {
         format!(
             r#"version: {version}
-gui:"#,
+builder:"#,
             version = SpecVersion::current()
         )
     }
 
     const MOCK_DOTRAIN_BODY: &str = r#"
-  name: Test gui
+  name: Test builder
   description: Test description
   short-description: Test short description
   deployments:
@@ -1005,7 +1044,7 @@ _ _: 1 1;
             assert!(order_details.valid.contains_key("auction-dca"));
 
             let fixed_limit_details = order_details.valid.get("fixed-limit").unwrap();
-            assert_eq!(fixed_limit_details.name, "Test gui");
+            assert_eq!(fixed_limit_details.name, "Test builder");
             assert_eq!(fixed_limit_details.description, "Test description");
         }
 
@@ -1314,6 +1353,43 @@ _ _: 1 1;
         }
 
         #[tokio::test]
+        async fn test_fetch_url_content_base64_data_uri() {
+            let url = Url::parse(&base64_data_uri("text/plain", "test content")).unwrap();
+            let content = DotrainRegistry::fetch_url_content(&url).await.unwrap();
+
+            assert_eq!(content, "test content");
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_malformed_data_uri() {
+            let url = Url::parse("data:text/plain;base64,not-valid-base64").unwrap();
+            let result = DotrainRegistry::fetch_url_content(&url).await;
+
+            assert!(result.is_err());
+            match result.err().unwrap() {
+                DotrainRegistryError::DataUriError(msg) => {
+                    assert!(msg.contains("invalid base64 payload"));
+                    assert!(!msg.contains("not-valid-base64"));
+                }
+                _ => panic!("Expected DataUriError"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_rejects_non_base64_data_uri() {
+            let url = Url::parse("data:text/plain,test%20content").unwrap();
+            let result = DotrainRegistry::fetch_url_content(&url).await;
+
+            assert!(result.is_err());
+            match result.err().unwrap() {
+                DotrainRegistryError::DataUriError(msg) => {
+                    assert!(msg.contains("payload must be base64 encoded"));
+                }
+                _ => panic!("Expected DataUriError"),
+            }
+        }
+
+        #[tokio::test]
         async fn test_fetch_settings() {
             let server = MockServer::start_async().await;
 
@@ -1366,6 +1442,51 @@ _ _: 1 1;
             assert_ne!(order1_content, order2_content);
             assert!(order1_content.contains("_ _: 0 0;"));
             assert!(order2_content.contains("_ _: 1 1;"));
+        }
+
+        #[tokio::test]
+        async fn test_new_constructor_with_data_uri_registry_and_settings() {
+            let server = MockServer::start_async().await;
+
+            server.mock(|when, then| {
+                when.method("GET").path("/order.rain");
+                then.status(200).body(get_first_dotrain_content());
+            });
+
+            let settings_uri = base64_data_uri("application/yaml", &mock_settings_content());
+            let test_registry_content = format!(
+                "{}\nfirst-order {}/order.rain",
+                settings_uri,
+                server.url("")
+            );
+            let registry_uri = base64_data_uri("text/plain", &test_registry_content);
+
+            let registry = DotrainRegistry::new(registry_uri).await.unwrap();
+
+            assert_eq!(registry.registry(), test_registry_content);
+            assert_eq!(registry.settings(), mock_settings_content());
+            assert_eq!(registry.order_urls.len(), 1);
+            assert_eq!(registry.orders.len(), 1);
+            assert!(registry.order_urls.contains_key("first-order"));
+            assert_eq!(
+                registry.orders.get("first-order").unwrap(),
+                &get_first_dotrain_content()
+            );
+        }
+
+        #[tokio::test]
+        async fn test_fetch_orders_supports_data_uri_order_content() {
+            let order_urls: HashMap<String, Url> = vec![(
+                "order1".to_string(),
+                Url::parse(&base64_data_uri("text/plain", &get_first_dotrain_content())).unwrap(),
+            )]
+            .into_iter()
+            .collect();
+
+            let orders = DotrainRegistry::fetch_orders(&order_urls).await.unwrap();
+
+            assert_eq!(orders.len(), 1);
+            assert_eq!(orders.get("order1").unwrap(), &get_first_dotrain_content());
         }
 
         #[tokio::test]
@@ -1438,7 +1559,7 @@ _ _: 1 1;
         }
 
         #[tokio::test]
-        async fn test_get_gui() {
+        async fn test_get_order_builder() {
             let server = MockServer::start_async().await;
 
             let test_registry_content = format!(
@@ -1477,37 +1598,37 @@ _ _: 1 1;
             assert!(registry.order_urls.contains_key("second-order"));
             assert_eq!(registry.orders.len(), 2);
 
-            let gui1 = registry
-                .get_gui("first-order".to_string(), "flare".to_string(), None, None)
+            let mut builder1 = registry
+                .get_order_builder("first-order".to_string(), "flare".to_string(), None, None)
                 .await
                 .unwrap();
 
-            let deployment_details1 = gui1.get_current_deployment().unwrap();
+            let deployment_details1 = builder1.get_current_deployment().unwrap();
             assert_eq!(deployment_details1.name, "Flare order name");
             assert_eq!(deployment_details1.description, "Flare order description");
 
-            let default_serialized_state = gui1.serialize_state().unwrap();
+            let default_serialized_state = builder1.serialize_state().unwrap();
 
-            let gui2 = registry
-                .get_gui("second-order".to_string(), "base".to_string(), None, None)
+            let builder2 = registry
+                .get_order_builder("second-order".to_string(), "base".to_string(), None, None)
                 .await
                 .unwrap();
 
-            let deployment_details2 = gui2.get_current_deployment().unwrap();
+            let deployment_details2 = builder2.get_current_deployment().unwrap();
             assert_eq!(deployment_details2.name, "Base order name");
             assert_eq!(deployment_details2.description, "Base order description");
 
-            let mut gui_with_state = registry
-                .get_gui("first-order".to_string(), "flare".to_string(), None, None)
+            let mut builder_with_state = registry
+                .get_order_builder("first-order".to_string(), "flare".to_string(), None, None)
                 .await
                 .unwrap();
-            gui_with_state
+            builder_with_state
                 .set_field_value("test-binding".to_string(), "42".to_string())
                 .unwrap();
-            let saved_state = gui_with_state.serialize_state().unwrap();
+            let saved_state = builder_with_state.serialize_state().unwrap();
 
-            let restored_gui = registry
-                .get_gui(
+            let restored_builder = registry
+                .get_order_builder(
                     "first-order".to_string(),
                     "flare".to_string(),
                     Some(saved_state.clone()),
@@ -1515,10 +1636,10 @@ _ _: 1 1;
                 )
                 .await
                 .unwrap();
-            assert_eq!(restored_gui.serialize_state().unwrap(), saved_state);
+            assert_eq!(restored_builder.serialize_state().unwrap(), saved_state);
 
-            let fallback_gui = registry
-                .get_gui(
+            let fallback_builder = registry
+                .get_order_builder(
                     "first-order".to_string(),
                     "flare".to_string(),
                     Some("not-a-valid-state".to_string()),
@@ -1527,12 +1648,12 @@ _ _: 1 1;
                 .await
                 .unwrap();
             assert_eq!(
-                fallback_gui.serialize_state().unwrap(),
+                fallback_builder.serialize_state().unwrap(),
                 default_serialized_state
             );
 
             let result = registry
-                .get_gui(
+                .get_order_builder(
                     "non-existent-order".to_string(),
                     "flare".to_string(),
                     None,
@@ -1587,7 +1708,7 @@ registrys:
             )
         }
 
-        const MOCK_DOTRAIN_SIMPLE: &str = r#"gui:
+        const MOCK_DOTRAIN_SIMPLE: &str = r#"builder:
   name: Test Order
   description: Test description
   deployments:

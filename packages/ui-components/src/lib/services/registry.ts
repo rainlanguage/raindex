@@ -1,5 +1,5 @@
 import type { InvalidOrderDetail, ValidOrderDetail } from '$lib/types/order';
-import { DotrainOrderGui } from '@rainlanguage/raindex';
+import { RaindexOrderBuilder } from '@rainlanguage/raindex';
 
 export type RegistryFile = {
 	name: string;
@@ -80,7 +80,7 @@ export async function validateOrders(
 ): Promise<OrderValidationResult> {
 	const ordersPromises = registryDotrains.map(async (registryDotrain) => {
 		try {
-			const result = await DotrainOrderGui.getOrderDetails(registryDotrain.dotrain);
+			const result = await RaindexOrderBuilder.getOrderDetails(registryDotrain.dotrain);
 
 			if (result.error) {
 				throw new Error(result.error.msg);

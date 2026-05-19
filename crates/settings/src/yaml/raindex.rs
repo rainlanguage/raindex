@@ -573,12 +573,12 @@ mod tests {
         let yaml = RaindexYaml::new_with_profile(
             sources.clone(),
             RaindexYamlValidation::default(),
-            ContextProfile::Gui {
+            ContextProfile::Builder {
                 current_deployment: "deployment1".to_string(),
             },
         )
         .unwrap();
-        assert!(matches!(yaml.profile, ContextProfile::Gui { .. }));
+        assert!(matches!(yaml.profile, ContextProfile::Builder { .. }));
 
         let yaml_default = RaindexYaml::new(sources, RaindexYamlValidation::default()).unwrap();
         assert!(matches!(yaml_default.profile, ContextProfile::Strict));
@@ -592,7 +592,7 @@ mod tests {
         let yaml = RaindexYaml::new_with_profile(
             vec![full_yaml()],
             RaindexYamlValidation::default(),
-            ContextProfile::Gui {
+            ContextProfile::Builder {
                 current_deployment: "deployment1".to_string(),
             },
         )
@@ -601,10 +601,10 @@ mod tests {
         let serialized = serde_json::to_string(&yaml).unwrap();
         let round_tripped: RaindexYaml = serde_json::from_str(&serialized).unwrap();
         match round_tripped.profile {
-            ContextProfile::Gui { current_deployment } => {
+            ContextProfile::Builder { current_deployment } => {
                 assert_eq!(current_deployment, "deployment1");
             }
-            _ => panic!("expected gui profile"),
+            _ => panic!("expected builder profile"),
         }
     }
 

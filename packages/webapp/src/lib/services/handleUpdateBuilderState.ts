@@ -1,7 +1,7 @@
 import { pushState } from '$app/navigation';
 import { debounce } from 'lodash';
 
-export const pushGuiStateToUrlHistory = debounce((serializedState: string) => {
+export const pushBuilderStateToUrlHistory = debounce((serializedState: string) => {
 	pushState(`?state=${serializedState}`, { serializedState });
 }, 1000);
 
@@ -13,7 +13,7 @@ if (import.meta.vitest) {
 		pushState: vi.fn()
 	}));
 
-	describe('handleUpdateGuiState', () => {
+	describe('handleUpdateBuilderState', () => {
 		beforeEach(() => {
 			vi.clearAllMocks();
 			vi.useFakeTimers();
@@ -25,7 +25,7 @@ if (import.meta.vitest) {
 
 		it('should push state to URL history when serializedState exists', async () => {
 			const mockSerializedState = 'mockSerializedState123';
-			pushGuiStateToUrlHistory(mockSerializedState);
+			pushBuilderStateToUrlHistory(mockSerializedState);
 
 			// Fast-forward timers to trigger debounced function
 			await vi.advanceTimersByTimeAsync(1000);
@@ -39,9 +39,9 @@ if (import.meta.vitest) {
 			const mockSerializedState = 'mockSerializedState123';
 
 			// Call multiple times in quick succession
-			pushGuiStateToUrlHistory(mockSerializedState);
-			pushGuiStateToUrlHistory(mockSerializedState);
-			pushGuiStateToUrlHistory(mockSerializedState);
+			pushBuilderStateToUrlHistory(mockSerializedState);
+			pushBuilderStateToUrlHistory(mockSerializedState);
+			pushBuilderStateToUrlHistory(mockSerializedState);
 
 			await vi.advanceTimersByTimeAsync(1000);
 

@@ -46,7 +46,7 @@ echo "Setting up rain.tofu.erc20-decimals..."
 echo "Setting up rain.interpreter..."
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude)'
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainix-rs-prelude)'
-(cd lib/rain.interpreter && nix develop -i ${keep[@]} -c bash -c i9r-prelude)
+(cd lib/rain.interpreter && nix develop -i ${keep[@]} -c bash -c rainlang-prelude)
 
 echo "Setting up rain.metadata..."
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-sol-prelude)'

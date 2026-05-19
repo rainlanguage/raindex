@@ -8,7 +8,7 @@ The SDK is designed to work in browsers, Node.js, and hybrid runtimes. It embeds
 ## Overview
 
 - Purpose
-  - Provide a WASM-backed API for: YAML parsing/validation, raindex queries (subgraph), quoting, vault management, transaction calldata generation (add/remove, deposit/withdraw), GUI helpers to deploy orders from dotrain, and low-level hashing/ABI helpers.
+  - Provide a WASM-backed API for: YAML parsing/validation, raindex queries (subgraph), quoting, vault management, transaction calldata generation (add/remove, deposit/withdraw), builder helpers to deploy orders from dotrain, and low-level hashing/ABI helpers.
 - Targets
   - ESM (browser) and CJS (Node.js) builds are both published.
   - The WASM is base64-embedded to avoid runtime `fetch`/`fs` requirements.
@@ -18,7 +18,7 @@ The SDK is designed to work in browsers, Node.js, and hybrid runtimes. It embeds
 Typical import
 
 ```ts
-import { RaindexClient, DotrainOrderGui, parseYaml, getOrderHash } from "@rainlanguage/raindex";
+import { RaindexClient, RaindexOrderBuilder, parseYaml, getOrderHash } from "@rainlanguage/raindex";
 ```
 
 
@@ -83,7 +83,7 @@ The package re-exports the WASM-bound API from the Rust crates. Representative i
 - High-level classes (selected)
   - `RaindexClient` — raindex queries (orders, trades, vaults, quotes, transactions) across configured networks/subgraphs. Constructor is async (`await RaindexClient.new(...)`) and accepts optional `queryCallback` (for applying fetched records to the local DB), `wipeCallback` (for cleaning up stale data during full re-sync), and `statusCallback` (for reporting sync progress/errors to the caller) args for local DB sync when the YAML has `local-db-sync` sections. The sync scheduler starts automatically when configured and shuts down via Drop.
   - `RaindexOrder`, `RaindexVault`, `RaindexTrade`, `RaindexTransaction`, `RaindexVaultsList`, etc.
-  - `DotrainOrder`, `DotrainOrderGui`, `DotrainRegistry` — dotrain parsing, GUI orchestration, registry fetching (including `getRaindexYaml()` for token queries), and deployment calldata.
+  - `DotrainOrder`, `RaindexOrderBuilder`, `DotrainRegistry` — dotrain parsing, builder orchestration, registry fetching (including `getRaindexYaml()` for token queries), and deployment calldata.
   - `RaindexYaml` — typed access to networks, tokens (via `getTokens()`), raindexes, subgraphs, deployers, accounts, metaboards.
   - `Float` — arbitrary-precision float utilities used across the API.
 - Errors & results
@@ -104,7 +104,7 @@ Notes on runtime behavior
 
 ## Testing & Documentation
 
-- Tests: Vitest suites under `test/` validate representative flows: orders/vaults/trades queries, quoting, calldata generation, GUI flows, and error surfaces.
+- Tests: Vitest suites under `test/` validate representative flows: orders/vaults/trades queries, quoting, calldata generation, builder flows, and error surfaces.
 - Docs: `npm run docs` builds TypeDoc from the emitted `.d.ts` for hosted API documentation.
 
 

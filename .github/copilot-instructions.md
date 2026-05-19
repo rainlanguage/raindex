@@ -67,7 +67,7 @@ nix develop -c cargo test --workspace
 If the end-of-session gate fails during `./prep-all.sh`, run these steps sequentially so dependencies still build:
 ```bash
 nix develop -c forge install
-nix develop -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude && rainix-rs-prelude && i9r-prelude)'
+nix develop -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude && rainix-rs-prelude && rainlang-prelude)'
 nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-sol-prelude && rainix-rs-prelude)'
 nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-sol-prelude && rainix-rs-prelude)'
 nix develop -c rainix-sol-prelude && nix develop -c rainix-rs-prelude && nix develop -c raindex-prelude
