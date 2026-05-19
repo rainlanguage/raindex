@@ -1118,7 +1118,7 @@ mod tests {
             raindex,
         }]);
 
-        // The orderbook's OZ Multicall bubbles the first inner revert up as
+        // The raindex's OZ Multicall bubbles the first inner revert up as
         // the outer eth_call revert data. We simulate `TokenSelfTrade()`
         // (selector 0x734bc71c) being bubbled up directly.
         rpc_server.mock(|when, then| {

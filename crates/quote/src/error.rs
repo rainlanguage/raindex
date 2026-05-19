@@ -51,7 +51,7 @@ pub enum Error {
     ReadProviderError(#[from] ReadProviderError),
     #[error("Multicall failed: {0}")]
     MulticallError(#[from] MulticallError),
-    /// Internal signal from `quote_chunk_once` that the orderbook's own
+    /// Internal signal from `quote_chunk_once` that the raindex's own
     /// `multicall(bytes[])` reverted at the chunk level (OZ Multicall bubbles
     /// the first failing inner call's revert; it cannot isolate per-element).
     /// The quote RPC layer consumes this to drive bisection and attribute the

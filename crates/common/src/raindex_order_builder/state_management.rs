@@ -396,9 +396,7 @@ mod tests {
         tests::{get_yaml, initialize_builder_with_select_tokens},
     };
     use alloy::primitives::{Address, U256};
-    use raindex_app_settings::{
-        network::NetworkCfg, order::VaultType, yaml::YamlParsableHash,
-    };
+    use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
     use std::str::FromStr;
 
     const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGZKYKlbVV5aVVJeUl5mYUlyQaJZcGVgVmmuhZNBVmSxQYRFortnaLmPsWGyrTgsLFJzUpNLdMGG6qakFuTkV-am5pUAADgqxtfKAQAA";

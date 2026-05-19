@@ -4,11 +4,11 @@ use crate::local_db::query::fetch_trades::{
 };
 use crate::raindex_client::local_db::query::fetch_trades::{fetch_trades, fetch_trades_count};
 use crate::utils::timing::Timing;
-use rain_orderbook_subgraph_client::types::common::{
+use raindex_subgraph_client::types::common::{
     SgBigInt, SgBytes, SgTrade, SgTradeEventFilter, SgTradeOrderFilter, SgTradesListQueryFilters,
     SgTradesTokensFilterArgs,
 };
-use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
+use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use tsify::Tsify;
 use wasm_bindgen_utils::impl_wasm_traits;
 
@@ -36,7 +36,7 @@ pub struct GetTradesFilters {
     #[tsify(optional)]
     pub tokens: Option<GetTradesTokenFilter>,
     #[tsify(optional, type = "Address[]")]
-    pub orderbook_addresses: Option<Vec<Address>>,
+    pub raindex_addresses: Option<Vec<Address>>,
     #[tsify(optional)]
     pub time_filter: Option<TimeFilter>,
 }
@@ -79,8 +79,8 @@ impl From<GetTradesFilters> for SgTradesListQueryFilters {
                     .end
                     .map_or(SgBigInt(u64::MAX.to_string()), |v| SgBigInt(v.to_string())),
             ),
-            orderbook_in: filters
-                .orderbook_addresses
+            raindex_in: filters
+                .raindex_addresses
                 .unwrap_or_default()
                 .into_iter()
                 .map(|address| address.to_string().to_lowercase())
@@ -187,7 +187,7 @@ impl RaindexClient {
         )]
         chain_ids: Option<ChainIds>,
         #[wasm_export(
-            param_description = "Filtering criteria including owners, order hash, token addresses, orderbooks, and time range"
+            param_description = "Filtering criteria including owners, order hash, token addresses, raindexes, and time range"
         )]
         filters: Option<GetTradesFilters>,
         #[wasm_export(param_description = "Page number for pagination (optional, defaults to 1)")]
@@ -218,7 +218,7 @@ impl RaindexClient {
             .and_then(|tokens| tokens.outputs.as_ref())
             .map_or(0, Vec::len);
         let takers_count = filters.takers.len();
-        let orderbooks_count = filters.orderbook_addresses.as_ref().map_or(0, Vec::len);
+        let raindexes_count = filters.raindex_addresses.as_ref().map_or(0, Vec::len);
 
         let mut all_trades = Vec::new();
         let mut total_count: u64 = 0;
@@ -248,7 +248,7 @@ impl RaindexClient {
                 &db,
                 FetchTradesArgs {
                     chain_ids: local_ids.clone(),
-                    orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
+                    raindex_addresses: filters.raindex_addresses.clone().unwrap_or_default(),
                     owners: filters.owners.clone(),
                     takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
@@ -279,7 +279,7 @@ impl RaindexClient {
                 &db,
                 FetchTradesArgs {
                     chain_ids: local_ids,
-                    orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
+                    raindex_addresses: filters.raindex_addresses.clone().unwrap_or_default(),
                     owners: filters.owners.clone(),
                     takers: filters.takers.clone(),
                     order_hash: filters.order_hash,
@@ -333,7 +333,7 @@ impl RaindexClient {
                 .iter()
                 .flat_map(|(chain_id, args)| args.iter().map(|arg| (arg.name.as_str(), *chain_id)))
                 .collect();
-            let client = MultiOrderbookSubgraphClient::new(
+            let client = MultiRaindexSubgraphClient::new(
                 multi_subgraph_args.values().flatten().cloned().collect(),
             );
             let subgraph_fetch_started = Timing::now();
@@ -407,7 +407,7 @@ impl RaindexClient {
             subgraph_chain_ids_count,
             owners_count = filters.owners.len(),
             takers_count,
-            orderbooks_count,
+            raindexes_count,
             has_order_hash = filters.order_hash.is_some(),
             has_time_filter = filters.time_filter.is_some(),
             input_tokens_count,
@@ -439,8 +439,8 @@ impl RaindexClient {
 mod tests {
     use super::*;
     use alloy::primitives::{address, b256};
-    use rain_orderbook_subgraph_client::types::common::{
-        SgErc20, SgOrderbook, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
+    use raindex_subgraph_client::types::common::{
+        SgErc20, SgRaindex, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
         SgTradeStructPartialOrder, SgTradeVaultBalanceChange, SgTransaction,
         SgVaultBalanceChangeVault,
     };
@@ -467,7 +467,7 @@ mod tests {
     fn maps_trade_filters_to_subgraph_filters() {
         let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         let taker = address!("0xcccccccccccccccccccccccccccccccccccccccc");
-        let orderbook = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let raindex = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         let order_hash =
             b256!("0x0000000000000000000000000000000000000000000000000000000000abcdef");
 
@@ -475,7 +475,7 @@ mod tests {
             owners: vec![owner],
             takers: vec![taker],
             order_hash: Some(order_hash),
-            orderbook_addresses: Some(vec![orderbook]),
+            raindex_addresses: Some(vec![raindex]),
             time_filter: Some(TimeFilter {
                 start: Some(10),
                 end: Some(20),
@@ -495,7 +495,7 @@ mod tests {
             trade_event_filter.sender_in,
             vec![SgBytes(taker.to_string())]
         );
-        assert_eq!(filters.orderbook_in, vec![format!("{orderbook:#x}")]);
+        assert_eq!(filters.raindex_in, vec![format!("{raindex:#x}")]);
         assert_eq!(filters.timestamp_gte, Some(SgBigInt("10".to_string())));
         assert_eq!(filters.timestamp_lte, Some(SgBigInt("20".to_string())));
     }
@@ -517,12 +517,12 @@ mod tests {
     #[test]
     fn maps_token_filters_to_subgraph_candidate_filter_without_unsupported_child_nesting() {
         let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        let orderbook = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        let raindex = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
         let token_a = address!("0x1111111111111111111111111111111111111111");
         let token_b = address!("0x2222222222222222222222222222222222222222");
         let filters: SgTradesListQueryFilters = GetTradesFilters {
             owners: vec![owner],
-            orderbook_addresses: Some(vec![orderbook]),
+            raindex_addresses: Some(vec![raindex]),
             time_filter: Some(TimeFilter {
                 start: Some(10),
                 end: Some(20),
@@ -539,7 +539,7 @@ mod tests {
         assert_eq!(order_filter.owner_in, vec![SgBytes(owner.to_string())]);
         assert_eq!(filters.timestamp_gte, Some(SgBigInt("10".to_string())));
         assert_eq!(filters.timestamp_lte, Some(SgBigInt("20".to_string())));
-        assert_eq!(filters.orderbook_in, vec![format!("{orderbook:#x}")]);
+        assert_eq!(filters.raindex_in, vec![format!("{raindex:#x}")]);
         assert!(filters.or.is_none());
         assert!(filters.input_vault_balance_change_.is_none());
         assert!(filters.output_vault_balance_change_.is_none());
@@ -579,7 +579,7 @@ mod tests {
                     block_number: SgBigInt("1".to_string()),
                     timestamp: SgBigInt("10".to_string()),
                 },
-                orderbook: SgOrderbook {
+                raindex: SgRaindex {
                     id: SgBytes("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
                 },
                 trade: SgTradeRef {
@@ -617,7 +617,7 @@ mod tests {
             },
             input_vault_balance_change: balance_change(input_token),
             timestamp: SgBigInt("10".to_string()),
-            orderbook: SgOrderbook {
+            raindex: SgRaindex {
                 id: SgBytes("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_string()),
             },
         }

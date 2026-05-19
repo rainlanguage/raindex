@@ -294,7 +294,7 @@ mod tests {
 
         // Only one of the two specs resolves to a QuoteTarget (the default
         // spec is missing from the subgraph → yields `NonExistent` before
-        // any RPC call), so the orderbook-native multicall response carries
+        // any RPC call), so the raindex-native multicall response carries
         // a single element.
         let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
             exists: true,
@@ -499,7 +499,7 @@ mod tests {
         };
 
         // The CLI `--target` flag here is parsed into a single QuoteTarget
-        // (four arg tokens per target), so the orderbook's multicall carries
+        // (four arg tokens per target), so the raindex's multicall carries
         // a single inner `quote2` return.
         let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
             exists: true,

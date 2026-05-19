@@ -193,8 +193,8 @@ pub struct SgTradesListQueryFilters {
     #[cynic(rename = "timestamp_lte", skip_serializing_if = "Option::is_none")]
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub timestamp_lte: Option<SgBigInt>,
-    #[cynic(rename = "orderbook_in", skip_serializing_if = "Vec::is_empty")]
-    pub orderbook_in: Vec<String>,
+    #[cynic(rename = "raindex_in", skip_serializing_if = "Vec::is_empty")]
+    pub raindex_in: Vec<String>,
     #[cynic(
         rename = "inputVaultBalanceChange_",
         skip_serializing_if = "Option::is_none"

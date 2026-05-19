@@ -1,7 +1,7 @@
 use super::*;
 use alloy::primitives::{Address, Bytes, U256};
-use rain_orderbook_app_settings::order::VaultType;
-use rain_orderbook_common::raindex_order_builder::order_operations as inner_ops;
+use raindex_app_settings::order::VaultType;
+use raindex_common::raindex_order_builder::order_operations as inner_ops;
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
@@ -86,7 +86,7 @@ pub struct DeploymentTransactionArgs {
     #[tsify(type = "string")]
     pub deployment_calldata: Bytes,
     #[tsify(type = "string")]
-    pub orderbook_address: Address,
+    pub raindex_address: Address,
     pub chain_id: u32,
     pub emit_meta_call: Option<ExternalCall>,
 }

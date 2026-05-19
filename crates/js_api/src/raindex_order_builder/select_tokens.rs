@@ -10,7 +10,7 @@ impl RaindexOrderBuilder {
     pub fn get_select_tokens(
         &self,
     ) -> Result<
-        Vec<rain_orderbook_app_settings::order_builder::OrderBuilderSelectTokensCfg>,
+        Vec<raindex_app_settings::order_builder::OrderBuilderSelectTokensCfg>,
         RaindexOrderBuilderWasmError,
     > {
         Ok(self.inner.get_select_tokens()?)
@@ -88,10 +88,8 @@ impl RaindexOrderBuilder {
         &self,
         #[wasm_export(param_description = "Token contract address")] token_address: String,
         #[wasm_export(param_description = "Account address to check balance for")] owner: String,
-    ) -> Result<
-        rain_orderbook_common::raindex_client::vaults::AccountBalance,
-        RaindexOrderBuilderWasmError,
-    > {
+    ) -> Result<raindex_common::raindex_client::vaults::AccountBalance, RaindexOrderBuilderWasmError>
+    {
         Ok(self.inner.get_account_balance(token_address, owner).await?)
     }
 }

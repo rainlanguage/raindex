@@ -36,7 +36,7 @@ fn single_quote_failure(err: &Error) -> QuoteResult {
 /// Issue a single `raindex.multicall([quote2, quote2, ...])` RPC call with
 /// `from = counterparty` so each inner `quote2` sees `msg.sender = counterparty`.
 ///
-/// OrderBookV6 inherits OpenZeppelin's `Multicall` which `delegatecall`s each
+/// RaindexV6 inherits OpenZeppelin's `Multicall` which `delegatecall`s each
 /// element back into the raindex itself. `delegatecall` preserves the outer
 /// `msg.sender`, so the calldata built here gives API-gated strategies (which
 /// read `order-counterparty()` in `calculate-io`) the correct taker address.

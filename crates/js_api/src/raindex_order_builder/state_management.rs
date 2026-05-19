@@ -1,14 +1,14 @@
 use super::*;
-use rain_orderbook_common::raindex_order_builder::state_management as inner_sm;
+use raindex_common::raindex_order_builder::state_management as inner_sm;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 #[serde(rename_all = "camelCase")]
 pub struct AllBuilderConfig {
     pub field_definitions_without_defaults: Vec<OrderBuilderFieldDefinitionCfg>,
     pub field_definitions_with_defaults: Vec<OrderBuilderFieldDefinitionCfg>,
-    pub deposits: Vec<rain_orderbook_app_settings::order_builder::OrderBuilderDepositCfg>,
-    pub order_inputs: Vec<rain_orderbook_app_settings::order::OrderIOCfg>,
-    pub order_outputs: Vec<rain_orderbook_app_settings::order::OrderIOCfg>,
+    pub deposits: Vec<raindex_app_settings::order_builder::OrderBuilderDepositCfg>,
+    pub order_inputs: Vec<raindex_app_settings::order::OrderIOCfg>,
+    pub order_outputs: Vec<raindex_app_settings::order::OrderIOCfg>,
 }
 impl_wasm_traits!(AllBuilderConfig);
 
@@ -88,10 +88,9 @@ impl RaindexOrderBuilder {
             Vec<String>,
         >,
     ) -> Result<String, RaindexOrderBuilderWasmError> {
-        let dotrain_order =
-            rain_orderbook_common::dotrain_order::DotrainOrder::create(dotrain, settings)
-                .await
-                .map_err(RaindexOrderBuilderError::from)?;
+        let dotrain_order = raindex_common::dotrain_order::DotrainOrder::create(dotrain, settings)
+            .await
+            .map_err(RaindexOrderBuilderError::from)?;
         Ok(RaindexOrderBuilderInner::compute_state_hash(
             &dotrain_order,
         )?)
