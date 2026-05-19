@@ -1,18 +1,26 @@
-import assert from 'assert';
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
-import { WasmEncodedResult, DotrainRegistry, RaindexYaml, RaindexClient } from '../../dist/cjs';
-import { getLocal } from 'mockttp';
+import assert from "assert";
+import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+import {
+  WasmEncodedResult,
+  DotrainRegistry,
+  RaindexYaml,
+  RaindexClient,
+} from "../../dist/cjs";
+import { getLocal } from "mockttp";
 
 const SPEC_VERSION = RaindexYaml.getCurrentSpecVersion().value;
 
-const extractWasmEncodedData = <T>(result: WasmEncodedResult<T>, errorMessage?: string): T => {
-	if (result.error) {
-		assert.fail(errorMessage ?? result.error.msg);
-	}
-	if (typeof void 0 === typeof result.value) {
-		return result.value as T;
-	}
-	return result.value;
+const extractWasmEncodedData = <T>(
+  result: WasmEncodedResult<T>,
+  errorMessage?: string,
+): T => {
+  if (result.error) {
+    assert.fail(errorMessage ?? result.error.msg);
+  }
+  if (typeof void 0 === typeof result.value) {
+    return result.value as T;
+  }
+  return result.value;
 };
 
 const MOCK_SETTINGS_CONTENT = `
@@ -29,8 +37,8 @@ networks:
     chain-id: 8453
     currency: ETH
 subgraphs:
-  flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-flare/0.8/gn
-  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/0.9/gn
+  flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-flare/0.8/gn
+  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-base/0.9/gn
 metaboards:
   flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn
   base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-base-0x59401C93/0.1/gn
@@ -157,250 +165,344 @@ _ _: 1 1;
 #handle-add-order
 :;`;
 
-describe('Raindex JS API Package Bindgen Tests - Dotrain Registry', async function () {
-	const mockServer = getLocal();
-	beforeAll(async () => {
-		await mockServer.start(8231);
-	});
-	afterAll(async () => {
-		await mockServer.stop();
-	});
-	beforeEach(() => {
-		mockServer.reset();
-	});
+describe("Raindex JS API Package Bindgen Tests - Dotrain Registry", async function () {
+  const mockServer = getLocal();
+  beforeAll(async () => {
+    await mockServer.start(8231);
+  });
+  afterAll(async () => {
+    await mockServer.stop();
+  });
+  beforeEach(() => {
+    mockServer.reset();
+  });
 
-	describe('DotrainRegistry Constructor', () => {
-		it('should create registry and fetch all content successfully', async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+  describe("DotrainRegistry Constructor", () => {
+    it("should create registry and fetch all content successfully", async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 fixed-limit http://localhost:8231/fixed-limit.rain
 auction-dca http://localhost:8231/auction-dca.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
-			await mockServer.forGet('/fixed-limit.rain').thenReply(200, FIRST_DOTRAIN_CONTENT);
-			await mockServer.forGet('/auction-dca.rain').thenReply(200, SECOND_DOTRAIN_CONTENT);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_CONTENT);
+      await mockServer
+        .forGet("/fixed-limit.rain")
+        .thenReply(200, FIRST_DOTRAIN_CONTENT);
+      await mockServer
+        .forGet("/auction-dca.rain")
+        .thenReply(200, SECOND_DOTRAIN_CONTENT);
 
-			const result = await DotrainRegistry.new('http://localhost:8231/registry.txt');
-			const registry = extractWasmEncodedData(result);
+      const result = await DotrainRegistry.new(
+        "http://localhost:8231/registry.txt",
+      );
+      const registry = extractWasmEncodedData(result);
 
-			assert.strictEqual(registry.registryUrl, 'http://localhost:8231/registry.txt');
-			assert.strictEqual(registry.settingsUrl, 'http://localhost:8231/settings.yaml');
-			assert.strictEqual(registry.registry, registryContent);
-			assert.strictEqual(registry.settings, MOCK_SETTINGS_CONTENT);
+      assert.strictEqual(
+        registry.registryUrl,
+        "http://localhost:8231/registry.txt",
+      );
+      assert.strictEqual(
+        registry.settingsUrl,
+        "http://localhost:8231/settings.yaml",
+      );
+      assert.strictEqual(registry.registry, registryContent);
+      assert.strictEqual(registry.settings, MOCK_SETTINGS_CONTENT);
 
-			const orderUrls = registry.orderUrls;
-			assert.strictEqual(orderUrls.size, 2);
-			assert.strictEqual(orderUrls.get('fixed-limit'), 'http://localhost:8231/fixed-limit.rain');
-			assert.strictEqual(orderUrls.get('auction-dca'), 'http://localhost:8231/auction-dca.rain');
+      const orderUrls = registry.orderUrls;
+      assert.strictEqual(orderUrls.size, 2);
+      assert.strictEqual(
+        orderUrls.get("fixed-limit"),
+        "http://localhost:8231/fixed-limit.rain",
+      );
+      assert.strictEqual(
+        orderUrls.get("auction-dca"),
+        "http://localhost:8231/auction-dca.rain",
+      );
 
-			const orders = registry.orders;
-			assert.strictEqual(orders.size, 2);
-			assert(orders.has('fixed-limit'));
-			assert(orders.has('auction-dca'));
-		});
+      const orders = registry.orders;
+      assert.strictEqual(orders.size, 2);
+      assert(orders.has("fixed-limit"));
+      assert(orders.has("auction-dca"));
+    });
 
-		it('should handle invalid registry format', async () => {
-			const invalidContent = 'invalid format without proper structure';
-			await mockServer.forGet('/invalid.txt').thenReply(200, invalidContent);
+    it("should handle invalid registry format", async () => {
+      const invalidContent = "invalid format without proper structure";
+      await mockServer.forGet("/invalid.txt").thenReply(200, invalidContent);
 
-			const result = await DotrainRegistry.new('http://localhost:8231/invalid.txt');
-			assert(result.error);
-		});
+      const result = await DotrainRegistry.new(
+        "http://localhost:8231/invalid.txt",
+      );
+      assert(result.error);
+    });
 
-		it('should handle empty registry file', async () => {
-			await mockServer.forGet('/empty.txt').thenReply(200, '');
+    it("should handle empty registry file", async () => {
+      await mockServer.forGet("/empty.txt").thenReply(200, "");
 
-			const result = await DotrainRegistry.new('http://localhost:8231/empty.txt');
-			assert(result.error);
-			assert(result.error.readableMsg.includes('Invalid registry format'));
-		});
+      const result = await DotrainRegistry.new(
+        "http://localhost:8231/empty.txt",
+      );
+      assert(result.error);
+      assert(result.error.readableMsg.includes("Invalid registry format"));
+    });
 
-		it('should handle settings fetch error', async () => {
-			const registryContent =
-				'http://localhost:8231/nonexistent-settings.yaml\norder1 http://localhost:8231/order1.rain';
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/nonexistent-settings.yaml').thenReply(404);
+    it("should handle settings fetch error", async () => {
+      const registryContent =
+        "http://localhost:8231/nonexistent-settings.yaml\norder1 http://localhost:8231/order1.rain";
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer.forGet("/nonexistent-settings.yaml").thenReply(404);
 
-			const result = await DotrainRegistry.new('http://localhost:8231/registry.txt');
-			assert(result.error);
-		});
+      const result = await DotrainRegistry.new(
+        "http://localhost:8231/registry.txt",
+      );
+      assert(result.error);
+    });
 
-		it('should validate registry format without fetching orders', async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+    it("should validate registry format without fetching orders", async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 fixed-limit http://localhost:8231/fixed-limit.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
 
-			const result = await DotrainRegistry.validate('http://localhost:8231/registry.txt');
-			const value = extractWasmEncodedData(result);
-			assert.strictEqual(value, undefined);
-		});
+      const result = await DotrainRegistry.validate(
+        "http://localhost:8231/registry.txt",
+      );
+      const value = extractWasmEncodedData(result);
+      assert.strictEqual(value, undefined);
+    });
 
-		it('should fail validation for invalid registry format', async () => {
-			await mockServer.forGet('/invalid-registry.txt').thenReply(200, 'invalid');
+    it("should fail validation for invalid registry format", async () => {
+      await mockServer
+        .forGet("/invalid-registry.txt")
+        .thenReply(200, "invalid");
 
-			const result = await DotrainRegistry.validate('http://localhost:8231/invalid-registry.txt');
-			assert(result.error);
-		});
-	});
+      const result = await DotrainRegistry.validate(
+        "http://localhost:8231/invalid-registry.txt",
+      );
+      assert(result.error);
+    });
+  });
 
-	describe('DotrainRegistry Order Management', () => {
-		let registry: DotrainRegistry;
+  describe("DotrainRegistry Order Management", () => {
+    let registry: DotrainRegistry;
 
-		beforeEach(async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+    beforeEach(async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 fixed-limit http://localhost:8231/fixed-limit.rain
 auction-dca http://localhost:8231/auction-dca.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
-			await mockServer.forGet('/fixed-limit.rain').thenReply(200, FIRST_DOTRAIN_CONTENT);
-			await mockServer.forGet('/auction-dca.rain').thenReply(200, SECOND_DOTRAIN_CONTENT);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_CONTENT);
+      await mockServer
+        .forGet("/fixed-limit.rain")
+        .thenReply(200, FIRST_DOTRAIN_CONTENT);
+      await mockServer
+        .forGet("/auction-dca.rain")
+        .thenReply(200, SECOND_DOTRAIN_CONTENT);
 
-			const result = await DotrainRegistry.new('http://localhost:8231/registry.txt');
-			registry = extractWasmEncodedData(result);
-		});
+      const result = await DotrainRegistry.new(
+        "http://localhost:8231/registry.txt",
+      );
+      registry = extractWasmEncodedData(result);
+    });
 
-		it('should get order keys', () => {
-			const keys = extractWasmEncodedData(registry.getOrderKeys());
+    it("should get order keys", () => {
+      const keys = extractWasmEncodedData(registry.getOrderKeys());
 
-			assert.strictEqual(keys.length, 2);
-			assert(keys.includes('fixed-limit'));
-			assert(keys.includes('auction-dca'));
-		});
+      assert.strictEqual(keys.length, 2);
+      assert(keys.includes("fixed-limit"));
+      assert(keys.includes("auction-dca"));
+    });
 
-		it('should get all order details', () => {
-			const orderDetails = extractWasmEncodedData(registry.getAllOrderDetails());
+    it("should get all order details", () => {
+      const orderDetails = extractWasmEncodedData(
+        registry.getAllOrderDetails(),
+      );
 
-			assert.strictEqual(orderDetails.valid.size, 2);
-			assert.strictEqual(orderDetails.invalid.size, 0);
-			assert(orderDetails.valid.has('fixed-limit'));
-			assert(orderDetails.valid.has('auction-dca'));
+      assert.strictEqual(orderDetails.valid.size, 2);
+      assert.strictEqual(orderDetails.invalid.size, 0);
+      assert(orderDetails.valid.has("fixed-limit"));
+      assert(orderDetails.valid.has("auction-dca"));
 
-			const fixedLimitDetails = orderDetails.valid.get('fixed-limit');
-			assert(fixedLimitDetails);
-			assert.strictEqual(fixedLimitDetails.name, 'Test builder');
-			assert.strictEqual(fixedLimitDetails.description, 'Test description');
-			assert.strictEqual(fixedLimitDetails.short_description, 'Test short description');
-		});
+      const fixedLimitDetails = orderDetails.valid.get("fixed-limit");
+      assert(fixedLimitDetails);
+      assert.strictEqual(fixedLimitDetails.name, "Test builder");
+      assert.strictEqual(fixedLimitDetails.description, "Test description");
+      assert.strictEqual(
+        fixedLimitDetails.short_description,
+        "Test short description",
+      );
+    });
 
-		it('should handle mixed valid and invalid orders', async () => {
-			mockServer.reset();
+    it("should handle mixed valid and invalid orders", async () => {
+      mockServer.reset();
 
-			const registryContent = `http://localhost:8231/settings.yaml
+      const registryContent = `http://localhost:8231/settings.yaml
 valid-order http://localhost:8231/valid.rain
 invalid-order http://localhost:8231/invalid.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
-			await mockServer.forGet('/valid.rain').thenReply(200, FIRST_DOTRAIN_CONTENT);
-			await mockServer.forGet('/invalid.rain').thenReply(200, 'not a dotrain file');
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_CONTENT);
+      await mockServer
+        .forGet("/valid.rain")
+        .thenReply(200, FIRST_DOTRAIN_CONTENT);
+      await mockServer
+        .forGet("/invalid.rain")
+        .thenReply(200, "not a dotrain file");
 
-			const registryResult = await DotrainRegistry.new('http://localhost:8231/registry.txt');
-			const mixedRegistry = extractWasmEncodedData(registryResult);
+      const registryResult = await DotrainRegistry.new(
+        "http://localhost:8231/registry.txt",
+      );
+      const mixedRegistry = extractWasmEncodedData(registryResult);
 
-			const orderDetails = extractWasmEncodedData(mixedRegistry.getAllOrderDetails());
+      const orderDetails = extractWasmEncodedData(
+        mixedRegistry.getAllOrderDetails(),
+      );
 
-			assert.strictEqual(orderDetails.valid.size, 1);
-			assert.strictEqual(orderDetails.invalid.size, 1);
-			assert(orderDetails.valid.has('valid-order'));
-			assert(orderDetails.invalid.has('invalid-order'));
-		});
+      assert.strictEqual(orderDetails.valid.size, 1);
+      assert.strictEqual(orderDetails.invalid.size, 1);
+      assert(orderDetails.valid.has("valid-order"));
+      assert(orderDetails.invalid.has("invalid-order"));
+    });
 
-		it('should get deployment details for specific order', () => {
-			const deploymentDetails = extractWasmEncodedData(
-				registry.getDeploymentDetails('fixed-limit')
-			);
+    it("should get deployment details for specific order", () => {
+      const deploymentDetails = extractWasmEncodedData(
+        registry.getDeploymentDetails("fixed-limit"),
+      );
 
-			assert.strictEqual(deploymentDetails.size, 2);
-			assert(deploymentDetails.has('flare'));
-			assert(deploymentDetails.has('base'));
+      assert.strictEqual(deploymentDetails.size, 2);
+      assert(deploymentDetails.has("flare"));
+      assert(deploymentDetails.has("base"));
 
-			const flareDetails = deploymentDetails.get('flare');
-			assert(flareDetails);
-			assert.strictEqual(flareDetails.name, 'Flare order name');
-			assert.strictEqual(flareDetails.description, 'Flare order description');
+      const flareDetails = deploymentDetails.get("flare");
+      assert(flareDetails);
+      assert.strictEqual(flareDetails.name, "Flare order name");
+      assert.strictEqual(flareDetails.description, "Flare order description");
 
-			const baseDetails = deploymentDetails.get('base');
-			assert(baseDetails);
-			assert.strictEqual(baseDetails.name, 'Base order name');
-			assert.strictEqual(baseDetails.description, 'Base order description');
-		});
+      const baseDetails = deploymentDetails.get("base");
+      assert(baseDetails);
+      assert.strictEqual(baseDetails.name, "Base order name");
+      assert.strictEqual(baseDetails.description, "Base order description");
+    });
 
-		it('should handle deployment details for non-existent order', () => {
-			const result = registry.getDeploymentDetails('non-existent');
-			assert(result.error);
-			assert(result.error.readableMsg.includes("order key 'non-existent' was not found"));
-		});
-	});
+    it("should handle deployment details for non-existent order", () => {
+      const result = registry.getDeploymentDetails("non-existent");
+      assert(result.error);
+      assert(
+        result.error.readableMsg.includes(
+          "order key 'non-existent' was not found",
+        ),
+      );
+    });
+  });
 
-	describe('DotrainRegistry Builder Creation', () => {
-		let registry: DotrainRegistry;
+  describe("DotrainRegistry Builder Creation", () => {
+    let registry: DotrainRegistry;
 
-		beforeEach(async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+    beforeEach(async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 fixed-limit http://localhost:8231/fixed-limit.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_CONTENT);
-			await mockServer.forGet('/fixed-limit.rain').thenReply(200, FIRST_DOTRAIN_CONTENT);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_CONTENT);
+      await mockServer
+        .forGet("/fixed-limit.rain")
+        .thenReply(200, FIRST_DOTRAIN_CONTENT);
 
-			registry = extractWasmEncodedData(
-				await DotrainRegistry.new('http://localhost:8231/registry.txt')
-			);
-		});
+      registry = extractWasmEncodedData(
+        await DotrainRegistry.new("http://localhost:8231/registry.txt"),
+      );
+    });
 
-		it('should create builder for valid order and deployment', async () => {
-			const builder = extractWasmEncodedData(
-				await registry.getOrderBuilder('fixed-limit', 'flare', null, null)
-			);
+    it("should create builder for valid order and deployment", async () => {
+      const builder = extractWasmEncodedData(
+        await registry.getOrderBuilder("fixed-limit", "flare", null, null),
+      );
 
-			const currentDeployment = extractWasmEncodedData(builder.getCurrentDeployment());
+      const currentDeployment = extractWasmEncodedData(
+        builder.getCurrentDeployment(),
+      );
 
-			assert.strictEqual(currentDeployment.name, 'Flare order name');
-			assert.strictEqual(currentDeployment.description, 'Flare order description');
-		});
+      assert.strictEqual(currentDeployment.name, "Flare order name");
+      assert.strictEqual(
+        currentDeployment.description,
+        "Flare order description",
+      );
+    });
 
-		it('should create builder with state update callback', async () => {
-			const stateCallback = () => {};
+    it("should create builder with state update callback", async () => {
+      const stateCallback = () => {};
 
-			const builder = extractWasmEncodedData(
-				await registry.getOrderBuilder('fixed-limit', 'base', null, stateCallback)
-			);
+      const builder = extractWasmEncodedData(
+        await registry.getOrderBuilder(
+          "fixed-limit",
+          "base",
+          null,
+          stateCallback,
+        ),
+      );
 
-			const currentDeployment = extractWasmEncodedData(builder.getCurrentDeployment());
+      const currentDeployment = extractWasmEncodedData(
+        builder.getCurrentDeployment(),
+      );
 
-			assert.strictEqual(currentDeployment.name, 'Base order name');
-			assert.strictEqual(currentDeployment.description, 'Base order description');
-		});
+      assert.strictEqual(currentDeployment.name, "Base order name");
+      assert.strictEqual(
+        currentDeployment.description,
+        "Base order description",
+      );
+    });
 
-		it('should restore builder from serialized state when provided', async () => {
-			let builder = extractWasmEncodedData(
-				await registry.getOrderBuilder('fixed-limit', 'flare', null, null)
-			);
+    it("should restore builder from serialized state when provided", async () => {
+      let builder = extractWasmEncodedData(
+        await registry.getOrderBuilder("fixed-limit", "flare", null, null),
+      );
 
-			builder.setFieldValue('test-binding', '42');
-			const serializedState = extractWasmEncodedData<string>(builder.serializeState());
+      builder.setFieldValue("test-binding", "42");
+      const serializedState = extractWasmEncodedData<string>(
+        builder.serializeState(),
+      );
 
-			builder = extractWasmEncodedData(
-				await registry.getOrderBuilder('fixed-limit', 'flare', serializedState, null)
-			);
+      builder = extractWasmEncodedData(
+        await registry.getOrderBuilder(
+          "fixed-limit",
+          "flare",
+          serializedState,
+          null,
+        ),
+      );
 
-			const fieldValue = extractWasmEncodedData<{ value: string }>(
-				builder.getFieldValue('test-binding')
-			);
+      const fieldValue = extractWasmEncodedData<{ value: string }>(
+        builder.getFieldValue("test-binding"),
+      );
 
-			assert.strictEqual(fieldValue.value, '42');
-		});
+      assert.strictEqual(fieldValue.value, "42");
+    });
 
-		it('should handle builder creation for non-existent order', async () => {
-			const result = await registry.getOrderBuilder('non-existent', 'flare', null, null);
-			assert(result.error);
-			assert(result.error.readableMsg.includes("order key 'non-existent' was not found"));
-		});
-	});
+    it("should handle builder creation for non-existent order", async () => {
+      const result = await registry.getOrderBuilder(
+        "non-existent",
+        "flare",
+        null,
+        null,
+      );
+      assert(result.error);
+      assert(
+        result.error.readableMsg.includes(
+          "order key 'non-existent' was not found",
+        ),
+      );
+    });
+  });
 
-	const MOCK_SETTINGS_WITH_TOKENS = `
+  const MOCK_SETTINGS_WITH_TOKENS = `
 version: ${SPEC_VERSION}
 networks:
   mainnet:
@@ -435,7 +537,7 @@ registrys:
     network: mainnet
 `;
 
-	const MOCK_DOTRAIN_SIMPLE = `
+  const MOCK_DOTRAIN_SIMPLE = `
 builder:
   name: Test Order
   description: Test description
@@ -476,45 +578,53 @@ _ _: 0 0;
 :;
 `;
 
-	describe('DotrainRegistry getRaindexYaml', () => {
-		it('should return RaindexYaml instance from settings', async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+  describe("DotrainRegistry getRaindexYaml", () => {
+    it("should return RaindexYaml instance from settings", async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 test-order http://localhost:8231/order.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_WITH_TOKENS);
-			await mockServer.forGet('/order.rain').thenReply(200, MOCK_DOTRAIN_SIMPLE);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_WITH_TOKENS);
+      await mockServer
+        .forGet("/order.rain")
+        .thenReply(200, MOCK_DOTRAIN_SIMPLE);
 
-			const registry = extractWasmEncodedData(
-				await DotrainRegistry.new('http://localhost:8231/registry.txt')
-			);
+      const registry = extractWasmEncodedData(
+        await DotrainRegistry.new("http://localhost:8231/registry.txt"),
+      );
 
-			const raindexYamlResult = registry.getRaindexYaml();
-			const raindexYaml = extractWasmEncodedData(raindexYamlResult);
+      const raindexYamlResult = registry.getRaindexYaml();
+      const raindexYaml = extractWasmEncodedData(raindexYamlResult);
 
-			assert.ok(raindexYaml, 'RaindexYaml instance should be returned');
-			assert.strictEqual(typeof raindexYaml.getTokens, 'function');
-			assert.strictEqual(typeof raindexYaml.getRaindexByAddress, 'function');
-		});
-	});
+      assert.ok(raindexYaml, "RaindexYaml instance should be returned");
+      assert.strictEqual(typeof raindexYaml.getTokens, "function");
+      assert.strictEqual(typeof raindexYaml.getRaindexByAddress, "function");
+    });
+  });
 
-	describe('DotrainRegistry getRaindexClient', () => {
-		it('should return RaindexClient instance from settings', async () => {
-			const registryContent = `http://localhost:8231/settings.yaml
+  describe("DotrainRegistry getRaindexClient", () => {
+    it("should return RaindexClient instance from settings", async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
 test-order http://localhost:8231/order.rain`;
 
-			await mockServer.forGet('/registry.txt').thenReply(200, registryContent);
-			await mockServer.forGet('/settings.yaml').thenReply(200, MOCK_SETTINGS_WITH_TOKENS);
-			await mockServer.forGet('/order.rain').thenReply(200, MOCK_DOTRAIN_SIMPLE);
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, MOCK_SETTINGS_WITH_TOKENS);
+      await mockServer
+        .forGet("/order.rain")
+        .thenReply(200, MOCK_DOTRAIN_SIMPLE);
 
-			const registry = extractWasmEncodedData(
-				await DotrainRegistry.new('http://localhost:8231/registry.txt')
-			);
+      const registry = extractWasmEncodedData(
+        await DotrainRegistry.new("http://localhost:8231/registry.txt"),
+      );
 
-			const raindexClientResult = await registry.getRaindexClient();
-			const raindexClient = extractWasmEncodedData(raindexClientResult);
+      const raindexClientResult = await registry.getRaindexClient();
+      const raindexClient = extractWasmEncodedData(raindexClientResult);
 
-			assert.ok(raindexClient, 'RaindexClient instance should be returned');
-		});
-	});
+      assert.ok(raindexClient, "RaindexClient instance should be returned");
+    });
+  });
 });

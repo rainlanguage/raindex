@@ -12,7 +12,7 @@ use utoipa::ToSchema;
 pub struct BuyRequest {
     /// YAML configuration containing network RPC endpoints, subgraph URLs, and raindex addresses
     #[schema(
-        example = "networks:\n  base:\n    rpc: https://mainnet.base.org\n    chain-id: 8453\nsubgraphs:\n  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/0.9/gn\nraindexes:\n  base:\n    address: 0xd2938e7c9fe3597f78832ce780feb61945c377d7\n    network: base\n    subgraph: base"
+        example = "networks:\n  base:\n    rpc: https://mainnet.base.org\n    chain-id: 8453\nsubgraphs:\n  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-base/0.9/gn\nraindexes:\n  base:\n    address: 0xd2938e7c9fe3597f78832ce780feb61945c377d7\n    network: base\n    subgraph: base"
     )]
     pub yaml_content: String,
     /// Address that will execute the transaction
@@ -44,7 +44,7 @@ pub struct BuyRequest {
 pub struct SellRequest {
     /// YAML configuration containing network RPC endpoints, subgraph URLs, and raindex addresses
     #[schema(
-        example = "networks:\n  base:\n    rpc: https://mainnet.base.org\n    chain-id: 8453\nsubgraphs:\n  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/ob4-base/0.9/gn\nraindexes:\n  base:\n    address: 0xd2938e7c9fe3597f78832ce780feb61945c377d7\n    network: base\n    subgraph: base"
+        example = "networks:\n  base:\n    rpc: https://mainnet.base.org\n    chain-id: 8453\nsubgraphs:\n  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-base/0.9/gn\nraindexes:\n  base:\n    address: 0xd2938e7c9fe3597f78832ce780feb61945c377d7\n    network: base\n    subgraph: base"
     )]
     pub yaml_content: String,
     /// Address that will execute the transaction
