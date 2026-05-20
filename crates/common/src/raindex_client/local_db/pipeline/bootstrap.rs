@@ -422,6 +422,19 @@ mod tests {
             .await
             .unwrap();
 
+        let calls = db.calls();
+        let expected_views: Vec<String> = create_views_batch()
+            .statements()
+            .iter()
+            .map(|s| s.sql().to_string())
+            .collect();
+        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
+        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert!(calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()));
+        assert!(
+            expected_views.iter().all(|stmt| calls.contains(stmt)),
+            "missing view creation statements"
+        );
         assert!(
             !db.json_calls().contains(
                 &fetch_target_watermark_stmt(&runner_ob_id())
