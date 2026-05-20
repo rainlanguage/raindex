@@ -399,7 +399,7 @@ mod tests {
     use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
     use std::str::FromStr;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGZKYKlbVV5aVVJeUl5mYUlyQaJZcGVgVmmuhZNBVmSxQYRFortnaLmPsWGyrTgsLFJzUpNLdMGG6qakFuTkV-am5pUAADgqxtfKAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGaEYXZEUUFeuWegaXGuUamrh3N4SmmmY2m2c36gX0iEZ0RQbnaZYZVBqm65rTgsLFJzUpNLdMGG6qakFuTkV-am5pUAAINPx5HKAQAA";
 
     fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -549,7 +549,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
-            version: 5
+            version: 6
             networks:
                 test:
                     rpcs:
