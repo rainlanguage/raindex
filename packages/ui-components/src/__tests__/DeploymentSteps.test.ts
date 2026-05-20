@@ -1,504 +1,519 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/svelte';
-import DeploymentSteps from '../lib/components/deployment/DeploymentSteps.svelte';
-import { RaindexOrderBuilder, type ScenarioCfg } from '@rainlanguage/raindex';
-import type { ComponentProps } from 'svelte';
-import { readable, writable } from 'svelte/store';
-import type { AppKit } from '@reown/appkit';
-import type { OrderBuilderDeploymentCfg, RaindexClient } from '@rainlanguage/raindex';
-import userEvent from '@testing-library/user-event';
-import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
-import { useAccount } from '$lib/providers/wallet/useAccount';
-import type { Account } from '$lib/types/account';
-import { useRaindexClient } from '$lib/hooks/useRaindexClient';
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { render, screen, waitFor } from "@testing-library/svelte";
+import DeploymentSteps from "../lib/components/deployment/DeploymentSteps.svelte";
+import { RaindexOrderBuilder, type ScenarioCfg } from "@rainlanguage/raindex";
+import type { ComponentProps } from "svelte";
+import { readable, writable } from "svelte/store";
+import type { AppKit } from "@reown/appkit";
+import type {
+  OrderBuilderDeploymentCfg,
+  RaindexClient,
+} from "@rainlanguage/raindex";
+import userEvent from "@testing-library/user-event";
+import { useRaindexOrderBuilder } from "$lib/hooks/useRaindexOrderBuilder";
+import { useAccount } from "$lib/providers/wallet/useAccount";
+import type { Account } from "$lib/types/account";
+import { useRaindexClient } from "$lib/hooks/useRaindexClient";
 
-vi.mock('@rainlanguage/raindex', () => ({
-	RaindexOrderBuilder: vi.fn()
+vi.mock("@rainlanguage/raindex", () => ({
+  RaindexOrderBuilder: vi.fn(),
 }));
 
-const { mockConnectedStore } = await vi.hoisted(() => import('../lib/__mocks__/stores'));
+const { mockConnectedStore } = await vi.hoisted(
+  () => import("../lib/__mocks__/stores"),
+);
 
-vi.mock('$lib/hooks/useRaindexOrderBuilder', () => ({
-	useRaindexOrderBuilder: vi.fn()
+vi.mock("$lib/hooks/useRaindexOrderBuilder", () => ({
+  useRaindexOrderBuilder: vi.fn(),
 }));
 
-vi.mock('$lib/hooks/useRaindexClient', () => ({
-	useRaindexClient: vi.fn()
+vi.mock("$lib/hooks/useRaindexClient", () => ({
+  useRaindexClient: vi.fn(),
 }));
 
-vi.mock('$lib/providers/wallet/useAccount', () => ({
-	useAccount: vi.fn()
+vi.mock("$lib/providers/wallet/useAccount", () => ({
+  useAccount: vi.fn(),
 }));
 
 type DeploymentStepsProps = ComponentProps<DeploymentSteps>;
 
 const mockDeployment = {
-	key: 'flare-sflr-wflr',
-	name: 'SFLR<>WFLR on Flare',
-	description: 'Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.',
-	deposits: [],
-	fields: [],
-	select_tokens: [],
-	deployment: {
-		key: 'flare-sflr-wflr',
-		scenario: {
-			key: 'flare',
-			bindings: {}
-		} as ScenarioCfg,
-		order: {
-			key: 'flare-sflr-wflr',
-			network: {
-				key: 'flare',
-				'chain-id': 14,
-				'network-id': 14,
-				rpc: 'https://rpc.ankr.com/flare',
-				label: 'Flare',
-				currency: 'FLR'
-			},
-			rainlang: {
-				key: 'flare',
-				bindings: {}
-			} as ScenarioCfg,
-			order: {
-				key: 'flare-sflr-wflr',
-				network: {
-					key: 'flare',
-					'chain-id': 14,
-					'network-id': 14,
-					rpc: 'https://rpc.ankr.com/flare',
-					label: 'Flare',
-					currency: 'FLR'
-				},
-				address: '0x0'
-			},
-			raindex: {
-				id: 'flare',
-				address: '0x0'
-			},
-			inputs: [],
-			outputs: []
-		}
-	}
+  key: "flare-sflr-wflr",
+  name: "SFLR<>WFLR on Flare",
+  description: "Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.",
+  deposits: [],
+  fields: [],
+  select_tokens: [],
+  deployment: {
+    key: "flare-sflr-wflr",
+    scenario: {
+      key: "flare",
+      bindings: {},
+    } as ScenarioCfg,
+    order: {
+      key: "flare-sflr-wflr",
+      network: {
+        key: "flare",
+        "chain-id": 14,
+        "network-id": 14,
+        rpc: "https://rpc.ankr.com/flare",
+        label: "Flare",
+        currency: "FLR",
+      },
+      rainlang: {
+        key: "flare",
+        bindings: {},
+      } as ScenarioCfg,
+      order: {
+        key: "flare-sflr-wflr",
+        network: {
+          key: "flare",
+          "chain-id": 14,
+          "network-id": 14,
+          rpc: "https://rpc.ankr.com/flare",
+          label: "Flare",
+          currency: "FLR",
+        },
+        address: "0x0",
+      },
+      raindex: {
+        id: "flare",
+        address: "0x0",
+      },
+      inputs: [],
+      outputs: [],
+    },
+  },
 } as unknown as OrderBuilderDeploymentCfg;
 
 const mockOnDeploy = vi.fn();
 
 const defaultProps: DeploymentStepsProps = {
-	orderDetail: {
-		name: 'SFLR<>WFLR on Flare',
-		description: 'Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.',
-		short_description: 'Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.'
-	},
-	deployment: mockDeployment,
-	wagmiConnected: mockConnectedStore,
-	appKitModal: writable({} as AppKit),
-	onDeploy: mockOnDeploy,
-	account: readable('0x123')
+  orderDetail: {
+    name: "SFLR<>WFLR on Flare",
+    description: "Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.",
+    short_description: "Rotate sFLR (Sceptre staked FLR) and WFLR on Flare.",
+  },
+  deployment: mockDeployment,
+  wagmiConnected: mockConnectedStore,
+  appKitModal: writable({} as AppKit),
+  onDeploy: mockOnDeploy,
+  account: readable("0x123"),
 } as DeploymentStepsProps;
 
-describe('DeploymentSteps', () => {
-	let builderInstance: RaindexOrderBuilder;
-	let mockBuilder: RaindexOrderBuilder;
+describe("DeploymentSteps", () => {
+  let builderInstance: RaindexOrderBuilder;
+  let mockBuilder: RaindexOrderBuilder;
 
-	beforeEach(() => {
-		vi.clearAllMocks();
+  beforeEach(() => {
+    vi.clearAllMocks();
 
-		// Create a mock instance with all the methods
-		builderInstance = {
-			areAllTokensSelected: vi.fn().mockReturnValue({ value: false }),
-			getSelectTokens: vi.fn().mockReturnValue({ value: [] }),
-			getCurrentDeployment: vi.fn().mockReturnValue(mockDeployment),
-			getAllFieldDefinitions: vi.fn().mockReturnValue({ value: [] }),
-			hasAnyDeposit: vi.fn().mockReturnValue({ value: false }),
-			hasAnyVaultId: vi.fn().mockReturnValue(false),
-			getAllTokenInfos: vi.fn().mockResolvedValue({ value: [] }),
-			getAllTokens: vi.fn().mockResolvedValue({
-				value: [
-					{
-						key: 'token1',
-						address: '0x1234567890123456789012345678901234567890',
-						name: 'Test Token 1',
-						symbol: 'TEST1',
-						decimals: 18
-					},
-					{
-						key: 'token2',
-						address: '0x0987654321098765432109876543210987654321',
-						name: 'Another Token',
-						symbol: 'ANOTHER',
-						decimals: 6
-					}
-				]
-			}),
-			getCurrentDeploymentDetails: vi.fn().mockReturnValue({
-				value: {
-					name: 'Test Deployment',
-					description: 'This is a test deployment description'
-				}
-			}),
-			getTokenInfo: vi.fn().mockResolvedValue({
-				value: {
-					name: 'Test Token',
-					symbol: 'TEST',
-					address: '0x123',
-					decimals: 18
-				}
-			}),
-			isSelectTokenSet: vi.fn().mockReturnValue({ value: false }),
-			setSelectToken: vi.fn(),
-			unsetSelectToken: vi.fn(),
-			getDeploymentTransactionArgs: vi.fn(),
-			getAccountBalance: vi.fn().mockResolvedValue({
-				value: '1000000000000000000'
-			})
-		} as unknown as RaindexOrderBuilder;
+    // Create a mock instance with all the methods
+    builderInstance = {
+      areAllTokensSelected: vi.fn().mockReturnValue({ value: false }),
+      getSelectTokens: vi.fn().mockReturnValue({ value: [] }),
+      getCurrentDeployment: vi.fn().mockReturnValue(mockDeployment),
+      getAllFieldDefinitions: vi.fn().mockReturnValue({ value: [] }),
+      hasAnyDeposit: vi.fn().mockReturnValue({ value: false }),
+      hasAnyVaultId: vi.fn().mockReturnValue(false),
+      getAllTokenInfos: vi.fn().mockResolvedValue({ value: [] }),
+      getAllTokens: vi.fn().mockResolvedValue({
+        value: [
+          {
+            key: "token1",
+            address: "0x1234567890123456789012345678901234567890",
+            name: "Test Token 1",
+            symbol: "TEST1",
+            decimals: 18,
+          },
+          {
+            key: "token2",
+            address: "0x0987654321098765432109876543210987654321",
+            name: "Another Token",
+            symbol: "ANOTHER",
+            decimals: 6,
+          },
+        ],
+      }),
+      getCurrentDeploymentDetails: vi.fn().mockReturnValue({
+        value: {
+          name: "Test Deployment",
+          description: "This is a test deployment description",
+        },
+      }),
+      getTokenInfo: vi.fn().mockResolvedValue({
+        value: {
+          name: "Test Token",
+          symbol: "TEST",
+          address: "0x123",
+          decimals: 18,
+        },
+      }),
+      isSelectTokenSet: vi.fn().mockReturnValue({ value: false }),
+      setSelectToken: vi.fn(),
+      unsetSelectToken: vi.fn(),
+      getDeploymentTransactionArgs: vi.fn(),
+      getAccountBalance: vi.fn().mockResolvedValue({
+        value: "1000000000000000000",
+      }),
+    } as unknown as RaindexOrderBuilder;
 
-		mockBuilder = builderInstance;
-		vi.mocked(useRaindexOrderBuilder).mockReturnValue(mockBuilder);
+    mockBuilder = builderInstance;
+    vi.mocked(useRaindexOrderBuilder).mockReturnValue(mockBuilder);
 
-		// Set default mock return value for useAccount
-		vi.mocked(useAccount).mockReturnValue({
-			account: writable(null),
-			matchesAccount: vi.fn()
-		});
-	});
+    // Set default mock return value for useAccount
+    vi.mocked(useAccount).mockReturnValue({
+      account: writable(null),
+      matchesAccount: vi.fn(),
+    });
+  });
 
-	it('shows deployment details when provided', async () => {
-		render(DeploymentSteps, { props: defaultProps });
+  it("shows deployment details when provided", async () => {
+    render(DeploymentSteps, { props: defaultProps });
 
-		await waitFor(() => {
-			expect(screen.getByText('SFLR<>WFLR on Flare')).toBeInTheDocument();
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByText("SFLR<>WFLR on Flare")).toBeInTheDocument();
+    });
+  });
 
-	it('shows select tokens section when tokens need to be selected', async () => {
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: ['token1', 'token2']
-		});
+  it("shows select tokens section when tokens need to be selected", async () => {
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: ["token1", "token2"],
+    });
 
-		render(DeploymentSteps, {
-			props: defaultProps
-		});
+    render(DeploymentSteps, {
+      props: defaultProps,
+    });
 
-		await waitFor(() => {
-			expect(screen.getByText('Select Tokens')).toBeInTheDocument();
-			expect(
-				screen.getByText('Select the tokens that you want to use in your order.')
-			).toBeInTheDocument();
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByText("Select Tokens")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Select the tokens that you want to use in your order.",
+        ),
+      ).toBeInTheDocument();
+    });
+  });
 
-	it('shows wallet connect button when all required fields are filled, but no account exists', async () => {
-		const mockSelectTokens = [
-			{ key: 'token1', name: 'Token 1', description: undefined },
-			{ key: 'token2', name: 'Token 2', description: undefined }
-		];
+  it("shows wallet connect button when all required fields are filled, but no account exists", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+      { key: "token2", name: "Token 2", description: undefined },
+    ];
 
-		// Set up specific mocks for this test
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: mockSelectTokens
-		});
-		(mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
-		(mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
-		(mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
-		(mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
-		(mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
-			value: {
-				deployment: {
-					order: {
-						inputs: [],
-						outputs: []
-					}
-				},
-				deposits: []
-			}
-		});
+    // Set up specific mocks for this test
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
+    (mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
+    (mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
+    (mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
+    (mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
+    (mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
+      value: {
+        deployment: {
+          order: {
+            inputs: [],
+            outputs: [],
+          },
+        },
+        deposits: [],
+      },
+    });
 
-		(mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
-			value: [
-				{
-					address: '0x1',
-					decimals: 18,
-					name: 'Token 1',
-					symbol: 'TKN1'
-				},
-				{
-					address: '0x2',
-					decimals: 18,
-					name: 'Token 2',
-					symbol: 'TKN2'
-				}
-			]
-		});
+    (mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
+      value: [
+        {
+          address: "0x1",
+          decimals: 18,
+          name: "Token 1",
+          symbol: "TKN1",
+        },
+        {
+          address: "0x2",
+          decimals: 18,
+          name: "Token 2",
+          symbol: "TKN2",
+        },
+      ],
+    });
 
-		render(DeploymentSteps, { props: { ...defaultProps, account: readable(null) } });
+    render(DeploymentSteps, {
+      props: { ...defaultProps, account: readable(null) },
+    });
 
-		await waitFor(() => {
-			expect(screen.getByText('Connect')).toBeInTheDocument();
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByText("Connect")).toBeInTheDocument();
+    });
+  });
 
-	it('shows deploy button when all required fields are filled, and account is connected', async () => {
-		const mockSelectTokens = [
-			{ key: 'token1', name: 'Token 1', description: undefined },
-			{ key: 'token2', name: 'Token 2', description: undefined }
-		];
+  it("shows deploy button when all required fields are filled, and account is connected", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+      { key: "token2", name: "Token 2", description: undefined },
+    ];
 
-		// Set up specific mocks for this test
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: mockSelectTokens
-		});
-		(mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
-		(mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
-		(mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
-		(mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
-		(mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
-			value: {
-				deployment: {
-					order: {
-						inputs: [],
-						outputs: []
-					}
-				},
-				deposits: []
-			}
-		});
+    // Set up specific mocks for this test
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
+    (mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
+    (mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
+    (mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
+    (mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
+    (mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
+      value: {
+        deployment: {
+          order: {
+            inputs: [],
+            outputs: [],
+          },
+        },
+        deposits: [],
+      },
+    });
 
-		(mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
-			value: [
-				{
-					address: '0x1',
-					decimals: 18,
-					name: 'Token 1',
-					symbol: 'TKN1'
-				},
-				{
-					address: '0x2',
-					decimals: 18,
-					name: 'Token 2',
-					symbol: 'TKN2'
-				}
-			]
-		});
+    (mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
+      value: [
+        {
+          address: "0x1",
+          decimals: 18,
+          name: "Token 1",
+          symbol: "TKN1",
+        },
+        {
+          address: "0x2",
+          decimals: 18,
+          name: "Token 2",
+          symbol: "TKN2",
+        },
+      ],
+    });
 
-		render(DeploymentSteps, { props: defaultProps });
+    render(DeploymentSteps, { props: defaultProps });
 
-		await waitFor(() => {
-			expect(screen.getByText('Deploy Order')).toBeInTheDocument();
-		});
-	});
-	it('refreshes field descriptions when tokens change', async () => {
-		const mockSelectTokens = [
-			{ key: 'token1', name: 'Token 1', description: undefined },
-			{ key: 'token2', name: 'Token 2', description: undefined }
-		];
+    await waitFor(() => {
+      expect(screen.getByText("Deploy Order")).toBeInTheDocument();
+    });
+  });
+  it("refreshes field descriptions when tokens change", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+      { key: "token2", name: "Token 2", description: undefined },
+    ];
 
-		// Set up specific mocks for this test
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: mockSelectTokens
-		});
-		(mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
-		(mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
-		(mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
-		(mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
-		(mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
-			value: {
-				deployment: {
-					order: {
-						inputs: [],
-						outputs: []
-					}
-				},
-				deposits: []
-			}
-		});
+    // Set up specific mocks for this test
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
+    (mockBuilder.getTokenInfo as Mock).mockImplementation(() => {});
+    (mockBuilder.areAllTokensSelected as Mock).mockReturnValue({ value: true });
+    (mockBuilder.isSelectTokenSet as Mock).mockReturnValue({ value: false });
+    (mockBuilder.setSelectToken as Mock).mockImplementation(() => {});
+    (mockBuilder.getCurrentDeployment as Mock).mockReturnValue({
+      value: {
+        deployment: {
+          order: {
+            inputs: [],
+            outputs: [],
+          },
+        },
+        deposits: [],
+      },
+    });
 
-		(mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
-			value: [
-				{
-					address: '0x1',
-					decimals: 18,
-					name: 'Token 1',
-					symbol: 'TKN1'
-				},
-				{
-					address: '0x2',
-					decimals: 18,
-					name: 'Token 2',
-					symbol: 'TKN2'
-				}
-			]
-		});
+    (mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
+      value: [
+        {
+          address: "0x1",
+          decimals: 18,
+          name: "Token 1",
+          symbol: "TKN1",
+        },
+        {
+          address: "0x2",
+          decimals: 18,
+          name: "Token 2",
+          symbol: "TKN2",
+        },
+      ],
+    });
 
-		const user = userEvent.setup();
+    const user = userEvent.setup();
 
-		render(DeploymentSteps, {
-			props: defaultProps
-		});
+    render(DeploymentSteps, {
+      props: defaultProps,
+    });
 
-		await waitFor(() => {
-			expect(mockBuilder.areAllTokensSelected).toHaveBeenCalled();
-		});
+    await waitFor(() => {
+      expect(mockBuilder.areAllTokensSelected).toHaveBeenCalled();
+    });
 
-		await waitFor(() => {
-			expect(screen.getByText('Select Tokens')).toBeInTheDocument();
-			expect(screen.getByText('Token 1')).toBeInTheDocument();
-			expect(screen.getByText('Token 2')).toBeInTheDocument();
-		});
+    await waitFor(() => {
+      expect(screen.getByText("Select Tokens")).toBeInTheDocument();
+      expect(screen.getByText("Token 1")).toBeInTheDocument();
+      expect(screen.getByText("Token 2")).toBeInTheDocument();
+    });
 
-		const selectTokenInput = screen.getByText('Token 1');
-		(mockBuilder.getTokenInfo as Mock).mockResolvedValue({
-			value: {
-				address: '0x1',
-				decimals: 18,
-				name: 'Token 1',
-				symbol: 'TKN1'
-			}
-		});
-		await user.type(selectTokenInput, '0x1');
+    const selectTokenInput = screen.getByText("Token 1");
+    (mockBuilder.getTokenInfo as Mock).mockResolvedValue({
+      value: {
+        address: "0x1",
+        decimals: 18,
+        name: "Token 1",
+        symbol: "TKN1",
+      },
+    });
+    await user.type(selectTokenInput, "0x1");
 
-		const selectTokenOutput = screen.getByText('Token 2');
-		(mockBuilder.getTokenInfo as Mock).mockResolvedValue({
-			value: {
-				address: '0x2',
-				decimals: 18,
-				name: 'Token 2',
-				symbol: 'TKN2'
-			}
-		});
-		await user.type(selectTokenOutput, '0x2');
+    const selectTokenOutput = screen.getByText("Token 2");
+    (mockBuilder.getTokenInfo as Mock).mockResolvedValue({
+      value: {
+        address: "0x2",
+        decimals: 18,
+        name: "Token 2",
+        symbol: "TKN2",
+      },
+    });
+    await user.type(selectTokenOutput, "0x2");
 
-		await waitFor(() => {
-			expect(mockBuilder.getAllTokenInfos).toHaveBeenCalled();
-		});
+    await waitFor(() => {
+      expect(mockBuilder.getAllTokenInfos).toHaveBeenCalled();
+    });
 
-		const customAddressButtons = screen.getAllByTestId('custom-mode-button');
-		await user.click(customAddressButtons[customAddressButtons.length - 1]);
-		const customInputs = screen.getAllByPlaceholderText('Enter token address (0x...)');
-		const lastCustomInput = customInputs[customInputs.length - 1];
-		(mockBuilder.getTokenInfo as Mock).mockResolvedValue({
-			value: {
-				address: '0x3',
-				decimals: 18,
-				name: 'Token 3',
-				symbol: 'TKN3'
-			}
-		});
-		await user.type(lastCustomInput, '0x3');
+    const customAddressButtons = screen.getAllByTestId("custom-mode-button");
+    await user.click(customAddressButtons[customAddressButtons.length - 1]);
+    const customInputs = screen.getAllByPlaceholderText(
+      "Enter token address (0x...)",
+    );
+    const lastCustomInput = customInputs[customInputs.length - 1];
+    (mockBuilder.getTokenInfo as Mock).mockResolvedValue({
+      value: {
+        address: "0x3",
+        decimals: 18,
+        name: "Token 3",
+        symbol: "TKN3",
+      },
+    });
+    await user.type(lastCustomInput, "0x3");
 
-		(mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
-			value: [
-				{
-					address: '0x3',
-					decimals: 18,
-					name: 'Token 3',
-					symbol: 'TKN3'
-				},
-				{
-					address: '0x2',
-					decimals: 18,
-					name: 'Token 2',
-					symbol: 'TKN2'
-				}
-			]
-		});
+    (mockBuilder.getAllTokenInfos as Mock).mockResolvedValue({
+      value: [
+        {
+          address: "0x3",
+          decimals: 18,
+          name: "Token 3",
+          symbol: "TKN3",
+        },
+        {
+          address: "0x2",
+          decimals: 18,
+          name: "Token 2",
+          symbol: "TKN2",
+        },
+      ],
+    });
 
-		await waitFor(() => {
-			expect(mockBuilder.getAllTokenInfos).toHaveBeenCalled();
-		});
-	});
+    await waitFor(() => {
+      expect(mockBuilder.getAllTokenInfos).toHaveBeenCalled();
+    });
+  });
 
-	it('passes correct arguments to onDeploy prop', async () => {
-		// Override the mock for this test
-		builderInstance.areAllTokensSelected = vi.fn().mockReturnValue({ value: true });
-		vi.mocked(useRaindexOrderBuilder).mockReturnValue(builderInstance);
+  it("passes correct arguments to onDeploy prop", async () => {
+    // Override the mock for this test
+    builderInstance.areAllTokensSelected = vi
+      .fn()
+      .mockReturnValue({ value: true });
+    vi.mocked(useRaindexOrderBuilder).mockReturnValue(builderInstance);
 
-		const mockRaindexClient = {} as unknown as RaindexClient;
-		vi.mocked(useRaindexClient).mockReturnValue(mockRaindexClient);
+    const mockRaindexClient = {} as unknown as RaindexClient;
+    vi.mocked(useRaindexClient).mockReturnValue(mockRaindexClient);
 
-		const propsWithMockHandlers = {
-			...defaultProps,
-			account: readable('0xTestAccount') as Account
-		};
+    const propsWithMockHandlers = {
+      ...defaultProps,
+      account: readable("0xTestAccount") as Account,
+    };
 
-		const user = userEvent.setup();
-		render(DeploymentSteps, { props: propsWithMockHandlers });
+    const user = userEvent.setup();
+    render(DeploymentSteps, { props: propsWithMockHandlers });
 
-		const deployButton = screen.getByText('Deploy Order');
-		await user.click(deployButton);
+    const deployButton = screen.getByText("Deploy Order");
+    await user.click(deployButton);
 
-		await waitFor(() => {
-			expect(mockOnDeploy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockOnDeploy).toHaveBeenCalledTimes(1);
 
-			const [raindexClient, builderArg] = mockOnDeploy.mock.calls[0];
+      const [raindexClient, builderArg] = mockOnDeploy.mock.calls[0];
 
-			expect(builderArg).toBe(mockBuilder);
-			expect(raindexClient).toBe(mockRaindexClient);
-		});
-	});
+      expect(builderArg).toBe(mockBuilder);
+      expect(raindexClient).toBe(mockRaindexClient);
+    });
+  });
 
-	it('calls getTokenInfoAndFetchBalance for each selected token on account change', async () => {
-		const mockSelectTokens = [
-			{ key: 'token1', name: 'Token 1', description: undefined },
-			{ key: 'token2', name: 'Token 2', description: undefined }
-		];
+  it("calls getTokenInfoAndFetchBalance for each selected token on account change", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+      { key: "token2", name: "Token 2", description: undefined },
+    ];
 
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: mockSelectTokens
-		});
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
 
-		const accountStore = writable<`0x${string}` | null>('0x123');
+    const accountStore = writable<`0x${string}` | null>("0x123");
 
-		const propsWithAccountStore = {
-			...defaultProps,
-			account: accountStore
-		};
+    const propsWithAccountStore = {
+      ...defaultProps,
+      account: accountStore,
+    };
 
-		render(DeploymentSteps, { props: propsWithAccountStore });
+    render(DeploymentSteps, { props: propsWithAccountStore });
 
-		await waitFor(() => {
-			expect(mockBuilder.getSelectTokens).toHaveBeenCalled();
-		});
-		vi.clearAllMocks();
+    await waitFor(() => {
+      expect(mockBuilder.getSelectTokens).toHaveBeenCalled();
+    });
+    vi.clearAllMocks();
 
-		accountStore.set('0x456');
+    accountStore.set("0x456");
 
-		await waitFor(() => {
-			expect(mockBuilder.getTokenInfo).toHaveBeenCalledTimes(2);
-			expect(mockBuilder.getTokenInfo).toHaveBeenCalledWith('token1');
-			expect(mockBuilder.getTokenInfo).toHaveBeenCalledWith('token2');
-		});
-		await waitFor(() => {
-			expect(mockBuilder.getAccountBalance).toHaveBeenCalledTimes(2);
-		});
-	});
+    await waitFor(() => {
+      expect(mockBuilder.getTokenInfo).toHaveBeenCalledTimes(2);
+      expect(mockBuilder.getTokenInfo).toHaveBeenCalledWith("token1");
+      expect(mockBuilder.getTokenInfo).toHaveBeenCalledWith("token2");
+    });
+    await waitFor(() => {
+      expect(mockBuilder.getAccountBalance).toHaveBeenCalledTimes(2);
+    });
+  });
 
-	it('clears token balances when account becomes null', async () => {
-		const mockSelectTokens = [{ key: 'token1', name: 'Token 1', description: undefined }];
+  it("clears token balances when account becomes null", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+    ];
 
-		(mockBuilder.getSelectTokens as Mock).mockReturnValue({
-			value: mockSelectTokens
-		});
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
 
-		const accountStore = writable<`0x${string}` | null>('0x123');
+    const accountStore = writable<`0x${string}` | null>("0x123");
 
-		const propsWithAccountStore = {
-			...defaultProps,
-			account: accountStore
-		};
+    const propsWithAccountStore = {
+      ...defaultProps,
+      account: accountStore,
+    };
 
-		render(DeploymentSteps, { props: propsWithAccountStore });
+    render(DeploymentSteps, { props: propsWithAccountStore });
 
-		await waitFor(() => {
-			expect(mockBuilder.getSelectTokens).toHaveBeenCalled();
-		});
+    await waitFor(() => {
+      expect(mockBuilder.getSelectTokens).toHaveBeenCalled();
+    });
 
-		vi.clearAllMocks();
+    vi.clearAllMocks();
 
-		accountStore.set(null);
+    accountStore.set(null);
 
-		// await new Promise((resolve) => setTimeout(resolve, 100));
-		expect(mockBuilder.getTokenInfo).not.toHaveBeenCalled();
-		expect(mockBuilder.getAccountBalance).not.toHaveBeenCalled();
-	});
+    // await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(mockBuilder.getTokenInfo).not.toHaveBeenCalled();
+    expect(mockBuilder.getAccountBalance).not.toHaveBeenCalled();
+  });
 });

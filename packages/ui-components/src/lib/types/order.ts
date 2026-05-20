@@ -1,12 +1,12 @@
-import type { NameAndDescriptionCfg } from '@rainlanguage/raindex';
+import type { NameAndDescriptionCfg } from "@rainlanguage/raindex";
 
 export type ValidOrderDetail = {
-	details: NameAndDescriptionCfg;
-	name: string;
-	dotrain: string;
+  details: NameAndDescriptionCfg;
+  name: string;
+  dotrain: string;
 };
 
 export type InvalidOrderDetail = {
-	name: string;
-	error: string;
+  name: string;
+  error: string;
 };

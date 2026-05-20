@@ -1,5 +1,5 @@
-import { getRegistryContext } from './context';
-import type { RegistryManager } from './RegistryManager';
+import { getRegistryContext } from "./context";
+import type { RegistryManager } from "./RegistryManager";
 
 /**
  * Hook to access registry manager information from context
@@ -7,32 +7,32 @@ import type { RegistryManager } from './RegistryManager';
  * @returns An object containing the registry manager
  */
 export function useRegistry() {
-	const registry = getRegistryContext();
-	return registry;
+  const registry = getRegistryContext();
+  return registry;
 }
 
 if (import.meta.vitest) {
-	const { describe, it, expect, vi, beforeEach } = import.meta.vitest;
+  const { describe, it, expect, vi, beforeEach } = import.meta.vitest;
 
-	vi.mock('./context', () => ({
-		getRegistryContext: vi.fn()
-	}));
+  vi.mock("./context", () => ({
+    getRegistryContext: vi.fn(),
+  }));
 
-	describe('useRegistry', () => {
-		const mockGetRegistryContext = vi.mocked(getRegistryContext);
+  describe("useRegistry", () => {
+    const mockGetRegistryContext = vi.mocked(getRegistryContext);
 
-		beforeEach(() => {
-			mockGetRegistryContext.mockReset();
-		});
+    beforeEach(() => {
+      mockGetRegistryContext.mockReset();
+    });
 
-		it('should return registry', () => {
-			const mockRegistry = {} as RegistryManager;
-			mockGetRegistryContext.mockReturnValue(mockRegistry);
+    it("should return registry", () => {
+      const mockRegistry = {} as RegistryManager;
+      mockGetRegistryContext.mockReturnValue(mockRegistry);
 
-			const result = useRegistry();
+      const result = useRegistry();
 
-			expect(mockGetRegistryContext).toHaveBeenCalled();
-			expect(result).toEqual(mockRegistry);
-		});
-	});
+      expect(mockGetRegistryContext).toHaveBeenCalled();
+      expect(result).toEqual(mockRegistry);
+    });
+  });
 }
