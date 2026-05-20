@@ -17,15 +17,14 @@
   },
   "scripts": {
     "build": "npm run build --workspaces",
-    "build:orderbook": "npm run build -w @rainlanguage/orderbook",
+    "build:raindex": "npm run build -w @rainlanguage/raindex",
     "build:ui": "npm run build -w @rainlanguage/ui-components && npm run build -w @rainlanguage/webapp",
     "dev": "npm run dev --workspaces",
     "test": "npm run test --workspaces",
     "lint:all": "npm run lint --workspaces --if-present",
     "format:all": "npm run format --workspaces --if-present",
-    "format-check:all": "npm run format-check --workspaces --if-present",
     "check:all": "npm run check --workspaces --if-present",
-    "lint-format-check:all": "npm run lint:all && npm run format-check:all && npm run check:all"
+    "lint-format-check:all": "npm run lint:all && npm run format:all && npm run check:all"
   },
   "devDependencies": {
     "@square/svelte-store": "1.0.18",
@@ -72,7 +71,7 @@
   ],
   "dependencies": {
     "@fast-check/vitest": "0.2.0",
-    "@rainlanguage/orderbook": "workspace:*",
+    "@rainlanguage/raindex": "workspace:*",
     "@rainlanguage/sqlite-web": "^0.0.2",
     "@rainlanguage/ui-components": "workspace:*",
     "@reown/appkit": "1.6.4",

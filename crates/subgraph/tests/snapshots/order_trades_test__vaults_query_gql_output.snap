@@ -39,7 +39,7 @@ query SgOrderTradesListQuery($first: Int, $id: Bytes!, $skip: Int, $timestampGte
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -77,7 +77,7 @@ query SgOrderTradesListQuery($first: Int, $id: Bytes!, $skip: Int, $timestampGte
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -87,7 +87,7 @@ query SgOrderTradesListQuery($first: Int, $id: Bytes!, $skip: Int, $timestampGte
       }
     }
     timestamp
-    orderbook {
+    raindex {
       id
     }
   }

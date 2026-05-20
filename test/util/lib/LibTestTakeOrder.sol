@@ -19,7 +19,7 @@ import {IParserV2} from "rain.interpreter.interface/interface/IParserV2.sol";
 import {SignedContextV1} from "rain.interpreter.interface/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
-import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
+import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {
     /// Extract OrderV4 from the first log entry emitted by addOrder4.
@@ -30,7 +30,7 @@ library LibTestTakeOrder {
 
     /// Parse an expression string, add the order as `owner`, and return the
     /// resulting OrderV4. Uses deploy constants for interpreter/store/parser
-    /// and the orderbook.
+    /// and the raindex.
     function addOrderWithExpression(
         Vm vm,
         address owner,
@@ -41,7 +41,7 @@ library LibTestTakeOrder {
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
         IParserV2 parser = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
-        IRaindexV6 orderbook = IRaindexV6(LibOrderBookDeploy.ORDERBOOK_DEPLOYED_ADDRESS);
+        IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         bytes memory bytecode = parser.parse2(expression);
         IOV2[] memory inputs = new IOV2[](1);
@@ -58,7 +58,7 @@ library LibTestTakeOrder {
 
         vm.prank(owner);
         vm.recordLogs();
-        orderbook.addOrder4(orderConfig, new TaskV2[](0));
+        raindex.addOrder4(orderConfig, new TaskV2[](0));
         return extractOrderFromLogs(vm.getRecordedLogs());
     }
 

@@ -10,8 +10,8 @@ const END_TS_BODY: &str = "\nAND tws.block_timestamp <= {param}\n";
 
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
+const CLEAR_EVENTS_RAINDEXS_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXS_CLAUSE*/";
+const CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
 
 const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
 
@@ -19,7 +19,7 @@ const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
 pub struct FetchOwnerTradesArgs {
     pub owner: Address,
     pub chain_ids: Vec<u32>,
-    pub orderbook_addresses: Vec<Address>,
+    pub raindex_addresses: Vec<Address>,
     pub time_filter: TimeFilter,
     pub pagination: PaginationParams,
 }
@@ -35,14 +35,14 @@ pub fn build_fetch_owner_trades_stmt(
         &mut stmt,
         args.owner,
         &args.chain_ids,
-        &args.orderbook_addresses,
+        &args.raindex_addresses,
         &args.time_filter,
         START_TS_BODY,
         END_TS_BODY,
     )?;
 
     let chain_ids_iter = || filters.chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || filters.orderbooks.iter().cloned().map(SqlValue::from);
+    let raindexs_iter = || filters.raindexs.iter().cloned().map(SqlValue::from);
 
     stmt.bind_list_clause(
         CLEAR_EVENTS_CHAIN_IDS_CLAUSE,
@@ -50,9 +50,9 @@ pub fn build_fetch_owner_trades_stmt(
         chain_ids_iter(),
     )?;
     stmt.bind_list_clause(
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE,
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        CLEAR_EVENTS_RAINDEXS_CLAUSE,
+        CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY,
+        raindexs_iter(),
     )?;
 
     if let Some(page) = args.pagination.page {
@@ -75,7 +75,7 @@ pub fn build_fetch_owner_trades_stmt(
 mod tests {
     use super::*;
     use crate::local_db::query::fetch_owner_trades_common::{
-        END_TS_CLAUSE, START_TS_CLAUSE, TAKE_ORDERS_CHAIN_IDS_CLAUSE, TAKE_ORDERS_ORDERBOOKS_CLAUSE,
+        END_TS_CLAUSE, START_TS_CLAUSE, TAKE_ORDERS_CHAIN_IDS_CLAUSE, TAKE_ORDERS_RAINDEXS_CLAUSE,
     };
     use alloy::{hex, primitives::address};
 
@@ -85,7 +85,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![137, 1, 137],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
             pagination: PaginationParams::default(),
         })
@@ -98,21 +98,21 @@ mod tests {
     }
 
     #[test]
-    fn builds_with_orderbook_address_filters() {
+    fn builds_with_raindex_address_filters() {
         let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         let ob = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![137],
-            orderbook_addresses: vec![ob],
+            raindex_addresses: vec![ob],
             time_filter: TimeFilter::default(),
             pagination: PaginationParams::default(),
         })
         .unwrap();
-        assert!(stmt.sql.contains("t.orderbook_address IN"));
-        assert!(stmt.sql.contains("c.orderbook_address IN"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_ORDERBOOKS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_ORDERBOOKS_CLAUSE));
+        assert!(stmt.sql.contains("t.raindex_address IN"));
+        assert!(stmt.sql.contains("c.raindex_address IN"));
+        assert!(!stmt.sql.contains(TAKE_ORDERS_RAINDEXS_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_EVENTS_RAINDEXS_CLAUSE));
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![137],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter {
                 start: Some(1000),
                 end: Some(2000),
@@ -141,7 +141,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
             pagination: PaginationParams::default(),
         })
@@ -159,7 +159,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
             pagination: PaginationParams {
                 page: Some(2),
@@ -181,7 +181,7 @@ mod tests {
         let result = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter {
                 start: Some(2000),
                 end: Some(1000),
@@ -197,7 +197,7 @@ mod tests {
         let stmt = build_fetch_owner_trades_stmt(&FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: TimeFilter::default(),
             pagination: PaginationParams::default(),
         })

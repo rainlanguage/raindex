@@ -5,15 +5,15 @@ pragma solidity =0.8.25;
 import {Script} from "forge-std/Script.sol";
 import {LibCodeGen} from "rain.sol.codegen/lib/LibCodeGen.sol";
 import {LibFs} from "rain.sol.codegen/lib/LibFs.sol";
-import {OrderBookV6} from "../src/concrete/ob/OrderBookV6.sol";
-import {OrderBookV6SubParser} from "../src/concrete/parser/OrderBookV6SubParser.sol";
-import {LibOrderBookSubParser, EXTERN_PARSE_META_BUILD_DEPTH} from "../src/lib/LibOrderBookSubParser.sol";
+import {RaindexV6} from "../src/concrete/raindex/RaindexV6.sol";
+import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
+import {LibRaindexSubParser, EXTERN_PARSE_META_BUILD_DEPTH} from "../src/lib/LibRaindexSubParser.sol";
 import {LibGenParseMeta} from "rain.interpreter.interface/lib/codegen/LibGenParseMeta.sol";
 import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
 import {ROUTE_PROCESSOR_4_CREATION_CODE} from "../src/lib/deploy/LibRouteProcessor4CreationCode.sol";
-import {GenericPoolOrderBookV6ArbOrderTaker} from "../src/concrete/arb/GenericPoolOrderBookV6ArbOrderTaker.sol";
-import {RouteProcessorOrderBookV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorOrderBookV6ArbOrderTaker.sol";
-import {GenericPoolOrderBookV6FlashBorrower} from "../src/concrete/arb/GenericPoolOrderBookV6FlashBorrower.sol";
+import {GenericPoolRaindexV6ArbOrderTaker} from "../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
+import {RouteProcessorRaindexV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
+import {GenericPoolRaindexV6FlashBorrower} from "../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 
 contract BuildPointers is Script {
     function addressConstantString(address addr) internal pure returns (string memory) {
@@ -27,20 +27,17 @@ contract BuildPointers is Script {
         );
     }
 
-    function buildOrderBookV6Pointers() internal {
-        address deployed = LibRainDeploy.deployZoltu(type(OrderBookV6).creationCode);
+    function buildRaindexV6Pointers() internal {
+        address deployed = LibRainDeploy.deployZoltu(type(RaindexV6).creationCode);
 
         LibFs.buildFileForContract(
             vm,
             deployed,
-            "OrderBookV6",
+            "RaindexV6",
             string.concat(
                 addressConstantString(deployed),
                 LibCodeGen.bytesConstantString(
-                    vm,
-                    "/// @dev The creation bytecode of the contract.",
-                    "CREATION_CODE",
-                    type(OrderBookV6).creationCode
+                    vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", type(RaindexV6).creationCode
                 ),
                 LibCodeGen.bytesConstantString(
                     vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
@@ -49,11 +46,11 @@ contract BuildPointers is Script {
         );
     }
 
-    function buildOrderBookSubParserPointers() internal {
-        address deployed = LibRainDeploy.deployZoltu(type(OrderBookV6SubParser).creationCode);
-        OrderBookV6SubParser subParser = OrderBookV6SubParser(deployed);
+    function buildRaindexSubParserPointers() internal {
+        address deployed = LibRainDeploy.deployZoltu(type(RaindexV6SubParser).creationCode);
+        RaindexV6SubParser subParser = RaindexV6SubParser(deployed);
 
-        string memory name = "OrderBookV6SubParser";
+        string memory name = "RaindexV6SubParser";
 
         LibFs.buildFileForContract(
             vm,
@@ -66,7 +63,7 @@ contract BuildPointers is Script {
                         vm,
                         "/// @dev The creation bytecode of the contract.",
                         "CREATION_CODE",
-                        type(OrderBookV6SubParser).creationCode
+                        type(RaindexV6SubParser).creationCode
                     ),
                     LibCodeGen.bytesConstantString(
                         vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
@@ -75,7 +72,7 @@ contract BuildPointers is Script {
                 string.concat(
                     LibCodeGen.describedByMetaHashConstantString(vm, name),
                     LibGenParseMeta.parseMetaConstantString(
-                        vm, LibOrderBookSubParser.authoringMetaV2(), EXTERN_PARSE_META_BUILD_DEPTH
+                        vm, LibRaindexSubParser.authoringMetaV2(), EXTERN_PARSE_META_BUILD_DEPTH
                     ),
                     LibCodeGen.subParserWordParsersConstantString(vm, subParser),
                     LibCodeGen.operandHandlerFunctionPointersConstantString(vm, subParser),
@@ -102,12 +99,12 @@ contract BuildPointers is Script {
     }
 
     function buildGenericPoolArbOrderTakerPointers() internal {
-        address deployed = LibRainDeploy.deployZoltu(type(GenericPoolOrderBookV6ArbOrderTaker).creationCode);
+        address deployed = LibRainDeploy.deployZoltu(type(GenericPoolRaindexV6ArbOrderTaker).creationCode);
 
         LibFs.buildFileForContract(
             vm,
             deployed,
-            "GenericPoolOrderBookV6ArbOrderTaker",
+            "GenericPoolRaindexV6ArbOrderTaker",
             string.concat(
                 addressConstantString(deployed),
                 LibCodeGen.bytesConstantString(
@@ -118,12 +115,12 @@ contract BuildPointers is Script {
     }
 
     function buildRouteProcessorArbOrderTakerPointers() internal {
-        address deployed = LibRainDeploy.deployZoltu(type(RouteProcessorOrderBookV6ArbOrderTaker).creationCode);
+        address deployed = LibRainDeploy.deployZoltu(type(RouteProcessorRaindexV6ArbOrderTaker).creationCode);
 
         LibFs.buildFileForContract(
             vm,
             deployed,
-            "RouteProcessorOrderBookV6ArbOrderTaker",
+            "RouteProcessorRaindexV6ArbOrderTaker",
             string.concat(
                 addressConstantString(deployed),
                 LibCodeGen.bytesConstantString(
@@ -134,12 +131,12 @@ contract BuildPointers is Script {
     }
 
     function buildGenericPoolFlashBorrowerPointers() internal {
-        address deployed = LibRainDeploy.deployZoltu(type(GenericPoolOrderBookV6FlashBorrower).creationCode);
+        address deployed = LibRainDeploy.deployZoltu(type(GenericPoolRaindexV6FlashBorrower).creationCode);
 
         LibFs.buildFileForContract(
             vm,
             deployed,
-            "GenericPoolOrderBookV6FlashBorrower",
+            "GenericPoolRaindexV6FlashBorrower",
             string.concat(
                 addressConstantString(deployed),
                 LibCodeGen.bytesConstantString(
@@ -152,8 +149,8 @@ contract BuildPointers is Script {
     function run() external {
         LibRainDeploy.etchZoltuFactory(vm);
 
-        buildOrderBookV6Pointers();
-        buildOrderBookSubParserPointers();
+        buildRaindexV6Pointers();
+        buildRaindexSubParserPointers();
         buildRouteProcessor4Pointers();
         buildGenericPoolArbOrderTakerPointers();
         buildRouteProcessorArbOrderTakerPointers();

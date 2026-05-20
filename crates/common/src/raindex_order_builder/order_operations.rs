@@ -10,13 +10,11 @@ use rain_metaboard_subgraph::metaboard_client::{
 };
 use rain_metaboard_subgraph::types::metas::BigInt as MetaBigInt;
 use rain_metadata::RainMetaDocumentV1Item;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     order::{OrderIOCfg, VaultType},
-    orderbook::OrderbookCfg,
+    raindex::RaindexCfg,
 };
-use rain_orderbook_bindings::{
-    IRaindexV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
-};
+use raindex_bindings::{IRaindexV6::deposit4Call, Raindex::multicallCall, IERC20::approveCall};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use url::Url;
 
@@ -79,7 +77,7 @@ pub struct ExternalCall {
 pub struct DeploymentTransactionArgs {
     pub approvals: Vec<ExtendedApprovalCalldata>,
     pub deployment_calldata: Bytes,
-    pub orderbook_address: Address,
+    pub raindex_address: Address,
     pub chain_id: u32,
     pub emit_meta_call: Option<ExternalCall>,
 }
@@ -98,24 +96,24 @@ pub struct VaultAndDeposit {
 }
 
 impl RaindexOrderBuilder {
-    fn get_orderbook(&self) -> Result<Arc<OrderbookCfg>, RaindexOrderBuilderError> {
+    fn get_raindex(&self) -> Result<Arc<RaindexCfg>, RaindexOrderBuilderError> {
         let deployment = self.get_current_deployment()?;
         deployment
             .deployment
             .as_ref()
             .order
             .as_ref()
-            .orderbook
+            .raindex
             .as_ref()
-            .ok_or(RaindexOrderBuilderError::OrderbookNotFound)
+            .ok_or(RaindexOrderBuilderError::RaindexNotFound)
             .cloned()
     }
 
     fn get_transaction_args(&self) -> Result<TransactionArgs, RaindexOrderBuilderError> {
-        let orderbook = self.get_orderbook()?;
+        let raindex = self.get_raindex()?;
         Ok(TransactionArgs {
-            orderbook_address: orderbook.address,
-            rpcs: orderbook
+            raindex_address: raindex.address,
+            rpcs: raindex
                 .network
                 .rpcs
                 .clone()
@@ -230,7 +228,7 @@ impl RaindexOrderBuilder {
                 .address;
 
             let erc20 = ERC20::new(rpcs, token);
-            let allowance = erc20.allowance(owner, tx_args.orderbook_address).await?;
+            let allowance = erc20.allowance(owner, tx_args.raindex_address).await?;
 
             results.push(TokenAllowance { token, allowance });
         }
@@ -272,7 +270,7 @@ impl RaindexOrderBuilder {
 
             if !allowance_float.eq(*deposit_amount)? {
                 let calldata = approveCall {
-                    spender: tx_args.orderbook_address,
+                    spender: tx_args.raindex_address,
                     amount: deposit_amount.to_fixed_decimal(decimals)?,
                 }
                 .abi_encode();
@@ -575,12 +573,12 @@ impl RaindexOrderBuilder {
         Ok(DeploymentTransactionArgs {
             approvals,
             deployment_calldata,
-            orderbook_address: deployment
+            raindex_address: deployment
                 .deployment
                 .order
-                .orderbook
+                .raindex
                 .as_ref()
-                .ok_or(RaindexOrderBuilderError::OrderbookNotFound)?
+                .ok_or(RaindexOrderBuilderError::RaindexNotFound)?
                 .address,
             chain_id: deployment.deployment.order.network.chain_id,
             emit_meta_call,
@@ -589,9 +587,8 @@ impl RaindexOrderBuilder {
 
     fn get_metaboard_client(&self) -> Result<MetaboardSubgraphClient, RaindexOrderBuilderError> {
         let deployment = self.get_current_deployment()?;
-        let orderbook_yaml = self.dotrain_order.orderbook_yaml();
-        let metaboard_cfg =
-            orderbook_yaml.get_metaboard(&deployment.deployment.order.network.key)?;
+        let raindex_yaml = self.dotrain_order.raindex_yaml();
+        let metaboard_cfg = raindex_yaml.get_metaboard(&deployment.deployment.order.network.key)?;
         Ok(MetaboardSubgraphClient::new(metaboard_cfg.url.clone()))
     }
 

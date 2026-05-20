@@ -28,7 +28,7 @@ mod wasm_tests {
         let tx_hash = b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
         let args = FetchTradesByTxArgs {
             chain_ids: vec![137, 42161],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             tx_hash,
         };
 

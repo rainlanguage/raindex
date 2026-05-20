@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/svelte';
 import TransactionConfirmationModal from '$lib/components/TransactionConfirmationModal.svelte';
 import type { TransactionConfirmationProps } from '@rainlanguage/ui-components';
-import type { RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexOrder } from '@rainlanguage/raindex';
 import { handleWalletConfirmation } from '$lib/services/handleWalletConfirmation';
 
 vi.mock('$lib/services/handleWalletConfirmation', () => ({
@@ -20,7 +20,7 @@ describe('TransactionConfirmationModal', () => {
 		owner: '0x4',
 		outputs: [],
 		inputs: [],
-		orderbook: 0x5,
+		raindex: 0x5,
 		active: true,
 		timestampAdded: BigInt(1234567890),
 		tradesCount: 0

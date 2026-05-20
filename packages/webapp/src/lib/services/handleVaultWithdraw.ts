@@ -1,4 +1,4 @@
-import type { Float, RaindexClient, RaindexVault } from '@rainlanguage/orderbook';
+import type { Float, RaindexClient, RaindexVault } from '@rainlanguage/raindex';
 import { type Hex } from 'viem';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 import type {
@@ -45,7 +45,7 @@ export async function handleVaultWithdraw(deps: VaultWithdrawHandlerDependencies
 					modalTitle: `Withdrawing ${amount.format().value} ${vault.token.symbol}...`,
 					args: {
 						entity: vault,
-						toAddress: vault.orderbook,
+						toAddress: vault.raindex,
 						chainId: vault.chainId,
 						onConfirm: (txHash: Hex) => {
 							manager.createWithdrawTransaction({

@@ -1,7 +1,7 @@
 use crate::execute::Execute;
 use anyhow::Result;
 use clap::Parser;
-use rain_orderbook_subgraph_client::validate::validate_subgraph_schema;
+use raindex_subgraph_client::validate::validate_subgraph_schema;
 
 #[derive(Parser)]
 pub enum Subgraph {

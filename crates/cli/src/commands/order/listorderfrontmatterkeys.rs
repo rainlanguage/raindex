@@ -2,7 +2,7 @@ use crate::execute::Execute;
 use crate::output::{output, SupportedOutputEncoding};
 use anyhow::{anyhow, Result};
 use clap::Parser;
-use rain_orderbook_common::dotrain_order::DotrainOrder;
+use raindex_common::dotrain_order::DotrainOrder;
 use std::fs::read_to_string;
 use std::path::PathBuf;
 
@@ -71,7 +71,7 @@ impl Execute for ListOrderFrontmatterKeys {
 #[cfg(test)]
 mod tests {
     use clap::CommandFactory;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::spec_version::SpecVersion;
     use std::str::FromStr;
     use tempfile::NamedTempFile;
 
@@ -119,7 +119,7 @@ mod tests {
         );
     }
 
-    fn get_test_dotrain(orderbook_key: &str) -> String {
+    fn get_test_dotrain(raindex_key: &str) -> String {
         format!(
             "
 version: {spec_version}
@@ -139,7 +139,7 @@ rainlangs:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
-orderbooks:
+raindexes:
     {}:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
@@ -197,14 +197,14 @@ _ _: 0 0;
 :;
 #handle-add-order
 :;",
-            orderbook_key,
+            raindex_key,
             spec_version = SpecVersion::current()
         )
     }
 
     #[tokio::test]
     async fn test_execute_deployment_key() {
-        let dotrain = get_test_dotrain("some-orderbook");
+        let dotrain = get_test_dotrain("some-raindex");
 
         let dotrain_file = NamedTempFile::new().unwrap();
         let dotrain_path = dotrain_file.path();
@@ -222,7 +222,7 @@ _ _: 0 0;
 
     #[tokio::test]
     async fn test_execute_scenario_key() {
-        let dotrain = get_test_dotrain("some-orderbook");
+        let dotrain = get_test_dotrain("some-raindex");
 
         let dotrain_file = NamedTempFile::new().unwrap();
         let dotrain_path = dotrain_file.path();
@@ -274,7 +274,7 @@ _ _: 0 0;
         let dotrain_file = NamedTempFile::new().unwrap();
         let settings_file = NamedTempFile::new().unwrap();
 
-        let dotrain = get_test_dotrain("some-orderbook");
+        let dotrain = get_test_dotrain("some-raindex");
         let dotrain_path = dotrain_file.path();
         let settings_path = settings_file.path();
 

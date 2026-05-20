@@ -1,6 +1,6 @@
 use crate::{csv::TryIntoCsv, utils::timestamp::format_bigint_timestamp_display};
 use rain_math_float::Float;
-use rain_orderbook_subgraph_client::types::common::*;
+use raindex_subgraph_client::types::common::*;
 use serde::{Deserialize, Serialize};
 
 use super::FlattenError;
@@ -77,11 +77,11 @@ mod tests {
     use super::*;
     use crate::utils::timestamp::format_bigint_timestamp_display;
     use rain_math_float::FloatError;
-    use rain_orderbook_subgraph_client::types::common::{
-        SgBigInt, SgBytes, SgErc20, SgOrderbook, SgTransaction, SgVaultBalanceChangeUnwrapped,
+    use raindex_subgraph_client::types::common::{
+        SgBigInt, SgBytes, SgErc20, SgRaindex, SgTransaction, SgVaultBalanceChangeUnwrapped,
         SgVaultBalanceChangeVault,
     };
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_subgraph_client::utils::float::*;
 
     fn mock_sg_vault_balance_change_unwrapped(
         timestamp_val: &str,
@@ -114,8 +114,8 @@ mod tests {
                     decimals: decimals_val.map(|s| SgBigInt(s.to_string())),
                 },
             },
-            orderbook: SgOrderbook {
-                id: SgBytes("0xorderbookid".to_string()),
+            raindex: SgRaindex {
+                id: SgBytes("0xraindexid".to_string()),
             },
         }
     }

@@ -13,12 +13,12 @@ use rain_interpreter_eval::{
     fork::{Forker, NewForkedEvm},
     trace::{RainEvalResultFromRawCallResultError, RainEvalResults},
 };
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     blocks::BlockError,
     rainlang::RainlangCfg,
     unit_test::TestConfig,
     yaml::{
-        orderbook::{OrderbookYaml, OrderbookYamlValidation},
+        raindex::{RaindexYaml, RaindexYamlValidation},
         YamlError, YamlParsable,
     },
 };
@@ -29,7 +29,7 @@ use thiserror::Error;
 pub struct TestRunner {
     pub forker: Forker,
     pub dotrains: Dotrains,
-    pub orderbook_yamls: OrderbookYamls,
+    pub raindex_yamls: RaindexYamls,
     pub rng: TestRng,
     pub test_setup: TestSetup,
     pub test_config: TestConfig,
@@ -49,9 +49,9 @@ pub struct Dotrains {
 }
 
 #[derive(Clone)]
-pub struct OrderbookYamls {
-    pub main: OrderbookYaml,
-    pub test: OrderbookYaml,
+pub struct RaindexYamls {
+    pub main: RaindexYaml,
+    pub test: RaindexYaml,
 }
 
 #[derive(Error, Debug)]
@@ -89,17 +89,17 @@ impl TestRunner {
         test_config: &TestConfig,
         seed: Option<[u8; 32]>,
     ) -> Result<Self, TestRunnerError> {
-        let main_orderbook_yaml = OrderbookYaml::new(
+        let main_raindex_yaml = RaindexYaml::new(
             vec![RainDocument::get_front_matter(dotrain)
                 .unwrap_or("")
                 .to_string()],
-            OrderbookYamlValidation::default(),
+            RaindexYamlValidation::default(),
         )?;
-        let test_orderbook_yaml = OrderbookYaml::new(
+        let test_raindex_yaml = RaindexYaml::new(
             vec![RainDocument::get_front_matter(test_dotrain)
                 .unwrap_or("")
                 .to_string()],
-            OrderbookYamlValidation::default(),
+            RaindexYamlValidation::default(),
         )?;
 
         Ok(Self {
@@ -108,9 +108,9 @@ impl TestRunner {
                 main_dotrain: dotrain.into(),
                 test_dotrain: test_dotrain.into(),
             },
-            orderbook_yamls: OrderbookYamls {
-                main: main_orderbook_yaml,
-                test: test_orderbook_yaml,
+            raindex_yamls: RaindexYamls {
+                main: main_raindex_yaml,
+                test: test_raindex_yaml,
             },
             rng: TestRng::from_seed(RngAlgorithm::ChaCha, &seed.unwrap_or([0; 32])),
             test_setup: TestSetup {
@@ -393,7 +393,7 @@ impl TestRunner {
 
     pub async fn run_unit_test(&mut self) -> Result<RainEvalResults, TestRunnerError> {
         self.test_setup.rainlang = Arc::new(
-            self.orderbook_yamls
+            self.raindex_yamls
                 .main
                 .get_rainlang(&self.test_config.scenario_name)?,
         );
@@ -437,8 +437,8 @@ impl TestRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::{spec_version::SpecVersion, unit_test::UnitTestConfigSource};
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_app_settings::{spec_version::SpecVersion, unit_test::UnitTestConfigSource};
+    use raindex_test_fixtures::LocalEvm;
 
     fn get_test_config(test_dotrain: &str) -> TestConfig {
         let frontmatter = RainDocument::get_front_matter(test_dotrain).unwrap();
@@ -458,10 +458,10 @@ test:
     scenario-name: some-key
     scenario:
         bindings:
-            orderbook-subparser: {orderbook_subparser}
+            raindex-subparser: {raindex_subparser}
             second-binding: 999
 ---
-#orderbook-subparser !
+#raindex-subparser !
 #second-binding !
 
 #pre
@@ -470,7 +470,7 @@ output-token: 0x02,
 output-cap: 10;
 
 #post
-using-words-from orderbook-subparser
+using-words-from raindex-subparser
 
 /* calculate io stack */
 :ensure(equal-to(calculated-io-ratio() 999) "io ratio should be 999"),
@@ -481,7 +481,7 @@ using-words-from orderbook-subparser
 /* handle io stack */
 :ensure(equal-to(output-vault-decrease() 10) "output cap should be 10");
     "#,
-            orderbook_subparser = local_evm.orderbook_subparser.address(),
+            raindex_subparser = local_evm.raindex_subparser.address(),
             spec_version = SpecVersion::current()
         );
         let dotrain = format!(
@@ -498,27 +498,27 @@ networks:
 scenarios:
     some-key:
         bindings:
-            orderbook-subparser: {orderbook_subparser}
+            raindex-subparser: {raindex_subparser}
             second-binding: 20
 ---
-#orderbook-subparser !
+#raindex-subparser !
 #second-binding !
 
 #calculate-io
-using-words-from orderbook-subparser
+using-words-from raindex-subparser
 
 _: input-token(),
 _: output-token(),
 a: 10,
 b: second-binding;
 #handle-io
-using-words-from orderbook-subparser
+using-words-from raindex-subparser
 
 _: output-vault-decrease();
     "#,
             rpc_url = local_evm.url(),
             rainlang_address = local_evm.rainlang,
-            orderbook_subparser = local_evm.orderbook_subparser.address(),
+            raindex_subparser = local_evm.raindex_subparser.address(),
             spec_version = SpecVersion::current()
         );
 

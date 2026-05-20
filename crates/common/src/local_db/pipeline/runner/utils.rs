@@ -1,46 +1,46 @@
 use crate::local_db::fetch::FetchConfig;
 use crate::local_db::pipeline::engine::SyncInputs;
 use crate::local_db::pipeline::{FinalityConfig, SyncConfig, WindowOverrides};
-use crate::local_db::{LocalDbError, OrderbookIdentifier};
+use crate::local_db::{LocalDbError, RaindexIdentifier};
 use itertools::Itertools;
-use rain_orderbook_app_settings::local_db_sync::LocalDbSyncCfg;
-use rain_orderbook_app_settings::orderbook::OrderbookCfg;
-use rain_orderbook_app_settings::yaml::orderbook::{OrderbookYaml, OrderbookYamlValidation};
-use rain_orderbook_app_settings::yaml::YamlParsable;
+use raindex_app_settings::local_db_sync::LocalDbSyncCfg;
+use raindex_app_settings::raindex::RaindexCfg;
+use raindex_app_settings::yaml::raindex::{RaindexYaml, RaindexYamlValidation};
+use raindex_app_settings::yaml::YamlParsable;
 use std::collections::HashMap;
 use url::Url;
 
 /// Parsed settings required by the runner orchestration layer.
 #[derive(Debug, Clone)]
 pub struct ParsedRunnerSettings {
-    pub orderbooks: HashMap<String, OrderbookCfg>,
+    pub raindexes: HashMap<String, RaindexCfg>,
     pub syncs: HashMap<String, LocalDbSyncCfg>,
 }
 
 /// Scheduling metadata for a single engine invocation.
 #[derive(Debug, Clone)]
 pub struct RunnerTarget {
-    pub orderbook_key: String,
+    pub raindex_key: String,
     pub manifest_url: Url,
     pub network_key: String,
     pub inputs: SyncInputs,
 }
 
-/// Parses the provided YAML string into orderbooks and per-network sync settings.
+/// Parses the provided YAML string into raindexes and per-network sync settings.
 pub fn parse_runner_settings(settings_yaml: &str) -> Result<ParsedRunnerSettings, LocalDbError> {
-    let orderbook_yaml = OrderbookYaml::new(
+    let raindex_yaml = RaindexYaml::new(
         vec![settings_yaml.to_owned()],
-        OrderbookYamlValidation::default(),
+        RaindexYamlValidation::default(),
     )?;
-    parse_runner_settings_from_yaml(&orderbook_yaml)
+    parse_runner_settings_from_yaml(&raindex_yaml)
 }
 
 pub fn parse_runner_settings_from_yaml(
-    yaml: &OrderbookYaml,
+    yaml: &RaindexYaml,
 ) -> Result<ParsedRunnerSettings, LocalDbError> {
-    let orderbooks = yaml.get_orderbooks()?;
+    let raindexes = yaml.get_raindexes()?;
     let syncs = yaml.get_local_db_syncs()?;
-    Ok(ParsedRunnerSettings { orderbooks, syncs })
+    Ok(ParsedRunnerSettings { raindexes, syncs })
 }
 
 pub(crate) fn map_sync_to_engine(
@@ -60,14 +60,14 @@ pub(crate) fn map_sync_to_engine(
     Ok((fetch, finality))
 }
 
-/// Builds runner targets for all configured orderbooks.
+/// Builds runner targets for all configured raindexes.
 pub fn build_runner_targets(
-    orderbooks: &HashMap<String, OrderbookCfg>,
+    raindexes: &HashMap<String, RaindexCfg>,
     syncs: &HashMap<String, LocalDbSyncCfg>,
 ) -> Result<Vec<RunnerTarget>, LocalDbError> {
-    let mut targets = Vec::with_capacity(orderbooks.len());
-    for (key, orderbook) in orderbooks {
-        let network_key = orderbook.network.key.clone();
+    let mut targets = Vec::with_capacity(raindexes.len());
+    for (key, raindex) in raindexes {
+        let network_key = raindex.network.key.clone();
         let sync_cfg =
             syncs
                 .get(&network_key)
@@ -76,10 +76,10 @@ pub fn build_runner_targets(
                 })?;
         let (fetch, finality) = map_sync_to_engine(sync_cfg)?;
         let inputs = SyncInputs {
-            ob_id: OrderbookIdentifier::new(orderbook.network.chain_id, orderbook.address),
-            metadata_rpcs: orderbook.network.rpcs.clone(),
+            raindex_id: RaindexIdentifier::new(raindex.network.chain_id, raindex.address),
+            metadata_rpcs: raindex.network.rpcs.clone(),
             cfg: SyncConfig {
-                deployment_block: orderbook.deployment_block,
+                deployment_block: raindex.deployment_block,
                 fetch,
                 finality,
                 window_overrides: WindowOverrides::default(),
@@ -89,14 +89,16 @@ pub fn build_runner_targets(
             manifest_end_block: 0,
         };
 
-        let remote = orderbook.local_db_remote.as_ref().ok_or_else(|| {
-            LocalDbError::MissingLocalDbRemote {
-                orderbook_key: key.clone(),
-            }
-        })?;
+        let remote =
+            raindex
+                .local_db_remote
+                .as_ref()
+                .ok_or_else(|| LocalDbError::MissingLocalDbRemote {
+                    raindex_key: key.clone(),
+                })?;
 
         targets.push(RunnerTarget {
-            orderbook_key: key.clone(),
+            raindex_key: key.clone(),
             manifest_url: remote.url.clone(),
             network_key,
             inputs,
@@ -109,7 +111,7 @@ pub fn build_runner_targets(
 /// Convenience helper retained for existing tests/utilities.
 pub fn build_sync_inputs_from_yaml(settings_yaml: &str) -> Result<Vec<SyncInputs>, LocalDbError> {
     let parsed = parse_runner_settings(settings_yaml)?;
-    let targets = build_runner_targets(&parsed.orderbooks, &parsed.syncs)?;
+    let targets = build_runner_targets(&parsed.raindexes, &parsed.syncs)?;
     Ok(targets.into_iter().map(|target| target.inputs).collect())
 }
 
@@ -127,9 +129,9 @@ mod tests {
     use crate::local_db::fetch::FetchConfigError;
     use crate::local_db::LocalDbError;
     use alloy::primitives::address;
-    use rain_orderbook_app_settings::local_db_sync::LocalDbSyncCfg;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::default_document;
+    use raindex_app_settings::local_db_sync::LocalDbSyncCfg;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::default_document;
     use url::Url;
 
     fn sample_settings_yaml() -> String {
@@ -170,20 +172,20 @@ local-db-sync:
     finality-depth: 24
     bootstrap-block-threshold: 5000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: network-a
     subgraph: network-a
     local-db-remote: remote-a
     deployment-block: 111
-  ob-b:
+  raindex-b:
     address: 0x00000000000000000000000000000000000000b2
     network: network-b
     subgraph: network-b
     local-db-remote: remote-b
     deployment-block: 222
-  ob-c:
+  raindex-c:
     address: 0x00000000000000000000000000000000000000c3
     network: network-a
     subgraph: network-a
@@ -211,7 +213,7 @@ subgraphs:
   mainnet: https://subgraph.network/mainnet
 local-db-remotes:
   remote: https://remotes.example.com/mainnet.yaml
-orderbooks:
+raindexes:
   book:
     address: 0x0000000000000000000000000000000000000001
     network: mainnet
@@ -238,9 +240,9 @@ orderbooks:
     #[test]
     fn parse_runner_settings_happy_path() {
         let parsed = parse_runner_settings(&sample_settings_yaml()).expect("parse succeeds");
-        assert_eq!(parsed.orderbooks.len(), 3);
+        assert_eq!(parsed.raindexes.len(), 3);
         assert_eq!(parsed.syncs.len(), 2);
-        assert!(parsed.orderbooks.contains_key("ob-a"));
+        assert!(parsed.raindexes.contains_key("raindex-a"));
         assert!(parsed.syncs.contains_key("network-a"));
     }
 
@@ -261,7 +263,7 @@ orderbooks:
         let is_missing_networks = matches!(
             err,
             LocalDbError::SettingsYaml(ref yaml_err)
-                if matches!(yaml_err, rain_orderbook_app_settings::yaml::YamlError::Field { .. })
+                if matches!(yaml_err, raindex_app_settings::yaml::YamlError::Field { .. })
         );
         assert!(
             is_yaml_scan || is_missing_networks,
@@ -325,18 +327,18 @@ orderbooks:
     fn build_runner_targets_success() {
         let parsed = parsed_settings();
         let targets =
-            build_runner_targets(&parsed.orderbooks, &parsed.syncs).expect("targets build");
+            build_runner_targets(&parsed.raindexes, &parsed.syncs).expect("targets build");
 
         assert_eq!(targets.len(), 3);
 
         let target_a = targets
             .iter()
-            .find(|t| t.orderbook_key == "ob-a")
-            .expect("target for ob-a exists");
+            .find(|t| t.raindex_key == "raindex-a")
+            .expect("target for raindex-a exists");
         assert_eq!(target_a.network_key, "network-a");
-        assert_eq!(target_a.inputs.ob_id.chain_id, 1);
+        assert_eq!(target_a.inputs.raindex_id.chain_id, 1);
         assert_eq!(
-            target_a.inputs.ob_id.orderbook_address,
+            target_a.inputs.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000a1")
         );
         assert_eq!(target_a.inputs.cfg.deployment_block, 111);
@@ -359,7 +361,7 @@ orderbooks:
         let mut syncs = parsed.syncs.clone();
         syncs.remove("network-a");
 
-        let err = build_runner_targets(&parsed.orderbooks, &syncs).unwrap_err();
+        let err = build_runner_targets(&parsed.raindexes, &syncs).unwrap_err();
         match err {
             LocalDbError::MissingLocalDbSyncForNetwork { network } => {
                 assert_eq!(network, "network-a")
@@ -376,7 +378,7 @@ orderbooks:
             sync.batch_size = 0;
         }
 
-        let err = build_runner_targets(&parsed.orderbooks, &syncs).unwrap_err();
+        let err = build_runner_targets(&parsed.raindexes, &syncs).unwrap_err();
         match err {
             LocalDbError::FetchConfigError(FetchConfigError::ChunkSizeZero(0)) => {}
             other => panic!("expected fetch config error, got {other:?}"),
@@ -392,11 +394,11 @@ orderbooks:
         let input_b = inputs
             .iter()
             .find(|input| {
-                input.ob_id.orderbook_address
+                input.raindex_id.raindex_address
                     == address!("00000000000000000000000000000000000000b2")
             })
-            .expect("input for ob-b exists");
-        assert_eq!(input_b.ob_id.chain_id, 2);
+            .expect("input for raindex-b exists");
+        assert_eq!(input_b.raindex_id.chain_id, 2);
         assert_eq!(input_b.cfg.fetch.max_concurrent_requests(), 2);
     }
 
@@ -414,7 +416,7 @@ orderbooks:
     #[test]
     fn group_targets_by_network_groups_correctly() {
         let parsed = parsed_settings();
-        let targets = build_runner_targets(&parsed.orderbooks, &parsed.syncs).unwrap();
+        let targets = build_runner_targets(&parsed.raindexes, &parsed.syncs).unwrap();
         let grouped = group_targets_by_network(&targets);
 
         assert_eq!(grouped.len(), 2);

@@ -21,7 +21,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
         symbol
         decimals
       }
-      orderbook {
+      raindex {
         id
       }
       ordersAsOutput(orderBy: timestampAdded, orderDirection: desc) {
@@ -60,7 +60,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
         }
@@ -88,7 +88,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
           trade {
@@ -121,7 +121,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
         }
@@ -149,7 +149,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
           sender
@@ -168,7 +168,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
         symbol
         decimals
       }
-      orderbook {
+      raindex {
         id
       }
       ordersAsOutput(orderBy: timestampAdded, orderDirection: desc) {
@@ -207,7 +207,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
         }
@@ -235,7 +235,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
           trade {
@@ -268,7 +268,7 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
         }
@@ -296,14 +296,14 @@ query SgOrderDetailByIdQuery($id: ID!) {
             blockNumber
             timestamp
           }
-          orderbook {
+          raindex {
             id
           }
           sender
         }
       }
     }
-    orderbook {
+    raindex {
       id
     }
     active

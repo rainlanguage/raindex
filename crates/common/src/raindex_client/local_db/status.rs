@@ -1,6 +1,6 @@
 use crate::local_db::pipeline::runner::utils::ParsedRunnerSettings;
 use crate::local_db::pipeline::SyncPhase;
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -26,8 +26,8 @@ impl_wasm_traits!(SchedulerState);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct OrderbookSyncStatus {
-    pub ob_id: OrderbookIdentifier,
+pub struct RaindexSyncStatus {
+    pub raindex_id: RaindexIdentifier,
     pub status: LocalDbStatus,
     pub scheduler_state: SchedulerState,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -35,18 +35,18 @@ pub struct OrderbookSyncStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
-impl_wasm_traits!(OrderbookSyncStatus);
+impl_wasm_traits!(RaindexSyncStatus);
 
-impl OrderbookSyncStatus {
+impl RaindexSyncStatus {
     pub fn new(
-        ob_id: OrderbookIdentifier,
+        raindex_id: RaindexIdentifier,
         status: LocalDbStatus,
         scheduler_state: SchedulerState,
         phase_message: Option<String>,
         error: Option<String>,
     ) -> Self {
         Self {
-            ob_id,
+            raindex_id,
             status,
             scheduler_state,
             phase_message,
@@ -54,9 +54,9 @@ impl OrderbookSyncStatus {
         }
     }
 
-    pub fn syncing(ob_id: OrderbookIdentifier, phase: SyncPhase) -> Self {
+    pub fn syncing(raindex_id: RaindexIdentifier, phase: SyncPhase) -> Self {
         Self::new(
-            ob_id,
+            raindex_id,
             LocalDbStatus::Syncing,
             SchedulerState::Leader,
             Some(phase.to_message().to_string()),
@@ -64,13 +64,19 @@ impl OrderbookSyncStatus {
         )
     }
 
-    pub fn active(ob_id: OrderbookIdentifier, scheduler_state: SchedulerState) -> Self {
-        Self::new(ob_id, LocalDbStatus::Active, scheduler_state, None, None)
+    pub fn active(raindex_id: RaindexIdentifier, scheduler_state: SchedulerState) -> Self {
+        Self::new(
+            raindex_id,
+            LocalDbStatus::Active,
+            scheduler_state,
+            None,
+            None,
+        )
     }
 
-    pub fn failure(ob_id: OrderbookIdentifier, error: String) -> Self {
+    pub fn failure(raindex_id: RaindexIdentifier, error: String) -> Self {
         Self::new(
-            ob_id,
+            raindex_id,
             LocalDbStatus::Failure,
             SchedulerState::Leader,
             None,
@@ -163,7 +169,7 @@ pub struct NetworkSyncStatusSnapshot {
     pub network_key: Option<String>,
     pub status: LocalDbStatus,
     pub scheduler_state: SchedulerState,
-    pub orderbook_count: usize,
+    pub raindex_count: usize,
     pub ready: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
@@ -177,7 +183,7 @@ impl NetworkSyncStatusSnapshot {
             network_key,
             status: LocalDbStatus::Syncing,
             scheduler_state: SchedulerState::Leader,
-            orderbook_count: 0,
+            raindex_count: 0,
             ready: false,
             error: None,
         }
@@ -192,10 +198,10 @@ impl NetworkSyncStatusSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-pub struct OrderbookSyncStatusSnapshot {
-    pub ob_id: OrderbookIdentifier,
+pub struct RaindexSyncStatusSnapshot {
+    pub raindex_id: RaindexIdentifier,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub orderbook_key: Option<String>,
+    pub raindex_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network_key: Option<String>,
     pub status: LocalDbStatus,
@@ -210,17 +216,17 @@ pub struct OrderbookSyncStatusSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
-impl_wasm_traits!(OrderbookSyncStatusSnapshot);
+impl_wasm_traits!(RaindexSyncStatusSnapshot);
 
-impl OrderbookSyncStatusSnapshot {
+impl RaindexSyncStatusSnapshot {
     pub fn new(
-        ob_id: OrderbookIdentifier,
-        orderbook_key: Option<String>,
+        raindex_id: RaindexIdentifier,
+        raindex_key: Option<String>,
         network_key: Option<String>,
     ) -> Self {
         Self {
-            ob_id,
-            orderbook_key,
+            raindex_id,
+            raindex_key,
             network_key,
             status: LocalDbStatus::Syncing,
             scheduler_state: SchedulerState::Leader,
@@ -232,7 +238,7 @@ impl OrderbookSyncStatusSnapshot {
         }
     }
 
-    pub fn apply_status(&mut self, status: OrderbookSyncStatus) {
+    pub fn apply_status(&mut self, status: RaindexSyncStatus) {
         self.status = status.status;
         self.scheduler_state = status.scheduler_state;
         self.phase_message = status.phase_message;
@@ -248,7 +254,7 @@ pub struct LocalDbSyncSnapshot {
     pub status: LocalDbStatus,
     pub scheduler_state: SchedulerState,
     pub networks: Vec<NetworkSyncStatusSnapshot>,
-    pub orderbooks: Vec<OrderbookSyncStatusSnapshot>,
+    pub raindexes: Vec<RaindexSyncStatusSnapshot>,
 }
 impl_wasm_traits!(LocalDbSyncSnapshot);
 
@@ -260,25 +266,25 @@ impl LocalDbSyncSnapshot {
             status: LocalDbStatus::Active,
             scheduler_state: SchedulerState::Leader,
             networks: Vec::new(),
-            orderbooks: Vec::new(),
+            raindexes: Vec::new(),
         }
     }
 
     pub fn from_parts(
         mut networks: Vec<NetworkSyncStatusSnapshot>,
-        mut orderbooks: Vec<OrderbookSyncStatusSnapshot>,
+        mut raindexes: Vec<RaindexSyncStatusSnapshot>,
     ) -> Self {
         networks.sort_by_key(|network| network.chain_id);
-        orderbooks.sort_by(|a, b| {
-            (a.ob_id.chain_id, a.ob_id.orderbook_address)
-                .cmp(&(b.ob_id.chain_id, b.ob_id.orderbook_address))
+        raindexes.sort_by(|a, b| {
+            (a.raindex_id.chain_id, a.raindex_id.raindex_address)
+                .cmp(&(b.raindex_id.chain_id, b.raindex_id.raindex_address))
         });
 
-        let configured = !networks.is_empty() || !orderbooks.is_empty();
+        let configured = !networks.is_empty() || !raindexes.is_empty();
         let all_statuses = networks
             .iter()
             .map(|network| network.status)
-            .chain(orderbooks.iter().map(|orderbook| orderbook.status))
+            .chain(raindexes.iter().map(|raindex| raindex.status))
             .collect::<Vec<_>>();
 
         let has_failure = all_statuses.contains(&LocalDbStatus::Failure);
@@ -307,7 +313,7 @@ impl LocalDbSyncSnapshot {
             status,
             scheduler_state,
             networks,
-            orderbooks,
+            raindexes,
         }
     }
 }
@@ -315,7 +321,7 @@ impl LocalDbSyncSnapshot {
 #[derive(Debug, Clone, Default)]
 pub struct LocalDbSyncSnapshotStore {
     networks: HashMap<u32, NetworkSyncStatusSnapshot>,
-    orderbooks: HashMap<OrderbookIdentifier, OrderbookSyncStatusSnapshot>,
+    raindexes: HashMap<RaindexIdentifier, RaindexSyncStatusSnapshot>,
 }
 
 impl LocalDbSyncSnapshotStore {
@@ -329,21 +335,21 @@ impl LocalDbSyncSnapshotStore {
             .or_insert_with(|| NetworkSyncStatusSnapshot::new(chain_id, network_key));
     }
 
-    pub fn seed_orderbook(
+    pub fn seed_raindex(
         &mut self,
-        ob_id: OrderbookIdentifier,
-        orderbook_key: Option<String>,
+        raindex_id: RaindexIdentifier,
+        raindex_key: Option<String>,
         network_key: Option<String>,
     ) {
-        let chain_id = ob_id.chain_id;
-        self.orderbooks
-            .entry(ob_id.clone())
-            .or_insert_with(|| OrderbookSyncStatusSnapshot::new(ob_id, orderbook_key, network_key));
+        let chain_id = raindex_id.chain_id;
+        self.raindexes.entry(raindex_id.clone()).or_insert_with(|| {
+            RaindexSyncStatusSnapshot::new(raindex_id, raindex_key, network_key)
+        });
         if let Some(network) = self.networks.get_mut(&chain_id) {
-            network.orderbook_count = self
-                .orderbooks
+            network.raindex_count = self
+                .raindexes
                 .values()
-                .filter(|orderbook| orderbook.ob_id.chain_id == chain_id)
+                .filter(|raindex| raindex.raindex_id.chain_id == chain_id)
                 .count();
         }
     }
@@ -355,10 +361,12 @@ impl LocalDbSyncSnapshotStore {
             .apply_status(status);
     }
 
-    pub fn update_orderbook(&mut self, status: OrderbookSyncStatus) {
-        self.orderbooks
-            .entry(status.ob_id.clone())
-            .or_insert_with(|| OrderbookSyncStatusSnapshot::new(status.ob_id.clone(), None, None))
+    pub fn update_raindex(&mut self, status: RaindexSyncStatus) {
+        self.raindexes
+            .entry(status.raindex_id.clone())
+            .or_insert_with(|| {
+                RaindexSyncStatusSnapshot::new(status.raindex_id.clone(), None, None)
+            })
             .apply_status(status);
     }
 
@@ -369,12 +377,12 @@ impl LocalDbSyncSnapshotStore {
                 network.status = LocalDbStatus::Active;
             }
         }
-        for orderbook in self.orderbooks.values_mut() {
-            if orderbook.ob_id.chain_id == chain_id {
-                orderbook.ready = true;
-                if orderbook.status != LocalDbStatus::Failure {
-                    orderbook.status = LocalDbStatus::Active;
-                    orderbook.phase_message = None;
+        for raindex in self.raindexes.values_mut() {
+            if raindex.raindex_id.chain_id == chain_id {
+                raindex.ready = true;
+                if raindex.status != LocalDbStatus::Failure {
+                    raindex.status = LocalDbStatus::Active;
+                    raindex.phase_message = None;
                 }
             }
         }
@@ -383,7 +391,7 @@ impl LocalDbSyncSnapshotStore {
     pub fn snapshot(&self) -> LocalDbSyncSnapshot {
         LocalDbSyncSnapshot::from_parts(
             self.networks.values().cloned().collect(),
-            self.orderbooks.values().cloned().collect(),
+            self.raindexes.values().cloned().collect(),
         )
     }
 }
@@ -425,18 +433,18 @@ impl LocalDbSyncStatusStore {
     pub fn seed(&self, settings: &ParsedRunnerSettings) {
         self.with_store(|store| {
             *store = LocalDbSyncSnapshotStore::new();
-            let mut orderbooks = settings.orderbooks.iter().collect::<Vec<_>>();
-            orderbooks.sort_by(|a, b| a.0.cmp(b.0));
-            for (orderbook_key, orderbook) in orderbooks {
-                if !settings.syncs.contains_key(&orderbook.network.key) {
+            let mut raindexes = settings.raindexes.iter().collect::<Vec<_>>();
+            raindexes.sort_by(|a, b| a.0.cmp(b.0));
+            for (raindex_key, raindex) in raindexes {
+                if !settings.syncs.contains_key(&raindex.network.key) {
                     continue;
                 }
-                let chain_id = orderbook.network.chain_id;
-                let network_key = orderbook.network.key.clone();
+                let chain_id = raindex.network.chain_id;
+                let network_key = raindex.network.key.clone();
                 store.seed_network(chain_id, Some(network_key.clone()));
-                store.seed_orderbook(
-                    OrderbookIdentifier::new(chain_id, orderbook.address),
-                    Some(orderbook_key.clone()),
+                store.seed_raindex(
+                    RaindexIdentifier::new(chain_id, raindex.address),
+                    Some(raindex_key.clone()),
                     Some(network_key),
                 );
             }
@@ -449,9 +457,9 @@ impl LocalDbSyncStatusStore {
         });
     }
 
-    pub fn record_orderbook_status(&self, status: OrderbookSyncStatus) {
+    pub fn record_raindex_status(&self, status: RaindexSyncStatus) {
         self.with_store(|store| {
-            store.update_orderbook(status);
+            store.update_raindex(status);
         });
     }
 
@@ -471,30 +479,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn orderbook_sync_status_serializes_with_camel_case() {
+    fn raindex_sync_status_serializes_with_camel_case() {
         use crate::local_db::pipeline::SyncPhase;
         use alloy::primitives::address;
 
-        let ob_id = crate::local_db::OrderbookIdentifier::new(
+        let raindex_id = crate::local_db::RaindexIdentifier::new(
             42161,
             address!("0000000000000000000000000000000000001234"),
         );
-        let status = OrderbookSyncStatus::syncing(ob_id, SyncPhase::FetchingLatestBlock);
+        let status = RaindexSyncStatus::syncing(raindex_id, SyncPhase::FetchingLatestBlock);
         let json = serde_json::to_string(&status).unwrap();
 
         assert!(
-            json.contains("\"obId\":{"),
-            "expected obId as nested object in JSON: {}",
+            json.contains("\"raindexId\":{"),
+            "expected raindexId as nested object in JSON: {}",
             json
         );
         assert!(
             json.contains("\"chainId\":42161"),
-            "expected chainId in obId in JSON: {}",
+            "expected chainId in raindexId in JSON: {}",
             json
         );
         assert!(
-            json.contains("\"orderbookAddress\":"),
-            "expected orderbookAddress in obId in JSON: {}",
+            json.contains("\"raindexAddress\":"),
+            "expected raindexAddress in raindexId in JSON: {}",
             json
         );
         assert!(
@@ -513,8 +521,8 @@ mod tests {
             json
         );
         assert!(
-            !json.contains("orderbook_address"),
-            "should not have snake_case orderbook_address: {}",
+            !json.contains("raindex_address"),
+            "should not have snake_case raindex_address: {}",
             json
         );
     }
@@ -615,17 +623,17 @@ mod tests {
     }
 
     #[test]
-    fn orderbook_sync_status_deserializes_from_json() {
+    fn raindex_sync_status_deserializes_from_json() {
         let json = r#"{
-            "obId": {"chainId": 137, "orderbookAddress": "0x0000000000000000000000000000000000001234"},
+            "raindexId": {"chainId": 137, "raindexAddress": "0x0000000000000000000000000000000000001234"},
             "status": "syncing",
             "schedulerState": "leader",
             "phaseMessage": "Fetching latest block"
         }"#;
 
-        let status: OrderbookSyncStatus = serde_json::from_str(json).unwrap();
+        let status: RaindexSyncStatus = serde_json::from_str(json).unwrap();
 
-        assert_eq!(status.ob_id.chain_id, 137);
+        assert_eq!(status.raindex_id.chain_id, 137);
         assert_eq!(status.status, LocalDbStatus::Syncing);
         assert_eq!(status.scheduler_state, SchedulerState::Leader);
         assert_eq!(
@@ -675,7 +683,7 @@ mod tests {
         assert!(snapshot.healthy);
         assert_eq!(snapshot.status, LocalDbStatus::Active);
         assert!(snapshot.networks.is_empty());
-        assert!(snapshot.orderbooks.is_empty());
+        assert!(snapshot.raindexes.is_empty());
     }
 
     #[test]
@@ -687,16 +695,16 @@ mod tests {
             network_key: Some("mainnet".to_string()),
             status: LocalDbStatus::Syncing,
             scheduler_state: SchedulerState::Leader,
-            orderbook_count: 1,
+            raindex_count: 1,
             ready: false,
             error: None,
         };
-        let orderbook = OrderbookSyncStatusSnapshot {
-            ob_id: crate::local_db::OrderbookIdentifier::new(
+        let raindex = RaindexSyncStatusSnapshot {
+            raindex_id: crate::local_db::RaindexIdentifier::new(
                 1,
                 address!("0000000000000000000000000000000000001234"),
             ),
-            orderbook_key: Some("ob".to_string()),
+            raindex_key: Some("ob".to_string()),
             network_key: Some("mainnet".to_string()),
             status: LocalDbStatus::Failure,
             scheduler_state: SchedulerState::Leader,
@@ -707,7 +715,7 @@ mod tests {
             error: Some("boom".to_string()),
         };
 
-        let snapshot = LocalDbSyncSnapshot::from_parts(vec![network], vec![orderbook]);
+        let snapshot = LocalDbSyncSnapshot::from_parts(vec![network], vec![raindex]);
 
         assert!(snapshot.configured);
         assert!(!snapshot.healthy);
@@ -719,13 +727,13 @@ mod tests {
         use alloy::primitives::address;
 
         let mut store = LocalDbSyncSnapshotStore::new();
-        let ob_id = crate::local_db::OrderbookIdentifier::new(
+        let raindex_id = crate::local_db::RaindexIdentifier::new(
             42161,
             address!("0000000000000000000000000000000000001234"),
         );
         store.seed_network(42161, Some("arbitrum".to_string()));
-        store.seed_orderbook(
-            ob_id.clone(),
+        store.seed_raindex(
+            raindex_id.clone(),
             Some("main-ob".to_string()),
             Some("arbitrum".to_string()),
         );
@@ -733,39 +741,39 @@ mod tests {
         let syncing = store.snapshot();
         assert_eq!(syncing.status, LocalDbStatus::Syncing);
         assert!(!syncing.networks[0].ready);
-        assert!(!syncing.orderbooks[0].ready);
-        assert_eq!(syncing.networks[0].orderbook_count, 1);
+        assert!(!syncing.raindexes[0].ready);
+        assert_eq!(syncing.networks[0].raindex_count, 1);
 
         store.mark_ready(42161);
         let ready = store.snapshot();
 
         assert_eq!(ready.status, LocalDbStatus::Active);
         assert!(ready.networks[0].ready);
-        assert!(ready.orderbooks[0].ready);
-        assert_eq!(ready.orderbooks[0].ob_id, ob_id);
+        assert!(ready.raindexes[0].ready);
+        assert_eq!(ready.raindexes[0].raindex_id, raindex_id);
     }
 
     #[test]
-    fn sync_snapshot_store_updates_live_network_and_orderbook_statuses() {
+    fn sync_snapshot_store_updates_live_network_and_raindex_statuses() {
         use crate::local_db::pipeline::SyncPhase;
         use alloy::primitives::address;
 
         let mut store = LocalDbSyncSnapshotStore::new();
-        let ob_id = crate::local_db::OrderbookIdentifier::new(
+        let raindex_id = crate::local_db::RaindexIdentifier::new(
             1,
             address!("0000000000000000000000000000000000000001"),
         );
         store.seed_network(1, Some("mainnet".to_string()));
-        store.seed_orderbook(
-            ob_id.clone(),
+        store.seed_raindex(
+            raindex_id.clone(),
             Some("main-ob".to_string()),
             Some("mainnet".to_string()),
         );
 
         store.update_network(NetworkSyncStatus::active(1, SchedulerState::NotLeader));
-        store.update_orderbook(OrderbookSyncStatus::syncing(
-            ob_id.clone(),
-            SyncPhase::FetchingOrderbookLogs,
+        store.update_raindex(RaindexSyncStatus::syncing(
+            raindex_id.clone(),
+            SyncPhase::FetchingRaindexLogs,
         ));
 
         let snapshot = store.snapshot();
@@ -773,18 +781,18 @@ mod tests {
         assert_eq!(snapshot.scheduler_state, SchedulerState::NotLeader);
         assert_eq!(snapshot.networks[0].status, LocalDbStatus::Active);
         assert_eq!(
-            snapshot.orderbooks[0].phase_message,
-            Some("Fetching orderbook logs".to_string())
+            snapshot.raindexes[0].phase_message,
+            Some("Fetching raindex logs".to_string())
         );
 
-        store.update_orderbook(OrderbookSyncStatus::failure(
-            ob_id,
+        store.update_raindex(RaindexSyncStatus::failure(
+            raindex_id,
             "rpc failed".to_string(),
         ));
         let failed = store.snapshot();
         assert_eq!(failed.status, LocalDbStatus::Failure);
         assert!(!failed.healthy);
-        assert_eq!(failed.orderbooks[0].error, Some("rpc failed".to_string()));
+        assert_eq!(failed.raindexes[0].error, Some("rpc failed".to_string()));
     }
 
     #[test]

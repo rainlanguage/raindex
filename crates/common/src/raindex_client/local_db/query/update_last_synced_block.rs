@@ -1,13 +1,13 @@
 use crate::local_db::query::update_last_synced_block::build_update_last_synced_block_stmt;
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 
 pub async fn update_last_synced_block<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     block_number: u64,
 ) -> Result<(), LocalDbQueryError> {
-    let stmt = build_update_last_synced_block_stmt(ob_id, block_number);
+    let stmt = build_update_last_synced_block_stmt(raindex_id, block_number);
     exec.query_text(&stmt).await.map(|_| ())
 }
 
@@ -28,7 +28,7 @@ mod wasm_tests {
     async fn wrapper_uses_builder_sql_exactly() {
         let addr = Address::from([0x11u8; 20]);
         let expected_stmt =
-            build_update_last_synced_block_stmt(&OrderbookIdentifier::new(1, addr), 999);
+            build_update_last_synced_block_stmt(&RaindexIdentifier::new(1, addr), 999);
         let store = Rc::new(RefCell::new((
             String::new(),
             wasm_bindgen::JsValue::UNDEFINED,
@@ -37,7 +37,7 @@ mod wasm_tests {
         let exec = JsCallbackExecutor::from_ref(&callback);
 
         let res =
-            super::update_last_synced_block(&exec, &OrderbookIdentifier::new(1, addr), 999).await;
+            super::update_last_synced_block(&exec, &RaindexIdentifier::new(1, addr), 999).await;
         assert!(res.is_ok());
         let captured = store.borrow().clone();
         assert_eq!(captured.0, expected_stmt.sql);
@@ -64,7 +64,7 @@ mod wasm_tests {
         let exec = JsCallbackExecutor::from_ref(&callback);
         let res = super::update_last_synced_block(
             &exec,
-            &OrderbookIdentifier::new(1, Address::from([0x22u8; 20])),
+            &RaindexIdentifier::new(1, Address::from([0x22u8; 20])),
             999,
         )
         .await;

@@ -1,5 +1,5 @@
-import { DecimalFloat } from "../generated/OrderBook/DecimalFloat";
-import { AfterClearV2, ClearV3 } from "../generated/OrderBook/OrderBook";
+import { DecimalFloat } from "../generated/Raindex/DecimalFloat";
+import { AfterClearV2, ClearV3 } from "../generated/Raindex/Raindex";
 import { Clear, ClearBounty, ClearTemporaryData } from "../generated/schema";
 import { Float, getCalculator } from "./float";
 import { eventId } from "./interfaces/event";
@@ -105,7 +105,7 @@ export function createClearEntity(
   zero: Float
 ): void {
   let clear = new Clear(eventId(event));
-  clear.orderbook = event.address;
+  clear.raindex = event.address;
   clear.aliceInputAmount = event.params.clearStateChange.aliceInput;
   clear.aliceOutputAmount = event.params.clearStateChange.aliceOutput;
   clear.aliceBountyAmount = calculator.gt(aliceBountyAmount, zero)
@@ -139,7 +139,7 @@ export function createClearBountyEntity(
   const calculator = getCalculator();
 
   let clearBounty = new ClearBounty(makeClearBountyId(event, vaultEntityId));
-  clearBounty.orderbook = event.address;
+  clearBounty.raindex = event.address;
   clearBounty.amount = amount;
   clearBounty.oldVaultBalance = oldVaultBalance;
   clearBounty.newVaultBalance = calculator.add(oldVaultBalance, amount);

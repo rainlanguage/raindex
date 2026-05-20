@@ -11,7 +11,7 @@ latest_order_events AS (
     SELECT 1
     FROM add_order_events newer
     WHERE newer.chain_id = oe.chain_id
-      AND newer.orderbook_address = oe.orderbook_address
+      AND newer.raindex_address = oe.raindex_address
       AND newer.order_hash = oe.order_hash
       AND (
            newer.block_number > oe.block_number
@@ -20,7 +20,7 @@ latest_order_events AS (
   )
 )
 SELECT d.chain_id,
-       d.orderbook_address,
+       d.raindex_address,
        d.transaction_hash,
        d.log_index,
        d.block_number,
@@ -34,7 +34,7 @@ FROM deposits d
 
 UNION ALL
 SELECT w.chain_id,
-       w.orderbook_address,
+       w.raindex_address,
        w.transaction_hash,
        w.log_index,
        w.block_number,
@@ -49,7 +49,7 @@ FROM withdrawals w
 UNION ALL
 -- maker buy: +taker_output
 SELECT t.chain_id,
-       t.orderbook_address,
+       t.raindex_address,
        t.transaction_hash,
        t.log_index,
        t.block_number,
@@ -62,7 +62,7 @@ SELECT t.chain_id,
 FROM take_orders t
 JOIN add_order_events oe
   ON oe.chain_id = t.chain_id
- AND oe.orderbook_address = t.orderbook_address
+ AND oe.raindex_address = t.raindex_address
  AND oe.order_owner = t.order_owner
  AND oe.order_nonce = t.order_nonce
  AND (oe.block_number < t.block_number
@@ -70,7 +70,7 @@ JOIN add_order_events oe
  AND NOT EXISTS (
    SELECT 1 FROM add_order_events x
    WHERE x.chain_id = t.chain_id
-     AND x.orderbook_address = t.orderbook_address
+     AND x.raindex_address = t.raindex_address
      AND x.order_owner = t.order_owner
      AND x.order_nonce = t.order_nonce
      AND (x.block_number < t.block_number
@@ -80,7 +80,7 @@ JOIN add_order_events oe
  )
 JOIN order_ios io
   ON io.chain_id = oe.chain_id
- AND io.orderbook_address = oe.orderbook_address
+ AND io.raindex_address = oe.raindex_address
  AND io.transaction_hash = oe.transaction_hash
  AND io.log_index = oe.log_index
  AND io.io_index = t.input_io_index
@@ -89,7 +89,7 @@ JOIN order_ios io
 UNION ALL
 -- maker sell: -taker_input
 SELECT t.chain_id,
-       t.orderbook_address,
+       t.raindex_address,
        t.transaction_hash,
        t.log_index,
        t.block_number,
@@ -102,7 +102,7 @@ SELECT t.chain_id,
 FROM take_orders t
 JOIN add_order_events oe
   ON oe.chain_id = t.chain_id
- AND oe.orderbook_address = t.orderbook_address
+ AND oe.raindex_address = t.raindex_address
  AND oe.order_owner = t.order_owner
  AND oe.order_nonce = t.order_nonce
  AND (oe.block_number < t.block_number
@@ -110,7 +110,7 @@ JOIN add_order_events oe
  AND NOT EXISTS (
    SELECT 1 FROM add_order_events x
    WHERE x.chain_id = t.chain_id
-     AND x.orderbook_address = t.orderbook_address
+     AND x.raindex_address = t.raindex_address
      AND x.order_owner = t.order_owner
      AND x.order_nonce = t.order_nonce
      AND (x.block_number < t.block_number
@@ -120,7 +120,7 @@ JOIN add_order_events oe
  )
 JOIN order_ios io
   ON io.chain_id = oe.chain_id
- AND io.orderbook_address = oe.orderbook_address
+ AND io.raindex_address = oe.raindex_address
  AND io.transaction_hash = oe.transaction_hash
  AND io.log_index = oe.log_index
  AND io.io_index = t.output_io_index
@@ -129,7 +129,7 @@ JOIN order_ios io
 UNION ALL
 -- clears (maker-oriented already)
 SELECT DISTINCT c.chain_id,
-       c.orderbook_address,
+       c.raindex_address,
        c.transaction_hash,
        c.log_index,
        c.block_number,
@@ -142,23 +142,23 @@ SELECT DISTINCT c.chain_id,
 FROM clear_v3_events c
 JOIN after_clear_v2_events a
   ON a.chain_id = c.chain_id
- AND a.orderbook_address = c.orderbook_address
+ AND a.raindex_address = c.raindex_address
  AND a.transaction_hash = c.transaction_hash
  AND a.log_index = (
      SELECT MIN(ac.log_index)
      FROM after_clear_v2_events ac
      WHERE ac.chain_id = c.chain_id
-       AND ac.orderbook_address = c.orderbook_address
+       AND ac.raindex_address = c.raindex_address
        AND ac.transaction_hash = c.transaction_hash
        AND ac.log_index > c.log_index
  )
 JOIN latest_order_events oeA
   ON oeA.chain_id = c.chain_id
- AND oeA.orderbook_address = c.orderbook_address
+ AND oeA.raindex_address = c.raindex_address
  AND oeA.order_hash = c.alice_order_hash
 JOIN order_ios io_ai
   ON io_ai.chain_id = oeA.chain_id
- AND io_ai.orderbook_address = oeA.orderbook_address
+ AND io_ai.raindex_address = oeA.raindex_address
  AND io_ai.transaction_hash = oeA.transaction_hash
  AND io_ai.log_index = oeA.log_index
  AND io_ai.io_index = c.alice_input_io_index
@@ -166,7 +166,7 @@ JOIN order_ios io_ai
 
 UNION ALL
 SELECT DISTINCT c.chain_id,
-       c.orderbook_address,
+       c.raindex_address,
        c.transaction_hash,
        c.log_index,
        c.block_number,
@@ -179,23 +179,23 @@ SELECT DISTINCT c.chain_id,
 FROM clear_v3_events c
 JOIN after_clear_v2_events a
   ON a.chain_id = c.chain_id
- AND a.orderbook_address = c.orderbook_address
+ AND a.raindex_address = c.raindex_address
  AND a.transaction_hash = c.transaction_hash
  AND a.log_index = (
      SELECT MIN(ac.log_index)
      FROM after_clear_v2_events ac
      WHERE ac.chain_id = c.chain_id
-       AND ac.orderbook_address = c.orderbook_address
+       AND ac.raindex_address = c.raindex_address
        AND ac.transaction_hash = c.transaction_hash
        AND ac.log_index > c.log_index
  )
 JOIN latest_order_events oeA
   ON oeA.chain_id = c.chain_id
- AND oeA.orderbook_address = c.orderbook_address
+ AND oeA.raindex_address = c.raindex_address
  AND oeA.order_hash = c.alice_order_hash
 JOIN order_ios io_ao
   ON io_ao.chain_id = oeA.chain_id
- AND io_ao.orderbook_address = oeA.orderbook_address
+ AND io_ao.raindex_address = oeA.raindex_address
  AND io_ao.transaction_hash = oeA.transaction_hash
  AND io_ao.log_index = oeA.log_index
  AND io_ao.io_index = c.alice_output_io_index
@@ -203,7 +203,7 @@ JOIN order_ios io_ao
 
 UNION ALL
 SELECT DISTINCT c.chain_id,
-       c.orderbook_address,
+       c.raindex_address,
        c.transaction_hash,
        c.log_index,
        c.block_number,
@@ -216,23 +216,23 @@ SELECT DISTINCT c.chain_id,
 FROM clear_v3_events c
 JOIN after_clear_v2_events a
   ON a.chain_id = c.chain_id
- AND a.orderbook_address = c.orderbook_address
+ AND a.raindex_address = c.raindex_address
  AND a.transaction_hash = c.transaction_hash
  AND a.log_index = (
      SELECT MIN(ac.log_index)
      FROM after_clear_v2_events ac
      WHERE ac.chain_id = c.chain_id
-       AND ac.orderbook_address = c.orderbook_address
+       AND ac.raindex_address = c.raindex_address
        AND ac.transaction_hash = c.transaction_hash
        AND ac.log_index > c.log_index
  )
 JOIN latest_order_events oeB
   ON oeB.chain_id = c.chain_id
- AND oeB.orderbook_address = c.orderbook_address
+ AND oeB.raindex_address = c.raindex_address
  AND oeB.order_hash = c.bob_order_hash
 JOIN order_ios io_bi
   ON io_bi.chain_id = oeB.chain_id
- AND io_bi.orderbook_address = oeB.orderbook_address
+ AND io_bi.raindex_address = oeB.raindex_address
  AND io_bi.transaction_hash = oeB.transaction_hash
  AND io_bi.log_index = oeB.log_index
  AND io_bi.io_index = c.bob_input_io_index
@@ -240,7 +240,7 @@ JOIN order_ios io_bi
 
 UNION ALL
 SELECT DISTINCT c.chain_id,
-       c.orderbook_address,
+       c.raindex_address,
        c.transaction_hash,
        c.log_index,
        c.block_number,
@@ -253,23 +253,23 @@ SELECT DISTINCT c.chain_id,
 FROM clear_v3_events c
 JOIN after_clear_v2_events a
   ON a.chain_id = c.chain_id
- AND a.orderbook_address = c.orderbook_address
+ AND a.raindex_address = c.raindex_address
  AND a.transaction_hash = c.transaction_hash
  AND a.log_index = (
      SELECT MIN(ac.log_index)
      FROM after_clear_v2_events ac
      WHERE ac.chain_id = c.chain_id
-       AND ac.orderbook_address = c.orderbook_address
+       AND ac.raindex_address = c.raindex_address
        AND ac.transaction_hash = c.transaction_hash
        AND ac.log_index > c.log_index
  )
 JOIN latest_order_events oeB
   ON oeB.chain_id = c.chain_id
- AND oeB.orderbook_address = c.orderbook_address
+ AND oeB.raindex_address = c.raindex_address
  AND oeB.order_hash = c.bob_order_hash
 JOIN order_ios io_bo
   ON io_bo.chain_id = oeB.chain_id
- AND io_bo.orderbook_address = oeB.orderbook_address
+ AND io_bo.raindex_address = oeB.raindex_address
  AND io_bo.transaction_hash = oeB.transaction_hash
  AND io_bo.log_index = oeB.log_index
  AND io_bo.io_index = c.bob_output_io_index
@@ -280,7 +280,7 @@ SELECT *
 FROM (
   SELECT DISTINCT
     c.chain_id,
-    c.orderbook_address,
+    c.raindex_address,
     c.transaction_hash,
     c.log_index,
     c.block_number,
@@ -300,23 +300,23 @@ FROM (
   FROM clear_v3_events c
   JOIN after_clear_v2_events a
     ON a.chain_id = c.chain_id
-   AND a.orderbook_address = c.orderbook_address
+   AND a.raindex_address = c.raindex_address
    AND a.transaction_hash = c.transaction_hash
    AND a.log_index = (
        SELECT MIN(ac.log_index)
        FROM after_clear_v2_events ac
        WHERE ac.chain_id = c.chain_id
-         AND ac.orderbook_address = c.orderbook_address
+         AND ac.raindex_address = c.raindex_address
          AND ac.transaction_hash = c.transaction_hash
          AND ac.log_index > c.log_index
   )
   JOIN latest_order_events oeA
     ON oeA.chain_id = c.chain_id
-   AND oeA.orderbook_address = c.orderbook_address
+   AND oeA.raindex_address = c.raindex_address
    AND oeA.order_hash = c.alice_order_hash
   JOIN order_ios io_ao
     ON io_ao.chain_id = oeA.chain_id
-   AND io_ao.orderbook_address = oeA.orderbook_address
+   AND io_ao.raindex_address = oeA.raindex_address
    AND io_ao.transaction_hash = oeA.transaction_hash
    AND io_ao.log_index = oeA.log_index
    AND io_ao.io_index = c.alice_output_io_index
@@ -329,7 +329,7 @@ SELECT *
 FROM (
   SELECT DISTINCT
     c.chain_id,
-    c.orderbook_address,
+    c.raindex_address,
     c.transaction_hash,
     c.log_index,
     c.block_number,
@@ -349,23 +349,23 @@ FROM (
   FROM clear_v3_events c
   JOIN after_clear_v2_events a
     ON a.chain_id = c.chain_id
-   AND a.orderbook_address = c.orderbook_address
+   AND a.raindex_address = c.raindex_address
    AND a.transaction_hash = c.transaction_hash
    AND a.log_index = (
        SELECT MIN(ac.log_index)
        FROM after_clear_v2_events ac
        WHERE ac.chain_id = c.chain_id
-         AND ac.orderbook_address = c.orderbook_address
+         AND ac.raindex_address = c.raindex_address
          AND ac.transaction_hash = c.transaction_hash
          AND ac.log_index > c.log_index
   )
   JOIN latest_order_events oeB
     ON oeB.chain_id = c.chain_id
-   AND oeB.orderbook_address = c.orderbook_address
+   AND oeB.raindex_address = c.raindex_address
    AND oeB.order_hash = c.bob_order_hash
   JOIN order_ios io_bo
     ON io_bo.chain_id = oeB.chain_id
-   AND io_bo.orderbook_address = oeB.orderbook_address
+   AND io_bo.raindex_address = oeB.raindex_address
    AND io_bo.transaction_hash = oeB.transaction_hash
    AND io_bo.log_index = oeB.log_index
    AND io_bo.io_index = c.bob_output_io_index

@@ -91,14 +91,14 @@ mod tests {
     }
 
     #[test]
-    fn builds_count_with_orderbooks() {
+    fn builds_count_with_raindexes() {
         let args = FetchOrdersArgs {
             chain_ids: vec![1],
-            orderbook_addresses: vec![Address::ZERO],
+            raindex_addresses: vec![Address::ZERO],
             ..FetchOrdersArgs::default()
         };
         let stmt = build_fetch_orders_count_stmt(&args).unwrap();
-        assert!(stmt.sql.contains("AND oe.orderbook_address IN (?"));
+        assert!(stmt.sql.contains("AND oe.raindex_address IN (?"));
     }
 
     #[test]

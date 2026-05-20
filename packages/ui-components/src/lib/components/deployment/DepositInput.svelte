@@ -3,7 +3,7 @@
 		type OrderBuilderDepositCfg,
 		type TokenDeposit,
 		type TokenInfo
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import { Input } from 'flowbite-svelte';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';

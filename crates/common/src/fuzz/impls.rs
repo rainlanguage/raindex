@@ -1,5 +1,5 @@
 use super::*;
-use crate::add_order::ORDERBOOK_ORDER_ENTRYPOINTS;
+use crate::add_order::RAINDEX_ORDER_ENTRYPOINTS;
 use alloy::primitives::private::rand;
 use alloy::primitives::Address;
 use alloy::primitives::B256;
@@ -21,14 +21,14 @@ use rain_interpreter_eval::eval::ForkParseArgs;
 use rain_interpreter_eval::fork::{Forker, NewForkedEvm};
 pub use rain_interpreter_eval::trace::{RainEvalResult, RainEvalResults, TraceSearchError};
 use rain_interpreter_eval::{error::ForkCallError, eval::ForkEvalArgs};
-use rain_orderbook_app_settings::blocks::BlockError;
-use rain_orderbook_app_settings::scenario::ScenarioCfg;
-use rain_orderbook_app_settings::yaml::dotrain::DotrainYamlValidation;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::blocks::BlockError;
+use raindex_app_settings::scenario::ScenarioCfg;
+use raindex_app_settings::yaml::dotrain::DotrainYamlValidation;
+use raindex_app_settings::{
     order::OrderIOCfg,
     yaml::{dotrain::DotrainYaml, YamlError, YamlParsable},
 };
-use rain_orderbook_bindings::IERC20Metadata;
+use raindex_bindings::IERC20Metadata;
 use std::collections::HashMap;
 use std::sync::Arc;
 use thiserror::Error;
@@ -286,13 +286,13 @@ impl FuzzRunner {
 
                     let rainlang_string = RainDocument::compose_text(
                         &dotrain,
-                        &ORDERBOOK_ORDER_ENTRYPOINTS,
+                        &RAINDEX_ORDER_ENTRYPOINTS,
                         None,
                         Some(final_bindings),
                     )?;
 
                     // Create a 5x5 grid of zero values for context - later we'll
-                    // replace these with sane values based on Orderbook context
+                    // replace these with sane values based on Raindex context
                     let mut context = vec![vec![U256::from(0); 5]; 5];
                     // set random hash for context order hash cell
                     context[1][0] = rand::random();
@@ -439,14 +439,14 @@ impl FuzzRunner {
 
         let rainlang_string = RainDocument::compose_text(
             &dotrain,
-            &ORDERBOOK_ORDER_ENTRYPOINTS,
+            &RAINDEX_ORDER_ENTRYPOINTS,
             None,
             Some(final_bindings),
         )
         .map_err(FuzzRunnerError::ComposeError)?;
 
         // Create a 5x5 grid of zero values for context - later we'll
-        // replace these with sane values based on Orderbook context
+        // replace these with sane values based on Raindex context
         let mut context = vec![vec![B256::ZERO; 5]; 5];
         // set random hash for context order hash cell
         context[1][0] = rand::random();
@@ -731,8 +731,8 @@ impl FuzzRunner {
 mod tests {
     use super::*;
     use alloy::providers::{ext::AnvilApi, Provider};
-    use rain_orderbook_app_settings::{spec_version::SpecVersion, yaml::FieldErrorKind};
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_app_settings::{spec_version::SpecVersion, yaml::FieldErrorKind};
+    use raindex_test_fixtures::LocalEvm;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
     async fn test_fuzz_runner_missing_spec_version() {
@@ -1236,7 +1236,7 @@ scenarios:
         rainlang: flare
         runs: 1
         bindings:
-            orderbook-subparser: {orderbook_subparser}
+            raindex-subparser: {raindex_subparser}
 orders:
     sell-wflr:
         network: flare
@@ -1251,9 +1251,9 @@ deployments:
         order: sell-wflr
         scenario: flare
 ---
-#orderbook-subparser !
+#raindex-subparser !
 #calculate-io
-using-words-from orderbook-subparser
+using-words-from raindex-subparser
 _: input-token(),
 _: input-token-decimals(),
 _: input-vault-id(),
@@ -1274,7 +1274,7 @@ _: 30;
 :;"#,
             rpc_url = local_evm.url(),
             rainlang_address = local_evm.rainlang,
-            orderbook_subparser = local_evm.orderbook_subparser.address(),
+            raindex_subparser = local_evm.raindex_subparser.address(),
             wflr_address = wflr_address,
             usdce_address = usdce_address,
             spec_version = SpecVersion::current()

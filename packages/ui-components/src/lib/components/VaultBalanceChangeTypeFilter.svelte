@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { type VaultBalanceChangeFilter } from '@rainlanguage/orderbook';
+	import { type VaultBalanceChangeFilter } from '@rainlanguage/raindex';
 	import DropdownCheckbox from './dropdown/DropdownCheckbox.svelte';
 	import { VAULT_BALANCE_CHANGE_FILTER_LABELS } from '../utils/vaultBalanceChangeLabels';
 

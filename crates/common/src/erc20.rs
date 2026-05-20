@@ -3,9 +3,9 @@ use alloy::primitives::{Address, U256};
 use alloy::providers::{MulticallError, Provider};
 use alloy_ethers_typecast::ReadContractParametersBuilderError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
-use rain_orderbook_app_settings::token::TokenCfg;
-use rain_orderbook_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
-use rain_orderbook_bindings::IERC20Metadata::IERC20MetadataInstance;
+use raindex_app_settings::token::TokenCfg;
+use raindex_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
+use raindex_bindings::IERC20Metadata::IERC20MetadataInstance;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -251,7 +251,7 @@ mod tests {
     use super::*;
     use alloy::{hex, sol_types::SolValue};
     use httpmock::MockServer;
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_test_fixtures::LocalEvm;
     use serde_json::json;
 
     #[tokio::test]

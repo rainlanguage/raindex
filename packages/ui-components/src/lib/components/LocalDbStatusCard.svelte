@@ -1,15 +1,11 @@
 <script lang="ts">
-	import type {
-		LocalDbStatus,
-		NetworkSyncStatus,
-		OrderbookSyncStatus
-	} from '@rainlanguage/orderbook';
+	import type { LocalDbStatus, NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
 	import LocalDbStatusBadge from './LocalDbStatusBadge.svelte';
 	import LocalDbStatusModal from './LocalDbStatusModal.svelte';
 	import { ChevronRightOutline } from 'flowbite-svelte-icons';
 
 	export let networkStatuses: Map<number, NetworkSyncStatus> = new Map();
-	export let orderbookStatuses: Map<string, OrderbookSyncStatus> = new Map();
+	export let raindexStatuses: Map<string, RaindexSyncStatus> = new Map();
 
 	let modalOpen = false;
 
@@ -47,4 +43,4 @@
 	</button>
 </div>
 
-<LocalDbStatusModal bind:open={modalOpen} {networkStatuses} {orderbookStatuses} />
+<LocalDbStatusModal bind:open={modalOpen} {networkStatuses} {raindexStatuses} />

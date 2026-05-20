@@ -6,7 +6,7 @@ use crate::{
 use alloy::primitives::U256;
 use chrono::TimeDelta;
 use rain_math_float::Float;
-use rain_orderbook_math::{BigUintMath, ONE18};
+use raindex_math::{BigUintMath, ONE18};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 #[cfg(target_family = "wasm")]
@@ -165,7 +165,7 @@ mod tests {
     use crate::{
         performance::vol::VolumeDetails,
         types::common::{
-            SgBigInt, SgBytes, SgOrderbook, SgTradeEvent, SgTradeStructPartialOrder,
+            SgBigInt, SgBytes, SgRaindex, SgTradeEvent, SgTradeStructPartialOrder,
             SgTradeVaultBalanceChange, SgTransaction, SgVaultBalanceChangeVault,
         },
     };
@@ -359,7 +359,7 @@ mod tests {
                 },
             },
             timestamp: SgBigInt("1".to_string()),
-            orderbook: SgOrderbook { id: bytes.clone() },
+            raindex: SgRaindex { id: bytes.clone() },
             output_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
                 __typename: "TradeVaultBalanceChange".to_string(),
@@ -378,7 +378,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: SgBigInt("1".to_string()),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
             },
             input_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
@@ -398,7 +398,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: SgBigInt("1".to_string()),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
             },
         };
 
@@ -419,7 +419,7 @@ mod tests {
                 },
             },
             timestamp: SgBigInt("2".to_string()),
-            orderbook: SgOrderbook { id: bytes.clone() },
+            raindex: SgRaindex { id: bytes.clone() },
             output_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
                 __typename: "TradeVaultBalanceChange".to_string(),
@@ -438,7 +438,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: SgBigInt("1".to_string()),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
             },
             input_vault_balance_change: SgTradeVaultBalanceChange {
                 id: bytes.clone(),
@@ -458,7 +458,7 @@ mod tests {
                     block_number: bigint.clone(),
                     timestamp: SgBigInt("1".to_string()),
                 },
-                orderbook: SgOrderbook { id: bytes.clone() },
+                raindex: SgRaindex { id: bytes.clone() },
             },
         };
         vec![trade2, trade1]

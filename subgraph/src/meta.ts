@@ -1,4 +1,4 @@
-import { MetaV1_2 } from "../generated/OrderBook/OrderBook";
+import { MetaV1_2 } from "../generated/Raindex/Raindex";
 import { Order } from "../generated/schema";
 import { makeOrderId } from "./order";
 

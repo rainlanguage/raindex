@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { test } from '@fast-check/vitest';
-import { Float } from '@rainlanguage/orderbook';
+import { Float } from '@rainlanguage/raindex';
 
 /**
  * Validates an amount against a balance and returns validation results

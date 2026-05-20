@@ -25,7 +25,7 @@ impl From<GetOrdersFilters> for FetchOrdersArgs {
             owners: filters.owners,
             order_hash: filters.order_hash,
             tokens,
-            orderbook_addresses: filters.orderbook_addresses.unwrap_or_default(),
+            raindex_addresses: filters.raindex_addresses.unwrap_or_default(),
             has_positive_output_vault_balance: filters.has_positive_output_vault_balance,
             ..FetchOrdersArgs::default()
         }
@@ -51,8 +51,8 @@ mod tests {
     fn from_get_orders_filters_builds_args() {
         let owner = Address::from_str("0x0123456789ABCDEF0123456789ABCDEF01234567").unwrap();
         let token = Address::from_str("0x89ABCDEF0123456789ABCDEF0123456789ABCDEF").unwrap();
-        let orderbook1 = address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
-        let orderbook2 = address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+        let raindex1 = address!("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        let raindex2 = address!("0xBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
         let filters = GetOrdersFilters {
             owners: vec![owner],
             active: Some(true),
@@ -63,7 +63,7 @@ mod tests {
                 inputs: Some(vec![token]),
                 outputs: None,
             }),
-            orderbook_addresses: Some(vec![orderbook1, orderbook2]),
+            raindex_addresses: Some(vec![raindex1, raindex2]),
             has_positive_output_vault_balance: Some(true),
         };
         let args: FetchOrdersArgs = filters.into();
@@ -83,40 +83,40 @@ mod tests {
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
             ))
         );
-        assert_eq!(args.orderbook_addresses.len(), 2);
-        assert_eq!(args.orderbook_addresses[0], orderbook1);
-        assert_eq!(args.orderbook_addresses[1], orderbook2);
+        assert_eq!(args.raindex_addresses.len(), 2);
+        assert_eq!(args.raindex_addresses[0], raindex1);
+        assert_eq!(args.raindex_addresses[1], raindex2);
         assert_eq!(args.has_positive_output_vault_balance, Some(true));
     }
 
     #[test]
-    fn from_get_orders_filters_none_orderbook_addresses_becomes_empty_vec() {
+    fn from_get_orders_filters_none_raindex_addresses_becomes_empty_vec() {
         let filters = GetOrdersFilters {
             owners: vec![],
             active: None,
             order_hash: None,
             tokens: None,
-            orderbook_addresses: None,
+            raindex_addresses: None,
             has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
-        assert!(args.orderbook_addresses.is_empty());
+        assert!(args.raindex_addresses.is_empty());
     }
 
     #[test]
-    fn from_get_orders_filters_single_orderbook_address() {
-        let orderbook = address!("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF");
+    fn from_get_orders_filters_single_raindex_address() {
+        let raindex = address!("0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF");
         let filters = GetOrdersFilters {
             owners: vec![],
             active: None,
             order_hash: None,
             tokens: None,
-            orderbook_addresses: Some(vec![orderbook]),
+            raindex_addresses: Some(vec![raindex]),
             has_positive_output_vault_balance: None,
         };
         let args: FetchOrdersArgs = filters.into();
-        assert_eq!(args.orderbook_addresses.len(), 1);
-        assert_eq!(args.orderbook_addresses[0], orderbook);
+        assert_eq!(args.raindex_addresses.len(), 1);
+        assert_eq!(args.raindex_addresses[0], raindex);
     }
 
     #[cfg(target_family = "wasm")]
@@ -132,7 +132,7 @@ mod tests {
         use wasm_bindgen_test::*;
         use wasm_bindgen_utils::prelude::*;
 
-        fn orderbook() -> Address {
+        fn raindex() -> Address {
             Address::from([0x11; 20])
         }
 
@@ -150,7 +150,7 @@ mod tests {
                 "0x0000000000000000000000000000000000000000000000000000000000000001"
             ));
             args.chain_ids = vec![137];
-            args.orderbook_addresses = vec![orderbook()];
+            args.raindex_addresses = vec![raindex()];
 
             let expected_stmt = build_fetch_orders_stmt(&args).unwrap();
 

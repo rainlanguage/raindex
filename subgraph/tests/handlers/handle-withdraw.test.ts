@@ -65,18 +65,18 @@ describe("Handle withdraw", () => {
 
     handleWithdraw(event);
 
-    // we should have an orderbook entity
+    // we should have a raindex entity
     assert.entityCount(
-      "Orderbook",
+      "Raindex",
       1,
-      "Expected exactly 1 Orderbook entity after first withdraw"
+      "Expected exactly 1 Raindex entity after first withdraw"
     );
     assert.fieldEquals(
-      "Orderbook",
+      "Raindex",
       event.address.toHexString(),
       "id",
       event.address.toHexString(),
-      "Orderbook entity id does not match event address"
+      "Raindex entity id does not match event address"
     );
 
     // check vault entity

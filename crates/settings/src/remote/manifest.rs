@@ -56,11 +56,11 @@ mod tests {
         let server = MockServer::start_async().await;
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com/dump1"
         end-block: 123
@@ -82,20 +82,20 @@ networks:
             .unwrap();
 
         assert_eq!(manifest.manifest_version, 1);
-        assert_eq!(manifest.db_schema_version, 2);
+        assert_eq!(manifest.db_schema_version, 3);
         let net = manifest.networks.get("mainnet").unwrap();
         assert_eq!(net.chain_id, 1);
-        assert_eq!(net.orderbooks.len(), 1);
+        assert_eq!(net.raindexes.len(), 1);
         assert_eq!(
-            net.orderbooks[0].address,
+            net.raindexes[0].address,
             address!("0x0000000000000000000000000000000000000001")
         );
-        assert_eq!(net.orderbooks[0].end_block, 123);
+        assert_eq!(net.raindexes[0].end_block, 123);
         assert_eq!(
-            net.orderbooks[0].end_block_hash,
+            net.raindexes[0].end_block_hash,
             Bytes::from_str("0x0abc").unwrap()
         );
-        assert_eq!(net.orderbooks[0].end_block_time_ms, 1000);
+        assert_eq!(net.raindexes[0].end_block_time_ms, 1000);
 
         // find helper
         let found = manifest.find(1, address!("0x0000000000000000000000000000000000000001"));
@@ -107,19 +107,19 @@ networks:
         let server = MockServer::start_async().await;
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 extra-root: ignored
 networks:
   goerli:
     chain-id: 5
     extra: ignored
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000002"
         dump-url: "http://example.com/dump2"
         end-block: 555
         end-block-hash: "0x0def"
         end-block-time-ms: 2000
-        extra-ob: ignored
+        extra-raindex: ignored
 "#;
 
         server
@@ -136,7 +136,7 @@ networks:
         assert!(manifest.networks.contains_key("goerli"));
         let net = manifest.networks.get("goerli").unwrap();
         assert_eq!(net.chain_id, 5);
-        assert_eq!(net.orderbooks.len(), 1);
+        assert_eq!(net.raindexes.len(), 1);
     }
 
     #[tokio::test]
@@ -169,11 +169,11 @@ networks:
         let server = MockServer::start_async().await;
         let yaml = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: 123 # invalid type
         dump-url: "not-a-url"
         end-block: 0
@@ -215,11 +215,11 @@ networks:
 
         let yaml_one = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   mainnet:
     chain-id: 1
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000001"
         dump-url: "http://example.com/dump1"
         end-block: 123
@@ -229,11 +229,11 @@ networks:
 
         let yaml_two = r#"
 manifest-version: 1
-db-schema-version: 2
+db-schema-version: 3
 networks:
   goerli:
     chain-id: 5
-    orderbooks:
+    raindexes:
       - address: "0x0000000000000000000000000000000000000002"
         dump-url: "http://example.com/dump2"
         end-block: 555

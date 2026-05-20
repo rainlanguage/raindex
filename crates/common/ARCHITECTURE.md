@@ -1,10 +1,10 @@
-# rain_orderbook_common — Architecture & Reference
+# raindex_common — Architecture & Reference
 
-This crate provides the shared core for the Rain Orderbook toolchain across native (CLI, services) and WebAssembly (browser) targets. It bundles higher‑level orchestration around:
+This crate provides the shared core for the Raindex toolchain across native (CLI, services) and WebAssembly (browser) targets. It bundles higher‑level orchestration around:
 
 - Parsing and composing Rain language (Rainlang) and DOTRAIN YAML frontmatter.
-- Building and executing Orderbook contract calls (add/remove orders, deposit, withdraw), including Ledger support on native.
-- Querying orderbook state via the subgraph and flattening results for display/CSV export.
+- Building and executing Raindex contract calls (add/remove orders, deposit, withdraw), including Ledger support on native.
+- Querying raindex state via the subgraph and flattening results for display/CSV export.
 - A WASM‑friendly API surface for UI apps (via `wasm_bindgen_utils` and `tsify`).
 - Developer ergonomics: LSP helpers, fuzz/unit‑test runners, and EVM fork utilities to parse/evaluate Rainlang and replay transactions.
 
@@ -19,8 +19,8 @@ The library is built as `rlib` and `cdylib`. A Git commit identifier is embedded
 - `withdraw` — `withdraw3` call builder/executor and calldata generator.
 - `transaction` — Shared tx args (RPCs, chain ID, fees), Ledger provider creation (native), and `WriteContractParameters` helpers.
 - `erc20` — Typed ERC20 reads (decimals/name/symbol/allowance/balance), multicall token info, and robust revert decoding.
-- `subgraph` — Thin wrapper to instantiate an orderbook subgraph client from a URL.
-- `raindex_client/*` — High‑level client over orderbook YAML config: find networks/orderbooks, fetch orders, vaults, trades, transactions; quote orders; prepare batch withdraw calldata; expose WASM‑friendly structs. The `local_db/` subtree is split into `state.rs` (runtime state, query routing via `LocalDbState`/`QuerySource`/`SyncReadiness`) and `status.rs` (UI status‑reporting types).
+- `subgraph` — Thin wrapper to instantiate a raindex subgraph client from a URL.
+- `raindex_client/*` — High‑level client over raindex YAML config: find networks/raindexes, fetch orders, vaults, trades, transactions; quote orders; prepare batch withdraw calldata; expose WASM‑friendly structs. The `local_db/` subtree is split into `state.rs` (runtime state, query routing via `LocalDbState`/`QuerySource`/`SyncReadiness`) and `status.rs` (UI status‑reporting types).
 - `dotrain_order` — Parse and validate a DOTRAIN config; compose scenarios/deployments to Rainlang; fetch authoring metadata and pragma words; merge additional settings.
 - `rainlang` — Compose Rainlang from a DOTRAIN string + bindings; optional fork‑based parser that returns encoded bytecode.
 - `dotrain_add_order_lsp` — Language‑services integration for Rainlang/DOTRAIN (hover, completion, diagnostics, and fork‑parse problems).
@@ -41,7 +41,7 @@ Target gating is used extensively:
 ## Key Data Flow & Responsibilities
 
 ### 1) DOTRAIN → Rainlang → Bytecode (add_order)
-- Inputs: DOTRAIN (YAML frontmatter + Rainlang sections), selected scenario/deployment (from `rain_orderbook_app_settings`), and bindings.
+- Inputs: DOTRAIN (YAML frontmatter + Rainlang sections), selected scenario/deployment (from `raindex_app_settings`), and bindings.
 - `AddOrderArgs::compose_to_rainlang` uses `rainlang::compose_to_rainlang` to produce the Rainlang snippet for order entrypoints (`calculate-io`, `handle-io`).
 - Parser address is discovered via `DISPair::from_deployer`; the Rainlang text is parsed by `ParserV2::parse_text` over provided RPCs to produce bytecode.
 - Metadata is generated as a Rain Meta V1 document containing `RainlangSourceV1` and CBOR‑encoded with `rain-metadata`.
@@ -75,23 +75,23 @@ Target gating is used extensively:
 - Revert data is decoded via `rain_error_decoding` to produce human‑readable errors. For multicall `CallFailed`, the revert is decoded and mapped.
 
 ### 7) Subgraph Client Creation
-- `SubgraphArgs::to_subgraph_client` parses the URL and returns an `OrderbookSubgraphClient` bound to that endpoint.
+- `SubgraphArgs::to_subgraph_client` parses the URL and returns a raindex subgraph client bound to that endpoint.
 
-### 8) Raindex Client (orderbook YAML–driven API)
-- `RaindexClient::create` (async on WASM, aliased to `new` in JS) parses one or more orderbook YAML strings using `OrderbookYaml`, optionally with full validation. When the YAML declares `local-db-sync` sections and DB callbacks are provided, the constructor automatically sets up the local DB and starts the sync scheduler.
+### 8) Raindex Client (raindex YAML–driven API)
+- `RaindexClient::create` (async on WASM, aliased to `new` in JS) parses one or more raindex YAML strings using `RaindexYaml`, optionally with full validation. When the YAML declares `local-db-sync` sections and DB callbacks are provided, the constructor automatically sets up the local DB and starts the sync scheduler.
 - `LocalDbState` encapsulates the local DB handle, scheduler, `SyncReadiness` (tracks which chains have completed a sync cycle), and the set of configured chain IDs. Query routing uses `QuerySource::LocalDb` vs `QuerySource::Subgraph` — each chain is routed to exactly one source based on configuration and readiness.
-- Derives a map of networks and orderbooks to build `MultiSubgraphArgs` groupings for cross‑network queries.
+- Derives a map of networks and raindexes to build `MultiSubgraphArgs` groupings for cross‑network queries.
 - Exposed operations (with WASM bindings):
-  - YAML accessors: get unique chain IDs, networks, orderbooks by address, accounts, and RPC URLs.
+  - YAML accessors: get unique chain IDs, networks, raindexes by address, accounts, and RPC URLs.
   - Orders: list with filters/pagination across networks, fetch by hash, fetch orders created in a transaction.
   - Quotes: compute per‑pair quotes for an order (`get_order_quotes` under the hood), with formatted ratios and inverses.
-  - Vaults: list/query vaults for an order or orderbook, fetch balance changes, prepare withdraw multicall calldata, format balances.
+  - Vaults: list/query vaults for an order or raindex, fetch balance changes, prepare withdraw multicall calldata, format balances.
   - Trades and transactions: list trades (with optional time bounds), fetch trade detail, transaction detail.
 - Conversion helpers map subgraph types (`Sg*`) to WASM/JS‑friendly shapes (`Raindex*`) and back when needed.
 - Error surface `RaindexError` normalizes failures from YAML parsing, hex parsing, subgraph network errors, ERC20 reads, float/parse errors, etc., and provides user‑facing messages via `to_readable_msg`.
 
 ### 9) DOTRAIN Order Utilities
-- `DotrainOrder::create` extracts frontmatter from a DOTRAIN text, validates spec version, hydrates remote networks/tokens if configured, and builds both `DotrainYaml` and `OrderbookYaml` caches.
+- `DotrainOrder::create` extracts frontmatter from a DOTRAIN text, validates spec version, hydrates remote networks/tokens if configured, and builds both `DotrainYaml` and `RaindexYaml` caches.
 - Compose helpers:
   - `compose_scenario_to_rainlang` and `compose_deployment_to_rainlang` create Rainlang with scenario/deployment bindings applied.
   - `compose_scenario_to_post_task_rainlang` produces post‑task (`handle-add-order`) Rainlang.
@@ -139,18 +139,18 @@ Target gating is used extensively:
   - `rainlang::compose_to_rainlang` and native `fork_parse::parse_rainlang_on_fork`
 
 - Raindex client (selected)
-  - YAML: `get_unique_chain_ids`, `get_all_networks`, `get_network_by_chain_id`, `get_orderbook_by_address`, `get_all_accounts`
+  - YAML: `get_unique_chain_ids`, `get_all_networks`, `get_network_by_chain_id`, `get_raindex_by_address`, `get_all_accounts`
   - Orders: `get_orders`, `get_order_by_hash`, `get_add_orders_for_transaction`
   - Quotes: `RaindexOrder::get_quotes`
-  - Vaults: `get_vaults_list`, `get_orderbook_vaults_list`, `RaindexVault::{get_balance_changes, get_deposit_calldata, get_withdraw_calldata}`, `RaindexVault::get_account_balance`
+  - Vaults: `get_vaults_list`, `get_raindex_vaults_list`, `RaindexVault::{get_balance_changes, get_deposit_calldata, get_withdraw_calldata}`, `RaindexVault::get_account_balance`
   - Trades/Tx: `RaindexOrder::{get_trades_list, get_trades_count}`, `RaindexOrder::get_trade_detail`, `RaindexClient::get_transaction`
 
 - CSV & types
   - `TryIntoCsv` implemented on vectors of flattened types for export.
 
 - Constants
-  - `ORDERBOOK_ORDER_ENTRYPOINTS` = [`calculate-io`, `handle-io`]
-  - `ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS` = [`handle-add-order`]
+  - `RAINDEX_ORDER_ENTRYPOINTS` = [`calculate-io`, `handle-io`]
+  - `RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS` = [`handle-add-order`]
   - `types::vault::NO_SYMBOL` — fallback when token symbol is absent
   - `GH_COMMIT_SHA` — compile‑time commit id
 
@@ -181,8 +181,8 @@ Where functionality cannot run in WASM, equivalent calldata generation methods a
 
 ## Subgraph, YAML, and Quoting
 
-- Subgraph clients are constructed from orderbook YAML to ensure per‑network routing and naming.
-- The client supports multi‑network fan‑out via `MultiOrderbookSubgraphClient` and paginated queries.
+- Subgraph clients are constructed from raindex YAML to ensure per‑network routing and naming.
+- The client supports multi‑network fan‑out via `MultiRaindexSubgraphClient` and paginated queries.
 - Quotes use on‑chain multicall under the hood; results are converted to `Float` and pre‑formatted strings, including inverse ratios and empty/infinite cases.
 
 
@@ -200,10 +200,10 @@ Where functionality cannot run in WASM, equivalent calldata generation methods a
 
 ## Notable Dependencies (workspace crates)
 
-- `rain_orderbook_bindings` — Strongly‑typed ABI for Orderbook and ERC20 contracts (`addOrder3`, `removeOrder3`, `deposit3`, `withdraw3`, multicall).
-- `rain_orderbook_subgraph_client` — GraphQL types and clients for orderbook data; provides `Sg*` models and helpers.
-- `rain_orderbook_app_settings` — DOTRAIN/orderbook YAML structures, validation, and spec versioning.
-- `rain_orderbook_quote` — Batch quote engine for orders.
+- `raindex_bindings` — Strongly‑typed ABI for Raindex and ERC20 contracts (`addOrder3`, `removeOrder3`, `deposit3`, `withdraw3`, multicall).
+- `raindex_subgraph_client` — GraphQL types and clients for raindex data; provides `Sg*` models and helpers.
+- `raindex_app_settings` — DOTRAIN/raindex YAML structures, validation, and spec versioning.
+- `raindex_quote` — Batch quote engine for orders.
 - `rain_interpreter_*` — Parser, eval, DISP pair, bindings used to compile/evaluate Rainlang.
 - `rain_metadata` — CBOR‑encoded metadata with magic prefixes; used to embed Rainlang source.
 - `rain_error_decoding` — ABI error decoding to readable types/names.
@@ -227,7 +227,7 @@ Where functionality cannot run in WASM, equivalent calldata generation methods a
   1) For deposit, check allowance and, when it differs from the intended amount, approve the exact target before calling `deposit3`.
   2) For withdraw, construct `withdraw3` calldata or execute; batch multiple via `RaindexVaultsList::get_withdraw_calldata`.
 
-- Explore orderbook data in a UI:
+- Explore raindex data in a UI:
   1) Instantiate `RaindexClient` from YAML configs.
   2) List orders across networks; fetch vaults, trades, and quotes for selected orders.
   3) Render CSV exports using `TryIntoCsv` on flattened types.

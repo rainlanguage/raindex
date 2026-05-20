@@ -26,7 +26,7 @@ mod wasm_tests {
     async fn wrapper_uses_builder_sql_exactly() {
         let args = FetchAllTokensArgs {
             chain_ids: vec![1, 137],
-            orderbook_addresses: vec![Address::from([0x11; 20])],
+            raindex_addresses: vec![Address::from([0x11; 20])],
         };
 
         let expected_stmt = build_fetch_all_tokens_stmt(&args).unwrap();

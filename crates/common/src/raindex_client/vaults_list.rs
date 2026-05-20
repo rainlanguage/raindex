@@ -1,6 +1,6 @@
 use alloy::{primitives::Bytes, sol_types::SolCall};
 use rain_math_float::Float;
-use rain_orderbook_bindings::OrderBook::multicallCall;
+use raindex_bindings::Raindex::multicallCall;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use wasm_bindgen_utils::prelude::*;
@@ -51,11 +51,11 @@ impl RaindexVaultsList {
         if vaults_to_withdraw.is_empty() {
             return Err(VaultsListError::NoWithdrawableVaults);
         }
-        let mut orderbook_id_iter = vaults_to_withdraw.iter().map(|v| v.orderbook());
-        let first_orderbook_id = orderbook_id_iter.next();
-        if let Some(first_id) = first_orderbook_id {
-            if orderbook_id_iter.any(|id| id != first_id) {
-                return Err(VaultsListError::MultipleOrderbooksUsed);
+        let mut raindex_id_iter = vaults_to_withdraw.iter().map(|v| v.raindex());
+        let first_raindex_id = raindex_id_iter.next();
+        if let Some(first_id) = first_raindex_id {
+            if raindex_id_iter.any(|id| id != first_id) {
+                return Err(VaultsListError::MultipleRaindexesUsed);
             }
         }
         // Generate multicall calldata for all vaults
@@ -210,8 +210,8 @@ pub enum VaultsListError {
     WithdrawMulticallError(String),
     #[error("No withdrawable vaults available")]
     NoWithdrawableVaults,
-    #[error("All vaults must share the same orderbook for batch withdrawal")]
-    MultipleOrderbooksUsed,
+    #[error("All vaults must share the same raindex for batch withdrawal")]
+    MultipleRaindexesUsed,
 }
 
 impl VaultsListError {
@@ -221,8 +221,8 @@ impl VaultsListError {
                 format!("Failed to generate withdraw multicall: {}", err)
             }
             VaultsListError::NoWithdrawableVaults => "No withdrawable vaults available".to_string(),
-            VaultsListError::MultipleOrderbooksUsed => {
-                "All vaults must share the same orderbook for batch withdrawal".to_string()
+            VaultsListError::MultipleRaindexesUsed => {
+                "All vaults must share the same raindex for batch withdrawal".to_string()
             }
         }
     }
@@ -267,7 +267,7 @@ mod tests {
                 "symbol": "TKN1",
                 "decimals": "18"
               },
-              "orderbook": {
+              "raindex": {
                 "id": "0x0000000000000000000000000000000000000000"
               },
               "ordersAsOutput": [],
@@ -289,7 +289,7 @@ mod tests {
                     "symbol": "TKN2",
                     "decimals": "18"
                 },
-                "orderbook": {
+                "raindex": {
                     "id": "0x0000000000000000000000000000000000000000"
                 },
                 "ordersAsOutput": [],

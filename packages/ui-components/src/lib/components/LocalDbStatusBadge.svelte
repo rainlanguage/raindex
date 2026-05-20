@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { LocalDbStatus } from '@rainlanguage/orderbook';
+	import type { LocalDbStatus } from '@rainlanguage/raindex';
 
 	const STATUS_LABELS: Record<LocalDbStatus, string> = {
 		active: 'Active',

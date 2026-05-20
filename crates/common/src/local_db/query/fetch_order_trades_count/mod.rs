@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlBuildError, SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use alloy::primitives::B256;
 use serde::{Deserialize, Serialize};
@@ -20,14 +20,14 @@ const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
 const END_TS_BODY: &str = "\nAND block_timestamp <= {param}\n";
 
 pub fn build_fetch_trade_count_stmt(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     order_hash: B256,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
-    stmt.push(SqlValue::from(ob_id.chain_id));
-    stmt.push(SqlValue::from(ob_id.orderbook_address));
+    stmt.push(SqlValue::from(raindex_id.chain_id));
+    stmt.push(SqlValue::from(raindex_id.raindex_address));
     stmt.push(SqlValue::from(order_hash));
 
     // Optional time filters
@@ -75,7 +75,7 @@ mod tests {
     #[test]
     fn builds_with_time_filters() {
         let stmt = build_fetch_trade_count_stmt(
-            &OrderbookIdentifier::new(137, Address::ZERO),
+            &RaindexIdentifier::new(137, Address::ZERO),
             b256!("0x0000000000000000000000000000000000000000000000000000000000ABCDEF"),
             Some(1000),
             Some(2000),
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn builds_without_time_filters_when_none() {
         let stmt = build_fetch_trade_count_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef"),
             None,
             None,

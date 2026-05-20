@@ -9,7 +9,7 @@ use crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow;
 use crate::local_db::query::upsert_target_watermark::upsert_target_watermark_stmt;
 use crate::local_db::query::upsert_vault_balances::upsert_vault_balances_batch;
 use crate::local_db::query::{LocalDbQueryExecutor, SqlStatement, SqlStatementBatch};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use crate::local_db::{decode::DecodedEventData, LocalDbError};
 use crate::rpc_client::LogEntryResponse;
 use alloy::primitives::{Address, B256};
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ApplyPipelineTargetInfo {
-    pub ob_id: OrderbookIdentifier,
+    pub raindex_id: RaindexIdentifier,
     pub start_block: u64,
     pub target_block: u64,
     pub hash: B256,
@@ -30,8 +30,8 @@ pub struct ApplyPipelineTargetInfo {
 /// - Build a transactional batch containing:
 ///   - Raw events INSERTs.
 ///   - Token upserts for provided `(Address, TokenInfo)` pairs.
-///   - Decoded event INSERTs for all orderbook-scoped tables, binding the
-///     target orderbook.
+///   - Decoded event INSERTs for all raindex-scoped tables, binding the
+///     target raindex.
 ///   - Vault balance change/running balance upserts.
 ///   - Watermark update to the `target_block` (and later last hash).
 /// - Persist the batch with a single-writer gate; must assert that the batch
@@ -66,24 +66,24 @@ pub trait ApplyPipeline {
         let mut batch = SqlStatementBatch::new();
 
         // Raw events first
-        let raw_batch = build_raw_event_sql(&target_info.ob_id, raw_logs)?;
+        let raw_batch = build_raw_event_sql(&target_info.raindex_id, raw_logs)?;
         batch.extend(raw_batch);
 
         // Token upserts for the missing set only
         if !tokens_to_upsert.is_empty() {
-            let upserts = build_token_upserts(&target_info.ob_id, tokens_to_upsert);
+            let upserts = build_token_upserts(&target_info.raindex_id, tokens_to_upsert);
             batch.extend(upserts);
         }
 
-        // Decoded orderbook/store events
+        // Decoded raindex/store events
         let decoded_batch =
-            build_decoded_event_sql(&target_info.ob_id, decoded_events, &decimals_by_token)?;
+            build_decoded_event_sql(&target_info.raindex_id, decoded_events, &decimals_by_token)?;
         batch.extend(decoded_batch);
 
         // Vault balance change/running balance updates
         if target_info.start_block <= target_info.target_block {
             batch.extend(upsert_vault_balances_batch(
-                &target_info.ob_id,
+                &target_info.raindex_id,
                 target_info.start_block,
                 target_info.target_block,
             ));
@@ -91,7 +91,7 @@ pub trait ApplyPipeline {
 
         // Watermark update to target block
         batch.add(upsert_target_watermark_stmt(
-            &target_info.ob_id,
+            &target_info.raindex_id,
             target_info.target_block,
             target_info.hash.into(),
         ));
@@ -118,7 +118,7 @@ pub trait ApplyPipeline {
     async fn export_dump<DB>(
         &self,
         _db: &DB,
-        _ob_id: &OrderbookIdentifier,
+        _raindex_id: &RaindexIdentifier,
         _end_block: u64,
     ) -> Result<(), LocalDbError>
     where
@@ -145,19 +145,19 @@ impl ApplyPipeline for DefaultApplyPipeline {}
 mod tests {
     use super::*;
     use crate::local_db::query::{LocalDbQueryError, SqlStatement, SqlValue};
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use alloy::primitives::{b256, Bytes, B256, U256};
 
     const SAMPLE_HASH_B256: B256 =
         b256!("0x111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000");
 
     fn build_target_info(
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         start_block: u64,
         target_block: u64,
     ) -> ApplyPipelineTargetInfo {
         ApplyPipelineTargetInfo {
-            ob_id: ob_id.clone(),
+            raindex_id: raindex_id.clone(),
             start_block,
             target_block,
             hash: SAMPLE_HASH_B256,
@@ -221,13 +221,13 @@ mod tests {
         }
     }
 
-    fn sample_ob_id() -> OrderbookIdentifier {
-        OrderbookIdentifier::new(137, Address::from([0u8; 20]))
+    fn sample_raindex_id() -> RaindexIdentifier {
+        RaindexIdentifier::new(137, Address::from([0u8; 20]))
     }
 
     fn deposit_event(addr: Address) -> DecodedEventData<DecodedEvent> {
         use crate::local_db::decode::EventType;
-        use rain_orderbook_bindings::IRaindexV6::DepositV2;
+        use raindex_bindings::IRaindexV6::DepositV2;
         DecodedEventData {
             event_type: EventType::DepositV2,
             block_number: U256::from(1),
@@ -247,7 +247,7 @@ mod tests {
 
     fn withdraw_event(addr: Address) -> DecodedEventData<DecodedEvent> {
         use crate::local_db::decode::EventType;
-        use rain_orderbook_bindings::IRaindexV6::WithdrawV2;
+        use raindex_bindings::IRaindexV6::WithdrawV2;
         DecodedEventData {
             event_type: EventType::WithdrawV2,
             block_number: U256::from(0x10),
@@ -270,13 +270,13 @@ mod tests {
     #[test]
     fn build_batch_contains_watermark() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([3u8; 20]);
 
         // existing token with decimals 18
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token,
             name: "Token".into(),
             symbol: "TKN".into(),
@@ -287,7 +287,7 @@ mod tests {
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 123),
+                &build_target_info(&raindex_id, 1, 123),
                 &[],
                 &decoded,
                 &existing,
@@ -355,10 +355,10 @@ mod tests {
     #[test]
     fn empty_work_window_only_watermark() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         let batch = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 42), &[], &[], &[], &[])
+            .build_batch(&build_target_info(&raindex_id, 1, 42), &[], &[], &[], &[])
             .expect("batch ok");
 
         // Expect vault balance refresh plus the watermark and ANALYZE when there is no work.
@@ -380,13 +380,13 @@ mod tests {
         use rain_math_float::Float;
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([7u8; 20]);
 
         // Existing says 6 decimals
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token,
             name: "Token".into(),
             symbol: "T6".into(),
@@ -405,7 +405,7 @@ mod tests {
         let decoded = vec![deposit_event(token)];
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &existing,
@@ -420,7 +420,7 @@ mod tests {
             .find(|s| s.sql().starts_with("INSERT INTO deposits"))
             .expect("deposit insert present");
 
-        // Params: [chain_id, orderbook, block_number, block_timestamp, tx_hash, log_index, sender, token, vault_id, deposit_amount, deposit_amount_uint256]
+        // Params: [chain_id, raindex, block_number, block_timestamp, tx_hash, log_index, sender, token, vault_id, deposit_amount, deposit_amount_uint256]
         let deposit_amount_param = stmt.params().get(9).expect("param 10 present");
         let expected = Float::from_fixed_decimal(U256::from(1000u64), 18)
             .unwrap()
@@ -443,13 +443,13 @@ mod tests {
         use rain_math_float::Float;
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([10u8; 20]);
 
         // Existing has an invalid address string
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: Address::ZERO,
             name: "Bad".into(),
             symbol: "BAD".into(),
@@ -468,7 +468,7 @@ mod tests {
         let decoded = vec![deposit_event(token)];
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &existing,
@@ -496,12 +496,18 @@ mod tests {
     #[test]
     fn missing_decimals_yields_error() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([9u8; 20]);
         let decoded = vec![deposit_event(token)];
 
         let err = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 1), &[], &decoded, &[], &[])
+            .build_batch(
+                &build_target_info(&raindex_id, 1, 1),
+                &[],
+                &decoded,
+                &[],
+                &[],
+            )
             .unwrap_err();
 
         use crate::local_db::insert::InsertError;
@@ -516,14 +522,14 @@ mod tests {
     #[test]
     fn token_upserts_generated_for_provided_tokens() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         // Existing has A; upserts contain B
         let token_a = Address::from([1u8; 20]);
         let token_b = Address::from([2u8; 20]);
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token_a,
             name: "A".into(),
             symbol: "A".into(),
@@ -540,7 +546,7 @@ mod tests {
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 1),
+                &build_target_info(&raindex_id, 1, 1),
                 &[],
                 &[],
                 &existing,
@@ -572,12 +578,12 @@ mod tests {
     #[test]
     fn watermark_param_matches_target_block() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         let target_block = 12345u64;
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, target_block),
+                &build_target_info(&raindex_id, 1, target_block),
                 &[],
                 &[],
                 &[],
@@ -615,13 +621,13 @@ mod tests {
         use rain_math_float::Float;
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([13u8; 20]);
 
         // Only existing provides decimals
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token,
             name: "E".into(),
             symbol: "E".into(),
@@ -631,7 +637,7 @@ mod tests {
         let decoded = vec![deposit_event(token)];
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &existing,
@@ -697,7 +703,7 @@ mod tests {
         use rain_math_float::Float;
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([11u8; 20]);
 
         // Provide two upserts for same token with differing decimals; later should win
@@ -723,7 +729,7 @@ mod tests {
         let decoded = vec![deposit_event(token)];
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &[],
@@ -760,7 +766,7 @@ mod tests {
     #[test]
     fn token_upserts_chain_id_param_matches_target() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         let token = Address::from([5u8; 20]);
         let upserts = vec![(
@@ -773,7 +779,13 @@ mod tests {
         )];
 
         let batch = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 1), &[], &[], &[], &upserts)
+            .build_batch(
+                &build_target_info(&raindex_id, 1, 1),
+                &[],
+                &[],
+                &[],
+                &upserts,
+            )
             .expect("batch ok");
 
         let stmt = batch
@@ -783,10 +795,10 @@ mod tests {
             .expect("token upsert present");
         match stmt.params().first() {
             Some(crate::local_db::query::SqlValue::U64(chain)) => {
-                assert_eq!(*chain, ob_id.chain_id as u64);
+                assert_eq!(*chain, raindex_id.chain_id as u64);
             }
             Some(crate::local_db::query::SqlValue::I64(chain)) => {
-                assert_eq!(*chain as u64, ob_id.chain_id as u64);
+                assert_eq!(*chain as u64, raindex_id.chain_id as u64);
             }
             other => panic!("unexpected chain_id param: {other:?}"),
         }
@@ -795,7 +807,7 @@ mod tests {
     #[test]
     fn raw_events_sorted_by_block_then_log() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         // Two raw logs out of order
         let mk = |block: u64, log_index: u64| {
@@ -817,7 +829,13 @@ mod tests {
         let b = mk(10, 3);
 
         let batch = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 10), &[a, b], &[], &[], &[])
+            .build_batch(
+                &build_target_info(&raindex_id, 1, 10),
+                &[a, b],
+                &[],
+                &[],
+                &[],
+            )
             .expect("batch ok");
 
         let raws: Vec<_> = batch
@@ -845,7 +863,7 @@ mod tests {
     #[test]
     fn only_raw_logs_emitted_when_no_tokens_or_decoded() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         let mk = |block: u64, log_index: u64| LogEntryResponse {
             address: Address::from([0x11; 20]),
@@ -870,7 +888,7 @@ mod tests {
         let raw = [mk(1, 0), mk(1, 1)];
 
         let batch = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 2), &raw, &[], &[], &[])
+            .build_batch(&build_target_info(&raindex_id, 1, 2), &raw, &[], &[], &[])
             .expect("batch ok");
 
         let texts: Vec<_> = batch.statements().iter().map(|s| s.sql()).collect();
@@ -889,9 +907,9 @@ mod tests {
     #[test]
     fn watermark_emitted_exactly_once() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let batch = pipeline
-            .build_batch(&build_target_info(&ob_id, 1, 77), &[], &[], &[], &[])
+            .build_batch(&build_target_info(&raindex_id, 1, 77), &[], &[], &[], &[])
             .expect("batch ok");
         let count = batch
             .statements()
@@ -904,12 +922,12 @@ mod tests {
     #[test]
     fn analyze_emitted_exactly_once_and_is_last() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([3u8; 20]);
 
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token,
             name: "Token".into(),
             symbol: "TKN".into(),
@@ -919,7 +937,7 @@ mod tests {
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &existing,
@@ -948,7 +966,7 @@ mod tests {
     #[test]
     fn statements_order_raw_then_tokens_then_decoded_then_watermark() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         // Build one raw, one token upsert, one decoded deposit
         let mk_raw = |block: u64, log_index: u64| LogEntryResponse {
@@ -984,7 +1002,7 @@ mod tests {
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 9),
+                &build_target_info(&raindex_id, 1, 9),
                 &[mk_raw(9, 0)],
                 &decoded,
                 &[],
@@ -1021,12 +1039,12 @@ mod tests {
     #[test]
     fn deterministic_batch_shape_for_identical_inputs() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([3u8; 20]);
 
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token,
             name: "Token".into(),
             symbol: "TKN".into(),
@@ -1036,7 +1054,7 @@ mod tests {
 
         let b1 = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 5),
+                &build_target_info(&raindex_id, 1, 5),
                 &[],
                 &decoded,
                 &existing,
@@ -1045,7 +1063,7 @@ mod tests {
             .expect("b1 ok");
         let b2 = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 5),
+                &build_target_info(&raindex_id, 1, 5),
                 &[],
                 &decoded,
                 &existing,
@@ -1063,12 +1081,12 @@ mod tests {
     #[test]
     fn includes_withdraw_decoded_events() {
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([12u8; 20]);
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 5),
+                &build_target_info(&raindex_id, 1, 5),
                 &[],
                 &[withdraw_event(token)],
                 &[],
@@ -1088,15 +1106,15 @@ mod tests {
         use rain_math_float::Float;
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
 
         // Two tokens: A gets decimals from existing, B from upserts
         let token_a = Address::from([21u8; 20]);
         let token_b = Address::from([22u8; 20]);
 
         let existing = vec![Erc20TokenRow {
-            chain_id: ob_id.chain_id as u32,
-            orderbook_address: ob_id.orderbook_address,
+            chain_id: raindex_id.chain_id as u32,
+            raindex_address: raindex_id.raindex_address,
             token_address: token_a,
             name: "A".into(),
             symbol: "A".into(),
@@ -1114,7 +1132,7 @@ mod tests {
         let decoded = vec![deposit_event(token_a), deposit_event(token_b)];
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 100),
+                &build_target_info(&raindex_id, 1, 100),
                 &[],
                 &decoded,
                 &existing,
@@ -1168,12 +1186,12 @@ mod tests {
         use alloy::{hex, primitives::U256};
 
         let pipeline = DefaultApplyPipeline::new();
-        let ob_id = sample_ob_id();
+        let raindex_id = sample_raindex_id();
         let token = Address::from([15u8; 20]);
 
         let batch = pipeline
             .build_batch(
-                &build_target_info(&ob_id, 1, 5),
+                &build_target_info(&raindex_id, 1, 5),
                 &[],
                 &[withdraw_event(token)],
                 &[],

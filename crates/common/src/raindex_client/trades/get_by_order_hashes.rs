@@ -3,11 +3,11 @@ use super::*;
 use crate::local_db::query::fetch_trades::{FetchTradesArgs, FetchTradesTokensFilter};
 use crate::raindex_client::local_db::query::fetch_trades::fetch_trades;
 use crate::utils::timing::Timing;
-use rain_orderbook_subgraph_client::types::common::{
+use raindex_subgraph_client::types::common::{
     SgBigInt, SgBytes, SgTradeEventFilter, SgTradeOrderFilter, SgTradesListQueryFilters,
     SgTradesTokensFilterArgs,
 };
-use rain_orderbook_subgraph_client::MultiOrderbookSubgraphClient;
+use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use std::collections::{HashMap, HashSet};
 use tsify::Tsify;
 use wasm_bindgen_utils::{impl_wasm_traits, wasm_export};
@@ -26,7 +26,7 @@ pub struct GetTradesByOrderHashesFilters {
     #[tsify(optional)]
     pub tokens: Option<GetTradesTokenFilter>,
     #[tsify(optional, type = "Address[]")]
-    pub orderbook_addresses: Option<Vec<Address>>,
+    pub raindex_addresses: Option<Vec<Address>>,
     #[tsify(optional)]
     pub time_filter: Option<TimeFilter>,
 }
@@ -125,8 +125,8 @@ fn build_sg_filters(
                 .end
                 .map_or(SgBigInt(u64::MAX.to_string()), |v| SgBigInt(v.to_string())),
         ),
-        orderbook_in: filters
-            .orderbook_addresses
+        raindex_in: filters
+            .raindex_addresses
             .unwrap_or_default()
             .into_iter()
             .map(|address| address.to_string().to_lowercase())
@@ -207,7 +207,7 @@ impl RaindexClient {
         )]
         order_hashes: OrderHashes,
         #[wasm_export(
-            param_description = "Filtering criteria including owners, takers, token addresses, orderbooks, and time range"
+            param_description = "Filtering criteria including owners, takers, token addresses, raindexes, and time range"
         )]
         filters: Option<GetTradesByOrderHashesFilters>,
     ) -> Result<RaindexTradesByOrderHashResult, RaindexError> {
@@ -234,7 +234,7 @@ impl RaindexClient {
             .map_or(0, Vec::len);
         let takers_count = filters.takers.len();
         let owners_count = filters.owners.len();
-        let orderbooks_count = filters.orderbook_addresses.as_ref().map_or(0, Vec::len);
+        let raindexes_count = filters.raindex_addresses.as_ref().map_or(0, Vec::len);
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let requested_chain_ids_count = ids.as_ref().map_or(0, Vec::len);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
@@ -260,7 +260,7 @@ impl RaindexClient {
                 &db,
                 FetchTradesArgs {
                     chain_ids: local_ids,
-                    orderbook_addresses: filters.orderbook_addresses.clone().unwrap_or_default(),
+                    raindex_addresses: filters.raindex_addresses.clone().unwrap_or_default(),
                     owners: filters.owners.clone(),
                     takers: filters.takers.clone(),
                     order_hash: None,
@@ -298,7 +298,7 @@ impl RaindexClient {
                 .iter()
                 .flat_map(|(chain_id, args)| args.iter().map(|arg| (arg.name.as_str(), *chain_id)))
                 .collect();
-            let client = MultiOrderbookSubgraphClient::new(
+            let client = MultiRaindexSubgraphClient::new(
                 multi_subgraph_args.values().flatten().cloned().collect(),
             );
             let subgraph_started = Timing::now();
@@ -344,7 +344,7 @@ impl RaindexClient {
             unique_order_hashes_count = result.trades_by_order_hash.len(),
             owners_count,
             takers_count,
-            orderbooks_count,
+            raindexes_count,
             input_tokens_count,
             output_tokens_count,
             local_rows,
@@ -369,7 +369,7 @@ mod tests {
         LocalDbOrderTrade {
             chain_id: 1,
             trade_kind: "take".to_string(),
-            orderbook: Address::ZERO,
+            raindex: Address::ZERO,
             order_hash,
             order_owner: Address::ZERO,
             order_nonce: "0".to_string(),

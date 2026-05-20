@@ -1,5 +1,5 @@
-import type { RaindexVaultToken } from '@rainlanguage/orderbook';
+import type { RaindexVaultToken } from "@rainlanguage/raindex";
 
 export function getTokenDisplayName(token: RaindexVaultToken): string {
-	return token.symbol || token.name || 'Unknown Token';
+  return token.symbol || token.name || "Unknown Token";
 }

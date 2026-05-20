@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_rest_api"
-description = "REST API server for rain orderbook"
+name = "raindex_rest_api"
+description = "REST API server for raindex"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,11 +8,11 @@ homepage.workspace = true
 publish = false
 
 [[bin]]
-name = "rain-orderbook-api"
+name = "raindex-api"
 path = "src/main.rs"
 
 [dependencies]
-rain_orderbook_common = { workspace = true }
+raindex_common = { workspace = true }
 rocket = { version = "0.5.1", features = ["json"] }
 rocket_cors = "0.6"
 serde = { workspace = true, features = ["derive"] }

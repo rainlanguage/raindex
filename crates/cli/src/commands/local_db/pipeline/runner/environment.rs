@@ -1,4 +1,4 @@
-use rain_orderbook_common::local_db::pipeline::{
+use raindex_common::local_db::pipeline::{
     adapters::{
         apply::DefaultApplyPipeline, events::DefaultEventsPipeline, tokens::DefaultTokensPipeline,
         window::DefaultWindowPipeline,
@@ -33,14 +33,14 @@ pub fn default_environment(
         default_dump_downloader(),
         Arc::new(move |target: &RunnerTarget| {
             let events = DefaultEventsPipeline::with_hyperrpc(
-                target.inputs.ob_id.chain_id,
+                target.inputs.raindex_id.chain_id,
                 hypersync_token.clone(),
             )?;
             let tokens = DefaultTokensPipeline::new(target.inputs.metadata_rpcs.clone())?;
             let status = ProducerStatusBus::new(
                 debug_status,
-                target.orderbook_key.clone(),
-                target.inputs.ob_id.clone(),
+                target.raindex_key.clone(),
+                target.inputs.raindex_id.clone(),
             );
 
             Ok(EnginePipelines::new(
@@ -59,21 +59,21 @@ pub fn default_environment(
 mod tests {
     use super::*;
     use alloy::primitives::address;
-    use rain_orderbook_common::local_db::fetch::FetchConfig;
-    use rain_orderbook_common::local_db::pipeline::engine::SyncInputs;
-    use rain_orderbook_common::local_db::pipeline::{FinalityConfig, SyncConfig, WindowOverrides};
-    use rain_orderbook_common::local_db::{LocalDbError, OrderbookIdentifier};
-    use rain_orderbook_common::rpc_client::RpcClientError;
+    use raindex_common::local_db::fetch::FetchConfig;
+    use raindex_common::local_db::pipeline::engine::SyncInputs;
+    use raindex_common::local_db::pipeline::{FinalityConfig, SyncConfig, WindowOverrides};
+    use raindex_common::local_db::{LocalDbError, RaindexIdentifier};
+    use raindex_common::rpc_client::RpcClientError;
     use url::Url;
 
     fn sample_target(chain_id: u32) -> RunnerTarget {
         let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         RunnerTarget {
-            orderbook_key: "test-book".to_string(),
+            raindex_key: "test-book".to_string(),
             manifest_url: Url::parse("https://manifests.example/default.yaml").unwrap(),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
-                ob_id: OrderbookIdentifier::new(
+                raindex_id: RaindexIdentifier::new(
                     chain_id,
                     address!("00000000000000000000000000000000000000a1"),
                 ),

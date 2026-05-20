@@ -36,10 +36,8 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -56,27 +54,21 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-
       - run: ./prep-webapp.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-
       - run: nix develop .#webapp-shell -c npm run build
         working-directory: packages/webapp
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-
       # check for npm package blacklists pkgs across all packages
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
-          working-directory: packages/orderbook
-
+          working-directory: packages/raindex
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/ui-components
-
       - name: Install Vercel CLI (local, pinned)
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
@@ -99,7 +91,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           "$VERCEL_BIN" deploy --prebuilt --token="$VERCEL_TOKEN" packages/webapp
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

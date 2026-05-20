@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_cli"
-description = "Rain Orderbook CLI."
+name = "raindex_cli"
+description = "Raindex CLI."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,11 +11,11 @@ homepage.workspace = true
 [dependencies]
 alloy-ethers-typecast = { workspace = true }
 alloy = { workspace = true }
-rain_orderbook_subgraph_client = { workspace = true }
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_common = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_quote = { workspace = true }
+raindex_subgraph_client = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_common = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_quote = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 clap = { workspace = true }
@@ -52,4 +52,4 @@ httpmock = "0.7.0"
 rain-metadata = { workspace = true }
 rain_interpreter_bindings = { workspace = true }
 tempfile.workspace = true
-rain_orderbook_test_fixtures = { workspace = true }
+raindex_test_fixtures = { workspace = true }

@@ -8,7 +8,7 @@ Interactive Start
 - Ask which areas are likely in scope (check all that apply):
   - Solidity contracts (`src/`, `test/`, `test-resources/`)
   - Rust crates (`crates/*` — e.g., `cli`, `common`, `bindings`, `js_api`, `quote`, `subgraph`, `settings`, `math`)
-  - JS/WASM package (`packages/orderbook`)
+  - JS/WASM package (`packages/raindex`)
   - Webapp UI (`packages/webapp`) or UI components (`packages/ui-components`)
   - Subgraph/indexing (`subgraph/*`)
   - Tooling/scripts (`script/*`, `.github/*`, `nix.flake`, repo root scripts)
@@ -89,7 +89,7 @@ Procedure
 4) Detailed implementation plan (by directory)
    - For each impacted area, list concrete changes with file path anchors where possible. For example:
      - Rust crates (e.g., `crates/<name>`): modules to add/modify, new types/functions, error handling, feature flags; `Cargo.toml` updates if needed.
-     - JS/WASM (`packages/orderbook`): new exports, TS types, wasm bindings, build scripts.
+     - JS/WASM (`packages/raindex`): new exports, TS types, wasm bindings, build scripts.
      - Webapp (`packages/webapp`): routes/components, stores, API calls, state management, styles.
      - Contracts (`src/`): new contracts/interfaces/libraries, events, storage layout notes, upgrade path; tests in `test/` with fixtures in `test-resources/`.
      - Subgraph (`subgraph/`): schema changes, mappings, handlers, data flow and reindex considerations.
@@ -164,8 +164,8 @@ Build/Test Commands Reference (use where relevant; reference only — do not exe
 - Bootstrap: `./prep-all.sh`
 - Rust: `nix develop -c cargo build --workspace` / `nix develop -c cargo test`
 - Solidity: `nix develop -c forge build` / `nix develop -c forge test`
-- JS workspaces: `npm run test`, `npm run build:ui`, `npm run build:orderbook`
-- WASM bundle: `cd packages/orderbook && npm run build-wasm`
+- JS workspaces: `npm run test`, `npm run build:ui`, `npm run build:raindex`
+- WASM bundle: `cd packages/raindex && npm run build-wasm`
 - Webapp: `cd packages/webapp && nix develop -c npm run dev`
 
 Acceptance Criteria

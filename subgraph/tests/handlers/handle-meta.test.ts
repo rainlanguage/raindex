@@ -86,10 +86,10 @@ describe("Add and remove orders", () => {
 
     handleMeta(metaEvent);
 
-    // we should have an orderbook entity
-    assert.entityCount("Orderbook", 1);
+    // we should have an raindex entity
+    assert.entityCount("Raindex", 1);
     assert.fieldEquals(
-      "Orderbook",
+      "Raindex",
       event.address.toHexString(),
       "id",
       event.address.toHexString()

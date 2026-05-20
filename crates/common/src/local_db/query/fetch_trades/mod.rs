@@ -8,15 +8,15 @@ const QUERY_TEMPLATE: &str = include_str!("query.sql");
 
 const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
 const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
-const TAKE_ORDERS_ORDERBOOKS_CLAUSE: &str = "/*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/";
-const TAKE_ORDERS_ORDERBOOKS_CLAUSE_BODY: &str = "AND t.orderbook_address IN ({list})";
+const TAKE_ORDERS_RAINDEXES_CLAUSE: &str = "/*TAKE_ORDERS_RAINDEXES_CLAUSE*/";
+const TAKE_ORDERS_RAINDEXES_CLAUSE_BODY: &str = "AND t.raindex_address IN ({list})";
 const TAKE_ORDERS_TAKERS_CLAUSE: &str = "/*TAKE_ORDERS_TAKERS_CLAUSE*/";
 const TAKE_ORDERS_TAKERS_CLAUSE_BODY: &str = "AND t.sender IN ({list})";
 
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
 const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE: &str = "/*CLEAR_EVENTS_ORDERBOOKS_CLAUSE*/";
-const CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY: &str = "AND c.orderbook_address IN ({list})";
+const CLEAR_EVENTS_RAINDEXES_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXES_CLAUSE*/";
+const CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
 const CLEAR_EVENTS_TAKERS_CLAUSE: &str = "/*CLEAR_EVENTS_TAKERS_CLAUSE*/";
 const CLEAR_EVENTS_TAKERS_CLAUSE_BODY: &str = "AND c.sender IN ({list})";
 const CLEAR_EVENTS_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_EVENTS_ORDER_HASHES_CLAUSE*/";
@@ -55,7 +55,7 @@ pub struct FetchTradesTokensFilter {
 #[derive(Debug, Clone, Default)]
 pub struct FetchTradesArgs {
     pub chain_ids: Vec<u32>,
-    pub orderbook_addresses: Vec<Address>,
+    pub raindex_addresses: Vec<Address>,
     pub owners: Vec<Address>,
     pub takers: Vec<Address>,
     pub order_hash: Option<B256>,
@@ -72,12 +72,12 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
     chain_ids.sort_unstable();
     chain_ids.dedup();
 
-    let mut orderbooks = args.orderbook_addresses.clone();
-    orderbooks.sort();
-    orderbooks.dedup();
+    let mut raindexes = args.raindex_addresses.clone();
+    raindexes.sort();
+    raindexes.dedup();
 
     let chain_ids_iter = || chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || orderbooks.iter().cloned().map(SqlValue::from);
+    let raindexes_iter = || raindexes.iter().cloned().map(SqlValue::from);
 
     stmt.bind_list_clause(
         TAKE_ORDERS_CHAIN_IDS_CLAUSE,
@@ -90,14 +90,14 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
         chain_ids_iter(),
     )?;
     stmt.bind_list_clause(
-        TAKE_ORDERS_ORDERBOOKS_CLAUSE,
-        TAKE_ORDERS_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        TAKE_ORDERS_RAINDEXES_CLAUSE,
+        TAKE_ORDERS_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
     stmt.bind_list_clause(
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE,
-        CLEAR_EVENTS_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        CLEAR_EVENTS_RAINDEXES_CLAUSE,
+        CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
     let mut takers = args.takers.clone();
     takers.sort();
@@ -290,7 +290,7 @@ mod tests {
     fn builds_with_chain_ids() {
         let stmt = build_fetch_trades_stmt(&FetchTradesArgs {
             chain_ids: vec![137, 1, 137],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             ..Default::default()
         })
         .unwrap();
@@ -306,11 +306,11 @@ mod tests {
     }
 
     #[test]
-    fn builds_with_orderbook_address_filters() {
+    fn builds_with_raindex_address_filters() {
         let ob = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
         let stmt = build_fetch_trades_stmt(&FetchTradesArgs {
             chain_ids: vec![137],
-            orderbook_addresses: vec![ob],
+            raindex_addresses: vec![ob],
             ..Default::default()
         })
         .unwrap();
@@ -319,10 +319,10 @@ mod tests {
         assert_eq!(stmt.params[1], SqlValue::U64(137));
         assert_eq!(stmt.params[2], SqlValue::Text(hex::encode_prefixed(ob)));
         assert_eq!(stmt.params[3], SqlValue::Text(hex::encode_prefixed(ob)));
-        assert!(stmt.sql.contains("t.orderbook_address IN (?3)"));
-        assert!(stmt.sql.contains("c.orderbook_address IN (?4)"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_ORDERBOOKS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_ORDERBOOKS_CLAUSE));
+        assert!(stmt.sql.contains("t.raindex_address IN (?3)"));
+        assert!(stmt.sql.contains("c.raindex_address IN (?4)"));
+        assert!(!stmt.sql.contains(TAKE_ORDERS_RAINDEXES_CLAUSE));
+        assert!(!stmt.sql.contains(CLEAR_EVENTS_RAINDEXES_CLAUSE));
     }
 
     #[test]

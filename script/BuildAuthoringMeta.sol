@@ -3,13 +3,13 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std/Script.sol";
-import {LibOrderBookSubParser} from "../src/lib/LibOrderBookSubParser.sol";
+import {LibRaindexSubParser} from "../src/lib/LibRaindexSubParser.sol";
 
-/// @title OrderBook subparser Authoring Meta
+/// @title Raindex subparser Authoring Meta
 /// @notice A script that writes the raw authoring meta out to file so it can be
 /// wrapped in CBOR and emitted on metaboard.
 contract BuildAuthoringMeta is Script {
     function run() external {
-        vm.writeFileBinary("meta/OrderBookV6SubParserAuthoringMeta.rain.meta", LibOrderBookSubParser.authoringMetaV2());
+        vm.writeFileBinary("meta/RaindexV6SubParserAuthoringMeta.rain.meta", LibRaindexSubParser.authoringMetaV2());
     }
 }

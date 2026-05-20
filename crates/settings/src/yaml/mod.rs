@@ -2,18 +2,18 @@ pub mod cache;
 pub mod context;
 pub mod dotrain;
 pub mod emitter;
-pub mod orderbook;
+pub mod raindex;
 
 use crate::{
     remote_networks::ParseRemoteNetworksError, remote_tokens::ParseRemoteTokensError, NetworkCfg,
     ParseDeploymentConfigSourceError, ParseNetworkConfigSourceError, ParseOrderConfigSourceError,
-    ParseOrderbookConfigSourceError, ParseRainlangConfigSourceError,
-    ParseScenarioConfigSourceError, ParseTokenConfigSourceError, TokenCfg,
+    ParseRaindexConfigSourceError, ParseRainlangConfigSourceError, ParseScenarioConfigSourceError,
+    ParseTokenConfigSourceError, TokenCfg,
 };
 use alloy::primitives::ruint::ParseError as RuintParseError;
 use context::{Context, ContextError, ContextProfile};
 use dotrain::DotrainYaml;
-use orderbook::OrderbookYaml;
+use raindex::RaindexYaml;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::StrictYamlEmitter;
@@ -32,7 +32,7 @@ pub trait ValidationConfig {
     fn should_validate_subgraphs(&self) -> bool;
     fn should_validate_local_db_remotes(&self) -> bool;
     fn should_validate_local_db_sync(&self) -> bool;
-    fn should_validate_orderbooks(&self) -> bool;
+    fn should_validate_raindexes(&self) -> bool;
     fn should_validate_metaboards(&self) -> bool;
     fn should_validate_rainlangs(&self) -> bool;
     fn should_validate_orders(&self) -> bool;
@@ -45,7 +45,7 @@ pub trait YamlParsable: Sized {
     fn new(sources: Vec<String>, validate: Self::ValidationConfig) -> Result<Self, YamlError>;
 
     fn from_documents(documents: Vec<Arc<RwLock<StrictYaml>>>) -> Self;
-    fn from_orderbook_yaml(orderbook_yaml: OrderbookYaml) -> Self;
+    fn from_raindex_yaml(raindex_yaml: RaindexYaml) -> Self;
     fn from_dotrain_yaml(dotrain_yaml: DotrainYaml) -> Self;
 
     fn get_yaml_string(document: Arc<RwLock<StrictYaml>>) -> Result<String, YamlError> {
@@ -199,7 +199,7 @@ pub enum YamlError {
     #[error(transparent)]
     ParseTokenConfigSourceError(#[from] ParseTokenConfigSourceError),
     #[error(transparent)]
-    ParseOrderbookConfigSourceError(#[from] ParseOrderbookConfigSourceError),
+    ParseRaindexConfigSourceError(#[from] ParseRaindexConfigSourceError),
     #[error(transparent)]
     ParseRainlangConfigSourceError(#[from] ParseRainlangConfigSourceError),
     #[error(transparent)]
@@ -250,10 +250,9 @@ impl PartialEq for YamlError {
             (Self::ParseTokenConfigSourceError(e1), Self::ParseTokenConfigSourceError(e2)) => {
                 e1 == e2
             }
-            (
-                Self::ParseOrderbookConfigSourceError(e1),
-                Self::ParseOrderbookConfigSourceError(e2),
-            ) => e1 == e2,
+            (Self::ParseRaindexConfigSourceError(e1), Self::ParseRaindexConfigSourceError(e2)) => {
+                e1 == e2
+            }
             (
                 Self::ParseRainlangConfigSourceError(e1),
                 Self::ParseRainlangConfigSourceError(e2),
@@ -344,8 +343,8 @@ impl YamlError {
                 "Token configuration error in your YAML: {}",
                 err.to_readable_msg()
             ),
-            YamlError::ParseOrderbookConfigSourceError(err) => format!(
-                "Orderbook configuration error in your YAML: {}",
+            YamlError::ParseRaindexConfigSourceError(err) => format!(
+                "Raindex configuration error in your YAML: {}",
                 err.to_readable_msg()
             ),
             YamlError::ParseRainlangConfigSourceError(err) => format!(
@@ -552,7 +551,7 @@ pub fn sanitize_all_documents(documents: &[Arc<RwLock<StrictYaml>>]) -> Result<(
     crate::LocalDbSyncCfg::sanitize_documents(documents)?;
     crate::NetworkCfg::sanitize_documents(documents)?;
     crate::OrderCfg::sanitize_documents(documents)?;
-    crate::OrderbookCfg::sanitize_documents(documents)?;
+    crate::RaindexCfg::sanitize_documents(documents)?;
     crate::RemoteNetworksCfg::sanitize_documents(documents)?;
     crate::ScenarioCfg::sanitize_documents(documents)?;
     crate::TokenCfg::sanitize_documents(documents)?;

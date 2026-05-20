@@ -3,7 +3,7 @@ use crate::local_db::pipeline::TokensPipeline;
 use crate::local_db::query::fetch_erc20_tokens_by_addresses::{build_fetch_stmt, Erc20TokenRow};
 use crate::local_db::query::LocalDbQueryExecutor;
 use crate::local_db::token_fetch::fetch_erc20_metadata_concurrent;
-use crate::local_db::{FetchConfig, LocalDbError, OrderbookIdentifier};
+use crate::local_db::{FetchConfig, LocalDbError, RaindexIdentifier};
 use crate::rpc_client::RpcClient;
 use alloy::primitives::Address;
 use async_trait::async_trait;
@@ -35,13 +35,13 @@ impl TokensPipeline for DefaultTokensPipeline {
     async fn load_existing<DB>(
         &self,
         db: &DB,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         token_addrs_lower: &[Address],
     ) -> Result<Vec<Erc20TokenRow>, LocalDbError>
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        let Some(stmt) = build_fetch_stmt(ob_id, token_addrs_lower)? else {
+        let Some(stmt) = build_fetch_stmt(raindex_id, token_addrs_lower)? else {
             return Ok(vec![]);
         };
         let rows: Vec<Erc20TokenRow> = db.query_json(&stmt).await?;
@@ -70,7 +70,7 @@ mod tests {
         // Assertions for the incoming statement
         expect_in_clause: bool,
         expect_chain_id: Option<u32>,
-        expect_orderbook: Option<String>,
+        expect_raindex: Option<String>,
         expect_addr_count: Option<usize>,
         // Optional explicit expected address parameter values (in order)
         expect_addr_values: Option<Vec<String>>,
@@ -106,18 +106,18 @@ mod tests {
                     other => panic!("expected first param U64({cid}), got {other:?}"),
                 }
             }
-            if let Some(expected_orderbook) = self.expect_orderbook.as_ref() {
+            if let Some(expected_raindex) = self.expect_raindex.as_ref() {
                 match stmt.params().get(1) {
                     Some(crate::local_db::query::SqlValue::Text(actual)) => {
-                        assert_eq!(actual, &expected_orderbook.to_ascii_lowercase());
+                        assert_eq!(actual, &expected_raindex.to_ascii_lowercase());
                     }
                     other => {
-                        panic!("expected second param Text({expected_orderbook}), got {other:?}")
+                        panic!("expected second param Text({expected_raindex}), got {other:?}")
                     }
                 }
             }
             if let Some(n) = self.expect_addr_count {
-                // There should be chain id + orderbook + n address params
+                // There should be chain id + raindex + n address params
                 assert_eq!(stmt.params().len(), 2 + n);
             }
             if let Some(expected) = &self.expect_addr_values {
@@ -155,12 +155,12 @@ mod tests {
 
     #[tokio::test]
     async fn load_existing_empty_addresses_short_circuits() {
-        let orderbook = Address::from([0xbe; 20]);
+        let raindex = Address::from([0xbe; 20]);
         let db = MockDb {
             rows: vec![],
             expect_in_clause: false,
             expect_chain_id: None,
-            expect_orderbook: None,
+            expect_raindex: None,
             expect_addr_count: None,
             expect_addr_values: None,
             fail_query: false,
@@ -168,7 +168,7 @@ mod tests {
         };
         let pipeline = DefaultTokensPipeline::mock();
         let out = pipeline
-            .load_existing(&db, &OrderbookIdentifier::new(137, orderbook), &[])
+            .load_existing(&db, &RaindexIdentifier::new(137, raindex), &[])
             .await
             .expect("ok");
         assert!(out.is_empty());
@@ -176,12 +176,12 @@ mod tests {
 
     #[tokio::test]
     async fn load_existing_builds_query_and_returns_rows() {
-        let orderbook = Address::from([0xab; 20]);
+        let raindex = Address::from([0xab; 20]);
         let token_addr = Address::from([0xac; 20]);
         let other_addr = Address::from([0xad; 20]);
         let row = Erc20TokenRow {
             chain_id: 137,
-            orderbook_address: orderbook,
+            raindex_address: raindex,
             token_address: token_addr,
             name: "Token".to_string(),
             symbol: "TKN".to_string(),
@@ -191,7 +191,7 @@ mod tests {
             rows: vec![row.clone()],
             expect_in_clause: true,
             expect_chain_id: Some(137),
-            expect_orderbook: Some(orderbook.to_string()),
+            expect_raindex: Some(raindex.to_string()),
             expect_addr_count: Some(2),
             expect_addr_values: Some(vec![
                 hex::encode_prefixed(token_addr),
@@ -203,7 +203,7 @@ mod tests {
         let pipeline = DefaultTokensPipeline::mock();
         let addrs = vec![token_addr, other_addr];
         let out = pipeline
-            .load_existing(&db, &OrderbookIdentifier::new(137, orderbook), &addrs)
+            .load_existing(&db, &RaindexIdentifier::new(137, raindex), &addrs)
             .await
             .expect("ok");
         assert_eq!(out, vec![row]);
@@ -211,13 +211,13 @@ mod tests {
 
     #[tokio::test]
     async fn load_existing_propagates_db_error() {
-        let orderbook = Address::from([0xcd; 20]);
+        let raindex = Address::from([0xcd; 20]);
         let token_addr = Address::from([0xae; 20]);
         let db = MockDb {
             rows: vec![],
             expect_in_clause: true,
             expect_chain_id: Some(1),
-            expect_orderbook: Some(orderbook.to_string()),
+            expect_raindex: Some(raindex.to_string()),
             expect_addr_count: Some(1),
             expect_addr_values: Some(vec![hex::encode_prefixed(token_addr)]),
             fail_query: true,
@@ -225,7 +225,7 @@ mod tests {
         };
         let pipeline = DefaultTokensPipeline::mock();
         let err = pipeline
-            .load_existing(&db, &OrderbookIdentifier::new(1, orderbook), &[token_addr])
+            .load_existing(&db, &RaindexIdentifier::new(1, raindex), &[token_addr])
             .await
             .expect_err("should fail");
         match err {
@@ -239,13 +239,13 @@ mod tests {
 
     #[tokio::test]
     async fn load_existing_deserialization_error_bubbles() {
-        let orderbook = Address::from([0xde; 20]);
+        let raindex = Address::from([0xde; 20]);
         let token_addr = Address::from([0xaf; 20]);
         let db = MockDb {
             rows: vec![],
             expect_in_clause: true,
             expect_chain_id: Some(1),
-            expect_orderbook: Some(orderbook.to_string()),
+            expect_raindex: Some(raindex.to_string()),
             expect_addr_count: Some(1),
             expect_addr_values: Some(vec![hex::encode_prefixed(token_addr)]),
             fail_query: false,
@@ -253,7 +253,7 @@ mod tests {
         };
         let pipeline = DefaultTokensPipeline::mock();
         let err = pipeline
-            .load_existing(&db, &OrderbookIdentifier::new(1, orderbook), &[token_addr])
+            .load_existing(&db, &RaindexIdentifier::new(1, raindex), &[token_addr])
             .await
             .expect_err("should fail");
         match err {
@@ -267,14 +267,14 @@ mod tests {
 
     #[tokio::test]
     async fn load_existing_keeps_duplicate_addresses_in_order() {
-        let orderbook = Address::from([0xef; 20]);
+        let raindex = Address::from([0xef; 20]);
         let addr_a = Address::from([0xaa; 20]);
         let addr_b = Address::from([0xbb; 20]);
         let db = MockDb {
             rows: vec![],
             expect_in_clause: true,
             expect_chain_id: Some(137),
-            expect_orderbook: Some(orderbook.to_string()),
+            expect_raindex: Some(raindex.to_string()),
             expect_addr_count: Some(3),
             expect_addr_values: Some(vec![
                 hex::encode_prefixed(addr_a),
@@ -288,7 +288,7 @@ mod tests {
         let addrs = vec![addr_a, addr_a, addr_b];
         // We only care that params keep duplicates in order; rows are empty
         let out = pipeline
-            .load_existing(&db, &OrderbookIdentifier::new(137, orderbook), &addrs)
+            .load_existing(&db, &RaindexIdentifier::new(137, raindex), &addrs)
             .await
             .expect("ok");
         assert!(out.is_empty());
@@ -298,7 +298,7 @@ mod tests {
     mod non_wasm_tests {
         use super::*;
         use alloy::primitives::Address;
-        use rain_orderbook_test_fixtures::LocalEvm;
+        use raindex_test_fixtures::LocalEvm;
 
         #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
         async fn fetch_missing_delegates_to_concurrent_fetcher() {

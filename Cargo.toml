@@ -1,9 +1,6 @@
 [workspace]
 members = ["crates/*"]
-exclude = [
-    "lib/rain.interpreter",
-    "lib/rain.raindex.interface",
-]
+exclude = ["lib/rain.interpreter", "lib/rain.raindex.interface"]
 resolver = "2"
 
 [workspace.package]
@@ -63,34 +60,34 @@ tower = "0.5.2"
 getrandom = { version = "0.2", features = ["js"] }
 itertools = "0.14.0"
 
-[workspace.dependencies.rain_orderbook_bindings]
+[workspace.dependencies.raindex_bindings]
 path = "crates/bindings"
 
-[workspace.dependencies.rain_orderbook_common]
+[workspace.dependencies.raindex_common]
 path = "crates/common"
 
-[workspace.dependencies.rain_orderbook_cli]
+[workspace.dependencies.raindex_cli]
 path = "crates/cli"
 
-[workspace.dependencies.rain_orderbook_subgraph_client]
+[workspace.dependencies.raindex_subgraph_client]
 path = "crates/subgraph"
 
-[workspace.dependencies.rain_orderbook_app_settings]
+[workspace.dependencies.raindex_app_settings]
 path = "crates/settings"
 
-[workspace.dependencies.rain_orderbook_quote]
+[workspace.dependencies.raindex_quote]
 path = "crates/quote"
 
-[workspace.dependencies.rain_orderbook_test_fixtures]
+[workspace.dependencies.raindex_test_fixtures]
 path = "crates/test_fixtures"
 
-[workspace.dependencies.rain_orderbook_math]
+[workspace.dependencies.raindex_math]
 path = "crates/math"
 
-[workspace.dependencies.rain_orderbook_js_api]
+[workspace.dependencies.raindex_js_api]
 path = "crates/js_api"
 
-[workspace.dependencies.rain_orderbook_rest_api]
+[workspace.dependencies.raindex_rest_api]
 path = "crates/rest_api"
 
 # release profile for wasm build optimized for size reduction

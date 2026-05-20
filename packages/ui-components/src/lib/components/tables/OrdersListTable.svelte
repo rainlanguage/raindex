@@ -3,10 +3,10 @@
 	import { goto } from '$app/navigation';
 	import { DotsVerticalOutline } from 'flowbite-svelte-icons';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
-	import { RaindexOrder, type OrderbookCfg, type Address } from '@rainlanguage/orderbook';
+	import { RaindexOrder, type RaindexCfg, type Address } from '@rainlanguage/raindex';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
-	import ListViewOrderbookFilters from '../ListViewOrderbookFilters.svelte';
+	import ListViewRaindexFilters from '../ListViewRaindexFilters.svelte';
 	import Hash, { HashType } from '../Hash.svelte';
 	import VaultCard from '../VaultCard.svelte';
 	import { DEFAULT_PAGE_SIZE, DEFAULT_REFRESH_INTERVAL } from '../../queries/constants';
@@ -37,7 +37,7 @@
 	export let hideZeroBalanceVaults: AppStoresInterface['hideZeroBalanceVaults'];
 	export let hideInactiveOrdersVaults: AppStoresInterface['hideInactiveOrdersVaults'];
 	export let activeTokens: AppStoresInterface['activeTokens'];
-	export let activeOrderbookAddresses: AppStoresInterface['activeOrderbookAddresses'];
+	export let activeRaindexAddresses: AppStoresInterface['activeRaindexAddresses'];
 	export let ownerFilter: AppStoresInterface['ownerFilter'];
 
 	const { matchesAccount, account } = useAccount();
@@ -61,19 +61,19 @@
 			(address) => !$tokensQuery.data || $tokensQuery.data.some((t) => t.address === address)
 		) ?? [];
 
-	$: orderbooksMap = raindexClient.getAllOrderbooks()?.value ?? new Map<string, OrderbookCfg>();
-	$: availableOrderbookAddresses = (() => {
+	$: raindexesMap = raindexClient.getAllRaindexes()?.value ?? new Map<string, RaindexCfg>();
+	$: availableRaindexAddresses = (() => {
 		const addrs: string[] = [];
-		orderbooksMap.forEach((cfg: OrderbookCfg) => {
+		raindexesMap.forEach((cfg: RaindexCfg) => {
 			if ($selectedChainIds.length === 0 || $selectedChainIds.includes(cfg.network.chainId)) {
 				addrs.push(cfg.address.toLowerCase());
 			}
 		});
 		return addrs;
 	})();
-	$: selectedOrderbookAddresses =
-		$activeOrderbookAddresses?.filter((address) =>
-			availableOrderbookAddresses.includes(address.toLowerCase())
+	$: selectedRaindexAddresses =
+		$activeRaindexAddresses?.filter((address) =>
+			availableRaindexAddresses.includes(address.toLowerCase())
 		) ?? [];
 
 	$: query = createInfiniteQuery({
@@ -84,7 +84,7 @@
 			$showInactiveOrders,
 			$orderHash,
 			selectedTokens,
-			selectedOrderbookAddresses
+			selectedRaindexAddresses
 		],
 		queryFn: async ({ pageParam }) => {
 			const result = await raindexClient.getOrders(
@@ -97,8 +97,8 @@
 						selectedTokens.length > 0
 							? { inputs: selectedTokens, outputs: selectedTokens }
 							: undefined,
-					orderbookAddresses:
-						selectedOrderbookAddresses.length > 0 ? selectedOrderbookAddresses : undefined
+					raindexAddresses:
+						selectedRaindexAddresses.length > 0 ? selectedRaindexAddresses : undefined
 				},
 				pageParam + 1
 			);
@@ -117,7 +117,7 @@
 	const AppTable = TanstackAppTable<RaindexOrder, OrdersListResult>;
 </script>
 
-<ListViewOrderbookFilters
+<ListViewRaindexFilters
 	{selectedChainIds}
 	{showInactiveOrders}
 	{orderHash}
@@ -126,8 +126,8 @@
 	{tokensQuery}
 	{activeTokens}
 	{selectedTokens}
-	{activeOrderbookAddresses}
-	{selectedOrderbookAddresses}
+	{activeRaindexAddresses}
+	{selectedRaindexAddresses}
 	{ownerFilter}
 />
 
@@ -137,7 +137,7 @@
 	emptyMessage="No Orders Found"
 	dataSelector={(page) => page.orders}
 	on:clickRow={(e) => {
-		goto(`/orders/${e.detail.item.chainId}-${e.detail.item.orderbook}-${e.detail.item.orderHash}`);
+		goto(`/orders/${e.detail.item.chainId}-${e.detail.item.raindex}-${e.detail.item.orderHash}`);
 	}}
 >
 	<svelte:fragment slot="title">
@@ -213,8 +213,8 @@
 					<Hash type={HashType.Wallet} value={item.owner} />
 				</div>
 				<div class="flex items-center gap-1">
-					<span class="text-gray-500 dark:text-gray-400">Orderbook:</span>
-					<Hash type={HashType.Identifier} value={item.orderbook} />
+					<span class="text-gray-500 dark:text-gray-400">Raindex:</span>
+					<Hash type={HashType.Identifier} value={item.raindex} />
 				</div>
 			</div>
 		</TableBodyCell>

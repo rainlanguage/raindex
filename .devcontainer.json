@@ -1,5 +1,5 @@
 {
-  "name": "rain.orderbook dev",
+  "name": "raindex dev",
   "image": "ghcr.io/zombiezen/codespaces-nix",
   "remoteUser": "vscode",
   "features": {

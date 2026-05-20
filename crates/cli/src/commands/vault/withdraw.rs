@@ -4,8 +4,8 @@ use alloy::primitives::{Address, B256};
 use anyhow::Result;
 use clap::Args;
 use rain_math_float::{Float, FloatError};
-use rain_orderbook_common::transaction::TransactionArgs;
-use rain_orderbook_common::withdraw::WithdrawArgs;
+use raindex_common::transaction::TransactionArgs;
+use raindex_common::withdraw::WithdrawArgs;
 use tracing::info;
 
 #[derive(Args, Clone)]

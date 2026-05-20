@@ -20,26 +20,26 @@ import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
 import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
-import {GenericPoolOrderBookV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolOrderBookV6ArbOrderTaker.sol";
+import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
-import {RealisticOrderTakerMockOrderBook} from "test/util/concrete/RealisticOrderTakerMockOrderBook.sol";
+import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
 
 /// @dev Return value from `setupAndArb`.
 struct ArbResult {
-    GenericPoolOrderBookV6ArbOrderTaker arb;
+    GenericPoolRaindexV6ArbOrderTaker arb;
     MockToken inputToken;
     MockToken outputToken;
-    RealisticOrderTakerMockOrderBook orderBook;
+    RealisticOrderTakerMockRaindex raindex;
     MockExchange exchange;
 }
 
 /// @dev Return value from `setup`. Caller keeps their own exchange reference.
 struct OrderTakerSetup {
-    GenericPoolOrderBookV6ArbOrderTaker arb;
+    GenericPoolRaindexV6ArbOrderTaker arb;
     MockToken inputToken;
     MockToken outputToken;
-    IRaindexV6 orderBook;
+    IRaindexV6 raindex;
     TakeOrdersConfigV5 takeOrdersConfig;
 }
 
@@ -65,16 +65,16 @@ library LibTestArb {
     /// Set up a standard arb scenario and execute arb5.
     ///
     /// @param vm The Vm cheatcode handle.
-    /// @param obPullAmount How many inputTokens the mock OB pulls from arb.
-    /// @param obOutputAmount How many outputTokens the mock OB has to send.
+    /// @param raindexPullAmount How many inputTokens the mock Raindex pulls from arb.
+    /// @param raindexOutputAmount How many outputTokens the mock Raindex has to send.
     /// @param exchangeInputAmount How many inputTokens the exchange has.
     /// @param swapAmount How many outputTokens the arb swaps at the exchange.
     /// @param task The post-arb task to run.
     /// @param ethValue ETH to send with arb5.
     function setupAndArb(
         Vm vm,
-        uint256 obPullAmount,
-        uint256 obOutputAmount,
+        uint256 raindexPullAmount,
+        uint256 raindexOutputAmount,
         uint256 exchangeInputAmount,
         uint256 swapAmount,
         TaskV2 memory task,
@@ -85,13 +85,13 @@ library LibTestArb {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockOrderBook orderBook = new RealisticOrderTakerMockOrderBook(obPullAmount);
+        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(raindexPullAmount);
         MockExchange exchange = new MockExchange();
 
-        outputToken.mint(address(orderBook), obOutputAmount);
+        outputToken.mint(address(raindex), raindexOutputAmount);
         inputToken.mint(address(exchange), exchangeInputAmount);
 
-        GenericPoolOrderBookV6ArbOrderTaker arb = new GenericPoolOrderBookV6ArbOrderTaker();
+        GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), swapAmount));
@@ -128,11 +128,12 @@ library LibTestArb {
             });
         }
 
-        arb.arb5{value: ethValue}(IRaindexV6(address(orderBook)), takeOrdersConfig, task);
+        arb.arb5{value: ethValue}(IRaindexV6(address(raindex)), takeOrdersConfig, task);
 
-        return ArbResult({
-            arb: arb, inputToken: inputToken, outputToken: outputToken, orderBook: orderBook, exchange: exchange
-        });
+        return
+            ArbResult({
+                arb: arb, inputToken: inputToken, outputToken: outputToken, raindex: raindex, exchange: exchange
+            });
     }
 
     /// Set up an order-taker arb scenario without executing it.
@@ -142,19 +143,19 @@ library LibTestArb {
     /// @param vm The Vm cheatcode handle.
     /// @param exchange The exchange contract address.
     /// @param amount Token amount for the swap (18 decimals). Used as
-    /// obPullAmount, obOutputAmount, exchangeInputAmount, and swapAmount.
+    /// raindexPullAmount, raindexOutputAmount, exchangeInputAmount, and swapAmount.
     function setup(Vm vm, address exchange, uint256 amount) internal returns (OrderTakerSetup memory) {
         deployPrereqs(vm);
 
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockOrderBook orderBook = new RealisticOrderTakerMockOrderBook(amount);
+        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(amount);
 
-        outputToken.mint(address(orderBook), amount);
+        outputToken.mint(address(raindex), amount);
         inputToken.mint(exchange, amount);
 
-        GenericPoolOrderBookV6ArbOrderTaker arb = new GenericPoolOrderBookV6ArbOrderTaker();
+        GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), amount));
@@ -195,7 +196,7 @@ library LibTestArb {
             arb: arb,
             inputToken: inputToken,
             outputToken: outputToken,
-            orderBook: IRaindexV6(address(orderBook)),
+            raindex: IRaindexV6(address(raindex)),
             takeOrdersConfig: takeOrdersConfig
         });
     }
