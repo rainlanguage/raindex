@@ -23,7 +23,7 @@
 	import { initWallet } from '$lib/services/handleWalletInitialization';
 	import { REGISTRY_URL } from '$lib/constants';
 	import { onMount } from 'svelte';
-	import type { RaindexClient } from '@rainlanguage/orderbook';
+	import type { RaindexClient } from '@rainlanguage/raindex';
 
 	const { errorMessage, localDb, raindexClient, registry } = $page.data;
 	const registryManager = new RegistryManager(REGISTRY_URL);

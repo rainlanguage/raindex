@@ -1,5 +1,5 @@
 use rain_math_float::FloatError;
-use rain_orderbook_math::MathError;
+use raindex_math::MathError;
 use std::num::ParseIntError;
 use thiserror::Error;
 
@@ -7,7 +7,7 @@ use thiserror::Error;
 // use alloy::primitives::{ruint::ParseError, U256};
 // use chrono::TimeDelta;
 // use once_cell::sync::Lazy;
-// use rain_orderbook_math::ONE18;
+// use raindex_math::ONE18;
 
 // TODO: APY related logic
 // pub mod apy;

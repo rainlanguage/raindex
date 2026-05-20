@@ -1,10 +1,11 @@
-import { getContext, setContext } from 'svelte';
-import { TransactionManager } from './TransactionManager';
+import { getContext, setContext } from "svelte";
+import { TransactionManager } from "./TransactionManager";
 
 /**
  * The context key used to store and retrieve the TransactionManager instance
  */
-export const TRANSACTION_MANAGER_CONTEXT_KEY = 'rain:ui-components:transactionManager';
+export const TRANSACTION_MANAGER_CONTEXT_KEY =
+  "rain:ui-components:transactionManager";
 
 /**
  * Sets the TransactionManager instance in Svelte's context
@@ -13,7 +14,7 @@ export const TRANSACTION_MANAGER_CONTEXT_KEY = 'rain:ui-components:transactionMa
  * @returns {void}
  */
 export function setTransactionManagerContext(manager: TransactionManager) {
-	setContext(TRANSACTION_MANAGER_CONTEXT_KEY, manager);
+  setContext(TRANSACTION_MANAGER_CONTEXT_KEY, manager);
 }
 
 /**
@@ -23,11 +24,13 @@ export function setTransactionManagerContext(manager: TransactionManager) {
  * @throws {Error} If no TransactionManager is found in context
  */
 export function getTransactionManagerContext(): TransactionManager {
-	const manager = getContext<TransactionManager | undefined>(TRANSACTION_MANAGER_CONTEXT_KEY);
-	if (!manager) {
-		throw new Error(
-			'TransactionManager not found. Did you forget to setTransactionManagerContext?'
-		);
-	}
-	return manager;
+  const manager = getContext<TransactionManager | undefined>(
+    TRANSACTION_MANAGER_CONTEXT_KEY,
+  );
+  if (!manager) {
+    throw new Error(
+      "TransactionManager not found. Did you forget to setTransactionManagerContext?",
+    );
+  }
+  return manager;
 }

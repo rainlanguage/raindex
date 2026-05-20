@@ -1,6 +1,6 @@
 use crate::csv::TryIntoCsv;
 use rain_math_float::Float;
-use rain_orderbook_subgraph_client::types::common::*;
+use raindex_subgraph_client::types::common::*;
 use serde::{Deserialize, Serialize};
 
 use super::FlattenError;
@@ -44,10 +44,10 @@ impl TryIntoCsv<TokenVaultFlattened> for Vec<TokenVaultFlattened> {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_subgraph_client::types::common::{
-        SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgOrderbook, SgVault, SgVaultBalanceChangeType,
+    use raindex_subgraph_client::types::common::{
+        SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgRaindex, SgVault, SgVaultBalanceChangeType,
     };
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_subgraph_client::utils::float::*;
 
     #[allow(clippy::too_many_arguments)]
     fn create_sg_vault(
@@ -73,8 +73,8 @@ mod tests {
                 symbol: token_symbol.map(String::from),
                 decimals: token_decimals_str.map(|s| SgBigInt(s.into())),
             },
-            orderbook: SgOrderbook {
-                id: SgBytes("default_orderbook_id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("default_raindex_id".into()),
             },
             orders_as_output: Vec::<SgOrderAsIO>::new(),
             orders_as_input: Vec::<SgOrderAsIO>::new(),

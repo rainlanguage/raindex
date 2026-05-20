@@ -14,12 +14,12 @@
 		showInactiveOrders,
 		activeTokens,
 		selectedChainIds,
-		activeOrderbookAddresses,
+		activeRaindexAddresses,
 		ownerFilter
 	} from '$lib/stores/settings';
 	import { handleTransactionConfirmationModal, handleTakeOrderModal } from '$lib/services/modal';
 	import { handleTakeOrder } from '$lib/services/handleTakeOrder';
-	import type { RaindexOrder } from '@rainlanguage/orderbook';
+	import type { RaindexOrder } from '@rainlanguage/raindex';
 	import type { Hex } from 'viem';
 
 	const { hideZeroBalanceVaults, hideInactiveOrdersVaults }: AppStoresInterface = $page.data.stores;
@@ -52,7 +52,7 @@
 	{hideZeroBalanceVaults}
 	{hideInactiveOrdersVaults}
 	{activeTokens}
-	{activeOrderbookAddresses}
+	{activeRaindexAddresses}
 	{ownerFilter}
 	handleTakeOrderModal={onTakeOrderCallback}
 />

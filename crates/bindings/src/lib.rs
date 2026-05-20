@@ -9,7 +9,7 @@ sol!(
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    OrderBook, "../../out/OrderBookV6.sol/OrderBookV6.json"
+    Raindex, "../../out/RaindexV6.sol/RaindexV6.json"
 );
 
 // Inline definition avoids non-deterministic artifact collision between
@@ -60,11 +60,11 @@ pub mod topics {
         IRaindexV6::{
             AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
         },
-        OrderBook::MetaV1_2,
+        Raindex::MetaV1_2,
     };
     use alloy::{primitives::B256, sol_types::SolEvent};
 
-    pub const ORDERBOOK_EVENT_TOPICS: [B256; 8] = [
+    pub const RAINDEX_EVENT_TOPICS: [B256; 8] = [
         AddOrderV3::SIGNATURE_HASH,
         TakeOrderV3::SIGNATURE_HASH,
         WithdrawV2::SIGNATURE_HASH,

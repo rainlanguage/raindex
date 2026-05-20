@@ -2,7 +2,7 @@ use super::super::RaindexError;
 use super::{
     query::fetch_all_tokens::fetch_all_tokens,
     query::fetch_vault_balance_changes::fetch_vault_balance_changes,
-    query::fetch_vaults::fetch_vaults, LocalDb, OrderbookIdentifier,
+    query::fetch_vaults::fetch_vaults, LocalDb, RaindexIdentifier,
 };
 use crate::raindex_client::ClientRef;
 use crate::{
@@ -73,12 +73,12 @@ impl VaultsDataSource for LocalDbVaults<'_> {
 
     async fn get_by_id(
         &self,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         vault_id: &Bytes,
     ) -> Result<Option<RaindexVault>, RaindexError> {
         let fetch_args = FetchVaultsArgs {
-            chain_ids: vec![ob_id.chain_id],
-            orderbook_addresses: vec![ob_id.orderbook_address],
+            chain_ids: vec![raindex_id.chain_id],
+            raindex_addresses: vec![raindex_id.raindex_address],
             hide_zero_balance: false,
             ..FetchVaultsArgs::default()
         };
@@ -101,9 +101,9 @@ impl VaultsDataSource for LocalDbVaults<'_> {
         filter_types: Option<&[VaultBalanceChangeFilter]>,
     ) -> Result<Vec<RaindexVaultBalanceChange>, RaindexError> {
         #[cfg(target_family = "wasm")]
-        let orderbook_address = Address::from_str(&vault.orderbook())?;
+        let raindex_address = Address::from_str(&vault.raindex())?;
         #[cfg(not(target_family = "wasm"))]
-        let orderbook_address = vault.orderbook();
+        let raindex_address = vault.raindex();
 
         #[cfg(target_family = "wasm")]
         let vault_id = U256::from_str(&vault.vault_id_hex())?;
@@ -120,10 +120,10 @@ impl VaultsDataSource for LocalDbVaults<'_> {
         #[cfg(not(target_family = "wasm"))]
         let owner_address = vault.owner();
 
-        let ob_id = crate::local_db::OrderbookIdentifier::new(vault.chain_id(), orderbook_address);
+        let raindex_id = crate::local_db::RaindexIdentifier::new(vault.chain_id(), raindex_address);
         let local_changes = fetch_vault_balance_changes(
             self.db,
-            &ob_id,
+            &raindex_id,
             vault_id,
             token_address,
             owner_address,
@@ -208,7 +208,7 @@ mod tests {
                 vault_id: U256::from_str(vault_id).unwrap(),
                 token: Address::from_str(token).unwrap(),
                 owner: Address::from_str(owner).unwrap(),
-                orderbook_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
+                raindex_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
                 token_name: "Token".to_string(),
                 token_symbol: "TKN".to_string(),
                 token_decimals: 18,
@@ -242,7 +242,7 @@ mod tests {
             assert_eq!(result_vault.chain_id(), 42161);
             assert_eq!(result_vault.owner().to_lowercase(), owner.to_string());
             assert_eq!(
-                result_vault.orderbook().to_lowercase(),
+                result_vault.raindex().to_lowercase(),
                 "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string()
             );
             assert_eq!(result_vault.formatted_balance(), "1".to_string());
@@ -271,11 +271,14 @@ mod tests {
             let vault_id_hex = derived_vault.id();
             let vault_id_bytes = Bytes::from_str(&vault_id_hex).expect("valid vault id");
 
-            let orderbook =
+            let raindex_addr =
                 Address::from_str("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB").unwrap();
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
             let retrieved = data_source
-                .get_by_id(&OrderbookIdentifier::new(42161, orderbook), &vault_id_bytes)
+                .get_by_id(
+                    &RaindexIdentifier::new(42161, raindex_addr),
+                    &vault_id_bytes,
+                )
                 .await
                 .expect("local vault retrieval should succeed")
                 .expect("vault should be found");
@@ -381,7 +384,7 @@ mod tests {
                 owners: vec![Address::from_str(owner_kept).unwrap()],
                 hide_zero_balance: true,
                 tokens: Some(vec![Address::from_str(token_kept).unwrap()]),
-                orderbook_addresses: None,
+                raindex_addresses: None,
                 only_active_orders: false,
             };
 
@@ -442,7 +445,7 @@ mod tests {
 
             let token = LocalDbToken {
                 chain_id: 42161,
-                orderbook_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
+                raindex_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
                 token_address: address!("0x00000000000000000000000000000000000000aa"),
                 name: "Test Token".to_string(),
                 symbol: "TST".to_string(),
@@ -481,7 +484,7 @@ mod tests {
 
             let token = LocalDbToken {
                 chain_id: 42161,
-                orderbook_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
+                raindex_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
                 token_address: address!("0x00000000000000000000000000000000000000aa"),
                 name: "Test Token".to_string(),
                 symbol: "TST".to_string(),
@@ -519,7 +522,7 @@ mod tests {
 
             let token = LocalDbToken {
                 chain_id: 42161,
-                orderbook_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
+                raindex_address: address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB"),
                 token_address: address!("0x00000000000000000000000000000000000000aa"),
                 name: "Test Token".to_string(),
                 symbol: "TST".to_string(),
@@ -558,7 +561,7 @@ mod tests {
 
             let owner = address!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
             let token = address!("0x00000000000000000000000000000000000000aa");
-            let orderbook = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
+            let raindex_addr = address!("0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB");
             let vault_id = U256::from(1);
 
             let balance_change = LocalDbVaultBalanceChange {
@@ -579,7 +582,7 @@ mod tests {
                 vault_id,
                 token,
                 owner,
-                orderbook_address: orderbook,
+                raindex_address: raindex_addr,
                 token_name: "Token".to_string(),
                 token_symbol: "TKN".to_string(),
                 token_decimals: 18,

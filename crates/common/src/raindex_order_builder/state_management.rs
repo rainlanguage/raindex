@@ -3,7 +3,7 @@ use rain_metadata::types::dotrain::{
     order_builder_state_v1::{OrderBuilderStateV1, ShortenedTokenCfg, ValueCfg},
     source_v1::DotrainSourceV1,
 };
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     order::{OrderIOCfg, VaultType},
     order_builder::OrderBuilderDepositCfg,
     token::TokenCfg,
@@ -224,7 +224,7 @@ impl RaindexOrderBuilder {
             for select_token in st {
                 if let Ok(token) = self
                     .dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .get_token(&select_token.key)
                 {
                     select_tokens.insert(select_token.key, token);
@@ -322,12 +322,12 @@ impl RaindexOrderBuilder {
             }
             if builder.is_select_token_set(key.clone())? {
                 TokenCfg::remove_record_from_yaml(
-                    builder.dotrain_order.orderbook_yaml().documents,
+                    builder.dotrain_order.raindex_yaml().documents,
                     &key,
                 )?;
             }
             TokenCfg::add_record_to_yaml(
-                builder.dotrain_order.orderbook_yaml().documents,
+                builder.dotrain_order.raindex_yaml().documents,
                 &key,
                 &token.network.key,
                 &token.address.to_string(),
@@ -396,12 +396,10 @@ mod tests {
         tests::{get_yaml, initialize_builder_with_select_tokens},
     };
     use alloy::primitives::{Address, U256};
-    use rain_orderbook_app_settings::{
-        network::NetworkCfg, order::VaultType, yaml::YamlParsableHash,
-    };
+    use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
     use std::str::FromStr;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGZKYKlbVV5aVVJeUl5mYUlyQaJZcGVgVmmuhZNBVmSxQYRFortnaLmPsWGyrTgsLFJzUpNLdMGG6qakFuTkV-am5pUAADgqxtfKAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGaEYXZEUUFeuWegaXGuUamrh3N4SmmmY2m2c36gX0iEZ0RQbnaZYZVBqm65rTgsLFJzUpNLdMGG6qakFuTkV-am5pUAAINPx5HKAQAA";
 
     fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -551,7 +549,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
-            version: 5
+            version: 6
             networks:
                 test:
                     rpcs:
@@ -567,7 +565,7 @@ mod tests {
                 test:
                     network: test
                     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-            orderbooks:
+            raindexes:
                 test:
                     address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
                     network: test
@@ -583,7 +581,7 @@ mod tests {
                     outputs:
                         - token: token1
                     rainlang: test
-                    orderbook: test
+                    raindex: test
             deployments:
                 select-token-deployment:
                     order: test
@@ -705,7 +703,7 @@ mod tests {
 
         let restored_token = builder
             .dotrain_order
-            .orderbook_yaml()
+            .raindex_yaml()
             .get_token("token3")
             .unwrap();
         assert_eq!(restored_token.address, replacement_token.address);

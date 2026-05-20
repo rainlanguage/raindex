@@ -1,6 +1,6 @@
 import type { LayoutLoad } from './$types';
 import type { InvalidOrderDetail, ValidOrderDetail } from '@rainlanguage/ui-components';
-import type { DotrainRegistry } from '@rainlanguage/orderbook';
+import type { DotrainRegistry } from '@rainlanguage/raindex';
 
 /**
  * Type defining the structure of the load function's return value,

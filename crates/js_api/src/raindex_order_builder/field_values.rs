@@ -1,5 +1,5 @@
 use super::*;
-use rain_orderbook_common::raindex_order_builder::field_values as inner_fv;
+use raindex_common::raindex_order_builder::field_values as inner_fv;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 pub struct FieldValuePair {

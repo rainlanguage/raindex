@@ -11,7 +11,7 @@ pub mod adapters;
 pub mod engine;
 pub mod runner;
 
-use super::OrderbookIdentifier;
+use super::RaindexIdentifier;
 use crate::erc20::TokenInfo;
 use crate::local_db::decode::{DecodedEvent, DecodedEventData};
 use crate::local_db::query::{
@@ -51,7 +51,7 @@ pub struct FinalityConfig {
 /// Static configuration supplied to a sync cycle.
 #[derive(Debug, Clone)]
 pub struct SyncConfig {
-    /// Block where the orderbook was deployed; the start block never goes
+    /// Block where the raindex was deployed; the start block never goes
     /// below this.
     pub deployment_block: u64,
     /// Fetch configuration (batch sizes, concurrency, etc.).
@@ -66,12 +66,12 @@ pub struct SyncConfig {
 #[derive(Debug, Clone)]
 pub struct SyncOutcome {
     /// Target that was synced.
-    pub ob_id: OrderbookIdentifier,
+    pub raindex_id: RaindexIdentifier,
     /// Start block (inclusive) that was used.
     pub start_block: u64,
     /// Target block (inclusive) that was used.
     pub target_block: u64,
-    /// Count of raw logs fetched across orderbook and stores.
+    /// Count of raw logs fetched across raindex and stores.
     pub fetched_logs: usize,
     /// Count of decoded events materialized during the cycle.
     pub decoded_events: usize,
@@ -85,8 +85,8 @@ pub enum SyncPhase {
     FetchingLatestBlock,
     RunningBootstrap,
     ComputingSyncWindow,
-    FetchingOrderbookLogs,
-    DecodingOrderbookLogs,
+    FetchingRaindexLogs,
+    DecodingRaindexLogs,
     FetchingStoreLogs,
     DecodingStoreLogs,
     FetchingTokenMetadata,
@@ -104,8 +104,8 @@ impl SyncPhase {
             Self::FetchingLatestBlock => "Fetching latest block",
             Self::RunningBootstrap => "Running bootstrap",
             Self::ComputingSyncWindow => "Computing sync window",
-            Self::FetchingOrderbookLogs => "Fetching orderbook logs",
-            Self::DecodingOrderbookLogs => "Decoding orderbook logs",
+            Self::FetchingRaindexLogs => "Fetching raindex logs",
+            Self::DecodingRaindexLogs => "Decoding raindex logs",
             Self::FetchingStoreLogs => "Fetching interpreter store logs",
             Self::DecodingStoreLogs => "Decoding interpreter store logs",
             Self::FetchingTokenMetadata => "Fetching missing token metadata",
@@ -147,7 +147,7 @@ pub trait WindowPipeline {
     async fn compute<DB>(
         &self,
         db: &DB,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         cfg: &SyncConfig,
         latest_block: u64,
     ) -> Result<(u64, u64), LocalDbError>
@@ -159,7 +159,7 @@ pub trait WindowPipeline {
 ///
 /// Responsibilities (concrete):
 /// - Decode via shared ABI into stable `DecodedEventData<DecodedEvent>`.
-/// - Provide a uniform surface for fetching orderbook/store logs.
+/// - Provide a uniform surface for fetching raindex/store logs.
 ///
 /// Policy (environment-specific):
 /// - Backend selection: browser uses regular/public RPCs; producer uses
@@ -172,10 +172,10 @@ pub trait EventsPipeline {
     /// Fetches the canonical block hash for the provided block number.
     async fn block_hash(&self, block_number: u64) -> Result<B256, LocalDbError>;
 
-    /// Fetches orderbook logs within the inclusive block range.
-    async fn fetch_orderbook(
+    /// Fetches raindex logs within the inclusive block range.
+    async fn fetch_raindex(
         &self,
-        orderbook_address: Address,
+        raindex_address: Address,
         from_block: u64,
         to_block: u64,
         cfg: &FetchConfig,
@@ -206,14 +206,14 @@ pub trait EventsPipeline {
 ///   is handled by the Apply pipeline.
 ///
 /// Invariants:
-/// - Upserts must be idempotent and keyed by `(chain_id, orderbook_address, token_address)`.
+/// - Upserts must be idempotent and keyed by `(chain_id, raindex_address, token_address)`.
 #[async_trait(?Send)]
 pub trait TokensPipeline {
     /// Loads existing token rows for the provided lowercase addresses.
     async fn load_existing<DB>(
         &self,
         db: &DB,
-        ob_id: &OrderbookIdentifier,
+        raindex_id: &RaindexIdentifier,
         token_addrs: &[Address],
     ) -> Result<Vec<Erc20TokenRow>, LocalDbError>
     where

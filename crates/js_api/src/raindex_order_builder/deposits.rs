@@ -1,6 +1,6 @@
 use super::*;
 use alloy::primitives::Address;
-use rain_orderbook_common::raindex_order_builder::deposits as inner_deposits;
+use raindex_common::raindex_order_builder::deposits as inner_deposits;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 pub struct TokenDeposit {

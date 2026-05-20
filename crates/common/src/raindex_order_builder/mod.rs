@@ -11,7 +11,7 @@ use base64::{engine::general_purpose::URL_SAFE, Engine};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use rain_math_float::FloatError;
 use rain_metaboard_subgraph::metaboard_client::MetaboardSubgraphClientError;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     deployment::DeploymentCfg,
     order::OrderCfg,
     order_builder::{
@@ -133,7 +133,7 @@ impl RaindexOrderBuilder {
         &self,
         key: String,
     ) -> Result<ExtendedTokenInfo, RaindexOrderBuilderError> {
-        let token = self.dotrain_order.orderbook_yaml().get_token(&key)?;
+        let token = self.dotrain_order.raindex_yaml().get_token(&key)?;
         Ok(ExtendedTokenInfo::from_token_cfg(&token).await?)
     }
 
@@ -278,8 +278,8 @@ pub enum RaindexOrderBuilderError {
     MissingDepositToken(String),
     #[error("Deposit amount cannot be an empty string")]
     DepositAmountCannotBeEmpty,
-    #[error("Orderbook not found")]
-    OrderbookNotFound,
+    #[error("Raindex not found")]
+    RaindexNotFound,
     #[error("Order not found: {0}")]
     OrderNotFound(String),
     #[error("Deserialized dotrain mismatch")]
@@ -371,8 +371,8 @@ impl RaindexOrderBuilderError {
                 format!("A deposit for token is required but has not been set for deployment '{}'.", deployment),
             Self::DepositAmountCannotBeEmpty =>
                 "The deposit amount cannot be an empty string. Please set a valid amount.".to_string(),
-            Self::OrderbookNotFound =>
-                "The orderbook configuration could not be found. Please check your YAML configuration.".to_string(),
+            Self::RaindexNotFound =>
+                "The raindex configuration could not be found. Please check your YAML configuration.".to_string(),
             Self::OrderNotFound(order) =>
                 format!("The order '{}' could not be found in the YAML configuration.", order),
             Self::DotrainMismatch =>
@@ -446,8 +446,8 @@ impl RaindexOrderBuilderError {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::FieldErrorKind;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::FieldErrorKind;
 
     pub fn get_yaml() -> String {
         format!(
@@ -561,8 +561,8 @@ rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -599,14 +599,14 @@ orders:
         - token: token2
           vault-id: 1
       rainlang: some-deployer
-      orderbook: some-orderbook
+      raindex: some-raindex
     other-order:
       inputs:
         - token: token1
       outputs:
         - token: token1
       rainlang: some-deployer
-      orderbook: some-orderbook
+      raindex: some-raindex
 deployments:
     some-deployment:
         scenario: some-scenario
@@ -764,8 +764,8 @@ rainlangs:
     test-deployer:
         network: test-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    test-orderbook:
+raindexes:
+    test-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: test-network
         subgraph: test-sg
@@ -822,7 +822,7 @@ orders:
         - token: token1
           vault-id: 1
       rainlang: test-deployer
-      orderbook: test-orderbook
+      raindex: test-raindex
 deployments:
     validation-deployment:
         scenario: test-scenario
@@ -1027,8 +1027,8 @@ rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg

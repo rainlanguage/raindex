@@ -8,7 +8,7 @@ use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use serde::{Deserialize, Serialize};
 
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::withdraw4Call;
+use raindex_bindings::IRaindexV6::withdraw4Call;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct WithdrawArgs {
@@ -29,7 +29,7 @@ impl From<WithdrawArgs> for withdraw4Call {
 }
 
 impl WithdrawArgs {
-    /// Execute OrderbookV3 withdraw call
+    /// Execute Raindex withdraw call
     #[cfg(not(target_family = "wasm"))]
     pub async fn execute<S: Fn(WriteTransactionStatus<withdraw4Call>)>(
         &self,
@@ -39,10 +39,8 @@ impl WithdrawArgs {
         let (ledger_client, _) = transaction_args.clone().try_into_ledger_client().await?;
 
         let withdraw_call: withdraw4Call = self.clone().into();
-        let params = transaction_args.try_into_write_contract_parameters(
-            withdraw_call,
-            transaction_args.orderbook_address,
-        )?;
+        let params = transaction_args
+            .try_into_write_contract_parameters(withdraw_call, transaction_args.raindex_address)?;
 
         WriteTransaction::new(ledger_client, params, 4, transaction_status_changed)
             .execute()
@@ -109,7 +107,7 @@ mod tests {
     fn test_withdraw_call_try_into_write_contract_parameters() {
         let args = TransactionArgs {
             rpcs: vec!["http://test.com".to_string()],
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: Some(0_usize),
             chain_id: Some(1),
             max_priority_fee_per_gas: Some(200),

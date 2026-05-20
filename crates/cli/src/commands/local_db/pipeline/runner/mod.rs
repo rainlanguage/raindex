@@ -12,15 +12,15 @@ use environment::default_environment;
 use export::export_dump;
 pub use export::ExportMetadata;
 use manifest::{build_manifest, write_manifest_to_path};
-use rain_orderbook_app_settings::local_db_manifest::ManifestOrderbook;
-use rain_orderbook_common::local_db::pipeline::adapters::apply::ApplyPipeline;
-use rain_orderbook_common::local_db::pipeline::runner::{
+use raindex_app_settings::local_db_manifest::ManifestRaindex;
+use raindex_common::local_db::pipeline::adapters::apply::ApplyPipeline;
+use raindex_common::local_db::pipeline::runner::{
     environment::RunnerEnvironment,
     remotes::lookup_manifest_entry,
     utils::{build_runner_targets, parse_runner_settings, ParsedRunnerSettings, RunnerTarget},
     RunReport, TargetFailure, TargetStage, TargetSuccess,
 };
-use rain_orderbook_common::local_db::pipeline::{
+use raindex_common::local_db::pipeline::{
     adapters::{
         apply::DefaultApplyPipeline, bootstrap::BootstrapPipeline, events::DefaultEventsPipeline,
         tokens::DefaultTokensPipeline, window::DefaultWindowPipeline,
@@ -28,7 +28,7 @@ use rain_orderbook_common::local_db::pipeline::{
     engine::SyncInputs,
     EventsPipeline, StatusBus, TokensPipeline, WindowPipeline,
 };
-use rain_orderbook_common::local_db::{LocalDbError, OrderbookIdentifier};
+use raindex_common::local_db::{LocalDbError, RaindexIdentifier};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -39,7 +39,7 @@ use url::Url;
 pub struct ProducerRunner<B, W, E, T, A, S> {
     settings: ParsedRunnerSettings,
     targets: Vec<RunnerTarget>,
-    target_lookup: HashMap<OrderbookIdentifier, RunnerTarget>,
+    target_lookup: HashMap<RaindexIdentifier, RunnerTarget>,
     out_root: PathBuf,
     release_base_url: Url,
     manifest_output_path: PathBuf,
@@ -62,11 +62,11 @@ where
         environment: RunnerEnvironment<B, W, E, T, A, S>,
     ) -> Result<Self, LocalDbError> {
         let settings = parse_runner_settings(&settings_yaml)?;
-        let targets = build_runner_targets(&settings.orderbooks, &settings.syncs)?;
+        let targets = build_runner_targets(&settings.raindexes, &settings.syncs)?;
 
         let mut target_lookup = HashMap::with_capacity(targets.len());
         for target in &targets {
-            target_lookup.insert(target.inputs.ob_id.clone(), target.clone());
+            target_lookup.insert(target.inputs.raindex_id.clone(), target.clone());
         }
 
         let manifest_output_path = out_root.join("manifest.yaml");
@@ -85,7 +85,7 @@ where
     pub async fn run(&self) -> Result<ProducerRunReport, LocalDbError> {
         let manifest_map = match self
             .environment
-            .fetch_manifests(&self.settings.orderbooks)
+            .fetch_manifests(&self.settings.raindexes)
             .await
         {
             Ok(map) => Arc::new(map),
@@ -93,8 +93,8 @@ where
                 let report = RunReport {
                     successes: Vec::new(),
                     failures: vec![TargetFailure {
-                        ob_id: OrderbookIdentifier::new(0, Address::ZERO),
-                        orderbook_key: None,
+                        raindex_id: RaindexIdentifier::new(0, Address::ZERO),
+                        raindex_key: None,
                         stage: TargetStage::ManifestFetch,
                         error,
                     }],
@@ -117,7 +117,7 @@ where
                     let environment = environment.clone();
                     tasks.spawn_local(async move {
                         let manifest_entry = lookup_manifest_entry(manifest_map.as_ref(), &target);
-                        run_orderbook_job::<B, W, E, T, A, S>(
+                        run_raindex_job::<B, W, E, T, A, S>(
                             target,
                             manifest_entry,
                             environment,
@@ -129,21 +129,21 @@ where
 
                 let mut successes = Vec::new();
                 let mut failures = Vec::new();
-                let mut exports: HashMap<OrderbookIdentifier, Option<ExportMetadata>> =
+                let mut exports: HashMap<RaindexIdentifier, Option<ExportMetadata>> =
                     HashMap::new();
                 while let Some(result) = tasks.join_next().await {
                     match result {
                         Ok(Ok((success, export))) => {
-                            exports.insert(success.outcome.ob_id.clone(), export);
+                            exports.insert(success.outcome.raindex_id.clone(), export);
                             successes.push(success);
                         }
                         Ok(Err(failure)) => {
                             error!(
-                                address = ?failure.ob_id.orderbook_address,
+                                address = ?failure.raindex_id.raindex_address,
                                 stage = ?failure.stage,
                                 error = %failure.error,
                                 "producer job failed (chain_id={:?})",
-                                failure.ob_id.chain_id,
+                                failure.raindex_id.chain_id,
                             );
                             failures.push(failure);
                         }
@@ -154,8 +154,8 @@ where
                                 "producer job panicked or was cancelled before completion"
                             );
                             failures.push(TargetFailure {
-                                ob_id: OrderbookIdentifier::new(0, Address::ZERO),
-                                orderbook_key: None,
+                                raindex_id: RaindexIdentifier::new(0, Address::ZERO),
+                                raindex_key: None,
                                 stage: TargetStage::EngineRun,
                                 error,
                             });
@@ -165,7 +165,7 @@ where
                 Ok::<
                     (
                         RunReport,
-                        HashMap<OrderbookIdentifier, Option<ExportMetadata>>,
+                        HashMap<RaindexIdentifier, Option<ExportMetadata>>,
                     ),
                     LocalDbError,
                 >((
@@ -228,13 +228,13 @@ impl
 pub struct ProducerRunReport {
     pub successes: Vec<TargetSuccess>,
     pub failures: Vec<TargetFailure>,
-    pub exports: HashMap<OrderbookIdentifier, Option<ExportMetadata>>,
+    pub exports: HashMap<RaindexIdentifier, Option<ExportMetadata>>,
 }
 
 impl ProducerRunReport {
     fn from_parts(
         report: RunReport,
-        exports: HashMap<OrderbookIdentifier, Option<ExportMetadata>>,
+        exports: HashMap<RaindexIdentifier, Option<ExportMetadata>>,
     ) -> Self {
         Self {
             successes: report.successes,
@@ -251,14 +251,14 @@ impl ProducerRunReport {
         &self.failures
     }
 
-    pub fn export_for(&self, ob_id: &OrderbookIdentifier) -> Option<&ExportMetadata> {
-        self.exports.get(ob_id)?.as_ref()
+    pub fn export_for(&self, raindex_id: &RaindexIdentifier) -> Option<&ExportMetadata> {
+        self.exports.get(raindex_id)?.as_ref()
     }
 }
 
-async fn run_orderbook_job<B, W, E, T, A, S>(
+async fn run_raindex_job<B, W, E, T, A, S>(
     target: RunnerTarget,
-    manifest_entry: Option<ManifestOrderbook>,
+    manifest_entry: Option<ManifestRaindex>,
     environment: RunnerEnvironment<B, W, E, T, A, S>,
     out_root: PathBuf,
 ) -> Result<(TargetSuccess, Option<ExportMetadata>), TargetFailure>
@@ -271,17 +271,17 @@ where
     S: StatusBus + 'static,
 {
     let RunnerTarget {
-        orderbook_key,
+        raindex_key,
         manifest_url,
         network_key,
         inputs,
     } = target;
 
-    let ob_id = inputs.ob_id.clone();
-    let ob_key_for_failure = orderbook_key.clone();
+    let raindex_id = inputs.raindex_id.clone();
+    let ob_key_for_failure = raindex_key.clone();
     let mk_failure = move |stage: TargetStage, error: LocalDbError| TargetFailure {
-        ob_id: ob_id.clone(),
-        orderbook_key: Some(ob_key_for_failure.clone()),
+        raindex_id: raindex_id.clone(),
+        raindex_key: Some(ob_key_for_failure.clone()),
         stage,
         error,
     };
@@ -301,7 +301,7 @@ where
     };
 
     let target = RunnerTarget {
-        orderbook_key,
+        raindex_key,
         manifest_url,
         network_key,
         inputs,
@@ -328,9 +328,9 @@ where
 }
 
 fn db_path_for_target(out_root: &Path, target: &RunnerTarget) -> Result<PathBuf, LocalDbError> {
-    let chain_folder = out_root.join(target.inputs.ob_id.chain_id.to_string());
+    let chain_folder = out_root.join(target.inputs.raindex_id.chain_id.to_string());
     std::fs::create_dir_all(&chain_folder)?;
-    let filename = format!("{}.db", target.inputs.ob_id.orderbook_address);
+    let filename = format!("{}.db", target.inputs.raindex_id.raindex_address);
     Ok(chain_folder.join(filename))
 }
 
@@ -347,26 +347,24 @@ mod tests {
     use alloy::primitives::{address, hex::encode_prefixed, Address, Bytes, B256};
     use async_trait::async_trait;
     use flate2::read::GzDecoder;
-    use rain_orderbook_app_settings::local_db_manifest::{
-        LocalDbManifest, ManifestNetwork, ManifestOrderbook, DB_SCHEMA_VERSION, MANIFEST_VERSION,
+    use raindex_app_settings::local_db_manifest::{
+        LocalDbManifest, ManifestNetwork, ManifestRaindex, DB_SCHEMA_VERSION, MANIFEST_VERSION,
     };
-    use rain_orderbook_app_settings::orderbook::OrderbookCfg;
-    use rain_orderbook_app_settings::remote::manifest::ManifestMap;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_common::local_db::pipeline::adapters::apply::ApplyPipelineTargetInfo;
-    use rain_orderbook_common::local_db::pipeline::adapters::bootstrap::{
+    use raindex_app_settings::raindex::RaindexCfg;
+    use raindex_app_settings::remote::manifest::ManifestMap;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_common::local_db::pipeline::adapters::apply::ApplyPipelineTargetInfo;
+    use raindex_common::local_db::pipeline::adapters::bootstrap::{
         BootstrapConfig, BootstrapPipeline, BootstrapState,
     };
-    use rain_orderbook_common::local_db::pipeline::runner::environment::{
+    use raindex_common::local_db::pipeline::runner::environment::{
         DumpFuture, EnginePipelines, ManifestFuture,
     };
-    use rain_orderbook_common::local_db::pipeline::{
+    use raindex_common::local_db::pipeline::{
         EventsPipeline, StatusBus, SyncPhase, TokensPipeline, WindowPipeline,
     };
-    use rain_orderbook_common::local_db::query::{
-        LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
-    };
-    use rain_orderbook_common::local_db::{FetchConfig, LocalDbError};
+    use raindex_common::local_db::query::{LocalDbQueryExecutor, SqlStatement, SqlStatementBatch};
+    use raindex_common::local_db::{FetchConfig, LocalDbError};
     use std::collections::HashMap;
     use std::fs::File;
     use std::io::Read;
@@ -435,17 +433,17 @@ mod tests {
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS target_watermarks (
                     chain_id INTEGER NOT NULL,
-                    orderbook_address TEXT NOT NULL,
+                    raindex_address TEXT NOT NULL,
                     last_block INTEGER NOT NULL DEFAULT 0,
                     last_hash TEXT,
                     updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
-                    PRIMARY KEY (chain_id, orderbook_address)
+                    PRIMARY KEY (chain_id, raindex_address)
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS raw_events (
                     chain_id INTEGER NOT NULL,
-                    orderbook_address TEXT NOT NULL,
+                    raindex_address TEXT NOT NULL,
                     transaction_hash TEXT NOT NULL,
                     log_index INTEGER NOT NULL,
                     block_number INTEGER NOT NULL,
@@ -454,20 +452,20 @@ mod tests {
                     topics TEXT NOT NULL,
                     data TEXT NOT NULL,
                     raw_json TEXT NOT NULL,
-                    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+                    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS order_events (
                     chain_id INTEGER,
-                    orderbook_address TEXT,
+                    raindex_address TEXT,
                     store_address TEXT
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS interpreter_store_sets (
                     chain_id INTEGER,
-                    orderbook_address TEXT,
+                    raindex_address TEXT,
                     store_address TEXT
                 );",
             ));
@@ -494,7 +492,7 @@ mod tests {
         async fn inspect_state<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
         ) -> Result<BootstrapState, LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -516,10 +514,10 @@ mod tests {
             Ok(())
         }
 
-        async fn clear_orderbook_data<DB>(
+        async fn clear_raindex_data<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
         ) -> Result<(), LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -538,14 +536,14 @@ mod tests {
             self.ensure_tables(db).await?;
 
             // Seed a raw event to force export_data_only to return Some, but skip watermark to trigger export failure.
-            let ob_id = &config.ob_id;
-            let orderbook_address = encode_prefixed(ob_id.orderbook_address);
+            let raindex_id = &config.raindex_id;
+            let raindex_address = encode_prefixed(raindex_id.raindex_address);
             let mut batch = SqlStatementBatch::new();
             batch.add(SqlStatement::new(format!(
-                "INSERT INTO raw_events (chain_id, orderbook_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
+                "INSERT INTO raw_events (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
                  VALUES ({}, '{}', '0xseedtx', 0, {}, 1_700_000_000, '{}', '[]', '0x00', '{{}}') \
-                 ON CONFLICT(chain_id, orderbook_address, transaction_hash, log_index) DO NOTHING;",
-                ob_id.chain_id, orderbook_address, config.latest_block, orderbook_address
+                 ON CONFLICT(chain_id, raindex_address, transaction_hash, log_index) DO NOTHING;",
+                raindex_id.chain_id, raindex_address, config.latest_block, raindex_address
             )));
             db.execute_batch(&batch.ensure_transaction()).await?;
 
@@ -590,17 +588,17 @@ mod tests {
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS target_watermarks (
                     chain_id INTEGER NOT NULL,
-                    orderbook_address TEXT NOT NULL,
+                    raindex_address TEXT NOT NULL,
                     last_block INTEGER NOT NULL DEFAULT 0,
                     last_hash TEXT,
                     updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
-                    PRIMARY KEY (chain_id, orderbook_address)
+                    PRIMARY KEY (chain_id, raindex_address)
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS raw_events (
                     chain_id INTEGER NOT NULL,
-                    orderbook_address TEXT NOT NULL,
+                    raindex_address TEXT NOT NULL,
                     transaction_hash TEXT NOT NULL,
                     log_index INTEGER NOT NULL,
                     block_number INTEGER NOT NULL,
@@ -609,20 +607,20 @@ mod tests {
                     topics TEXT NOT NULL,
                     data TEXT NOT NULL,
                     raw_json TEXT NOT NULL,
-                    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+                    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS order_events (
                     chain_id INTEGER,
-                    orderbook_address TEXT,
+                    raindex_address TEXT,
                     store_address TEXT
                 );",
             ));
             batch.add(SqlStatement::new(
                 "CREATE TABLE IF NOT EXISTS interpreter_store_sets (
                     chain_id INTEGER,
-                    orderbook_address TEXT,
+                    raindex_address TEXT,
                     store_address TEXT
                 );",
             ));
@@ -649,7 +647,7 @@ mod tests {
         async fn inspect_state<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
         ) -> Result<BootstrapState, LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -671,10 +669,10 @@ mod tests {
             Ok(())
         }
 
-        async fn clear_orderbook_data<DB>(
+        async fn clear_raindex_data<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
         ) -> Result<(), LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -699,24 +697,24 @@ mod tests {
             self.ensure_tables(db).await?;
 
             if self.seed_export {
-                let ob_id = &config.ob_id;
-                let orderbook_address = encode_prefixed(ob_id.orderbook_address);
+                let raindex_id = &config.raindex_id;
+                let raindex_address = encode_prefixed(raindex_id.raindex_address);
 
                 let mut batch = SqlStatementBatch::new();
                 batch.add(SqlStatement::new(format!(
-                    "INSERT INTO raw_events (chain_id, orderbook_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
+                    "INSERT INTO raw_events (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
                      VALUES ({}, '{}', '0xseedtx', 0, {}, 1_700_000_000, '{}', '[]', '0x00', '{{}}') \
-                     ON CONFLICT(chain_id, orderbook_address, transaction_hash, log_index) DO NOTHING;",
-                    ob_id.chain_id, orderbook_address, config.latest_block, orderbook_address
+                     ON CONFLICT(chain_id, raindex_address, transaction_hash, log_index) DO NOTHING;",
+                    raindex_id.chain_id, raindex_address, config.latest_block, raindex_address
                 )));
                 batch.add(SqlStatement::new(format!(
-                    "INSERT INTO target_watermarks (chain_id, orderbook_address, last_block, last_hash, updated_at) \
+                    "INSERT INTO target_watermarks (chain_id, raindex_address, last_block, last_hash, updated_at) \
                      VALUES ({}, '{}', {}, '0xfeedface', 1_700_000_000_000) \
-                     ON CONFLICT(chain_id, orderbook_address) DO UPDATE \
+                     ON CONFLICT(chain_id, raindex_address) DO UPDATE \
                      SET last_block = excluded.last_block, \
                          last_hash = excluded.last_hash, \
                          updated_at = excluded.updated_at;",
-                    ob_id.chain_id, orderbook_address, config.latest_block
+                    raindex_id.chain_id, raindex_address, config.latest_block
                 )));
 
                 db.execute_batch(&batch.ensure_transaction()).await?;
@@ -757,8 +755,8 @@ mod tests {
         async fn compute<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
-            _cfg: &rain_orderbook_common::local_db::pipeline::SyncConfig,
+            _target: &RaindexIdentifier,
+            _cfg: &raindex_common::local_db::pipeline::SyncConfig,
             _latest_block: u64,
         ) -> Result<(u64, u64), LocalDbError>
         where
@@ -779,14 +777,13 @@ mod tests {
             Ok(self.latest_block)
         }
 
-        async fn fetch_orderbook(
+        async fn fetch_raindex(
             &self,
-            _orderbook_address: Address,
+            _raindex_address: Address,
             _from_block: u64,
             _to_block: u64,
             _cfg: &FetchConfig,
-        ) -> Result<Vec<rain_orderbook_common::rpc_client::LogEntryResponse>, LocalDbError>
-        {
+        ) -> Result<Vec<raindex_common::rpc_client::LogEntryResponse>, LocalDbError> {
             Ok(Vec::new())
         }
 
@@ -796,18 +793,17 @@ mod tests {
             _from_block: u64,
             _to_block: u64,
             _cfg: &FetchConfig,
-        ) -> Result<Vec<rain_orderbook_common::rpc_client::LogEntryResponse>, LocalDbError>
-        {
+        ) -> Result<Vec<raindex_common::rpc_client::LogEntryResponse>, LocalDbError> {
             Ok(Vec::new())
         }
 
         fn decode(
             &self,
-            _logs: &[rain_orderbook_common::rpc_client::LogEntryResponse],
+            _logs: &[raindex_common::rpc_client::LogEntryResponse],
         ) -> Result<
             Vec<
-                rain_orderbook_common::local_db::decode::DecodedEventData<
-                    rain_orderbook_common::local_db::decode::DecodedEvent,
+                raindex_common::local_db::decode::DecodedEventData<
+                    raindex_common::local_db::decode::DecodedEvent,
                 >,
             >,
             LocalDbError,
@@ -828,10 +824,10 @@ mod tests {
         async fn load_existing<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _ob_id: &RaindexIdentifier,
             _token_addrs_lower: &[Address],
         ) -> Result<
-            Vec<rain_orderbook_common::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow>,
+            Vec<raindex_common::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow>,
             LocalDbError,
         >
         where
@@ -844,7 +840,7 @@ mod tests {
             &self,
             _missing: Vec<Address>,
             _cfg: &FetchConfig,
-        ) -> Result<Vec<(Address, rain_orderbook_common::erc20::TokenInfo)>, LocalDbError> {
+        ) -> Result<Vec<(Address, raindex_common::erc20::TokenInfo)>, LocalDbError> {
             Ok(Vec::new())
         }
     }
@@ -865,14 +861,14 @@ mod tests {
         fn build_batch(
             &self,
             _target_info: &ApplyPipelineTargetInfo,
-            _raw_logs: &[rain_orderbook_common::rpc_client::LogEntryResponse],
-            _decoded_events: &[rain_orderbook_common::local_db::decode::DecodedEventData<
-                rain_orderbook_common::local_db::decode::DecodedEvent,
+            _raw_logs: &[raindex_common::rpc_client::LogEntryResponse],
+            _decoded_events: &[raindex_common::local_db::decode::DecodedEventData<
+                raindex_common::local_db::decode::DecodedEvent,
             >],
             _existing_tokens: &[
-                rain_orderbook_common::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow
+                raindex_common::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow
             ],
-            _tokens_to_upsert: &[(Address, rain_orderbook_common::erc20::TokenInfo)],
+            _tokens_to_upsert: &[(Address, raindex_common::erc20::TokenInfo)],
         ) -> Result<SqlStatementBatch, LocalDbError> {
             Ok(SqlStatementBatch::new())
         }
@@ -897,7 +893,7 @@ mod tests {
         async fn export_dump<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
             _end_block: u64,
         ) -> Result<(), LocalDbError>
         where
@@ -951,7 +947,7 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
+raindexes:
   ok:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
@@ -999,7 +995,7 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
+raindexes:
   ok:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
@@ -1040,7 +1036,7 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
+raindexes:
   panic:
     address: 0x00000000000000000000000000000000000000c3
     network: anvil
@@ -1075,7 +1071,7 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
+raindexes:
   ok:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
@@ -1111,7 +1107,7 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 10000
     sync-interval-ms: 5000
-orderbooks:
+raindexes:
   ok:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
@@ -1129,10 +1125,10 @@ orderbooks:
         )
     }
 
-    fn manifest_for_ok_orderbook() -> ManifestMap {
+    fn manifest_for_ok_raindex() -> ManifestMap {
         let url = Url::parse("https://manifests.example/a.yaml").unwrap();
         let dump_url = Url::parse("https://dumps.example/ok.dump.sql").unwrap();
-        let orderbook_address = address!("00000000000000000000000000000000000000a1");
+        let raindex_address = address!("00000000000000000000000000000000000000a1");
         let manifest = LocalDbManifest {
             manifest_version: MANIFEST_VERSION,
             db_schema_version: DB_SCHEMA_VERSION,
@@ -1140,8 +1136,8 @@ orderbooks:
                 "anvil".to_string(),
                 ManifestNetwork {
                     chain_id: 42161,
-                    orderbooks: vec![ManifestOrderbook {
-                        address: orderbook_address,
+                    raindexes: vec![ManifestRaindex {
+                        address: raindex_address,
                         dump_url,
                         end_block: 111,
                         end_block_hash: Bytes::from_str("0xdead").unwrap(),
@@ -1153,8 +1149,8 @@ orderbooks:
         HashMap::from([(url, manifest)])
     }
 
-    fn manifest_for_two_ok_orderbooks() -> ManifestMap {
-        let mut map = manifest_for_ok_orderbook();
+    fn manifest_for_two_ok_raindexes() -> ManifestMap {
+        let mut map = manifest_for_ok_raindex();
         let second_url = Url::parse("https://manifests.example/d.yaml").unwrap();
         let second_dump_url = Url::parse("https://dumps.example/ok-second.dump.sql").unwrap();
         let second_address = address!("00000000000000000000000000000000000000d4");
@@ -1165,7 +1161,7 @@ orderbooks:
                 "anvil".to_string(),
                 ManifestNetwork {
                     chain_id: 42161,
-                    orderbooks: vec![ManifestOrderbook {
+                    raindexes: vec![ManifestRaindex {
                         address: second_address,
                         dump_url: second_dump_url,
                         end_block: 222,
@@ -1220,7 +1216,7 @@ orderbooks:
         let telemetry_for_builder = telemetry.clone();
         Arc::new(move |target: &RunnerTarget| {
             let behavior = behaviors
-                .get(&target.orderbook_key)
+                .get(&target.raindex_key)
                 .copied()
                 .unwrap_or(EngineBehavior::Success);
             let telemetry = telemetry_for_builder.clone();
@@ -1257,7 +1253,7 @@ orderbooks:
         let behaviors = Arc::new(behaviors);
         let manifest_fetcher = {
             let manifests = Arc::clone(&manifests);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let manifests = Arc::clone(&manifests);
                 Box::pin(async move { Ok((*manifests).clone()) }) as ManifestFuture
             })
@@ -1286,7 +1282,7 @@ orderbooks:
 
     fn build_targets(yaml: &str) -> Vec<RunnerTarget> {
         let parsed = parse_settings(yaml);
-        build_runner_targets(&parsed.orderbooks, &parsed.syncs).expect("targets")
+        build_runner_targets(&parsed.raindexes, &parsed.syncs).expect("targets")
     }
 
     #[test]
@@ -1303,8 +1299,8 @@ orderbooks:
         )
         .expect("runner to be constructed");
         assert_eq!(runner.targets.len(), 3);
-        assert_eq!(runner.settings.orderbooks.len(), 3);
-        assert!(runner.settings.orderbooks.contains_key("ok"));
+        assert_eq!(runner.settings.raindexes.len(), 3);
+        assert!(runner.settings.raindexes.contains_key("ok"));
     }
 
     #[test]
@@ -1338,7 +1334,7 @@ orderbooks:
         let mut behaviors = HashMap::new();
         behaviors.insert("ok".to_string(), EngineBehavior::Success);
         behaviors.insert("fail".to_string(), EngineBehavior::Fail);
-        let (environment, telemetry) = build_environment(manifest_for_ok_orderbook(), behaviors);
+        let (environment, telemetry) = build_environment(manifest_for_ok_raindex(), behaviors);
         let temp_dir = TempDir::new().unwrap();
         let release_base = Url::parse("https://releases.example.com").unwrap();
         let runner = ProducerRunner::with_environment(
@@ -1357,17 +1353,17 @@ orderbooks:
         let success = &report.successes[0];
         assert_eq!(success.outcome.start_block, 0);
         assert_eq!(
-            success.outcome.ob_id.orderbook_address,
+            success.outcome.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000a1")
         );
 
         let failure = &report.failures[0];
-        assert_eq!(failure.ob_id.chain_id, 42161);
+        assert_eq!(failure.raindex_id.chain_id, 42161);
         assert_eq!(
-            failure.ob_id.orderbook_address,
+            failure.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000b2")
         );
-        assert_eq!(failure.orderbook_key.as_deref(), Some("fail"));
+        assert_eq!(failure.raindex_key.as_deref(), Some("fail"));
         assert!(matches!(failure.error, LocalDbError::CustomError(_)));
 
         let dumps: Vec<Option<String>> = telemetry.bootstrap_dumps.lock().unwrap().clone();
@@ -1403,8 +1399,8 @@ orderbooks:
         assert_eq!(report.successes.len(), 0);
         assert_eq!(report.failures.len(), 1);
         let failure = &report.failures[0];
-        assert_eq!(failure.ob_id.chain_id, 0);
-        assert!(failure.orderbook_key.is_none());
+        assert_eq!(failure.raindex_id.chain_id, 0);
+        assert!(failure.raindex_key.is_none());
         assert!(matches!(failure.error, LocalDbError::TaskJoin(_)));
     }
 
@@ -1415,7 +1411,7 @@ orderbooks:
         behaviors.insert("ok".to_string(), EngineBehavior::Success);
         behaviors.insert("fail".to_string(), EngineBehavior::Fail);
         behaviors.insert("panic".to_string(), EngineBehavior::Panic);
-        let (environment, telemetry) = build_environment(manifest_for_ok_orderbook(), behaviors);
+        let (environment, telemetry) = build_environment(manifest_for_ok_raindex(), behaviors);
         let temp_dir = TempDir::new().unwrap();
         let release_base = Url::parse("https://releases.example.com").unwrap();
         let runner = ProducerRunner::with_environment(
@@ -1434,7 +1430,7 @@ orderbooks:
         let success_addresses: Vec<Address> = report
             .successes
             .iter()
-            .map(|outcome| outcome.outcome.ob_id.orderbook_address)
+            .map(|outcome| outcome.outcome.raindex_id.raindex_address)
             .collect();
         assert_eq!(
             success_addresses,
@@ -1444,7 +1440,10 @@ orderbooks:
         let mut custom_failure = None;
         let mut join_failure = None;
         for failure in &report.failures {
-            match (failure.ob_id.chain_id, failure.ob_id.orderbook_address) {
+            match (
+                failure.raindex_id.chain_id,
+                failure.raindex_id.raindex_address,
+            ) {
                 (42161, addr) if addr == address!("00000000000000000000000000000000000000b2") => {
                     custom_failure = Some(failure);
                 }
@@ -1470,7 +1469,7 @@ orderbooks:
         behaviors.insert("ok".to_string(), EngineBehavior::SuccessWithExport);
         behaviors.insert("ok-second".to_string(), EngineBehavior::Fail);
         let (environment, _telemetry) =
-            build_environment(manifest_for_two_ok_orderbooks(), behaviors);
+            build_environment(manifest_for_two_ok_raindexes(), behaviors);
         let temp_dir = TempDir::new().unwrap();
         let release_base = Url::parse("https://releases.example.com").unwrap();
         let runner = ProducerRunner::with_environment(
@@ -1513,7 +1512,7 @@ orderbooks:
         let yaml = settings_yaml_ok_only();
         let telemetry = Telemetry::default();
         let manifest_fetcher = Arc::new(
-            |_orderbooks: &HashMap<String, OrderbookCfg>| -> ManifestFuture {
+            |_raindexes: &HashMap<String, RaindexCfg>| -> ManifestFuture {
                 Box::pin(async {
                     Err(LocalDbError::CustomError(
                         "manifest fetch failure".to_string(),
@@ -1550,12 +1549,12 @@ orderbooks:
     #[tokio::test]
     async fn run_records_download_failure() {
         let yaml = settings_yaml_ok_only();
-        let manifest_map = manifest_for_ok_orderbook();
+        let manifest_map = manifest_for_ok_raindex();
         let telemetry = Telemetry::default();
         let manifests = Arc::new(manifest_map);
         let manifest_fetcher = {
             let manifests = Arc::clone(&manifests);
-            Arc::new(move |_orderbooks: &HashMap<String, OrderbookCfg>| {
+            Arc::new(move |_raindexes: &HashMap<String, RaindexCfg>| {
                 let manifests = Arc::clone(&manifests);
                 Box::pin(async move { Ok((*manifests).clone()) }) as ManifestFuture
             })
@@ -1589,12 +1588,12 @@ orderbooks:
         assert!(report.successes.is_empty());
         assert_eq!(report.failures.len(), 1);
         let failure = &report.failures[0];
-        assert_eq!(failure.ob_id.chain_id, 42161);
+        assert_eq!(failure.raindex_id.chain_id, 42161);
         assert_eq!(
-            failure.ob_id.orderbook_address,
+            failure.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000a1")
         );
-        assert_eq!(failure.orderbook_key.as_deref(), Some("ok"));
+        assert_eq!(failure.raindex_key.as_deref(), Some("ok"));
         assert!(matches!(
             &failure.error,
             LocalDbError::CustomError(message) if message.contains("download failed")
@@ -1608,7 +1607,7 @@ orderbooks:
     async fn run_records_engine_build_error() {
         let yaml = settings_yaml_ok_only();
         let manifest_fetcher = Arc::new(
-            |_orderbooks: &HashMap<String, OrderbookCfg>| -> ManifestFuture {
+            |_raindexes: &HashMap<String, RaindexCfg>| -> ManifestFuture {
                 Box::pin(async { Ok(HashMap::new()) })
             },
         );
@@ -1642,12 +1641,12 @@ orderbooks:
         assert!(report.successes.is_empty());
         assert_eq!(report.failures.len(), 1);
         let failure = &report.failures[0];
-        assert_eq!(failure.ob_id.chain_id, 42161);
+        assert_eq!(failure.raindex_id.chain_id, 42161);
         assert_eq!(
-            failure.ob_id.orderbook_address,
+            failure.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000a1")
         );
-        assert_eq!(failure.orderbook_key.as_deref(), Some("ok"));
+        assert_eq!(failure.raindex_key.as_deref(), Some("ok"));
         assert!(matches!(
             &failure.error,
             LocalDbError::CustomError(message) if message == "engine build error"
@@ -1657,9 +1656,9 @@ orderbooks:
     #[tokio::test]
     async fn run_records_export_failure_with_stage() {
         let yaml = settings_yaml_ok_only();
-        let manifest_map = manifest_for_ok_orderbook();
+        let manifest_map = manifest_for_ok_raindex();
         let manifest_fetcher = Arc::new(
-            move |_orderbooks: &HashMap<String, OrderbookCfg>| -> ManifestFuture {
+            move |_raindexes: &HashMap<String, RaindexCfg>| -> ManifestFuture {
                 let manifest_map = manifest_map.clone();
                 Box::pin(async move { Ok(manifest_map) })
             },
@@ -1705,7 +1704,7 @@ orderbooks:
         let failure = &report.failures[0];
         assert_eq!(failure.stage, TargetStage::Export);
         assert_eq!(
-            failure.ob_id.orderbook_address,
+            failure.raindex_id.raindex_address,
             address!("00000000000000000000000000000000000000a1")
         );
     }
@@ -1739,7 +1738,7 @@ orderbooks:
         let yaml = settings_yaml_ok_only();
         let mut behaviors = HashMap::new();
         behaviors.insert("ok".to_string(), EngineBehavior::Success);
-        let (environment, _telemetry) = build_environment(manifest_for_ok_orderbook(), behaviors);
+        let (environment, _telemetry) = build_environment(manifest_for_ok_raindex(), behaviors);
         let temp_dir = TempDir::new().unwrap();
         let release_base = Url::parse("https://releases.example.com").unwrap();
         let runner = ProducerRunner::with_environment(
@@ -1755,11 +1754,11 @@ orderbooks:
             panic!("expected success, got failures: {:?}", report.failures);
         }
         let outcome = &report.successes[0];
-        assert_eq!(outcome.outcome.ob_id.chain_id, 42161);
+        assert_eq!(outcome.outcome.raindex_id.chain_id, 42161);
         assert_eq!(outcome.outcome.start_block, 0);
 
         assert!(
-            report.export_for(&outcome.outcome.ob_id).is_none(),
+            report.export_for(&outcome.outcome.raindex_id).is_none(),
             "stub environment should not emit dumps"
         );
     }
@@ -1787,7 +1786,7 @@ orderbooks:
         let outcome = &report.successes[0];
 
         let metadata = report
-            .export_for(&outcome.outcome.ob_id)
+            .export_for(&outcome.outcome.raindex_id)
             .expect("export metadata to be present");
         assert!(
             metadata.dump_path.exists(),
@@ -1800,7 +1799,7 @@ orderbooks:
             .expect("dump file name");
         let expected_file = format!(
             "{}-{}.sql.gz",
-            outcome.outcome.ob_id.chain_id, outcome.outcome.ob_id.orderbook_address
+            outcome.outcome.raindex_id.chain_id, outcome.outcome.raindex_id.raindex_address
         );
         assert_eq!(file_name, expected_file);
         assert_eq!(metadata.end_block, outcome.outcome.target_block);
@@ -1887,7 +1886,7 @@ orderbooks:
             .expect("second address present");
         assert!(
             first_index < second_index,
-            "expected orderbooks to be sorted by address"
+            "expected raindexes to be sorted by address"
         );
     }
 
@@ -1898,7 +1897,7 @@ orderbooks:
         behaviors.insert("ok".to_string(), EngineBehavior::Success);
         behaviors.insert("ok-second".to_string(), EngineBehavior::Success);
         let (environment, telemetry) =
-            build_environment(manifest_for_two_ok_orderbooks(), behaviors);
+            build_environment(manifest_for_two_ok_raindexes(), behaviors);
         let temp_dir = TempDir::new().unwrap();
         let release_base = Url::parse("https://releases.example.com").unwrap();
         let runner = ProducerRunner::with_environment(
@@ -1973,8 +1972,8 @@ orderbooks:
             "{}.db",
             targets[0]
                 .inputs
-                .ob_id
-                .orderbook_address
+                .raindex_id
+                .raindex_address
                 .to_string()
                 .to_lowercase()
         );

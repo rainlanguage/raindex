@@ -12,7 +12,7 @@ pub async fn fetch_trades<E: LocalDbQueryExecutor + ?Sized>(
 ) -> Result<Vec<LocalDbOrderTrade>, LocalDbQueryError> {
     let started = Timing::now();
     let chain_ids_count = args.chain_ids.len();
-    let orderbooks_count = args.orderbook_addresses.len();
+    let raindexes_count = args.raindex_addresses.len();
     let owners_count = args.owners.len();
     let takers_count = args.takers.len();
     let input_tokens_count = args.tokens.inputs.len();
@@ -26,7 +26,7 @@ pub async fn fetch_trades<E: LocalDbQueryExecutor + ?Sized>(
         Ok(trades) => {
             tracing::info!(
                 chain_ids_count,
-                orderbooks_count,
+                raindexes_count,
                 owners_count,
                 takers_count,
                 input_tokens_count,
@@ -45,7 +45,7 @@ pub async fn fetch_trades<E: LocalDbQueryExecutor + ?Sized>(
         Err(err) => {
             tracing::error!(
                 chain_ids_count,
-                orderbooks_count,
+                raindexes_count,
                 owners_count,
                 takers_count,
                 input_tokens_count,
@@ -70,7 +70,7 @@ pub async fn fetch_trades_count<E: LocalDbQueryExecutor + ?Sized>(
 ) -> Result<Vec<LocalDbTradeCountRow>, LocalDbQueryError> {
     let started = Timing::now();
     let chain_ids_count = args.chain_ids.len();
-    let orderbooks_count = args.orderbook_addresses.len();
+    let raindexes_count = args.raindex_addresses.len();
     let owners_count = args.owners.len();
     let takers_count = args.takers.len();
     let input_tokens_count = args.tokens.inputs.len();
@@ -82,7 +82,7 @@ pub async fn fetch_trades_count<E: LocalDbQueryExecutor + ?Sized>(
         Ok(rows) => {
             tracing::info!(
                 chain_ids_count,
-                orderbooks_count,
+                raindexes_count,
                 owners_count,
                 takers_count,
                 input_tokens_count,
@@ -100,7 +100,7 @@ pub async fn fetch_trades_count<E: LocalDbQueryExecutor + ?Sized>(
         Err(err) => {
             tracing::error!(
                 chain_ids_count,
-                orderbooks_count,
+                raindexes_count,
                 owners_count,
                 takers_count,
                 input_tokens_count,
@@ -131,7 +131,7 @@ mod wasm_tests {
     async fn wrapper_uses_builder_sql_exactly() {
         let args = FetchTradesArgs {
             chain_ids: vec![137, 42161],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             ..Default::default()
         };
 

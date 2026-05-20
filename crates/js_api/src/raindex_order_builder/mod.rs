@@ -1,9 +1,9 @@
-use rain_orderbook_app_settings::order_builder::{
+use raindex_app_settings::order_builder::{
     NameAndDescriptionCfg, OrderBuilderCfg, OrderBuilderDeploymentCfg,
     OrderBuilderFieldDefinitionCfg,
 };
-pub use rain_orderbook_common::erc20::ExtendedTokenInfo;
-use rain_orderbook_common::raindex_order_builder::{
+pub use raindex_common::erc20::ExtendedTokenInfo;
+use raindex_common::raindex_order_builder::{
     RaindexOrderBuilder as RaindexOrderBuilderInner, RaindexOrderBuilderError,
 };
 use serde::{Deserialize, Serialize};
@@ -512,9 +512,9 @@ impl From<RaindexOrderBuilderWasmError> for WasmEncodedError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::order_builder::OrderBuilderPresetCfg;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::{FieldErrorKind, YamlError};
+    use raindex_app_settings::order_builder::OrderBuilderPresetCfg;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::{FieldErrorKind, YamlError};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     pub fn get_yaml() -> String {
@@ -629,8 +629,8 @@ rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg
@@ -667,14 +667,14 @@ orders:
         - token: token2
           vault-id: 1
       rainlang: some-deployer
-      orderbook: some-orderbook
+      raindex: some-raindex
     other-order:
       inputs:
         - token: token1
       outputs:
         - token: token1
       rainlang: some-deployer
-      orderbook: some-orderbook
+      raindex: some-raindex
 deployments:
     some-deployment:
         scenario: some-scenario
@@ -858,8 +858,8 @@ rainlangs:
     test-deployer:
         network: test-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    test-orderbook:
+raindexes:
+    test-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: test-network
         subgraph: test-sg
@@ -916,7 +916,7 @@ orders:
         - token: token1
           vault-id: 1
       rainlang: test-deployer
-      orderbook: test-orderbook
+      raindex: test-raindex
 deployments:
     validation-deployment:
         scenario: test-scenario
@@ -1696,8 +1696,8 @@ rainlangs:
     some-deployer:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-    some-orderbook:
+raindexes:
+    some-raindex:
         address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
         network: some-network
         subgraph: some-sg

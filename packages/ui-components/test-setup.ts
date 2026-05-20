@@ -55,7 +55,7 @@ vi.mock('$app/stores', async () => {
 	};
 });
 
-vi.mock('@rainlanguage/orderbook', () => {
+vi.mock('@rainlanguage/raindex', () => {
 	const RaindexOrderBuilder = vi.fn();
 	// @ts-expect-error - static method
 	RaindexOrderBuilder.getOrderDetails = vi.fn();

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+	import type { NameAndDescriptionCfg } from '@rainlanguage/raindex';
 	import DeploymentTile from './DeploymentTile.svelte';
 
 	export let deployments: Map<string, NameAndDescriptionCfg> | [string, NameAndDescriptionCfg][] =

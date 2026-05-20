@@ -2,18 +2,22 @@ use crate::local_db::query::fetch_order_vaults_volume::{
     build_fetch_order_vaults_volume_stmt, LocalDbVaultVolume,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use alloy::primitives::B256;
 
 pub async fn fetch_order_vaults_volume<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     order_hash: B256,
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<Vec<LocalDbVaultVolume>, LocalDbQueryError> {
-    let stmt =
-        build_fetch_order_vaults_volume_stmt(ob_id, order_hash, start_timestamp, end_timestamp)?;
+    let stmt = build_fetch_order_vaults_volume_stmt(
+        raindex_id,
+        order_hash,
+        start_timestamp,
+        end_timestamp,
+    )?;
     exec.query_json(&stmt).await
 }
 
@@ -31,14 +35,14 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn wrapper_uses_builder_sql_exactly() {
         let chain_id = 111;
-        let orderbook = Address::from([0x77; 20]);
+        let raindex = Address::from([0x77; 20]);
         let order_hash =
             b256!("0x000000000000000000000000000000000000000000000000000000000000abcd");
         let start = Some(100);
         let end = Some(200);
 
         let expected_stmt = build_fetch_order_vaults_volume_stmt(
-            &OrderbookIdentifier::new(chain_id, orderbook),
+            &RaindexIdentifier::new(chain_id, raindex),
             order_hash,
             start,
             end,
@@ -54,7 +58,7 @@ mod wasm_tests {
 
         let res = super::fetch_order_vaults_volume(
             &exec,
-            &OrderbookIdentifier::new(chain_id, orderbook),
+            &RaindexIdentifier::new(chain_id, raindex),
             order_hash,
             start,
             end,

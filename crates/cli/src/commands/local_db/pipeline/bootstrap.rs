@@ -1,4 +1,4 @@
-use rain_orderbook_common::local_db::{
+use raindex_common::local_db::{
     pipeline::adapters::bootstrap::{BootstrapConfig, BootstrapPipeline},
     query::LocalDbQueryExecutor,
     LocalDbError,
@@ -44,14 +44,14 @@ mod tests {
     use super::*;
     use alloy::primitives::Address;
     use async_trait::async_trait;
-    use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
-    use rain_orderbook_common::local_db::query::clear_tables::clear_tables_stmt;
-    use rain_orderbook_common::local_db::query::create_tables::create_tables_stmt;
-    use rain_orderbook_common::local_db::query::insert_db_metadata::insert_db_metadata_stmt;
-    use rain_orderbook_common::local_db::query::{
+    use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+    use raindex_common::local_db::query::clear_tables::clear_tables_stmt;
+    use raindex_common::local_db::query::create_tables::create_tables_stmt;
+    use raindex_common::local_db::query::insert_db_metadata::insert_db_metadata_stmt;
+    use raindex_common::local_db::query::{
         FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
     };
-    use rain_orderbook_common::local_db::OrderbookIdentifier;
+    use raindex_common::local_db::RaindexIdentifier;
 
     const TEST_BLOCK_NUMBER_THRESHOLD: u32 = 10_000;
 
@@ -73,7 +73,7 @@ mod tests {
         }
 
         fn with_views(self) -> Self {
-            rain_orderbook_common::local_db::query::create_views::create_views_batch()
+            raindex_common::local_db::query::create_views::create_views_batch()
                 .statements()
                 .iter()
                 .fold(self, |db, stmt| db.with_text(stmt, "ok"))
@@ -111,8 +111,8 @@ mod tests {
         }
     }
 
-    fn sample_ob_id() -> OrderbookIdentifier {
-        OrderbookIdentifier::new(1, Address::ZERO)
+    fn sample_ob_id() -> RaindexIdentifier {
+        RaindexIdentifier::new(1, Address::ZERO)
     }
 
     #[tokio::test]
@@ -125,7 +125,7 @@ mod tests {
             .with_views();
 
         let cfg = BootstrapConfig {
-            ob_id: sample_ob_id(),
+            raindex_id: sample_ob_id(),
             dump_stmt: None,
             latest_block: 0,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -160,7 +160,7 @@ mod tests {
             .with_views();
 
         let cfg = BootstrapConfig {
-            ob_id: sample_ob_id(),
+            raindex_id: sample_ob_id(),
             dump_stmt: None,
             latest_block: 0,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -171,7 +171,7 @@ mod tests {
 
         let calls = db.calls();
         let expected_views: Vec<String> =
-            rain_orderbook_common::local_db::query::create_views::create_views_batch()
+            raindex_common::local_db::query::create_views::create_views_batch()
                 .statements()
                 .iter()
                 .map(|s| s.sql().to_string())
@@ -194,7 +194,7 @@ mod tests {
             .with_views();
 
         let cfg = BootstrapConfig {
-            ob_id: sample_ob_id(),
+            raindex_id: sample_ob_id(),
             dump_stmt: Some(SqlStatementBatch::from(vec![dump_stmt.clone()])),
             latest_block: 0,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -233,7 +233,7 @@ mod tests {
             .with_views();
 
         let cfg = BootstrapConfig {
-            ob_id: sample_ob_id(),
+            raindex_id: sample_ob_id(),
             dump_stmt: Some(SqlStatementBatch::from(vec![dump_stmt.clone()])),
             latest_block: 0,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -270,7 +270,7 @@ mod tests {
             .with_views();
 
         let cfg = BootstrapConfig {
-            ob_id: sample_ob_id(),
+            raindex_id: sample_ob_id(),
             dump_stmt: None,
             latest_block: 0,
             block_number_threshold: 1,

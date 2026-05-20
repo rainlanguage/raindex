@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_bindings"
-description = "Bindings for the Rain Orderbook Solidity contracts to Rust types."
+name = "raindex_bindings"
+description = "Bindings for the Raindex Solidity contracts to Rust types."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,6 +1,6 @@
 use alloy::primitives::Address;
 use async_trait::async_trait;
-use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
 
 /// Caller-supplied source of additional `SignedContextV1` entries for each
 /// order candidate. Invoked during candidate building, after any oracle-URL

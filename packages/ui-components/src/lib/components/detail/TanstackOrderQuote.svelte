@@ -6,7 +6,7 @@
 	import { QKEY_ORDER_QUOTE } from '../../queries/keys';
 	import { hexToNumber, isHex } from 'viem';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import type { RaindexOrder, RaindexOrderQuote } from '@rainlanguage/orderbook';
+	import type { RaindexOrder, RaindexOrderQuote } from '@rainlanguage/raindex';
 	import {
 		Table,
 		TableBody,

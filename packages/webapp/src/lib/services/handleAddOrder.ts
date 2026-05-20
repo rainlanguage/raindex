@@ -4,7 +4,7 @@ import type {
 	RaindexClient,
 	RaindexVault,
 	RaindexVaultToken
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import type {
 	TransactionManager,
 	HandleTransactionConfirmationModal
@@ -43,7 +43,7 @@ export const handleAddOrder = async (deps: HandleAddOrderDependencies) => {
 		return errToast('Could not deploy: ' + result.error.msg);
 	}
 
-	const { approvals, deploymentCalldata, orderbookAddress, chainId, emitMetaCall } = result.value;
+	const { approvals, deploymentCalldata, raindexAddress, chainId, emitMetaCall } = result.value;
 
 	for (const approval of approvals) {
 		try {
@@ -108,13 +108,13 @@ export const handleAddOrder = async (deps: HandleAddOrderDependencies) => {
 			open: true,
 			modalTitle: 'Deploying your order',
 			args: {
-				toAddress: orderbookAddress as Address,
+				toAddress: raindexAddress as Address,
 				chainId,
 				calldata: deploymentCalldata as `0x${string}`,
 				onConfirm: (hash: Hex) => {
 					deps.manager.createAddOrderTransaction({
 						raindexClient,
-						orderbook: orderbookAddress as Address,
+						raindex: raindexAddress as Address,
 						chainId,
 						txHash: hash,
 						queryKey: QKEY_ORDERS

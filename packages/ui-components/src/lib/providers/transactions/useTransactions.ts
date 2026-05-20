@@ -1,4 +1,4 @@
-import { getTransactionManagerContext } from './context';
+import { getTransactionManagerContext } from "./context";
 
 /**
  * Hook for accessing the transaction manager in the application.
@@ -10,12 +10,12 @@ import { getTransactionManagerContext } from './context';
  * @returns An object containing the transactions store that can be subscribed to
  */
 export function useTransactions() {
-	const manager = getTransactionManagerContext();
+  const manager = getTransactionManagerContext();
 
-	const transactions = manager.getTransactions();
+  const transactions = manager.getTransactions();
 
-	return {
-		manager,
-		transactions
-	};
+  return {
+    manager,
+    transactions,
+  };
 }

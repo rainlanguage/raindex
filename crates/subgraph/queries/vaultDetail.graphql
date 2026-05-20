@@ -9,7 +9,7 @@ query VaultDetailQuery($id: Bytes!) {
       decimals
     }
     owner
-    orderbook {
+    raindex {
       id
     }
     ordersAsOutput {

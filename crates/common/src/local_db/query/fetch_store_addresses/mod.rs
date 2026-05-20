@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use alloy::primitives::Address;
 use serde::{Deserialize, Serialize};
@@ -12,12 +12,12 @@ pub struct StoreAddressRow {
     pub store_address: Address,
 }
 
-pub fn fetch_store_addresses_stmt(ob_id: &OrderbookIdentifier) -> SqlStatement {
+pub fn fetch_store_addresses_stmt(raindex_id: &RaindexIdentifier) -> SqlStatement {
     SqlStatement::new_with_params(
         FETCH_STORE_ADDRESSES_SQL,
         [
-            SqlValue::from(ob_id.chain_id),
-            SqlValue::from(ob_id.orderbook_address),
+            SqlValue::from(raindex_id.chain_id),
+            SqlValue::from(raindex_id.raindex_address),
         ],
     )
 }
@@ -27,8 +27,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn stmt_binds_chain_and_orderbook() {
-        let stmt = fetch_store_addresses_stmt(&OrderbookIdentifier::new(1, Address::ZERO));
+    fn stmt_binds_chain_and_raindex() {
+        let stmt = fetch_store_addresses_stmt(&RaindexIdentifier::new(1, Address::ZERO));
         assert_eq!(stmt.sql, FETCH_STORE_ADDRESSES_SQL);
         assert_eq!(stmt.params.len(), 2);
         assert!(stmt

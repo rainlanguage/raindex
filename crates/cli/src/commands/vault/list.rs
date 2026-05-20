@@ -5,12 +5,12 @@ use crate::{
 use anyhow::Result;
 use clap::Args;
 use comfy_table::Table;
-use rain_orderbook_common::{
+use raindex_common::{
     csv::TryIntoCsv,
     subgraph::SubgraphArgs,
     types::{FlattenError, TokenVaultFlattened, NO_SYMBOL},
 };
-use rain_orderbook_subgraph_client::SgPaginationArgs;
+use raindex_subgraph_client::SgPaginationArgs;
 use tracing::info;
 
 #[derive(Args, Clone)]
@@ -92,7 +92,7 @@ mod tests {
         primitives::{Address, B256},
     };
     use httpmock::MockServer;
-    use rain_orderbook_subgraph_client::utils::float::*;
+    use raindex_subgraph_client::utils::float::*;
     use serde_json::{json, Value};
 
     #[tokio::test]
@@ -209,7 +209,7 @@ mod tests {
                         "orderHash": encode_prefixed(B256::random()),
                         "active": true,
                     }],
-                    "orderbook": {
+                    "raindex": {
                         "id": encode_prefixed(B256::random()),
                     },
                     "balanceChanges": []

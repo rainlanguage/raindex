@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import WithdrawModal from '$lib/components/WithdrawModal.svelte';
 import type { ComponentProps } from 'svelte';
-import { Float, type RaindexVault } from '@rainlanguage/orderbook';
+import { Float, type RaindexVault } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import truncateEthAddress from 'truncate-eth-address';
 
@@ -20,7 +20,7 @@ vi.mock('../lib/stores/wagmi', () => ({
 describe('WithdrawModal', () => {
 	const mockVault = {
 		chainId: 1,
-		orderbook: '0x123',
+		raindex: '0x123',
 		token: {
 			address: '0x123',
 			symbol: 'TEST',

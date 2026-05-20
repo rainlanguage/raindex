@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
 
-use super::OrderbookIdentifier;
+use super::RaindexIdentifier;
 
 const SKIPPED_TABLES: &[&str] = &["db_metadata", "sync_status"];
 
@@ -25,23 +25,23 @@ pub enum ExportError {
     #[error("Row is missing expected column '{column}'")]
     MissingColumn { column: String },
 
-    #[error("Missing target_watermarks row for chain {chain_id} orderbook {orderbook_address}")]
+    #[error("Missing target_watermarks row for chain {chain_id} raindex {raindex_address}")]
     MissingTargetWatermark {
         chain_id: u32,
-        orderbook_address: Address,
+        raindex_address: Address,
     },
 }
 
-/// Export all data rows for a specific `(chain_id, orderbook_address)` from the
+/// Export all data rows for a specific `(chain_id, raindex_address)` from the
 /// local database as a SQL string containing data-only `INSERT` statements.
 ///
 /// Returns `Ok(None)` when no matching rows are found.
 ///
-/// Tables that do not include both `chain_id` and `orderbook_address` columns,
+/// Tables that do not include both `chain_id` and `raindex_address` columns,
 /// or that are explicitly skipped via [`SKIPPED_TABLES`], are ignored.
 pub async fn export_data_only<E>(
     executor: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
 ) -> Result<Option<String>, LocalDbError>
 where
     E: LocalDbQueryExecutor + ?Sized,
@@ -60,7 +60,7 @@ where
             continue;
         }
 
-        let select_stmt = build_select_statement(table, &columns, ob_id);
+        let select_stmt = build_select_statement(table, &columns, raindex_id);
         let rows: Vec<Value> = executor
             .query_json(&select_stmt)
             .await
@@ -104,16 +104,16 @@ fn has_target_filters(columns: &[TableInfoRow]) -> bool {
     let has_chain = columns
         .iter()
         .any(|col| col.name.eq_ignore_ascii_case("chain_id"));
-    let has_orderbook = columns
+    let has_raindex = columns
         .iter()
-        .any(|col| col.name.eq_ignore_ascii_case("orderbook_address"));
-    has_chain && has_orderbook
+        .any(|col| col.name.eq_ignore_ascii_case("raindex_address"));
+    has_chain && has_raindex
 }
 
 fn build_select_statement(
     table: &str,
     columns: &[TableInfoRow],
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
 ) -> SqlStatement {
     let columns_sql = columns.iter().map(|c| format!("\"{}\"", c.name)).join(", ");
 
@@ -126,9 +126,9 @@ fn build_select_statement(
     }
     if columns
         .iter()
-        .any(|c| c.name.eq_ignore_ascii_case("orderbook_address"))
+        .any(|c| c.name.eq_ignore_ascii_case("raindex_address"))
     {
-        order_columns.push("\"orderbook_address\"".to_string());
+        order_columns.push("\"raindex_address\"".to_string());
     }
 
     for column in columns {
@@ -140,10 +140,10 @@ fn build_select_statement(
 
     let order_clause = order_columns.join(", ");
     let mut stmt = SqlStatement::new(format!(
-        "SELECT {columns_sql} FROM \"{table}\" WHERE chain_id = ?1 AND orderbook_address = ?2 ORDER BY {order_clause};"
+        "SELECT {columns_sql} FROM \"{table}\" WHERE chain_id = ?1 AND raindex_address = ?2 ORDER BY {order_clause};"
     ));
-    stmt.push(SqlValue::from(ob_id.chain_id as u64));
-    stmt.push(SqlValue::from(ob_id.orderbook_address));
+    stmt.push(SqlValue::from(raindex_id.chain_id as u64));
+    stmt.push(SqlValue::from(raindex_id.raindex_address));
     stmt
 }
 
@@ -351,7 +351,7 @@ mod tests {
 
     struct TestTarget {
         chain_id: i64,
-        orderbook: Address,
+        raindex: Address,
         label: &'static str,
     }
 
@@ -359,17 +359,17 @@ mod tests {
         let specs = [
             TestTarget {
                 chain_id: 42161,
-                orderbook: Address::from_str("0x0000000000000000000000000000000000000aaa").unwrap(),
+                raindex: Address::from_str("0x0000000000000000000000000000000000000aaa").unwrap(),
                 label: "main",
             },
             TestTarget {
                 chain_id: 42161,
-                orderbook: Address::from_str("0x0000000000000000000000000000000000000bbb").unwrap(),
+                raindex: Address::from_str("0x0000000000000000000000000000000000000bbb").unwrap(),
                 label: "alt",
             },
             TestTarget {
                 chain_id: 10,
-                orderbook: Address::from_str("0x0000000000000000000000000000000000000ccc").unwrap(),
+                raindex: Address::from_str("0x0000000000000000000000000000000000000ccc").unwrap(),
                 label: "other",
             },
         ];
@@ -381,14 +381,14 @@ mod tests {
 
     fn insert_for_target(conn: &Connection, target: &TestTarget, base_idx: i64) {
         let chain = target.chain_id;
-        let orderbook = encode_prefixed(target.orderbook);
+        let raindex = encode_prefixed(target.raindex);
         let label = target.label;
 
         let raw_tx = format!("raw_tx_{label}");
         conn.execute(
             r#"INSERT INTO raw_events (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -411,7 +411,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 raw_tx,
                 base_idx,
                 1000 + base_idx,
@@ -428,7 +428,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO deposits (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -453,7 +453,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 deposit_tx,
                 base_idx + 1,
                 1000 + base_idx + 1,
@@ -471,7 +471,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO withdrawals (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -498,7 +498,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 withdraw_tx,
                 base_idx + 2,
                 1000 + base_idx + 2,
@@ -517,7 +517,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO order_events (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -548,7 +548,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 order_tx,
                 base_idx + 3,
                 1000 + base_idx + 3,
@@ -568,7 +568,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO order_ios (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 io_index,
@@ -587,7 +587,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 order_tx,
                 base_idx + 3,
                 0,
@@ -602,7 +602,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO take_orders (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -631,7 +631,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 take_tx,
                 base_idx + 4,
                 1000 + base_idx + 4,
@@ -650,7 +650,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO take_order_contexts (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 context_index,
@@ -665,7 +665,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 take_tx,
                 base_idx + 4,
                 0,
@@ -677,7 +677,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO context_values (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 context_index,
@@ -694,7 +694,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 take_tx,
                 base_idx + 4,
                 0,
@@ -708,7 +708,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO clear_v3_events (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -753,7 +753,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 clear_tx,
                 base_idx + 5,
                 1000 + base_idx + 5,
@@ -780,7 +780,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO after_clear_v2_events (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -805,7 +805,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 clear_tx,
                 base_idx + 6,
                 1000 + base_idx + 6,
@@ -823,7 +823,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO meta_events (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 transaction_hash,
                 log_index,
                 block_number,
@@ -844,7 +844,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 meta_tx,
                 base_idx + 7,
                 1000 + base_idx + 7,
@@ -859,7 +859,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO erc20_tokens (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 token_address,
                 name,
                 symbol,
@@ -874,7 +874,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 format!("token_addr_{label}"),
                 format!("Token {label}"),
                 format!("SYM{label}"),
@@ -887,7 +887,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO interpreter_store_sets (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 store_address,
                 transaction_hash,
                 log_index,
@@ -910,7 +910,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 format!("store_addr_{label}"),
                 store_tx,
                 base_idx + 8,
@@ -926,7 +926,7 @@ mod tests {
         conn.execute(
             r#"INSERT INTO target_watermarks (
                 chain_id,
-                orderbook_address,
+                raindex_address,
                 last_block,
                 last_hash,
                 updated_at
@@ -939,7 +939,7 @@ mod tests {
             );"#,
             params![
                 chain,
-                orderbook.as_str(),
+                raindex.as_str(),
                 2_000 + base_idx,
                 format!("hash_{label}"),
                 1_700_000_000_000i64 + base_idx * 1_000,
@@ -951,19 +951,19 @@ mod tests {
     #[tokio::test]
     async fn export_includes_only_targeted_rows() {
         let executor = TestExecutor::new();
-        let main_target = OrderbookIdentifier {
+        let main_target = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: Address::from_str("0x0000000000000000000000000000000000000aaa")
+            raindex_address: Address::from_str("0x0000000000000000000000000000000000000aaa")
                 .unwrap(),
         };
-        let alt_target = OrderbookIdentifier {
+        let alt_target = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: Address::from_str("0x0000000000000000000000000000000000000bbb")
+            raindex_address: Address::from_str("0x0000000000000000000000000000000000000bbb")
                 .unwrap(),
         };
-        let other_target = OrderbookIdentifier {
+        let other_target = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: Address::from_str("0x0000000000000000000000000000000000000ccc")
+            raindex_address: Address::from_str("0x0000000000000000000000000000000000000ccc")
                 .unwrap(),
         };
 
@@ -980,9 +980,9 @@ mod tests {
             .unwrap()
             .expect("other target should have rows");
 
-        let expected_main = expected_dump(42161, main_target.orderbook_address, "main", 10);
-        let expected_alt = expected_dump(42161, alt_target.orderbook_address, "alt", 20);
-        let expected_other = expected_dump(10, other_target.orderbook_address, "other", 30);
+        let expected_main = expected_dump(42161, main_target.raindex_address, "main", 10);
+        let expected_alt = expected_dump(42161, alt_target.raindex_address, "alt", 20);
+        let expected_other = expected_dump(10, other_target.raindex_address, "other", 30);
 
         let norm = |s: &str| normalize_sql(s).to_lowercase();
         assert_eq!(norm(&sql_main), norm(&expected_main), "main dump mismatch");
@@ -997,13 +997,13 @@ mod tests {
     #[tokio::test]
     async fn export_returns_none_when_no_rows() {
         let executor = TestExecutor::new();
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: Address::from_str("0x0000000000000000000000000000000000000ddd")
+            raindex_address: Address::from_str("0x0000000000000000000000000000000000000ddd")
                 .unwrap(),
         };
 
-        let export = export_data_only(&executor, &ob_id).await.unwrap();
+        let export = export_data_only(&executor, &raindex_id).await.unwrap();
         assert!(
             export.is_none(),
             "expected None when there are no rows for the target"
@@ -1013,12 +1013,12 @@ mod tests {
     #[test]
     fn export_omits_skipped_tables() {
         let executor = TestExecutor::new();
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: Address::from_str("0x0000000000000000000000000000000000000aaa")
+            raindex_address: Address::from_str("0x0000000000000000000000000000000000000aaa")
                 .unwrap(),
         };
-        let orderbook = encode_prefixed(ob_id.orderbook_address);
+        let raindex = encode_prefixed(raindex_id.raindex_address);
 
         {
             let conn = executor.conn.lock().unwrap();
@@ -1028,16 +1028,16 @@ mod tests {
             )
             .expect("insert db_metadata row");
             conn.execute(
-                "INSERT INTO sync_status (chain_id, orderbook_address, last_synced_block) VALUES (?1, ?2, ?3);",
-                params![ob_id.chain_id as i64, orderbook.as_str(), 456_i64],
+                "INSERT INTO sync_status (chain_id, raindex_address, last_synced_block) VALUES (?1, ?2, ?3);",
+                params![raindex_id.chain_id as i64, raindex.as_str(), 456_i64],
             )
             .expect("insert sync_status row");
         }
 
-        let sql = executor::block_on(export_data_only(&executor, &ob_id))
+        let sql = executor::block_on(export_data_only(&executor, &raindex_id))
             .unwrap()
             .expect("target should have rows");
-        let expected = expected_dump(42161, ob_id.orderbook_address, "main", 10);
+        let expected = expected_dump(42161, raindex_id.raindex_address, "main", 10);
 
         assert_eq!(
             normalize_sql(&sql),
@@ -1058,43 +1058,39 @@ mod tests {
 
     #[test]
     fn has_target_filters_detects_required_columns() {
-        let columns = vec![
-            column("chain_id"),
-            column("orderbook_address"),
-            column("foo"),
-        ];
+        let columns = vec![column("chain_id"), column("raindex_address"), column("foo")];
         assert!(has_target_filters(&columns));
 
-        let missing_orderbook = vec![column("chain_id"), column("foo")];
-        assert!(!has_target_filters(&missing_orderbook));
+        let missing_raindex = vec![column("chain_id"), column("foo")];
+        assert!(!has_target_filters(&missing_raindex));
 
-        let missing_chain = vec![column("orderbook_address"), column("foo")];
+        let missing_chain = vec![column("raindex_address"), column("foo")];
         assert!(!has_target_filters(&missing_chain));
     }
 
     #[test]
     fn build_select_statement_orders_columns_and_params() {
         let columns = vec![
-            column("orderbook_address"),
+            column("raindex_address"),
             column("chain_id"),
             column("alpha"),
             column("beta"),
         ];
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: Address::from_str("0x00112233445566778899aabbccddeeff00112233")
+            raindex_address: Address::from_str("0x00112233445566778899aabbccddeeff00112233")
                 .unwrap(),
         };
 
-        let stmt = build_select_statement("deposits", &columns, &ob_id);
+        let stmt = build_select_statement("deposits", &columns, &raindex_id);
         assert_eq!(
             stmt.sql(),
-            "SELECT \"orderbook_address\", \"chain_id\", \"alpha\", \"beta\" FROM \"deposits\" WHERE chain_id = ?1 AND orderbook_address = ?2 ORDER BY \"chain_id\", \"orderbook_address\", \"alpha\", \"beta\";"
+            "SELECT \"raindex_address\", \"chain_id\", \"alpha\", \"beta\" FROM \"deposits\" WHERE chain_id = ?1 AND raindex_address = ?2 ORDER BY \"chain_id\", \"raindex_address\", \"alpha\", \"beta\";"
         );
         let params = stmt.params();
         assert_eq!(params.len(), 2);
-        assert_eq!(params[0], SqlValue::from(ob_id.chain_id as u64));
-        assert_eq!(params[1], SqlValue::from(ob_id.orderbook_address));
+        assert_eq!(params[0], SqlValue::from(raindex_id.chain_id as u64));
+        assert_eq!(params[1], SqlValue::from(raindex_id.raindex_address));
     }
 
     #[test]
@@ -1164,7 +1160,7 @@ mod tests {
         }
     }
 
-    fn expected_dump(chain_id: u32, orderbook: Address, label: &str, base_idx: i64) -> String {
+    fn expected_dump(chain_id: u32, raindex: Address, label: &str, base_idx: i64) -> String {
         let base = base_idx;
         let dep_idx = base + 1;
         let with_idx = base + 2;
@@ -1179,25 +1175,25 @@ mod tests {
         let ts = |offset: i64| 1_700_000_000 + offset;
 
         let meta_hex = format!("0x{}", hex::encode(label.as_bytes()));
-        let orderbook = encode_prefixed(orderbook);
+        let raindex = encode_prefixed(raindex);
         let watermark_block = 2_000 + base_idx;
         let watermark_ms = 1_700_000_000_000i64 + base_idx * 1_000;
 
         let mut out = String::from("BEGIN;\n");
 
         out.push_str(&format!(
-            "INSERT INTO \"target_watermarks\" (\"chain_id\", \"orderbook_address\", \"last_block\", \"last_hash\", \"updated_at\") VALUES ({}, '{}', {}, 'hash_{}', {});\n",
+            "INSERT INTO \"target_watermarks\" (\"chain_id\", \"raindex_address\", \"last_block\", \"last_hash\", \"updated_at\") VALUES ({}, '{}', {}, 'hash_{}', {});\n",
             chain_id,
-            orderbook,
+            raindex,
             watermark_block,
             label,
             watermark_ms
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"raw_events\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"address\", \"topics\", \"data\", \"raw_json\") VALUES ({}, '{}', 'raw_tx_{}', {}, {}, {}, 'address_{}', '[\"topic_{}\"]', 'data_{}', '{{\"event\":\"raw_{}\"}}');\n",
+            "INSERT INTO \"raw_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"address\", \"topics\", \"data\", \"raw_json\") VALUES ({}, '{}', 'raw_tx_{}', {}, {}, {}, 'address_{}', '[\"topic_{}\"]', 'data_{}', '{{\"event\":\"raw_{}\"}}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             base,
             block(base),
@@ -1209,9 +1205,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"deposits\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"token\", \"vault_id\", \"deposit_amount\", \"deposit_amount_uint256\") VALUES ({}, '{}', 'dep_tx_{}', {}, {}, {}, 'sender_{}', 'token_{}', 'vault_{}', 'amount_{}', 'uint_{}');\n",
+            "INSERT INTO \"deposits\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"token\", \"vault_id\", \"deposit_amount\", \"deposit_amount_uint256\") VALUES ({}, '{}', 'dep_tx_{}', {}, {}, {}, 'sender_{}', 'token_{}', 'vault_{}', 'amount_{}', 'uint_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             dep_idx,
             block(dep_idx),
@@ -1224,9 +1220,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"withdrawals\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"token\", \"vault_id\", \"target_amount\", \"withdraw_amount\", \"withdraw_amount_uint256\") VALUES ({}, '{}', 'with_tx_{}', {}, {}, {}, 'withdraw_sender_{}', 'withdraw_token_{}', 'withdraw_vault_{}', 'target_amount_{}', 'withdraw_amount_{}', 'withdraw_uint_{}');\n",
+            "INSERT INTO \"withdrawals\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"token\", \"vault_id\", \"target_amount\", \"withdraw_amount\", \"withdraw_amount_uint256\") VALUES ({}, '{}', 'with_tx_{}', {}, {}, {}, 'withdraw_sender_{}', 'withdraw_token_{}', 'withdraw_vault_{}', 'target_amount_{}', 'withdraw_amount_{}', 'withdraw_uint_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             with_idx,
             block(with_idx),
@@ -1240,9 +1236,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"order_events\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"interpreter_address\", \"store_address\", \"order_hash\", \"event_type\", \"order_owner\", \"order_nonce\", \"order_bytes\") VALUES ({}, '{}', 'order_tx_{}', {}, {}, {}, 'order_sender_{}', 'interp_{}', 'store_{}', 'order_hash_{}', 'event_{}', 'order_owner_{}', 'order_nonce_{}', 'order_bytes_{}');\n",
+            "INSERT INTO \"order_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"interpreter_address\", \"store_address\", \"order_hash\", \"event_type\", \"order_owner\", \"order_nonce\", \"order_bytes\") VALUES ({}, '{}', 'order_tx_{}', {}, {}, {}, 'order_sender_{}', 'interp_{}', 'store_{}', 'order_hash_{}', 'event_{}', 'order_owner_{}', 'order_nonce_{}', 'order_bytes_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             order_idx,
             block(order_idx),
@@ -1258,9 +1254,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"order_ios\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"io_index\", \"io_type\", \"token\", \"vault_id\") VALUES ({}, '{}', 'order_tx_{}', {}, 0, 'io_type_{}', 'io_token_{}', 'io_vault_{}');\n",
+            "INSERT INTO \"order_ios\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"io_index\", \"io_type\", \"token\", \"vault_id\") VALUES ({}, '{}', 'order_tx_{}', {}, 0, 'io_type_{}', 'io_token_{}', 'io_vault_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             order_idx,
             label,
@@ -1269,9 +1265,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"take_orders\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"order_owner\", \"order_nonce\", \"input_io_index\", \"output_io_index\", \"taker_input\", \"taker_output\") VALUES ({}, '{}', 'take_tx_{}', {}, {}, {}, 'taker_{}', 'taker_owner_{}', 'taker_nonce_{}', 0, 1, 'taker_input_{}', 'taker_output_{}');\n",
+            "INSERT INTO \"take_orders\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"order_owner\", \"order_nonce\", \"input_io_index\", \"output_io_index\", \"taker_input\", \"taker_output\") VALUES ({}, '{}', 'take_tx_{}', {}, {}, {}, 'taker_{}', 'taker_owner_{}', 'taker_nonce_{}', 0, 1, 'taker_input_{}', 'taker_output_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             take_idx,
             block(take_idx),
@@ -1284,27 +1280,27 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"take_order_contexts\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"context_value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 'context_entry_{}');\n",
+            "INSERT INTO \"take_order_contexts\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"context_value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 'context_entry_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             take_idx,
             label
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"context_values\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"value_index\", \"value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 0, 'context_value_{}');\n",
+            "INSERT INTO \"context_values\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"value_index\", \"value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 0, 'context_value_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             take_idx,
             label
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"clear_v3_events\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"alice_order_hash\", \"alice_order_owner\", \"alice_input_io_index\", \"alice_output_io_index\", \"alice_bounty_vault_id\", \"alice_input_vault_id\", \"alice_output_vault_id\", \"bob_order_hash\", \"bob_order_owner\", \"bob_input_io_index\", \"bob_output_io_index\", \"bob_bounty_vault_id\", \"bob_input_vault_id\", \"bob_output_vault_id\") VALUES ({}, '{}', 'clear_tx_{}', {}, {}, {}, 'clear_sender_{}', 'alice_hash_{}', 'alice_owner_{}', 0, 1, 'alice_bounty_{}', 'alice_input_{}', 'alice_output_{}', 'bob_hash_{}', 'bob_owner_{}', 2, 3, 'bob_bounty_{}', 'bob_input_{}', 'bob_output_{}');\n",
+            "INSERT INTO \"clear_v3_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"alice_order_hash\", \"alice_order_owner\", \"alice_input_io_index\", \"alice_output_io_index\", \"alice_bounty_vault_id\", \"alice_input_vault_id\", \"alice_output_vault_id\", \"bob_order_hash\", \"bob_order_owner\", \"bob_input_io_index\", \"bob_output_io_index\", \"bob_bounty_vault_id\", \"bob_input_vault_id\", \"bob_output_vault_id\") VALUES ({}, '{}', 'clear_tx_{}', {}, {}, {}, 'clear_sender_{}', 'alice_hash_{}', 'alice_owner_{}', 0, 1, 'alice_bounty_{}', 'alice_input_{}', 'alice_output_{}', 'bob_hash_{}', 'bob_owner_{}', 2, 3, 'bob_bounty_{}', 'bob_input_{}', 'bob_output_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             clear_idx,
             block(clear_idx),
@@ -1323,9 +1319,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"after_clear_v2_events\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"alice_output\", \"bob_output\", \"alice_input\", \"bob_input\") VALUES ({}, '{}', 'clear_tx_{}', {}, {}, {}, 'after_sender_{}', 'alice_output_amount_{}', 'bob_output_amount_{}', 'alice_input_amount_{}', 'bob_input_amount_{}');\n",
+            "INSERT INTO \"after_clear_v2_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"alice_output\", \"bob_output\", \"alice_input\", \"bob_input\") VALUES ({}, '{}', 'clear_tx_{}', {}, {}, {}, 'after_sender_{}', 'alice_output_amount_{}', 'bob_output_amount_{}', 'alice_input_amount_{}', 'bob_input_amount_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             after_idx,
             block(after_idx),
@@ -1338,9 +1334,9 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"meta_events\" (\"chain_id\", \"orderbook_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"subject\", \"meta\") VALUES ({}, '{}', 'meta_tx_{}', {}, {}, {}, 'meta_sender_{}', 'subject_{}', '{}');\n",
+            "INSERT INTO \"meta_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"subject\", \"meta\") VALUES ({}, '{}', 'meta_tx_{}', {}, {}, {}, 'meta_sender_{}', 'subject_{}', '{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             meta_idx,
             block(meta_idx),
@@ -1351,18 +1347,18 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"erc20_tokens\" (\"chain_id\", \"orderbook_address\", \"token_address\", \"name\", \"symbol\", \"decimals\") VALUES ({}, '{}', 'token_addr_{}', 'Token {}', 'SYM{}', 18);\n",
+            "INSERT INTO \"erc20_tokens\" (\"chain_id\", \"raindex_address\", \"token_address\", \"name\", \"symbol\", \"decimals\") VALUES ({}, '{}', 'token_addr_{}', 'Token {}', 'SYM{}', 18);\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             label,
             label
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"interpreter_store_sets\" (\"chain_id\", \"orderbook_address\", \"store_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"namespace\", \"key\", \"value\") VALUES ({}, '{}', 'store_addr_{}', 'store_tx_{}', {}, {}, {}, 'store_namespace_{}', 'store_key_{}', 'store_value_{}');\n",
+            "INSERT INTO \"interpreter_store_sets\" (\"chain_id\", \"raindex_address\", \"store_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"namespace\", \"key\", \"value\") VALUES ({}, '{}', 'store_addr_{}', 'store_tx_{}', {}, {}, {}, 'store_namespace_{}', 'store_key_{}', 'store_value_{}');\n",
             chain_id,
-            orderbook,
+            raindex,
             label,
             label,
             store_idx,

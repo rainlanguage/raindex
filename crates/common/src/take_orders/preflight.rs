@@ -4,9 +4,9 @@ use alloy::providers::Provider;
 use alloy::rpc::types::TransactionRequest;
 use alloy::serde::WithOtherFields;
 use alloy::sol_types::SolCall;
-use rain_orderbook_bindings::provider::ReadProvider;
-use rain_orderbook_bindings::IRaindexV6::{takeOrders4Call, TakeOrdersConfigV5};
-use rain_orderbook_bindings::IERC20::approveCall;
+use raindex_bindings::provider::ReadProvider;
+use raindex_bindings::IRaindexV6::{takeOrders4Call, TakeOrdersConfigV5};
+use raindex_bindings::IERC20::approveCall;
 use thiserror::Error;
 
 use crate::erc20::ERC20;
@@ -102,10 +102,10 @@ pub async fn check_taker_balance(
 pub async fn check_taker_allowance(
     erc20: &ERC20,
     taker: Address,
-    orderbook: Address,
+    raindex: Address,
     required: U256,
 ) -> Result<AllowanceOnlyResult, PreflightError> {
-    let allowance = erc20.allowance(taker, orderbook).await?;
+    let allowance = erc20.allowance(taker, raindex).await?;
     if allowance >= required {
         Ok(AllowanceOnlyResult::sufficient(allowance, required))
     } else {
@@ -116,7 +116,7 @@ pub async fn check_taker_allowance(
 pub async fn check_taker_balance_and_allowance(
     erc20: &ERC20,
     taker: Address,
-    orderbook: Address,
+    raindex: Address,
     required: U256,
 ) -> Result<BalanceAndAllowanceResult, PreflightError> {
     let balance = erc20.get_account_balance(taker).await?;
@@ -127,7 +127,7 @@ pub async fn check_taker_balance_and_allowance(
         )));
     }
 
-    let allowance = erc20.allowance(taker, orderbook).await?;
+    let allowance = erc20.allowance(taker, raindex).await?;
     if allowance >= required {
         Ok(BalanceAndAllowanceResult::sufficient(
             balance, allowance, required,
@@ -146,7 +146,7 @@ pub fn build_approval_calldata(spender: Address, amount: U256) -> Bytes {
 
 pub async fn simulate_take_orders(
     provider: &ReadProvider,
-    orderbook: Address,
+    raindex: Address,
     taker: Address,
     config: &TakeOrdersConfigV5,
     block_number: Option<u64>,
@@ -157,7 +157,7 @@ pub async fn simulate_take_orders(
     .abi_encode();
 
     let tx = TransactionRequest::default()
-        .with_to(orderbook)
+        .with_to(raindex)
         .with_from(taker)
         .with_input(calldata);
 
@@ -180,7 +180,7 @@ pub async fn simulate_take_orders(
 
 pub async fn find_failing_order_index(
     provider: &ReadProvider,
-    orderbook: Address,
+    raindex: Address,
     taker: Address,
     config: &TakeOrdersConfigV5,
     block_number: Option<u64>,
@@ -190,7 +190,7 @@ pub async fn find_failing_order_index(
     }
 
     if config.orders.len() == 1 {
-        let result = simulate_take_orders(provider, orderbook, taker, config, block_number).await;
+        let result = simulate_take_orders(provider, raindex, taker, config, block_number).await;
         if result.is_err() {
             return Some(0);
         }
@@ -207,14 +207,9 @@ pub async fn find_failing_order_index(
             data: config.data.clone(),
         };
 
-        let result = simulate_take_orders(
-            provider,
-            orderbook,
-            taker,
-            &single_order_config,
-            block_number,
-        )
-        .await;
+        let result =
+            simulate_take_orders(provider, raindex, taker, &single_order_config, block_number)
+                .await;
 
         if result.is_err() {
             return Some(idx);
@@ -295,9 +290,9 @@ mod local_evm_tests {
     use super::*;
     use crate::erc20::ERC20;
     use alloy::primitives::B256;
-    use rain_orderbook_bindings::provider::mk_read_provider;
-    use rain_orderbook_bindings::IRaindexV6::TakeOrderConfigV4;
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_bindings::provider::mk_read_provider;
+    use raindex_bindings::IRaindexV6::TakeOrderConfigV4;
+    use raindex_test_fixtures::LocalEvm;
     use url::Url;
 
     async fn setup_local_evm() -> (LocalEvm, Address, Address, Address) {
@@ -306,8 +301,8 @@ mod local_evm_tests {
         let token = local_evm
             .deploy_new_token("TestToken", "TT", 18, U256::MAX, owner)
             .await;
-        let orderbook = *local_evm.orderbook.address();
-        (local_evm, owner, *token.address(), orderbook)
+        let raindex = *local_evm.raindex.address();
+        (local_evm, owner, *token.address(), raindex)
     }
 
     fn create_erc20(local_evm: &LocalEvm, token: Address) -> ERC20 {
@@ -317,7 +312,7 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_balance_sufficient() {
-        let (local_evm, owner, token, _orderbook) = setup_local_evm().await;
+        let (local_evm, owner, token, _raindex) = setup_local_evm().await;
         let erc20 = create_erc20(&local_evm, token);
 
         let result = check_taker_balance(&erc20, owner, U256::from(1000)).await;
@@ -329,7 +324,7 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_balance_insufficient() {
-        let (local_evm, _owner, token, _orderbook) = setup_local_evm().await;
+        let (local_evm, _owner, token, _raindex) = setup_local_evm().await;
         let erc20 = create_erc20(&local_evm, token);
 
         let random_address = Address::repeat_byte(0x42);
@@ -342,7 +337,7 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_allowance_sufficient() {
-        let (local_evm, owner, token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, token, raindex) = setup_local_evm().await;
 
         let token_contract = local_evm
             .tokens
@@ -350,7 +345,7 @@ mod local_evm_tests {
             .find(|t| *t.address() == token)
             .unwrap();
         token_contract
-            .approve(orderbook, U256::from(1000))
+            .approve(raindex, U256::from(1000))
             .from(owner)
             .send()
             .await
@@ -360,7 +355,7 @@ mod local_evm_tests {
             .unwrap();
 
         let erc20 = create_erc20(&local_evm, token);
-        let result = check_taker_allowance(&erc20, owner, orderbook, U256::from(500)).await;
+        let result = check_taker_allowance(&erc20, owner, raindex, U256::from(500)).await;
 
         assert!(result.is_ok());
         let check_result = result.unwrap();
@@ -370,10 +365,10 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_allowance_insufficient() {
-        let (local_evm, owner, token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, token, raindex) = setup_local_evm().await;
         let erc20 = create_erc20(&local_evm, token);
 
-        let result = check_taker_allowance(&erc20, owner, orderbook, U256::from(1000)).await;
+        let result = check_taker_allowance(&erc20, owner, raindex, U256::from(1000)).await;
 
         assert!(result.is_ok());
         let check_result = result.unwrap();
@@ -383,7 +378,7 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_balance_and_allowance_both_sufficient() {
-        let (local_evm, owner, token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, token, raindex) = setup_local_evm().await;
 
         let token_contract = local_evm
             .tokens
@@ -391,7 +386,7 @@ mod local_evm_tests {
             .find(|t| *t.address() == token)
             .unwrap();
         token_contract
-            .approve(orderbook, U256::from(1000))
+            .approve(raindex, U256::from(1000))
             .from(owner)
             .send()
             .await
@@ -402,7 +397,7 @@ mod local_evm_tests {
 
         let erc20 = create_erc20(&local_evm, token);
         let result =
-            check_taker_balance_and_allowance(&erc20, owner, orderbook, U256::from(500)).await;
+            check_taker_balance_and_allowance(&erc20, owner, raindex, U256::from(500)).await;
 
         assert!(result.is_ok());
         let check_result = result.unwrap();
@@ -413,12 +408,12 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_balance_and_allowance_insufficient_balance() {
-        let (local_evm, _owner, token, orderbook) = setup_local_evm().await;
+        let (local_evm, _owner, token, raindex) = setup_local_evm().await;
         let erc20 = create_erc20(&local_evm, token);
 
         let random_address = Address::repeat_byte(0x42);
         let result =
-            check_taker_balance_and_allowance(&erc20, random_address, orderbook, U256::from(1000))
+            check_taker_balance_and_allowance(&erc20, random_address, raindex, U256::from(1000))
                 .await;
 
         assert!(result.is_err());
@@ -430,11 +425,11 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_check_taker_balance_and_allowance_insufficient_allowance() {
-        let (local_evm, owner, token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, token, raindex) = setup_local_evm().await;
         let erc20 = create_erc20(&local_evm, token);
 
         let result =
-            check_taker_balance_and_allowance(&erc20, owner, orderbook, U256::from(1000)).await;
+            check_taker_balance_and_allowance(&erc20, owner, raindex, U256::from(1000)).await;
 
         assert!(result.is_ok());
         let check_result = result.unwrap();
@@ -445,7 +440,7 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_simulate_take_orders_empty_orders_fails_minimum_io() {
-        let (local_evm, owner, _token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, _token, raindex) = setup_local_evm().await;
 
         let rpc_url = Url::parse(&local_evm.url().to_string()).unwrap();
         let provider = mk_read_provider(&[rpc_url]).unwrap();
@@ -459,7 +454,7 @@ mod local_evm_tests {
             data: Bytes::new(),
         };
 
-        let result = simulate_take_orders(&provider, orderbook, owner, &config, None).await;
+        let result = simulate_take_orders(&provider, raindex, owner, &config, None).await;
         assert!(
             result.is_err(),
             "Empty orders config should fail simulation"
@@ -468,15 +463,15 @@ mod local_evm_tests {
 
     #[tokio::test]
     async fn test_simulate_take_orders_invalid_order_fails() {
-        let (local_evm, owner, _token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, _token, raindex) = setup_local_evm().await;
 
         let rpc_url = Url::parse(&local_evm.url().to_string()).unwrap();
         let provider = mk_read_provider(&[rpc_url]).unwrap();
 
         let fake_order = TakeOrderConfigV4 {
-            order: rain_orderbook_bindings::IRaindexV6::OrderV4 {
+            order: raindex_bindings::IRaindexV6::OrderV4 {
                 owner: Address::ZERO,
-                evaluable: rain_orderbook_bindings::IRaindexV6::EvaluableV4 {
+                evaluable: raindex_bindings::IRaindexV6::EvaluableV4 {
                     interpreter: Address::ZERO,
                     store: Address::ZERO,
                     bytecode: Bytes::new(),
@@ -499,13 +494,13 @@ mod local_evm_tests {
             data: Bytes::new(),
         };
 
-        let result = simulate_take_orders(&provider, orderbook, owner, &config, None).await;
+        let result = simulate_take_orders(&provider, raindex, owner, &config, None).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_find_failing_order_index_empty_orders() {
-        let (local_evm, owner, _token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, _token, raindex) = setup_local_evm().await;
 
         let rpc_url = Url::parse(&local_evm.url().to_string()).unwrap();
         let provider = mk_read_provider(&[rpc_url]).unwrap();
@@ -519,21 +514,21 @@ mod local_evm_tests {
             data: Bytes::new(),
         };
 
-        let result = find_failing_order_index(&provider, orderbook, owner, &config, None).await;
+        let result = find_failing_order_index(&provider, raindex, owner, &config, None).await;
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_find_failing_order_index_single_failing_order() {
-        let (local_evm, owner, _token, orderbook) = setup_local_evm().await;
+        let (local_evm, owner, _token, raindex) = setup_local_evm().await;
 
         let rpc_url = Url::parse(&local_evm.url().to_string()).unwrap();
         let provider = mk_read_provider(&[rpc_url]).unwrap();
 
         let fake_order = TakeOrderConfigV4 {
-            order: rain_orderbook_bindings::IRaindexV6::OrderV4 {
+            order: raindex_bindings::IRaindexV6::OrderV4 {
                 owner: Address::ZERO,
-                evaluable: rain_orderbook_bindings::IRaindexV6::EvaluableV4 {
+                evaluable: raindex_bindings::IRaindexV6::EvaluableV4 {
                     interpreter: Address::ZERO,
                     store: Address::ZERO,
                     bytecode: Bytes::new(),
@@ -556,7 +551,7 @@ mod local_evm_tests {
             data: Bytes::new(),
         };
 
-        let result = find_failing_order_index(&provider, orderbook, owner, &config, None).await;
+        let result = find_failing_order_index(&provider, raindex, owner, &config, None).await;
         assert_eq!(result, Some(0));
     }
 }

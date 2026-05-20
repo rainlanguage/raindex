@@ -1,4 +1,4 @@
-import type { RaindexClient, RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexClient, RaindexOrder } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import type { TransactionManager, TransactionConfirmationProps } from '@rainlanguage/ui-components';
 
@@ -23,7 +23,7 @@ export async function handleRemoveOrder(deps: HandleRemoveOrderDependencies): Pr
 			modalTitle: 'Removing order',
 			args: {
 				entity: deps.order,
-				toAddress: deps.order.orderbook,
+				toAddress: deps.order.raindex,
 				chainId: deps.order.chainId,
 				onConfirm: (txHash: Hex) => {
 					deps.manager.createRemoveOrderTransaction({

@@ -1,6 +1,6 @@
 import type { LayoutLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import type { DotrainRegistry, NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+import type { DotrainRegistry, NameAndDescriptionCfg } from '@rainlanguage/raindex';
 
 type ParentData = {
 	orderName: string;

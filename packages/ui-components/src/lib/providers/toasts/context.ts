@@ -1,20 +1,20 @@
-import { getContext, setContext } from 'svelte';
-import { type Writable } from 'svelte/store';
-import type { ToastProps } from '$lib/types/toast';
+import { getContext, setContext } from "svelte";
+import { type Writable } from "svelte/store";
+import type { ToastProps } from "$lib/types/toast";
 
-export const TOASTS_KEY = 'rain:ui-components:toasts';
+export const TOASTS_KEY = "rain:ui-components:toasts";
 
 /**
  * Retrieves the toasts store from Svelte's context
  */
 export function getToastsContext(): Writable<ToastProps[]> {
-	const toasts = getContext<Writable<ToastProps[]>>(TOASTS_KEY);
-	if (!toasts) {
-		throw new Error(
-			'No toasts context found. Did you forget to wrap your component with ToastProvider?'
-		);
-	}
-	return toasts;
+  const toasts = getContext<Writable<ToastProps[]>>(TOASTS_KEY);
+  if (!toasts) {
+    throw new Error(
+      "No toasts context found. Did you forget to wrap your component with ToastProvider?",
+    );
+  }
+  return toasts;
 }
 
 /**
@@ -24,5 +24,5 @@ export function getToastsContext(): Writable<ToastProps[]> {
  * @returns {void}
  */
 export function setToastsContext(toasts: Writable<ToastProps[]>) {
-	setContext(TOASTS_KEY, toasts);
+  setContext(TOASTS_KEY, toasts);
 }

@@ -8,8 +8,8 @@ use alloy_ethers_typecast::{
 use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use rain_math_float::{Float, FloatError};
 #[cfg(not(target_family = "wasm"))]
-use rain_orderbook_bindings::IERC20::approveCall;
-use rain_orderbook_bindings::{IRaindexV6::deposit4Call, IERC20::allowanceCall};
+use raindex_bindings::IERC20::approveCall;
+use raindex_bindings::{IRaindexV6::deposit4Call, IERC20::allowanceCall};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -69,7 +69,7 @@ impl DepositArgs {
             .address(self.token)
             .call(allowanceCall {
                 owner,
-                spender: transaction_args.orderbook_address,
+                spender: transaction_args.raindex_address,
             })
             .build()?;
         let res = readable_client.read(parameters).await?;
@@ -95,7 +95,7 @@ impl DepositArgs {
         // If allowance differs from desired amount, overwrite it with the target value
         if !current_allowance_float.eq(self.amount)? {
             let approve_call = approveCall {
-                spender: transaction_args.orderbook_address,
+                spender: transaction_args.raindex_address,
                 amount: self.amount.to_fixed_decimal(self.decimals)?,
             };
             let params =
@@ -109,7 +109,7 @@ impl DepositArgs {
         Ok(())
     }
 
-    /// Execute OrderbookV3 deposit call
+    /// Execute Raindex deposit call
     #[cfg(not(target_family = "wasm"))]
     pub async fn execute_deposit<S: Fn(WriteTransactionStatus<deposit4Call>)>(
         &self,
@@ -120,7 +120,7 @@ impl DepositArgs {
 
         let deposit_call: deposit4Call = self.clone().try_into()?;
         let params = transaction_args
-            .try_into_write_contract_parameters(deposit_call, transaction_args.orderbook_address)?;
+            .try_into_write_contract_parameters(deposit_call, transaction_args.raindex_address)?;
 
         WriteTransaction::new(ledger_client, params, 4, transaction_status_changed)
             .execute()
@@ -184,7 +184,7 @@ mod tests {
                 Address::ZERO,
                 TransactionArgs {
                     rpcs: vec![rpc_server.url("/rpc")],
-                    orderbook_address: Address::ZERO,
+                    raindex_address: Address::ZERO,
                     ..Default::default()
                 },
             )
@@ -197,7 +197,7 @@ mod tests {
     fn test_deposit_call_try_into_write_contract_parameters() {
         let args = TransactionArgs {
             rpcs: vec!["http://test.com".to_string()],
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: Some(0_usize),
             chain_id: Some(1),
             max_priority_fee_per_gas: Some(200),
@@ -224,7 +224,7 @@ mod tests {
     fn test_approve_call_try_into_write_contract_parameters() {
         let args = TransactionArgs {
             rpcs: vec!["http://test.com".to_string()],
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: Some(0_usize),
             chain_id: Some(1),
             max_priority_fee_per_gas: Some(200),

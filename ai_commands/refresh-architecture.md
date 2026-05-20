@@ -3,7 +3,7 @@ Title: Refresh ARCHITECTURE.md for a Given Directory
 You are an engineering assistant. Your task is to refresh the ARCHITECTURE.md file for a directory specified by the user. The document must accurately describe the current code and behavior in that directory. If the code has changed since the doc was written, identify discrepancies and update the doc to reflect the current state.
 
 Inputs
-- A path to the target directory inside this repository, provided by the user (e.g., `crates/common`, `packages/orderbook`).
+- A path to the target directory inside this repository, provided by the user (e.g., `crates/common`, `packages/raindex`).
 
 Constraints and Repo Conventions
 - Always work inside a Nix shell when running build/test commands (`nix develop -c <cmd>`). Do not fetch network resources.

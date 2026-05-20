@@ -1,6 +1,6 @@
-use rain_orderbook_common::local_db::{
+use raindex_common::local_db::{
     pipeline::{StatusBus, SyncPhase},
-    LocalDbError, OrderbookIdentifier,
+    LocalDbError, RaindexIdentifier,
 };
 use tracing::info;
 
@@ -24,16 +24,16 @@ impl From<bool> for DebugStatus {
 #[derive(Clone)]
 pub struct ProducerStatusBus {
     debug: DebugStatus,
-    orderbook_key: String,
-    ob_id: OrderbookIdentifier,
+    raindex_key: String,
+    raindex_id: RaindexIdentifier,
 }
 
 impl ProducerStatusBus {
-    pub fn new(debug: DebugStatus, orderbook_key: String, ob_id: OrderbookIdentifier) -> Self {
+    pub fn new(debug: DebugStatus, raindex_key: String, raindex_id: RaindexIdentifier) -> Self {
         Self {
             debug,
-            orderbook_key,
-            ob_id,
+            raindex_key,
+            raindex_id,
         }
     }
 }
@@ -42,8 +42,8 @@ impl Default for ProducerStatusBus {
     fn default() -> Self {
         Self {
             debug: DebugStatus::Disabled,
-            orderbook_key: "<unknown>".to_string(),
-            ob_id: OrderbookIdentifier::new(0, Default::default()),
+            raindex_key: "<unknown>".to_string(),
+            raindex_id: RaindexIdentifier::new(0, Default::default()),
         }
     }
 }
@@ -54,9 +54,9 @@ impl StatusBus for ProducerStatusBus {
         if self.debug == DebugStatus::Enabled {
             info!(
                 target: "local_db_status",
-                chain_id = self.ob_id.chain_id,
-                orderbook = %self.ob_id.orderbook_address,
-                orderbook_key = %self.orderbook_key,
+                chain_id = self.raindex_id.chain_id,
+                raindex = %self.raindex_id.raindex_address,
+                raindex_key = %self.raindex_key,
                 "{}",
                 phase.to_message()
             );

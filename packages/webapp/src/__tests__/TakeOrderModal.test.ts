@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import TakeOrderModal from '$lib/components/TakeOrderModal.svelte';
 import type { ComponentProps } from 'svelte';
-import { Float, type RaindexOrder } from '@rainlanguage/orderbook';
+import { Float, type RaindexOrder } from '@rainlanguage/raindex';
 
 type ModalProps = ComponentProps<TakeOrderModal>;
 
@@ -21,7 +21,7 @@ vi.mock('../lib/stores/wagmi', () => ({
 	signerAddress: mockSignerAddressStore
 }));
 
-const MOCK_ORDERBOOK_ADDRESS = '0x1234567890123456789012345678901234567890';
+const MOCK_RAINDEX_ADDRESS = '0x1234567890123456789012345678901234567890';
 const MOCK_SIGNER_ADDRESS = '0x9876543210987654321098765432109876543210';
 
 describe('TakeOrderModal', () => {
@@ -51,7 +51,7 @@ describe('TakeOrderModal', () => {
 		id: '0xorderid',
 		orderHash: '0xorderhash',
 		chainId: 1,
-		orderbook: MOCK_ORDERBOOK_ADDRESS,
+		raindex: MOCK_RAINDEX_ADDRESS,
 		getQuotes: vi.fn().mockResolvedValue({
 			value: mockQuotes,
 			error: undefined

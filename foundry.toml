@@ -18,7 +18,7 @@ evm_version = "cancun"
 # optimizer settings for snapshotting.
 optimizer = true
 # Lowered from 1000000 → 1000 → 800 to stay under the EIP-170 24KB contract
-# size limit. At 1000 runs OrderBookV6 was 24,650 bytes (74 over); at 800 it
+# size limit. At 1000 runs RaindexV6 was 24,650 bytes (74 over); at 800 it
 # is 23,437 bytes (1,139 under).
 optimizer_runs = 800
 
@@ -33,7 +33,7 @@ fs_permissions = [
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterStoreNPE2" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterNPE2" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterExpressionDeployerNPE2" },
-  { access = "read-write", path = "./meta/OrderBookV6SubParserAuthoringMeta.rain.meta"},
+  { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta"},
   { access = "read-write", path = "src/generated" },
   { access = "read", path = "./subgraph" },
 ]

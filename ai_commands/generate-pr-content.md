@@ -78,7 +78,7 @@ Procedure
 
 3) Draft the title
    - Format: `<type>: <scope>: <concise summary>`
-   - Scope: prefer a short identifier like `common`, `js_api`, `orderbook`, `webapp`.
+   - Scope: prefer a short identifier like `common`, `js_api`, `raindex`, `webapp`.
    - Summary: 6–12 words, describe outcome, not implementation details.
 
 4) Fill the description template

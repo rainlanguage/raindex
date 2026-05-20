@@ -1,6 +1,6 @@
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { ERC20 as ERC20Entity } from "../generated/schema";
-import { ERC20 } from "../generated/OrderBook/ERC20";
+import { ERC20 } from "../generated/Raindex/ERC20";
 
 export function createERC20Entity(address: Bytes): void {
   let erc20 = ERC20.bind(Address.fromBytes(address));

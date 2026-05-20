@@ -13,7 +13,7 @@ pub struct ApprovalCheckParams {
     pub rpc_urls: Vec<Url>,
     pub sell_token: Address,
     pub taker: Address,
-    pub orderbook: Address,
+    pub raindex: Address,
     pub mode: ParsedTakeOrdersMode,
     pub price_cap: Float,
 }
@@ -28,14 +28,14 @@ pub async fn check_approval_needed(
     let required_u256 = max_sell_cap.to_fixed_decimal_lossy(decimals)?.0;
 
     let allowance_result =
-        check_taker_allowance(&erc20, params.taker, params.orderbook, required_u256)
+        check_taker_allowance(&erc20, params.taker, params.raindex, required_u256)
             .await
             .map_err(|e| RaindexError::PreflightError(e.to_string()))?;
 
     if allowance_result.needs_approval {
         Ok(Some(build_approval_result(
             params.sell_token,
-            params.orderbook,
+            params.raindex,
             max_sell_cap,
             decimals,
         )?))
@@ -163,7 +163,7 @@ mod local_evm_tests {
     use super::*;
     use crate::take_orders::TakeOrdersMode;
     use alloy::primitives::U256;
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_test_fixtures::LocalEvm;
     use url::Url;
 
     fn make_mode(mode: TakeOrdersMode, amount: &str) -> ParsedTakeOrdersMode {
@@ -181,7 +181,7 @@ mod local_evm_tests {
         let token = local_evm
             .deploy_new_token("TestToken", "TT", 18, U256::MAX, owner)
             .await;
-        let orderbook = *local_evm.orderbook.address();
+        let raindex = *local_evm.raindex.address();
 
         token
             .transfer(
@@ -202,7 +202,7 @@ mod local_evm_tests {
             rpc_urls: vec![rpc_url],
             sell_token: *token.address(),
             taker,
-            orderbook,
+            raindex,
             mode: make_mode(TakeOrdersMode::SpendUpTo, "100"),
             price_cap: Float::parse("2".to_string()).unwrap(),
         };
@@ -227,8 +227,8 @@ mod local_evm_tests {
         );
         assert_eq!(
             approval_info.spender(),
-            orderbook,
-            "spender should be orderbook"
+            raindex,
+            "spender should be raindex"
         );
         assert!(
             !approval_info.calldata().is_empty(),
@@ -244,7 +244,7 @@ mod local_evm_tests {
         let token = local_evm
             .deploy_new_token("TestToken", "TT", 18, U256::MAX, owner)
             .await;
-        let orderbook = *local_evm.orderbook.address();
+        let raindex = *local_evm.raindex.address();
 
         token
             .transfer(
@@ -260,7 +260,7 @@ mod local_evm_tests {
             .unwrap();
 
         token
-            .approve(orderbook, U256::MAX)
+            .approve(raindex, U256::MAX)
             .from(taker)
             .send()
             .await
@@ -275,7 +275,7 @@ mod local_evm_tests {
             rpc_urls: vec![rpc_url],
             sell_token: *token.address(),
             taker,
-            orderbook,
+            raindex,
             mode: make_mode(TakeOrdersMode::SpendUpTo, "100"),
             price_cap: Float::parse("2".to_string()).unwrap(),
         };
@@ -296,7 +296,7 @@ mod local_evm_tests {
         let token = local_evm
             .deploy_new_token("USDC", "USDC", 6, U256::MAX, owner)
             .await;
-        let orderbook = *local_evm.orderbook.address();
+        let raindex = *local_evm.raindex.address();
 
         token
             .transfer(
@@ -317,7 +317,7 @@ mod local_evm_tests {
             rpc_urls: vec![rpc_url],
             sell_token: *token.address(),
             taker,
-            orderbook,
+            raindex,
             mode: make_mode(TakeOrdersMode::SpendUpTo, "1.57126799999999998"),
             price_cap: Float::parse("1".to_string()).unwrap(),
         };
@@ -338,7 +338,7 @@ mod local_evm_tests {
         let token = local_evm
             .deploy_new_token("TestToken", "TT", 18, U256::MAX, owner)
             .await;
-        let orderbook = *local_evm.orderbook.address();
+        let raindex = *local_evm.raindex.address();
 
         token
             .transfer(
@@ -355,7 +355,7 @@ mod local_evm_tests {
 
         token
             .approve(
-                orderbook,
+                raindex,
                 U256::from(150u64) * U256::from(10).pow(U256::from(18)),
             )
             .from(taker)
@@ -372,7 +372,7 @@ mod local_evm_tests {
             rpc_urls: vec![rpc_url],
             sell_token: *token.address(),
             taker,
-            orderbook,
+            raindex,
             mode: make_mode(TakeOrdersMode::BuyUpTo, "100"),
             price_cap: Float::parse("2".to_string()).unwrap(),
         };

@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlBuildError, SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use crate::types::VaultBalanceChangeKind;
 use alloy::primitives::{Address, B256, U256};
@@ -26,7 +26,7 @@ pub struct LocalDbVaultBalanceChange {
 }
 
 pub fn build_fetch_balance_changes_stmt(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     vault_id: U256,
     token: Address,
     owner: Address,
@@ -34,8 +34,8 @@ pub fn build_fetch_balance_changes_stmt(
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
 
-    stmt.push(SqlValue::from(ob_id.chain_id));
-    stmt.push(SqlValue::from(ob_id.orderbook_address));
+    stmt.push(SqlValue::from(raindex_id.chain_id));
+    stmt.push(SqlValue::from(raindex_id.raindex_address));
     stmt.push(SqlValue::from(vault_id));
     stmt.push(SqlValue::from(token));
     stmt.push(SqlValue::from(owner));
@@ -67,7 +67,7 @@ mod tests {
     #[test]
     fn builds_with_params_no_filter() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,
@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn builds_with_single_filter_type() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,
@@ -99,7 +99,7 @@ mod tests {
     #[test]
     fn builds_with_take_order_filter_expands_to_two_types() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,
@@ -114,7 +114,7 @@ mod tests {
     #[test]
     fn builds_with_clear_filter_expands_to_four_types() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,
@@ -129,7 +129,7 @@ mod tests {
     #[test]
     fn builds_with_multiple_filter_types() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn builds_with_empty_filter_array() {
         let stmt = build_fetch_balance_changes_stmt(
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             U256::from(1),
             Address::ZERO,
             Address::ZERO,

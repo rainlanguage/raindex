@@ -57,8 +57,8 @@ mod tests {
         sol_types::SolCall,
     };
     use rain_math_float::Float;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_test_fixtures::{LocalEvm, Orderbook};
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_test_fixtures::{LocalEvm, Raindex};
     use std::str::FromStr;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
@@ -86,7 +86,7 @@ mod tests {
                 token2_holder,
             )
             .await;
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
 
         let dotrain = format!(
             r#"
@@ -114,9 +114,9 @@ tokens:
         decimals: 18
         label: Dai
         symbol: DAI
-orderbook:
+raindex:
     polygon:
-        address: {orderbook}
+        address: {raindex}
 orders:
     polygon:
         inputs:
@@ -143,7 +143,7 @@ amount price: 2 1;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -165,14 +165,14 @@ amount price: 2 1;
             .abi_encode();
         let tx = TransactionRequest::default()
             .with_input(calldata)
-            .with_to(*orderbook.address())
+            .with_to(*raindex.address())
             .with_from(token1_holder);
         local_evm
             .send_transaction(WithOtherFields::new(tx))
             .await
             .unwrap();
 
-        let filter = orderbook.AddOrderV3_filter();
+        let filter = raindex.AddOrderV3_filter();
         let logs = filter.query().await.unwrap();
         let order = logs[0].0.order.clone();
 
@@ -180,14 +180,14 @@ amount price: 2 1;
         local_evm
             .send_transaction(
                 token1
-                    .approve(*orderbook.address(), parse_ether("1000").unwrap())
+                    .approve(*raindex.address(), parse_ether("1000").unwrap())
                     .into_transaction_request(),
             )
             .await
             .unwrap();
 
         let amount = Float::parse("10".to_string()).unwrap().get_inner();
-        let tx_req = orderbook
+        let tx_req = raindex
             .deposit4(
                 *token1.address(),
                 B256::from(U256::from(0x01)),
@@ -197,9 +197,9 @@ amount price: 2 1;
             .into_transaction_request();
         local_evm.send_transaction(tx_req).await.unwrap();
 
-        // approve T2 spending for token2 holder for orderbook
+        // approve T2 spending for token2 holder for raindex
         let tx_req = token2
-            .approve(*orderbook.address(), parse_ether("1000").unwrap())
+            .approve(*raindex.address(), parse_ether("1000").unwrap())
             .from(token2_holder)
             .into_transaction_request();
         local_evm.send_transaction(tx_req).await.unwrap();
@@ -214,8 +214,8 @@ amount price: 2 1;
         .unwrap()
         .get_inner();
         let one_float = Float::parse("1".to_string()).unwrap().get_inner();
-        let config = Orderbook::TakeOrdersConfigV5 {
-            orders: vec![Orderbook::TakeOrderConfigV4 {
+        let config = Raindex::TakeOrdersConfigV5 {
+            orders: vec![Raindex::TakeOrderConfigV4 {
                 order,
                 inputIOIndex: U256::from(0),
                 outputIOIndex: U256::from(0),
@@ -228,7 +228,7 @@ amount price: 2 1;
             data: Bytes::new(),
         };
 
-        let tx_req = orderbook
+        let tx_req = raindex
             .takeOrders4(config)
             .from(token2_holder)
             .into_transaction_request();

@@ -4,7 +4,7 @@
 		type FieldValue,
 		type OrderBuilderFieldDefinitionCfg,
 		type OrderBuilderPresetCfg
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import ButtonSelectOption from './ButtonSelectOption.svelte';
 	import DeploymentSectionHeader from './DeploymentSectionHeader.svelte';
 	import { onMount } from 'svelte';

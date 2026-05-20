@@ -1,7 +1,7 @@
 WITH params AS (
   SELECT
     ?1 AS chain_id,
-    ?2 AS orderbook_address,
+    ?2 AS raindex_address,
     ?3 AS transaction_hash
 ),
 combined AS (
@@ -14,7 +14,7 @@ combined AS (
   FROM deposits d
   JOIN params p
     ON p.chain_id = d.chain_id
-   AND p.orderbook_address = d.orderbook_address
+   AND p.raindex_address = d.raindex_address
    AND p.transaction_hash = d.transaction_hash
   UNION ALL
   SELECT
@@ -26,7 +26,7 @@ combined AS (
   FROM withdrawals w
   JOIN params p
     ON p.chain_id = w.chain_id
-   AND p.orderbook_address = w.orderbook_address
+   AND p.raindex_address = w.raindex_address
    AND p.transaction_hash = w.transaction_hash
 )
 SELECT

@@ -29,7 +29,7 @@ mod wasm_tests {
         let args = FetchOwnerTradesArgs {
             owner,
             chain_ids: vec![137, 42161],
-            orderbook_addresses: vec![],
+            raindex_addresses: vec![],
             time_filter: Default::default(),
             pagination: Default::default(),
         };

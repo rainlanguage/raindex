@@ -13,7 +13,7 @@
 	import { ArrowUpFromBracketOutline, DotsVerticalOutline } from 'flowbite-svelte-icons';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
-	import ListViewOrderbookFilters from '../ListViewOrderbookFilters.svelte';
+	import ListViewRaindexFilters from '../ListViewRaindexFilters.svelte';
 	import OrderOrVaultHash from '../OrderOrVaultHash.svelte';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { DEFAULT_PAGE_SIZE, DEFAULT_REFRESH_INTERVAL } from '../../queries/constants';
@@ -23,8 +23,8 @@
 		RaindexVault,
 		RaindexVaultsList,
 		type Address,
-		type OrderbookCfg
-	} from '@rainlanguage/orderbook';
+		type RaindexCfg
+	} from '@rainlanguage/raindex';
 	import { QKEY_TOKENS, QKEY_VAULTS } from '../../queries/keys';
 	import type { AppStoresInterface } from '$lib/types/appStores.ts';
 	import { useAccount } from '$lib/providers/wallet/useAccount';
@@ -42,7 +42,7 @@
 	export let hideInactiveOrdersVaults: AppStoresInterface['hideInactiveOrdersVaults'];
 	export let activeTokens: AppStoresInterface['activeTokens'];
 	export let selectedChainIds: AppStoresInterface['selectedChainIds'];
-	export let activeOrderbookAddresses: AppStoresInterface['activeOrderbookAddresses'];
+	export let activeRaindexAddresses: AppStoresInterface['activeRaindexAddresses'];
 	export let ownerFilter: AppStoresInterface['ownerFilter'];
 	export let handleDepositModal:
 		| ((
@@ -84,19 +84,19 @@
 			(address) => !$tokensQuery.data || $tokensQuery.data.some((t) => t.address === address)
 		) ?? [];
 
-	$: orderbooksMap = raindexClient.getAllOrderbooks()?.value ?? new Map<string, OrderbookCfg>();
-	$: availableOrderbookAddresses = (() => {
+	$: raindexesMap = raindexClient.getAllRaindexes()?.value ?? new Map<string, RaindexCfg>();
+	$: availableRaindexAddresses = (() => {
 		const addrs: string[] = [];
-		orderbooksMap.forEach((cfg: OrderbookCfg) => {
+		raindexesMap.forEach((cfg: RaindexCfg) => {
 			if ($selectedChainIds.length === 0 || $selectedChainIds.includes(cfg.network.chainId)) {
 				addrs.push(cfg.address.toLowerCase());
 			}
 		});
 		return addrs;
 	})();
-	$: selectedOrderbookAddresses =
-		$activeOrderbookAddresses?.filter((address) =>
-			availableOrderbookAddresses.includes(address.toLowerCase())
+	$: selectedRaindexAddresses =
+		$activeRaindexAddresses?.filter((address) =>
+			availableRaindexAddresses.includes(address.toLowerCase())
 		) ?? [];
 
 	$: query = createInfiniteQuery({
@@ -107,7 +107,7 @@
 			$selectedChainIds,
 			ownerAddress,
 			selectedTokens,
-			selectedOrderbookAddresses
+			selectedRaindexAddresses
 		],
 		queryFn: async ({ pageParam }) => {
 			const result = await raindexClient.getVaults(
@@ -116,8 +116,8 @@
 					owners,
 					hideZeroBalance: $hideZeroBalanceVaults,
 					tokens: selectedTokens,
-					orderbookAddresses:
-						selectedOrderbookAddresses.length > 0 ? selectedOrderbookAddresses : undefined,
+					raindexAddresses:
+						selectedRaindexAddresses.length > 0 ? selectedRaindexAddresses : undefined,
 					onlyActiveOrders: $hideInactiveOrdersVaults
 				},
 				pageParam + 1
@@ -215,7 +215,7 @@
 </script>
 
 {#if $query}
-	<ListViewOrderbookFilters
+	<ListViewRaindexFilters
 		{selectedChainIds}
 		{showInactiveOrders}
 		{orderHash}
@@ -224,8 +224,8 @@
 		{activeTokens}
 		{tokensQuery}
 		{selectedTokens}
-		{activeOrderbookAddresses}
-		{selectedOrderbookAddresses}
+		{activeRaindexAddresses}
+		{selectedRaindexAddresses}
 		{ownerFilter}
 	/>
 	<AppTable
@@ -234,7 +234,7 @@
 		queryKey={QKEY_VAULTS}
 		emptyMessage="No Vaults Found"
 		on:clickRow={(e) => {
-			goto(`/vaults/${e.detail.item.chainId}-${e.detail.item.orderbook}-${e.detail.item.id}`);
+			goto(`/vaults/${e.detail.item.chainId}-${e.detail.item.raindex}-${e.detail.item.id}`);
 		}}
 	>
 		<svelte:fragment slot="title">
@@ -299,8 +299,8 @@
 						<Hash type={HashType.Identifier} value={toHex(item.vaultId)} />
 					</div>
 					<div class="flex items-center gap-1">
-						<span class="text-gray-500 dark:text-gray-400">Orderbook:</span>
-						<Hash type={HashType.Identifier} value={item.orderbook} />
+						<span class="text-gray-500 dark:text-gray-400">Raindex:</span>
+						<Hash type={HashType.Identifier} value={item.raindex} />
 					</div>
 					<div class="flex items-center gap-1">
 						<span class="text-gray-500 dark:text-gray-400">Owner:</span>
@@ -324,7 +324,7 @@
 								type="orders"
 								orderOrVault={order}
 								chainId={item.chainId}
-								orderbookAddress={item.orderbook}
+								raindexAddress={item.raindex}
 							/>
 						{/each}
 						{#if item.ordersAsInput.length > 3}...{/if}
@@ -339,7 +339,7 @@
 								type="orders"
 								orderOrVault={order}
 								chainId={item.chainId}
-								orderbookAddress={item.orderbook}
+								raindexAddress={item.raindex}
 							/>
 						{/each}
 						{#if item.ordersAsOutput.length > 3}...{/if}

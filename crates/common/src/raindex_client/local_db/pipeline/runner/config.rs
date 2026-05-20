@@ -2,8 +2,8 @@ use crate::local_db::pipeline::runner::utils::{
     build_runner_targets, ParsedRunnerSettings, RunnerTarget,
 };
 use crate::local_db::LocalDbError;
-use rain_orderbook_app_settings::local_db_sync::LocalDbSyncCfg;
-use rain_orderbook_app_settings::orderbook::OrderbookCfg;
+use raindex_app_settings::local_db_sync::LocalDbSyncCfg;
+use raindex_app_settings::raindex::RaindexCfg;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
@@ -18,24 +18,24 @@ impl NetworkRunnerConfig {
         global: &ParsedRunnerSettings,
         network_key: &str,
     ) -> Result<Self, LocalDbError> {
-        let filtered_orderbooks: HashMap<String, OrderbookCfg> = global
-            .orderbooks
+        let filtered_raindexes: HashMap<String, RaindexCfg> = global
+            .raindexes
             .iter()
-            .filter(|(_, ob)| ob.network.key == network_key)
+            .filter(|(_, raindex_cfg)| raindex_cfg.network.key == network_key)
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
-        if filtered_orderbooks.is_empty() {
+        if filtered_raindexes.is_empty() {
             return Err(LocalDbError::CustomError(format!(
-                "no orderbooks found for network: {}",
+                "no raindexes found for network: {}",
                 network_key
             )));
         }
 
-        let chain_id = filtered_orderbooks
+        let chain_id = filtered_raindexes
             .values()
             .next()
-            .map(|ob| ob.network.chain_id)
+            .map(|raindex_cfg| raindex_cfg.network.chain_id)
             .ok_or_else(|| {
                 LocalDbError::CustomError(format!(
                     "could not determine chain_id for network: {}",
@@ -54,14 +54,14 @@ impl NetworkRunnerConfig {
             network_key: network_key.to_string(),
             chain_id,
             settings: ParsedRunnerSettings {
-                orderbooks: filtered_orderbooks,
+                raindexes: filtered_raindexes,
                 syncs: filtered_syncs,
             },
         })
     }
 
     pub fn build_targets(&self) -> Result<Vec<RunnerTarget>, LocalDbError> {
-        build_runner_targets(&self.settings.orderbooks, &self.settings.syncs)
+        build_runner_targets(&self.settings.raindexes, &self.settings.syncs)
     }
 }
 
@@ -69,7 +69,7 @@ impl NetworkRunnerConfig {
 mod tests {
     use super::*;
     use crate::local_db::pipeline::runner::utils::parse_runner_settings;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::spec_version::SpecVersion;
 
     fn sample_settings_yaml() -> String {
         format!(
@@ -109,20 +109,20 @@ local-db-sync:
     finality-depth: 24
     bootstrap-block-threshold: 5000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: network-a
     subgraph: network-a
     local-db-remote: remote-a
     deployment-block: 111
-  ob-b:
+  raindex-b:
     address: 0x00000000000000000000000000000000000000b2
     network: network-b
     subgraph: network-b
     local-db-remote: remote-b
     deployment-block: 222
-  ob-c:
+  raindex-c:
     address: 0x00000000000000000000000000000000000000c3
     network: network-a
     subgraph: network-a
@@ -134,17 +134,17 @@ orderbooks:
     }
 
     #[test]
-    fn from_global_settings_filters_orderbooks_for_network() {
+    fn from_global_settings_filters_raindexes_for_network() {
         let global = parse_runner_settings(&sample_settings_yaml()).expect("valid yaml");
         let config =
             NetworkRunnerConfig::from_global_settings(&global, "network-a").expect("config ok");
 
         assert_eq!(config.network_key, "network-a");
         assert_eq!(config.chain_id, 1);
-        assert_eq!(config.settings.orderbooks.len(), 2);
-        assert!(config.settings.orderbooks.contains_key("ob-a"));
-        assert!(config.settings.orderbooks.contains_key("ob-c"));
-        assert!(!config.settings.orderbooks.contains_key("ob-b"));
+        assert_eq!(config.settings.raindexes.len(), 2);
+        assert!(config.settings.raindexes.contains_key("raindex-a"));
+        assert!(config.settings.raindexes.contains_key("raindex-c"));
+        assert!(!config.settings.raindexes.contains_key("raindex-b"));
     }
 
     #[test]
@@ -179,13 +179,13 @@ orderbooks:
     }
 
     #[test]
-    fn build_targets_single_orderbook_network() {
+    fn build_targets_single_raindex_network() {
         let global = parse_runner_settings(&sample_settings_yaml()).expect("valid yaml");
         let config =
             NetworkRunnerConfig::from_global_settings(&global, "network-b").expect("config ok");
 
         let targets = config.build_targets().expect("targets ok");
         assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].orderbook_key, "ob-b");
+        assert_eq!(targets[0].raindex_key, "raindex-b");
     }
 }

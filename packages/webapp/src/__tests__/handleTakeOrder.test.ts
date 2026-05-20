@@ -9,7 +9,7 @@ import {
 	type RaindexClient,
 	type RaindexOrder,
 	type TakeOrdersCalldataResult
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 
@@ -27,7 +27,7 @@ const mockManager = {
 
 const mockRaindexClient = {} as unknown as RaindexClient;
 
-const MOCK_ORDERBOOK_ADDRESS = '0x1234567890123456789012345678901234567890' as Hex;
+const MOCK_RAINDEX_ADDRESS = '0x1234567890123456789012345678901234567890' as Hex;
 const MOCK_TOKEN_ADDRESS = '0xAbcDef1234567890AbcDef1234567890AbcDef12' as Hex;
 const MOCK_ACCOUNT_ADDRESS = '0x9876543210987654321098765432109876543210' as Hex;
 
@@ -35,7 +35,7 @@ const mockOrder = {
 	id: '0xorderid',
 	orderHash: '0xorderhash',
 	chainId: 1,
-	orderbook: MOCK_ORDERBOOK_ADDRESS,
+	raindex: MOCK_RAINDEX_ADDRESS,
 	inputsList: {
 		items: [
 			{
@@ -81,14 +81,14 @@ const mockParams: TakeOrderSubmitParams = {
 	priceCap: '2.0'
 };
 
-function createMockReadyResult(calldata: string, orderbook: string): TakeOrdersCalldataResult {
+function createMockReadyResult(calldata: string, raindex: string): TakeOrdersCalldataResult {
 	return {
 		isReady: true,
 		isNeedsApproval: false,
 		approvalInfo: undefined,
 		takeOrdersInfo: {
 			calldata,
-			orderbook,
+			raindex,
 			effectivePrice: Float.parse('1.5').value as Float,
 			maxSellCap: Float.parse('15').value as Float,
 			expectedSell: Float.parse('15').value as Float,
@@ -174,7 +174,7 @@ describe('handleTakeOrder', () => {
 		const mockCalldata = '0xcalldata' as Hex;
 
 		vi.mocked(mockOrder.getTakeCalldata).mockResolvedValue({
-			value: createMockReadyResult(mockCalldata, MOCK_ORDERBOOK_ADDRESS),
+			value: createMockReadyResult(mockCalldata, MOCK_RAINDEX_ADDRESS),
 			error: undefined
 		});
 
@@ -198,7 +198,7 @@ describe('handleTakeOrder', () => {
 			modalTitle: 'Taking order for TEST',
 			closeOnConfirm: false,
 			args: expect.objectContaining({
-				toAddress: MOCK_ORDERBOOK_ADDRESS,
+				toAddress: MOCK_RAINDEX_ADDRESS,
 				chainId: mockOrder.chainId,
 				calldata: mockCalldata
 			})
@@ -210,7 +210,7 @@ describe('handleTakeOrder', () => {
 		const mockTxHash = '0xtxhash' as Hex;
 
 		vi.mocked(mockOrder.getTakeCalldata).mockResolvedValue({
-			value: createMockReadyResult(mockCalldata, MOCK_ORDERBOOK_ADDRESS),
+			value: createMockReadyResult(mockCalldata, MOCK_RAINDEX_ADDRESS),
 			error: undefined
 		});
 
@@ -272,7 +272,7 @@ describe('handleTakeOrder', () => {
 		} as unknown as RaindexOrder;
 
 		vi.mocked(orderWithCustomSymbol.getTakeCalldata).mockResolvedValue({
-			value: createMockReadyResult(mockCalldata, MOCK_ORDERBOOK_ADDRESS),
+			value: createMockReadyResult(mockCalldata, MOCK_RAINDEX_ADDRESS),
 			error: undefined
 		});
 
@@ -306,7 +306,7 @@ describe('handleTakeOrder', () => {
 		} as unknown as RaindexOrder;
 
 		vi.mocked(orderWithNoSymbol.getTakeCalldata).mockResolvedValue({
-			value: createMockReadyResult(mockCalldata, MOCK_ORDERBOOK_ADDRESS),
+			value: createMockReadyResult(mockCalldata, MOCK_RAINDEX_ADDRESS),
 			error: undefined
 		});
 

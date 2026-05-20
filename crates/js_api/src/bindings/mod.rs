@@ -8,7 +8,7 @@ use alloy::{
     },
     sol_types::SolCall,
 };
-use rain_orderbook_bindings::IRaindexV6::{takeOrders4Call, OrderV4, TakeOrdersConfigV5};
+use raindex_bindings::IRaindexV6::{takeOrders4Call, OrderV4, TakeOrdersConfigV5};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 
@@ -43,7 +43,7 @@ pub fn get_order_hash(
     Ok(encode_prefixed(main_keccak256(order.abi_encode())))
 }
 
-/// Generates ABI-encoded calldata for the `takeOrders3()` function on the OrderBook smart contract.
+/// Generates ABI-encoded calldata for the `takeOrders3()` function on the Raindex smart contract.
 ///
 /// ## Examples
 ///

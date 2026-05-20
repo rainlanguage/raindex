@@ -4,7 +4,7 @@ SELECT COUNT(*) AS orders_count FROM (
   FROM (
     SELECT
       latest.chain_id,
-      latest.orderbook_address,
+      latest.raindex_address,
       latest.order_owner,
       latest.order_nonce,
       latest.order_hash,
@@ -12,7 +12,7 @@ SELECT COUNT(*) AS orders_count FROM (
     FROM (
       SELECT
         oe.chain_id,
-        oe.orderbook_address,
+        oe.raindex_address,
         oe.order_owner,
         oe.order_nonce,
         oe.order_hash,
@@ -20,7 +20,7 @@ SELECT COUNT(*) AS orders_count FROM (
         ROW_NUMBER() OVER (
           PARTITION BY
             oe.chain_id,
-            oe.orderbook_address,
+            oe.raindex_address,
             oe.order_owner,
             oe.order_nonce
           ORDER BY oe.block_number DESC, oe.log_index DESC
@@ -28,14 +28,14 @@ SELECT COUNT(*) AS orders_count FROM (
       FROM order_events oe
       WHERE 1 = 1
         /*MAIN_CHAIN_IDS_CLAUSE*/
-        /*MAIN_ORDERBOOKS_CLAUSE*/
+        /*MAIN_RAINDEXES_CLAUSE*/
     ) latest
     WHERE latest.row_rank_latest = 1
   ) l
   LEFT JOIN (
     SELECT
       ranked.chain_id,
-      ranked.orderbook_address,
+      ranked.raindex_address,
       ranked.order_owner,
       ranked.order_nonce,
       ranked.order_hash,
@@ -44,7 +44,7 @@ SELECT COUNT(*) AS orders_count FROM (
     FROM (
       SELECT
         oe.chain_id,
-        oe.orderbook_address,
+        oe.raindex_address,
         oe.order_owner,
         oe.order_nonce,
         oe.order_hash,
@@ -53,7 +53,7 @@ SELECT COUNT(*) AS orders_count FROM (
         ROW_NUMBER() OVER (
           PARTITION BY
             oe.chain_id,
-            oe.orderbook_address,
+            oe.raindex_address,
             oe.order_owner,
             oe.order_nonce
           ORDER BY oe.block_number DESC, oe.log_index DESC
@@ -61,12 +61,12 @@ SELECT COUNT(*) AS orders_count FROM (
       FROM order_events oe
       WHERE oe.event_type = 'AddOrderV3'
         /*LATEST_ADD_CHAIN_IDS_CLAUSE*/
-        /*LATEST_ADD_ORDERBOOKS_CLAUSE*/
+        /*LATEST_ADD_RAINDEXES_CLAUSE*/
     ) ranked
     WHERE ranked.row_rank_add = 1
   ) la
     ON la.chain_id = l.chain_id
-   AND la.orderbook_address = l.orderbook_address
+   AND la.raindex_address = l.raindex_address
    AND la.order_owner = l.order_owner
    AND la.order_nonce = l.order_nonce
   WHERE

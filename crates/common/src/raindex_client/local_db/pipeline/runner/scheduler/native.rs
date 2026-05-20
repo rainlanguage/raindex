@@ -14,11 +14,11 @@ use crate::local_db::LocalDbError;
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
 use crate::raindex_client::local_db::pipeline::status::TracingStatusBus;
 use crate::raindex_client::local_db::{
-    LocalDb, LocalDbStatus, LocalDbSyncStatusStore, NetworkSyncStatus, OrderbookSyncStatus,
+    LocalDb, LocalDbStatus, LocalDbSyncStatusStore, NetworkSyncStatus, RaindexSyncStatus,
     SchedulerState, SyncReadiness,
 };
-use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
-use rain_orderbook_app_settings::network::NetworkCfg;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+use raindex_app_settings::network::NetworkCfg;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
@@ -96,10 +96,10 @@ pub fn start(
     status_store: LocalDbSyncStatusStore,
 ) -> Result<NativeSyncHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
-    for ob in settings.orderbooks.values() {
+    for raindex_cfg in settings.raindexes.values() {
         networks_map
-            .entry(ob.network.key.clone())
-            .or_insert_with(|| (*ob.network).clone());
+            .entry(raindex_cfg.network.key.clone())
+            .or_insert_with(|| (*raindex_cfg.network).clone());
     }
     let mut networks: Vec<NetworkCfg> = networks_map.into_values().collect();
     networks.sort_by(|a, b| a.key.cmp(&b.key));
@@ -261,8 +261,8 @@ async fn run_network_loop<R: NativeRunner>(
                     } else {
                         for failure in &report.failures {
                             let msg = failure.error.to_readable_msg();
-                            status_store.record_orderbook_status(OrderbookSyncStatus::failure(
-                                failure.ob_id.clone(),
+                            status_store.record_raindex_status(RaindexSyncStatus::failure(
+                                failure.raindex_id.clone(),
                                 msg.clone(),
                             ));
                             status_store
@@ -270,7 +270,7 @@ async fn run_network_loop<R: NativeRunner>(
                             tracing::warn!(
                                 network = %network_key,
                                 chain_id,
-                                ob = %format!("{:#x}", failure.ob_id.orderbook_address),
+                                raindex = %format!("{:#x}", failure.raindex_id.raindex_address),
                                 stage = ?failure.stage,
                                 error = %failure.error,
                                 "sync target failed"
@@ -321,7 +321,7 @@ mod tests {
     use super::*;
     use crate::local_db::pipeline::runner::{RunReport, TargetFailure, TargetStage};
     use crate::local_db::query::{FromDbJson, LocalDbQueryError, SqlStatement, SqlStatementBatch};
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use alloy::primitives::Address;
     use std::collections::VecDeque;
     use std::sync::atomic::AtomicUsize;
@@ -390,8 +390,8 @@ mod tests {
                         if should_fail {
                             failures.fetch_add(1, Ordering::SeqCst);
                             let failure = TargetFailure {
-                                ob_id: OrderbookIdentifier::new(1, Address::ZERO),
-                                orderbook_key: None,
+                                raindex_id: RaindexIdentifier::new(1, Address::ZERO),
+                                raindex_key: None,
                                 stage: TargetStage::EngineRun,
                                 error: LocalDbError::CustomError("runner failure".to_string()),
                             };
@@ -432,7 +432,7 @@ mod tests {
     #[test]
     fn start_returns_error_for_empty_settings() {
         let settings = ParsedRunnerSettings {
-            orderbooks: HashMap::new(),
+            raindexes: HashMap::new(),
             syncs: HashMap::new(),
         };
         let result = start(

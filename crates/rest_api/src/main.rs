@@ -14,8 +14,8 @@ use utoipa_swagger_ui::SwaggerUi;
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "Rain Orderbook API",
-        description = "REST API for interacting with Rain Orderbook."
+        title = "Rain Raindex API",
+        description = "REST API for interacting with Rain Raindex."
     ),
     paths(routes::take_orders::buy, routes::take_orders::sell),
     components(schemas(
@@ -394,7 +394,7 @@ mod tests {
         let spec: serde_json::Value = serde_json::from_str(&body).unwrap();
 
         assert_eq!(spec["openapi"], "3.1.0");
-        assert_eq!(spec["info"]["title"], "Rain Orderbook API");
+        assert_eq!(spec["info"]["title"], "Rain Raindex API");
     }
 
     #[test]
@@ -464,7 +464,7 @@ mod tests {
 
         assert_eq!(
             buy_schema["yamlContent"]["description"],
-            "YAML configuration containing network RPC endpoints, subgraph URLs, and orderbook addresses"
+            "YAML configuration containing network RPC endpoints, subgraph URLs, and raindex addresses"
         );
         assert_eq!(
             buy_schema["taker"]["description"],
@@ -507,7 +507,7 @@ mod tests {
 
         assert_eq!(
             sell_schema["yamlContent"]["description"],
-            "YAML configuration containing network RPC endpoints, subgraph URLs, and orderbook addresses"
+            "YAML configuration containing network RPC endpoints, subgraph URLs, and raindex addresses"
         );
         assert_eq!(
             sell_schema["taker"]["description"],
@@ -549,8 +549,8 @@ mod tests {
         let ready_schema = &spec["components"]["schemas"]["TakeOrdersReadyResponse"]["properties"];
 
         assert_eq!(
-            ready_schema["orderbook"]["description"],
-            "Address of the orderbook contract to call"
+            ready_schema["raindex"]["description"],
+            "Address of the raindex contract to call"
         );
         assert_eq!(
             ready_schema["calldata"]["description"],
@@ -581,7 +581,7 @@ mod tests {
         );
         assert_eq!(
             approval_schema["spender"]["description"],
-            "Spender address (the orderbook contract)"
+            "Spender address (the raindex contract)"
         );
         assert_eq!(
             approval_schema["amount"]["description"],
@@ -619,7 +619,7 @@ mod tests {
 
             let ready_value = &examples["Ready"]["value"];
             assert_eq!(ready_value["status"], "ready");
-            assert!(ready_value["data"]["orderbook"].is_string());
+            assert!(ready_value["data"]["raindex"].is_string());
             assert!(ready_value["data"]["calldata"].is_string());
             assert!(ready_value["data"]["effectivePrice"].is_string());
             assert!(ready_value["data"]["prices"].is_array());

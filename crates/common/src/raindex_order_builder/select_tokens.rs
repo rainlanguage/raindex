@@ -2,7 +2,7 @@ use super::*;
 use crate::raindex_client::vaults::AccountBalance;
 use futures::StreamExt;
 use rain_math_float::Float;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     deployment::DeploymentCfg, network::NetworkCfg, order::OrderCfg,
     order_builder::OrderBuilderSelectTokensCfg, token::TokenCfg, yaml::YamlParsableHash,
 };
@@ -22,7 +22,7 @@ impl RaindexOrderBuilder {
     }
 
     pub fn is_select_token_set(&self, key: String) -> Result<bool, RaindexOrderBuilderError> {
-        Ok(self.dotrain_order.orderbook_yaml().get_token(&key).is_ok())
+        Ok(self.dotrain_order.raindex_yaml().get_token(&key).is_ok())
     }
 
     pub fn check_select_tokens(&self) -> Result<(), RaindexOrderBuilderError> {
@@ -35,7 +35,7 @@ impl RaindexOrderBuilder {
             for select_token in select_tokens {
                 if self
                     .dotrain_order
-                    .orderbook_yaml()
+                    .raindex_yaml()
                     .get_token(&select_token.key)
                     .is_err()
                 {
@@ -66,7 +66,7 @@ impl RaindexOrderBuilder {
         if TokenCfg::parse_from_yaml(self.dotrain_order.dotrain_yaml().documents, &key, None)
             .is_ok()
         {
-            TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)?;
+            TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
         }
 
         let address = Address::from_str(&address)?;
@@ -84,7 +84,7 @@ impl RaindexOrderBuilder {
         let token_info = erc20.token_info(None).await?;
 
         TokenCfg::add_record_to_yaml(
-            self.dotrain_order.orderbook_yaml().documents,
+            self.dotrain_order.raindex_yaml().documents,
             &key,
             &network_key,
             &address.to_string(),
@@ -106,7 +106,7 @@ impl RaindexOrderBuilder {
             return Err(RaindexOrderBuilderError::TokenNotFound(key.clone()));
         }
 
-        TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)?;
+        TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
 
         Ok(())
     }
@@ -131,7 +131,7 @@ impl RaindexOrderBuilder {
         )?;
         let network_key =
             OrderCfg::parse_network_key(self.dotrain_order.dotrain_yaml().documents, &order_key)?;
-        let tokens = self.dotrain_order.orderbook_yaml().get_tokens()?;
+        let tokens = self.dotrain_order.raindex_yaml().get_tokens()?;
 
         let mut fetch_futures = Vec::new();
 
@@ -188,7 +188,7 @@ impl RaindexOrderBuilder {
             OrderCfg::parse_network_key(self.dotrain_order.dotrain_yaml().documents, &order_key)?;
         let network = self
             .dotrain_order
-            .orderbook_yaml()
+            .raindex_yaml()
             .get_network(&network_key)?;
 
         let erc20 = ERC20::new(network.rpcs, Address::from_str(&token_address)?);
@@ -214,7 +214,7 @@ impl RaindexOrderBuilder {
         symbol: String,
     ) {
         TokenCfg::add_record_to_yaml(
-            self.dotrain_order.orderbook_yaml().documents,
+            self.dotrain_order.raindex_yaml().documents,
             &key,
             &network_key,
             &address,
@@ -226,7 +226,7 @@ impl RaindexOrderBuilder {
     }
 
     pub fn remove_record_from_yaml(&self, key: String) {
-        TokenCfg::remove_record_from_yaml(self.dotrain_order.orderbook_yaml().documents, &key)
+        TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)
             .unwrap();
     }
 }
@@ -596,7 +596,7 @@ mod tests {
         use crate::raindex_order_builder::RaindexOrderBuilder;
         use alloy::primitives::Address;
         use httpmock::MockServer;
-        use rain_orderbook_app_settings::spec_version::SpecVersion;
+        use raindex_app_settings::spec_version::SpecVersion;
         use serde_json::json;
         use std::str::FromStr;
 
@@ -648,8 +648,8 @@ rainlangs:
   some-deployer:
     network: some-network
     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-orderbooks:
-  some-orderbook:
+raindexes:
+  some-raindex:
     address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
     network: some-network
     subgraph: some-sg

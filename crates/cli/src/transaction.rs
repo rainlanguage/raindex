@@ -1,11 +1,11 @@
 use alloy::primitives::Address;
 use clap::Args;
-use rain_orderbook_common::transaction::TransactionArgs;
+use raindex_common::transaction::TransactionArgs;
 
 #[derive(Args, Clone)]
 pub struct CliTransactionArgs {
-    #[arg(short, long, help = "Orderbook contract address")]
-    pub orderbook_address: Address,
+    #[arg(long, help = "Raindex contract address")]
+    pub raindex_address: Address,
 
     #[arg(
         short,
@@ -31,7 +31,7 @@ pub struct CliTransactionArgs {
 impl From<CliTransactionArgs> for TransactionArgs {
     fn from(val: CliTransactionArgs) -> Self {
         TransactionArgs {
-            orderbook_address: val.orderbook_address,
+            raindex_address: val.raindex_address,
             derivation_index: val.derivation_index,
             chain_id: val.chain_id,
             rpcs: val.rpcs,
@@ -48,7 +48,7 @@ mod tests {
     #[test]
     fn test_from_cli_transaction_args() {
         let cli_args = CliTransactionArgs {
-            orderbook_address: Address::ZERO,
+            raindex_address: Address::ZERO,
             derivation_index: Some(1),
             chain_id: Some(2),
             rpcs: vec!["http://localhost:8545".to_string()],
@@ -58,16 +58,16 @@ mod tests {
 
         let transaction_args: TransactionArgs = cli_args.into();
 
-        assert_eq!(transaction_args.orderbook_address, Address::ZERO);
+        assert_eq!(transaction_args.raindex_address, Address::ZERO);
         assert_eq!(transaction_args.derivation_index, Some(1));
         assert_eq!(transaction_args.chain_id, Some(2));
         assert_eq!(transaction_args.rpcs, vec!["http://localhost:8545"]);
         assert_eq!(transaction_args.max_priority_fee_per_gas, Some(100));
         assert_eq!(transaction_args.max_fee_per_gas, Some(1000));
 
-        let orderbook_address = Address::random();
+        let raindex_address = Address::random();
         let cli_args = CliTransactionArgs {
-            orderbook_address,
+            raindex_address,
             derivation_index: None,
             chain_id: None,
             rpcs: vec!["http://localhost:8545".to_string()],
@@ -77,7 +77,7 @@ mod tests {
 
         let transaction_args: TransactionArgs = cli_args.into();
 
-        assert_eq!(transaction_args.orderbook_address, orderbook_address);
+        assert_eq!(transaction_args.raindex_address, raindex_address);
         assert_eq!(transaction_args.derivation_index, None);
         assert_eq!(transaction_args.chain_id, None);
         assert_eq!(transaction_args.rpcs, vec!["http://localhost:8545"]);

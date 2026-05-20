@@ -4,7 +4,7 @@ FROM (
   FROM take_orders t
   JOIN order_events oe
     ON oe.chain_id = t.chain_id
-   AND oe.orderbook_address = t.orderbook_address
+   AND oe.raindex_address = t.raindex_address
    AND oe.event_type = 'AddOrderV3'
    AND oe.order_owner = t.order_owner
    AND oe.order_nonce = t.order_nonce
@@ -17,7 +17,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = oe.chain_id
-      AND oe2.orderbook_address = oe.orderbook_address
+      AND oe2.raindex_address = oe.raindex_address
       AND oe2.event_type = 'AddOrderV3'
       AND oe2.order_owner = t.order_owner
       AND oe2.order_nonce = t.order_nonce
@@ -32,7 +32,7 @@ FROM (
    )
   WHERE t.order_owner = ?1
   /*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/
-  /*TAKE_ORDERS_ORDERBOOKS_CLAUSE*/
+  /*TAKE_ORDERS_RAINDEXS_CLAUSE*/
 
   UNION ALL
 
@@ -40,7 +40,7 @@ FROM (
   FROM clear_v3_events c
   JOIN order_events oe
     ON oe.chain_id = c.chain_id
-   AND oe.orderbook_address = c.orderbook_address
+   AND oe.raindex_address = c.raindex_address
    AND oe.order_hash = c.alice_order_hash
    AND oe.event_type = 'AddOrderV3'
    AND oe.order_owner = ?1
@@ -52,7 +52,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = oe.chain_id
-      AND oe2.orderbook_address = oe.orderbook_address
+      AND oe2.raindex_address = oe.raindex_address
       AND oe2.order_hash = c.alice_order_hash
       AND oe2.event_type = 'AddOrderV3'
        AND (
@@ -66,7 +66,7 @@ FROM (
    )
   WHERE 1 = 1
   /*CLEAR_ALICE_CHAIN_IDS_CLAUSE*/
-  /*CLEAR_ALICE_ORDERBOOKS_CLAUSE*/
+  /*CLEAR_ALICE_RAINDEXS_CLAUSE*/
 
   UNION ALL
 
@@ -74,7 +74,7 @@ FROM (
   FROM clear_v3_events c
   JOIN order_events oe
     ON oe.chain_id = c.chain_id
-   AND oe.orderbook_address = c.orderbook_address
+   AND oe.raindex_address = c.raindex_address
    AND oe.order_hash = c.bob_order_hash
    AND oe.event_type = 'AddOrderV3'
    AND oe.order_owner = ?1
@@ -86,7 +86,7 @@ FROM (
      SELECT 1
      FROM order_events oe2
     WHERE oe2.chain_id = oe.chain_id
-      AND oe2.orderbook_address = oe.orderbook_address
+      AND oe2.raindex_address = oe.raindex_address
       AND oe2.order_hash = c.bob_order_hash
       AND oe2.event_type = 'AddOrderV3'
        AND (
@@ -100,7 +100,7 @@ FROM (
    )
   WHERE 1 = 1
   /*CLEAR_BOB_CHAIN_IDS_CLAUSE*/
-  /*CLEAR_BOB_ORDERBOOKS_CLAUSE*/
+  /*CLEAR_BOB_RAINDEXS_CLAUSE*/
 ) AS combined_trades
 WHERE 1=1
 /*START_TS_CLAUSE*/

@@ -16,7 +16,7 @@
 		type RaindexOrderQuote,
 		type TakeOrdersMode,
 		type TakeOrderEstimate
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 
 	export let open: boolean;
 	export let order: RaindexOrder;

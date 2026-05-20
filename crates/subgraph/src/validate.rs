@@ -19,7 +19,7 @@ pub enum SchemaValidationError {
 
 /// checks if a schema is equal to this crate's schema
 fn check_schema(schema: String) -> Result<bool, SchemaValidationError> {
-    let main_schema = read_to_string("./schema/orderbook.graphql")?;
+    let main_schema = read_to_string("./schema/raindex.graphql")?;
     Ok(main_schema == schema)
 }
 
@@ -126,7 +126,7 @@ mod test {
 
     #[test]
     fn test_check_schema_happy() {
-        let schema = read_to_string("./schema/orderbook.graphql").unwrap();
+        let schema = read_to_string("./schema/raindex.graphql").unwrap();
         let result = check_schema(schema).unwrap();
         assert!(result);
     }

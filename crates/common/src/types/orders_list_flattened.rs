@@ -2,8 +2,8 @@ use crate::types::vault::NO_SYMBOL;
 use crate::{csv::TryIntoCsv, utils::timestamp::format_bigint_timestamp_display};
 use alloy::dyn_abi::SolType;
 use alloy::primitives::hex::{decode, encode};
-use rain_orderbook_bindings::IRaindexV6::OrderV4;
-use rain_orderbook_subgraph_client::types::common::*;
+use raindex_bindings::IRaindexV6::OrderV4;
+use raindex_subgraph_client::types::common::*;
 use serde::{Deserialize, Serialize};
 
 use super::FlattenError;
@@ -90,9 +90,9 @@ mod tests {
         primitives::{Address, Bytes, FixedBytes, B256, U256},
         sol_types::SolValue,
     };
-    use rain_orderbook_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
-    use rain_orderbook_subgraph_client::types::common::{
-        SgAddOrder, SgBigInt, SgBytes, SgErc20, SgOrderStructPartialTrade, SgOrderbook,
+    use raindex_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
+    use raindex_subgraph_client::types::common::{
+        SgAddOrder, SgBigInt, SgBytes, SgErc20, SgOrderStructPartialTrade, SgRaindex,
         SgTransaction, SgVault,
     };
     use std::str::FromStr;
@@ -144,8 +144,8 @@ mod tests {
                     symbol: Some("TOUT".into()),
                     decimals: Some(SgBigInt("18".into())),
                 },
-                orderbook: SgOrderbook {
-                    id: SgBytes("ob-id".into()),
+                raindex: SgRaindex {
+                    id: SgBytes("raindex-id".into()),
                 },
                 orders_as_output: vec![],
                 orders_as_input: vec![],
@@ -163,15 +163,15 @@ mod tests {
                     symbol: Some("TIN".into()),
                     decimals: Some(SgBigInt("18".into())),
                 },
-                orderbook: SgOrderbook {
-                    id: SgBytes("ob-id".into()),
+                raindex: SgRaindex {
+                    id: SgBytes("raindex-id".into()),
                 },
                 orders_as_output: vec![],
                 orders_as_input: vec![],
                 balance_changes: vec![],
             }],
-            orderbook: SgOrderbook {
-                id: SgBytes("ob-id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("raindex-id".into()),
             },
             active: true,
             timestamp_added: SgBigInt("1678886400".into()),
@@ -241,8 +241,8 @@ mod tests {
             id: SgBytes("vault-in-id-2".into()),
             owner: SgBytes("vault-owner-2".into()),
             balance: SgBytes("1000".into()),
-            orderbook: SgOrderbook {
-                id: SgBytes("ob-id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("raindex-id".into()),
             },
             orders_as_output: vec![],
             orders_as_input: vec![],
@@ -260,8 +260,8 @@ mod tests {
             id: SgBytes("vault-out-id-2".into()),
             owner: SgBytes("vault-owner-2".into()),
             balance: SgBytes("1000".into()),
-            orderbook: SgOrderbook {
-                id: SgBytes("ob-id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("raindex-id".into()),
             },
             orders_as_output: vec![],
             orders_as_input: vec![],
@@ -352,8 +352,8 @@ mod tests {
             id: SgBytes("vault-in-id".into()),
             owner: SgBytes("vault-owner".into()),
             balance: SgBytes("1000".into()),
-            orderbook: SgOrderbook {
-                id: SgBytes("ob-id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("raindex-id".into()),
             },
             orders_as_output: vec![],
             orders_as_input: vec![],
@@ -371,8 +371,8 @@ mod tests {
             id: SgBytes("vault-out-id".into()),
             owner: SgBytes("vault-owner".into()),
             balance: SgBytes("1000".into()),
-            orderbook: SgOrderbook {
-                id: SgBytes("ob-id".into()),
+            raindex: SgRaindex {
+                id: SgBytes("raindex-id".into()),
             },
             vault_id: SgBytes("222".into()),
             token: SgErc20 {

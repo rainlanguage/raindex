@@ -4,7 +4,7 @@ import DepositModal from '$lib/components/DepositModal.svelte';
 import type { ComponentProps } from 'svelte';
 import type { Hex } from 'viem';
 import truncateEthAddress from 'truncate-eth-address';
-import { Float, type RaindexVault } from '@rainlanguage/orderbook';
+import { Float, type RaindexVault } from '@rainlanguage/raindex';
 
 type ModalProps = ComponentProps<DepositModal>;
 
@@ -31,7 +31,7 @@ describe('DepositModal', () => {
 			}
 		}),
 		chainId: 1,
-		orderbook: '0x123',
+		raindex: '0x123',
 		balance: Float.parse('1').value as Float
 	} as unknown as RaindexVault;
 

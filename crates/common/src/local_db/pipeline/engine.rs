@@ -11,7 +11,7 @@ use crate::local_db::decode::{
 use crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow;
 use crate::local_db::query::fetch_store_addresses::{fetch_store_addresses_stmt, StoreAddressRow};
 use crate::local_db::query::{LocalDbQueryExecutor, SqlStatement, SqlStatementBatch};
-use crate::local_db::{LocalDbError, OrderbookIdentifier};
+use crate::local_db::{LocalDbError, RaindexIdentifier};
 use crate::rpc_client::LogEntryResponse;
 use alloy::primitives::Address;
 use std::collections::{BTreeSet, HashSet};
@@ -31,7 +31,7 @@ pub struct SyncEngine<B, W, E, T, A, S> {
 /// Runner-supplied inputs that are static for the duration of a sync cycle.
 #[derive(Debug, Clone)]
 pub struct SyncInputs {
-    pub ob_id: OrderbookIdentifier,
+    pub raindex_id: RaindexIdentifier,
     pub metadata_rpcs: Vec<Url>,
     pub cfg: SyncConfig,
     pub dump_str: Option<String>,
@@ -69,7 +69,7 @@ where
         if start_block > target_block {
             self.status.send(SyncPhase::Idle).await?;
             return Ok(SyncOutcome {
-                ob_id: input.ob_id.clone(),
+                raindex_id: input.raindex_id.clone(),
                 start_block,
                 target_block,
                 fetched_logs: 0,
@@ -77,11 +77,11 @@ where
             });
         }
 
-        let (orderbook_logs, decoded_orderbook_events) = self
-            .gather_orderbook(input, start_block, target_block)
+        let (raindex_logs, decoded_raindex_events) = self
+            .gather_raindex(input, start_block, target_block)
             .await?;
-        let mut all_raw_logs = orderbook_logs;
-        let mut decoded_events = decoded_orderbook_events;
+        let mut all_raw_logs = raindex_logs;
+        let mut decoded_events = decoded_raindex_events;
 
         let (store_logs, mut decoded_store_events, existing_tokens, token_addresses) = self
             .load_store_logs_and_existing_tokens(
@@ -109,7 +109,7 @@ where
             db,
             ApplyContext {
                 target_info: &ApplyPipelineTargetInfo {
-                    ob_id: input.ob_id.clone(),
+                    raindex_id: input.raindex_id.clone(),
                     start_block,
                     target_block,
                     hash: target_hash,
@@ -123,7 +123,7 @@ where
         .await?;
 
         Ok(SyncOutcome {
-            ob_id: input.ob_id.clone(),
+            raindex_id: input.raindex_id.clone(),
             start_block,
             target_block,
             fetched_logs: all_raw_logs.len(),
@@ -153,7 +153,7 @@ where
             .engine_run(
                 db,
                 &BootstrapConfig {
-                    ob_id: input.ob_id.clone(),
+                    raindex_id: input.raindex_id.clone(),
                     dump_stmt: input.dump_str.as_ref().map(|value| {
                         let mut batch_stmt = SqlStatementBatch::new();
                         for line in value.lines() {
@@ -183,31 +183,31 @@ where
     {
         self.status.send(SyncPhase::ComputingSyncWindow).await?;
         self.window
-            .compute(db, &input.ob_id, &input.cfg, latest_block)
+            .compute(db, &input.raindex_id, &input.cfg, latest_block)
             .await
     }
 
-    async fn gather_orderbook(
+    async fn gather_raindex(
         &self,
         input: &SyncInputs,
         start_block: u64,
         target_block: u64,
     ) -> Result<(Vec<LogEntryResponse>, Vec<DecodedEventData<DecodedEvent>>), LocalDbError> {
-        self.status.send(SyncPhase::FetchingOrderbookLogs).await?;
-        let orderbook_logs = self
+        self.status.send(SyncPhase::FetchingRaindexLogs).await?;
+        let raindex_logs = self
             .events
-            .fetch_orderbook(
-                input.ob_id.orderbook_address,
+            .fetch_raindex(
+                input.raindex_id.raindex_address,
                 start_block,
                 target_block,
                 &input.cfg.fetch,
             )
             .await?;
 
-        self.status.send(SyncPhase::DecodingOrderbookLogs).await?;
-        let decoded_events = self.events.decode(&orderbook_logs)?;
+        self.status.send(SyncPhase::DecodingRaindexLogs).await?;
+        let decoded_events = self.events.decode(&raindex_logs)?;
 
-        Ok((orderbook_logs, decoded_events))
+        Ok((raindex_logs, decoded_events))
     }
 
     async fn load_store_logs_and_existing_tokens<DB>(
@@ -230,7 +230,7 @@ where
         DB: LocalDbQueryExecutor + ?Sized,
     {
         let mut store_addresses = collect_store_addresses(decoded_events);
-        let existing_store_rows = load_known_store_addresses(db, &input.ob_id).await?;
+        let existing_store_rows = load_known_store_addresses(db, &input.raindex_id).await?;
         for row in existing_store_rows {
             if !row.store_address.is_zero() {
                 store_addresses.insert(row.store_address);
@@ -242,7 +242,7 @@ where
 
         let tokens_fut = self
             .tokens
-            .load_existing(db, &input.ob_id, &token_addresses_vec);
+            .load_existing(db, &input.raindex_id, &token_addresses_vec);
 
         let store_addresses_vec: Vec<Address> = store_addresses.into_iter().collect();
         let store_fetch_fut = async {
@@ -324,7 +324,11 @@ where
 
         self.status.send(SyncPhase::RunningPostSyncExport).await?;
         self.apply
-            .export_dump(db, &ctx.target_info.ob_id, ctx.target_info.target_block)
+            .export_dump(
+                db,
+                &ctx.target_info.raindex_id,
+                ctx.target_info.target_block,
+            )
             .await
     }
 }
@@ -339,12 +343,12 @@ struct ApplyContext<'a> {
 
 async fn load_known_store_addresses<DB>(
     db: &DB,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
 ) -> Result<Vec<StoreAddressRow>, LocalDbError>
 where
     DB: LocalDbQueryExecutor + ?Sized,
 {
-    db.query_json(&fetch_store_addresses_stmt(ob_id))
+    db.query_json(&fetch_store_addresses_stmt(raindex_id))
         .await
         .map_err(Into::into)
 }
@@ -366,7 +370,7 @@ mod tests {
     use crate::local_db::FetchConfig;
     use alloy::primitives::{b256, Address, Bytes, FixedBytes, B256, U256};
     use async_trait::async_trait;
-    use rain_orderbook_bindings::IInterpreterStoreV3::Set;
+    use raindex_bindings::IInterpreterStoreV3::Set;
     use serde_json;
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
@@ -408,7 +412,7 @@ mod tests {
         token: Address,
         tx: u8,
     ) -> DecodedEventData<DecodedEvent> {
-        use rain_orderbook_bindings::IRaindexV6::DepositV2;
+        use raindex_bindings::IRaindexV6::DepositV2;
         DecodedEventData {
             event_type: EventType::DepositV2,
             block_number: U256::from(block),
@@ -432,7 +436,7 @@ mod tests {
         output_token: Address,
         tx: u8,
     ) -> DecodedEventData<DecodedEvent> {
-        use rain_orderbook_bindings::IRaindexV6::{AddOrderV3, EvaluableV4, OrderV4, IOV2};
+        use raindex_bindings::IRaindexV6::{AddOrderV3, EvaluableV4, OrderV4, IOV2};
         DecodedEventData {
             event_type: EventType::AddOrderV3,
             block_number: U256::from(block),
@@ -486,16 +490,16 @@ mod tests {
         }
     }
 
-    fn base_target() -> OrderbookIdentifier {
-        OrderbookIdentifier {
+    fn base_target() -> RaindexIdentifier {
+        RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: addr(0xAB),
+            raindex_address: addr(0xAB),
         }
     }
 
     fn base_inputs() -> SyncInputs {
         SyncInputs {
-            ob_id: base_target(),
+            raindex_id: base_target(),
             metadata_rpcs: vec![Url::parse("https://rpc.example.com").unwrap()],
             cfg: SyncConfig {
                 deployment_block: 1,
@@ -575,7 +579,7 @@ mod tests {
         async fn inspect_state<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _raindex_id: &RaindexIdentifier,
         ) -> Result<BootstrapState, LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -597,10 +601,10 @@ mod tests {
             Ok(())
         }
 
-        async fn clear_orderbook_data<DB>(
+        async fn clear_raindex_data<DB>(
             &self,
             _db: &DB,
-            _target: &OrderbookIdentifier,
+            _target: &RaindexIdentifier,
         ) -> Result<(), LocalDbError>
         where
             DB: LocalDbQueryExecutor + ?Sized,
@@ -644,7 +648,7 @@ mod tests {
 
     #[derive(Default)]
     struct MockWindowInner {
-        calls: Mutex<Vec<(OrderbookIdentifier, u64, u64, u64)>>,
+        calls: Mutex<Vec<(RaindexIdentifier, u64, u64, u64)>>,
         results: Mutex<VecDeque<Result<(u64, u64), LocalDbError>>>,
     }
 
@@ -653,7 +657,7 @@ mod tests {
             *self.inner.results.lock().unwrap() = VecDeque::from(results);
         }
 
-        fn calls(&self) -> Vec<(OrderbookIdentifier, u64, u64, u64)> {
+        fn calls(&self) -> Vec<(RaindexIdentifier, u64, u64, u64)> {
             self.inner.calls.lock().unwrap().clone()
         }
     }
@@ -663,7 +667,7 @@ mod tests {
         async fn compute<DB>(
             &self,
             _db: &DB,
-            ob_id: &OrderbookIdentifier,
+            raindex_id: &RaindexIdentifier,
             cfg: &SyncConfig,
             latest_block: u64,
         ) -> Result<(u64, u64), LocalDbError>
@@ -671,7 +675,7 @@ mod tests {
             DB: LocalDbQueryExecutor + ?Sized,
         {
             self.inner.calls.lock().unwrap().push((
-                ob_id.clone(),
+                raindex_id.clone(),
                 cfg.deployment_block,
                 latest_block,
                 cfg.finality.depth as u64,
@@ -693,11 +697,11 @@ mod tests {
     #[derive(Default)]
     struct MockEventsInner {
         latest_blocks: Mutex<VecDeque<Result<u64, LocalDbError>>>,
-        orderbook_results: Mutex<VecDeque<Result<Vec<LogEntryResponse>, LocalDbError>>>,
+        raindex_results: Mutex<VecDeque<Result<Vec<LogEntryResponse>, LocalDbError>>>,
         store_results: Mutex<VecDeque<Result<Vec<LogEntryResponse>, LocalDbError>>>,
         decode_results: Mutex<VecDeque<Result<Vec<DecodedEventData<DecodedEvent>>, LocalDbError>>>,
         block_hashes: Mutex<VecDeque<Result<B256, LocalDbError>>>,
-        orderbook_calls: Mutex<Vec<(Address, u64, u64)>>,
+        raindex_calls: Mutex<Vec<(Address, u64, u64)>>,
         store_calls: Mutex<Vec<(Vec<Address>, u64, u64)>>,
         store_barrier: Mutex<Option<Arc<Barrier>>>,
         store_completed: Mutex<bool>,
@@ -708,12 +712,8 @@ mod tests {
             *self.inner.latest_blocks.lock().unwrap() = VecDeque::from(blocks);
         }
 
-        fn push_orderbook_result(&self, result: Result<Vec<LogEntryResponse>, LocalDbError>) {
-            self.inner
-                .orderbook_results
-                .lock()
-                .unwrap()
-                .push_back(result);
+        fn push_raindex_result(&self, result: Result<Vec<LogEntryResponse>, LocalDbError>) {
+            self.inner.raindex_results.lock().unwrap().push_back(result);
         }
 
         fn push_store_result(&self, result: Result<Vec<LogEntryResponse>, LocalDbError>) {
@@ -731,8 +731,8 @@ mod tests {
             self.inner.block_hashes.lock().unwrap().push_back(result);
         }
 
-        fn orderbook_calls(&self) -> Vec<(Address, u64, u64)> {
-            self.inner.orderbook_calls.lock().unwrap().clone()
+        fn raindex_calls(&self) -> Vec<(Address, u64, u64)> {
+            self.inner.raindex_calls.lock().unwrap().clone()
         }
 
         fn store_calls(&self) -> Vec<(Vec<Address>, u64, u64)> {
@@ -759,20 +759,20 @@ mod tests {
                 .unwrap_or(Ok(0))
         }
 
-        async fn fetch_orderbook(
+        async fn fetch_raindex(
             &self,
-            orderbook_address: Address,
+            raindex_address: Address,
             from_block: u64,
             to_block: u64,
             _cfg: &FetchConfig,
         ) -> Result<Vec<LogEntryResponse>, LocalDbError> {
-            self.inner.orderbook_calls.lock().unwrap().push((
-                orderbook_address,
-                from_block,
-                to_block,
-            ));
             self.inner
-                .orderbook_results
+                .raindex_calls
+                .lock()
+                .unwrap()
+                .push((raindex_address, from_block, to_block));
+            self.inner
+                .raindex_results
                 .lock()
                 .unwrap()
                 .pop_front()
@@ -880,7 +880,7 @@ mod tests {
         async fn load_existing<DB>(
             &self,
             _db: &DB,
-            _ob_id: &OrderbookIdentifier,
+            _raindex_id: &RaindexIdentifier,
             token_addrs_lower: &[Address],
         ) -> Result<Vec<Erc20TokenRow>, LocalDbError>
         where
@@ -943,7 +943,7 @@ mod tests {
         export_results: Mutex<VecDeque<Result<(), LocalDbError>>>,
         build_calls: Mutex<Vec<BuildCall>>,
         persist_calls: Mutex<Vec<SqlStatementBatch>>,
-        export_calls: Mutex<Vec<(OrderbookIdentifier, u64)>>,
+        export_calls: Mutex<Vec<(RaindexIdentifier, u64)>>,
     }
 
     impl MockApply {
@@ -967,7 +967,7 @@ mod tests {
             self.inner.persist_calls.lock().unwrap().clone()
         }
 
-        fn export_calls(&self) -> Vec<(OrderbookIdentifier, u64)> {
+        fn export_calls(&self) -> Vec<(RaindexIdentifier, u64)> {
             self.inner.export_calls.lock().unwrap().clone()
         }
     }
@@ -1028,7 +1028,7 @@ mod tests {
         async fn export_dump<DB>(
             &self,
             _db: &DB,
-            target: &OrderbookIdentifier,
+            target: &RaindexIdentifier,
             end_block: u64,
         ) -> Result<(), LocalDbError>
         where
@@ -1148,7 +1148,7 @@ mod tests {
     fn token_row(token: Address) -> Erc20TokenRow {
         Erc20TokenRow {
             chain_id: base_target().chain_id,
-            orderbook_address: base_target().orderbook_address,
+            raindex_address: base_target().raindex_address,
             token_address: token,
             name: "Token".into(),
             symbol: "TOK".into(),
@@ -1170,9 +1170,9 @@ mod tests {
         let token_a = addr(0x01);
         let token_b = addr(0x02);
         let store = addr(0x90);
-        let orderbook_logs = vec![
-            log_entry(base_target().orderbook_address, 10, 1, 1),
-            log_entry(base_target().orderbook_address, 11, 0, 2),
+        let raindex_logs = vec![
+            log_entry(base_target().raindex_address, 10, 1, 1),
+            log_entry(base_target().raindex_address, 11, 0, 2),
         ];
         let store_logs = vec![log_entry(store, 12, 0, 3)];
 
@@ -1181,9 +1181,7 @@ mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000001"
         )));
         harness.window.set_results(vec![Ok((10, 12))]);
-        harness
-            .events
-            .push_orderbook_result(Ok(orderbook_logs.clone()));
+        harness.events.push_raindex_result(Ok(raindex_logs.clone()));
         harness.events.push_decode_result(Ok(vec![
             deposit_event(10, 1, token_a, 1),
             add_order_event(11, 0, store, token_a, token_b, 2),
@@ -1203,10 +1201,10 @@ mod tests {
 
         let outcome = harness.run(&inputs).await.expect("run succeeds");
 
-        assert_eq!(outcome.ob_id.chain_id, inputs.ob_id.chain_id);
+        assert_eq!(outcome.raindex_id.chain_id, inputs.raindex_id.chain_id);
         assert_eq!(
-            outcome.ob_id.orderbook_address,
-            inputs.ob_id.orderbook_address
+            outcome.raindex_id.raindex_address,
+            inputs.raindex_id.raindex_address
         );
         assert_eq!(outcome.start_block, 10);
         assert_eq!(outcome.target_block, 12);
@@ -1220,8 +1218,8 @@ mod tests {
                 SyncPhase::FetchingLatestBlock,
                 SyncPhase::RunningBootstrap,
                 SyncPhase::ComputingSyncWindow,
-                SyncPhase::FetchingOrderbookLogs,
-                SyncPhase::DecodingOrderbookLogs,
+                SyncPhase::FetchingRaindexLogs,
+                SyncPhase::DecodingRaindexLogs,
                 SyncPhase::FetchingStoreLogs,
                 SyncPhase::DecodingStoreLogs,
                 SyncPhase::FetchingTokenMetadata,
@@ -1282,7 +1280,7 @@ mod tests {
             ]
         );
 
-        assert!(harness.events.orderbook_calls().is_empty());
+        assert!(harness.events.raindex_calls().is_empty());
         assert!(harness.apply.build_calls().is_empty());
     }
 
@@ -1292,8 +1290,8 @@ mod tests {
         let store = addr(0x50);
         harness.events.set_latest_blocks(vec![Ok(20)]);
         harness.window.set_results(vec![Ok((5, 6))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             5,
             0,
             1,
@@ -1334,8 +1332,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(8)]);
         harness.window.set_results(vec![Ok((2, 4))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             2,
             0,
             1,
@@ -1368,8 +1366,8 @@ mod tests {
         ])]);
         harness.events.set_latest_blocks(vec![Ok(9)]);
         harness.window.set_results(vec![Ok((3, 5))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             3,
             0,
             1,
@@ -1404,8 +1402,8 @@ mod tests {
         let token_b = addr(0x02);
         harness.events.set_latest_blocks(vec![Ok(50)]);
         harness.window.set_results(vec![Ok((10, 12))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             10,
             0,
             1,
@@ -1435,8 +1433,8 @@ mod tests {
         let token_b = addr(0x02);
         harness.events.set_latest_blocks(vec![Ok(22)]);
         harness.window.set_results(vec![Ok((5, 6))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             5,
             0,
             1,
@@ -1455,12 +1453,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_fetches_orderbook_with_window_range() {
+    async fn run_fetches_raindex_with_window_range() {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(200)]);
         harness.window.set_results(vec![Ok((42, 123))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             42,
             0,
             1,
@@ -1475,7 +1473,7 @@ mod tests {
 
         harness.run(&base_inputs()).await.expect("run succeeds");
 
-        let calls = harness.events.orderbook_calls();
+        let calls = harness.events.raindex_calls();
         assert_eq!(calls.len(), 1);
         let (_addr, start, end) = calls[0];
         assert_eq!(start, 42);
@@ -1500,9 +1498,9 @@ mod tests {
         ])]);
         harness.events.set_latest_blocks(vec![Ok(50)]);
         harness.window.set_results(vec![Ok((10, 12))]);
-        harness.events.push_orderbook_result(Ok(vec![
-            log_entry(base_target().orderbook_address, 10, 0, 1),
-            log_entry(base_target().orderbook_address, 11, 0, 2),
+        harness.events.push_raindex_result(Ok(vec![
+            log_entry(base_target().raindex_address, 10, 0, 1),
+            log_entry(base_target().raindex_address, 11, 0, 2),
         ]));
         harness.events.push_decode_result(Ok(vec![
             add_order_event(10, 0, store1, addr(0x10), addr(0x11), 1),
@@ -1538,9 +1536,9 @@ mod tests {
         let token = addr(0x0A);
         harness.events.set_latest_blocks(vec![Ok(60)]);
         harness.window.set_results(vec![Ok((7, 9))]);
-        harness.events.push_orderbook_result(Ok(vec![
-            log_entry(base_target().orderbook_address, 7, 0, 1),
-            log_entry(base_target().orderbook_address, 8, 0, 2),
+        harness.events.push_raindex_result(Ok(vec![
+            log_entry(base_target().raindex_address, 7, 0, 1),
+            log_entry(base_target().raindex_address, 8, 0, 2),
         ]));
         harness.events.push_decode_result(Ok(vec![
             deposit_event(7, 0, token, 1),
@@ -1572,8 +1570,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(1000)]);
         harness.window.set_results(vec![Ok((100, 105))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             100,
             0,
             1,
@@ -1593,9 +1591,9 @@ mod tests {
 
         let calls = harness.apply.export_calls();
         assert_eq!(calls.len(), 1);
-        let (ob_id, end_block) = &calls[0];
-        assert_eq!(ob_id.chain_id, ob_id.chain_id);
-        assert_eq!(ob_id.orderbook_address, ob_id.orderbook_address);
+        let (raindex_id, end_block) = &calls[0];
+        assert_eq!(raindex_id.chain_id, raindex_id.chain_id);
+        assert_eq!(raindex_id.raindex_address, raindex_id.raindex_address);
         assert_eq!(*end_block, 105);
     }
 
@@ -1604,8 +1602,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(30)]);
         harness.window.set_results(vec![Ok((3, 3))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             3,
             0,
             1,
@@ -1642,8 +1640,8 @@ mod tests {
         let store = addr(0xAA);
         harness.events.set_latest_blocks(vec![Ok(40)]);
         harness.window.set_results(vec![Ok((12, 15))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             12,
             0,
             1,
@@ -1719,12 +1717,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_propagates_orderbook_decode_error() {
+    async fn run_propagates_raindex_decode_error() {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(20)]);
         harness.window.set_results(vec![Ok((1, 5))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1748,8 +1746,8 @@ mod tests {
         let store = addr(0x77);
         harness.events.set_latest_blocks(vec![Ok(30)]);
         harness.window.set_results(vec![Ok((1, 3))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1796,17 +1794,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_propagates_fetch_orderbook_error() {
+    async fn run_propagates_fetch_raindex_error() {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(10)]);
         harness.window.set_results(vec![Ok((1, 2))]);
         harness
             .events
-            .push_orderbook_result(Err(LocalDbError::CustomError("orderbook fail".into())));
+            .push_raindex_result(Err(LocalDbError::CustomError("raindex fail".into())));
 
         let err = harness.run(&base_inputs()).await.expect_err("should fail");
         match err {
-            LocalDbError::CustomError(msg) => assert_eq!(msg, "orderbook fail"),
+            LocalDbError::CustomError(msg) => assert_eq!(msg, "raindex fail"),
             other => panic!("unexpected error: {other:?}"),
         }
     }
@@ -1817,8 +1815,8 @@ mod tests {
         let store = addr(0x70);
         harness.events.set_latest_blocks(vec![Ok(20)]);
         harness.window.set_results(vec![Ok((1, 3))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1847,8 +1845,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(10)]);
         harness.window.set_results(vec![Ok((1, 1))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1872,8 +1870,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(10)]);
         harness.window.set_results(vec![Ok((1, 1))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1902,8 +1900,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(15)]);
         harness.window.set_results(vec![Ok((1, 2))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1933,8 +1931,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(15)]);
         harness.window.set_results(vec![Ok((1, 2))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -1964,8 +1962,8 @@ mod tests {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(15)]);
         harness.window.set_results(vec![Ok((1, 2))]);
-        harness.events.push_orderbook_result(Ok(vec![log_entry(
-            base_target().orderbook_address,
+        harness.events.push_raindex_result(Ok(vec![log_entry(
+            base_target().raindex_address,
             1,
             0,
             1,
@@ -2058,12 +2056,12 @@ mod tests {
             },
         ];
         let executor = MockExecutor::success(rows.clone());
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 42161,
-            orderbook_address: Address::repeat_byte(0xAA),
+            raindex_address: Address::repeat_byte(0xAA),
         };
 
-        let actual = load_known_store_addresses(&executor, &ob_id)
+        let actual = load_known_store_addresses(&executor, &raindex_id)
             .await
             .expect("fetch rows");
 
@@ -2072,7 +2070,7 @@ mod tests {
         assert_eq!(calls.len(), 1);
         let stmt = &calls[0];
         assert_eq!(stmt.params().len(), 2);
-        assert_eq!(stmt.params()[0], SqlValue::U64(ob_id.chain_id as u64));
+        assert_eq!(stmt.params()[0], SqlValue::U64(raindex_id.chain_id as u64));
         assert_eq!(
             stmt.params()[1],
             SqlValue::Text("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string())
@@ -2082,12 +2080,12 @@ mod tests {
     #[tokio::test]
     async fn load_known_store_addresses_returns_empty_vec() {
         let executor = MockExecutor::success(Vec::new());
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 10,
-            orderbook_address: Address::repeat_byte(0xBB),
+            raindex_address: Address::repeat_byte(0xBB),
         };
 
-        let actual = load_known_store_addresses(&executor, &ob_id)
+        let actual = load_known_store_addresses(&executor, &raindex_id)
             .await
             .expect("fetch rows");
         assert!(actual.is_empty());
@@ -2096,12 +2094,12 @@ mod tests {
     #[tokio::test]
     async fn load_known_store_addresses_propagates_query_error() {
         let executor = MockExecutor::failure(LocalDbQueryError::database("boom"));
-        let ob_id = OrderbookIdentifier {
+        let raindex_id = RaindexIdentifier {
             chain_id: 1,
-            orderbook_address: Address::repeat_byte(0xCC),
+            raindex_address: Address::repeat_byte(0xCC),
         };
 
-        let err = load_known_store_addresses(&executor, &ob_id)
+        let err = load_known_store_addresses(&executor, &raindex_id)
             .await
             .expect_err("should propagate error");
         match err {

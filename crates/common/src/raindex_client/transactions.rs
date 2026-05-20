@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
 use super::*;
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use crate::raindex_client::local_db::transactions::LocalDbTransactions;
 use crate::raindex_client::QuerySource;
 use alloy::primitives::{Address, B256, U256};
 #[cfg(target_family = "wasm")]
 use gloo_timers::future::TimeoutFuture;
-use rain_orderbook_subgraph_client::types::{common::SgTransaction, Id};
-use rain_orderbook_subgraph_client::OrderbookSubgraphClientError;
+use raindex_subgraph_client::types::{common::SgTransaction, Id};
+use raindex_subgraph_client::RaindexSubgraphClientError;
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_family = "wasm"))]
 use std::time::Duration;
@@ -126,11 +126,11 @@ impl RaindexClient {
         #[wasm_export(js_name = "chainId", param_description = "Chain ID for the network")]
         chain_id: u32,
         #[wasm_export(
-            js_name = "orderbookAddress",
-            param_description = "Orderbook contract address",
+            js_name = "raindexAddress",
+            param_description = "Raindex contract address",
             unchecked_param_type = "Address"
         )]
-        orderbook_address: String,
+        raindex_address: String,
         #[wasm_export(
             js_name = "txHash",
             param_description = "Transaction hash",
@@ -148,11 +148,11 @@ impl RaindexClient {
         )]
         interval_ms: Option<u32>,
     ) -> Result<RaindexTransaction, RaindexError> {
-        let orderbook_address = Address::from_str(&orderbook_address)?;
+        let raindex_address = Address::from_str(&raindex_address)?;
         let tx_hash = B256::from_str(&tx_hash)?;
         self.get_transaction(
             chain_id,
-            orderbook_address,
+            raindex_address,
             tx_hash,
             max_attempts.map(|v| v as usize),
             interval_ms.map(|v| v as u64),
@@ -164,7 +164,7 @@ impl RaindexClient {
     pub async fn get_transaction(
         &self,
         chain_id: u32,
-        orderbook_address: Address,
+        raindex_address: Address,
         tx_hash: B256,
         max_attempts: Option<usize>,
         interval_ms: Option<u64>,
@@ -177,10 +177,10 @@ impl RaindexClient {
         match self.query_source(chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbTransactions::new(&local_db);
-                let ob_id = OrderbookIdentifier::new(chain_id, orderbook_address);
+                let raindex_id = RaindexIdentifier::new(chain_id, raindex_address);
 
                 for attempt in 1..=attempts {
-                    if let Some(tx) = local_source.get_by_tx_hash(&ob_id, tx_hash).await? {
+                    if let Some(tx) = local_source.get_by_tx_hash(&raindex_id, tx_hash).await? {
                         return Ok(tx);
                     }
                     if attempt < attempts {
@@ -191,7 +191,7 @@ impl RaindexClient {
                 Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
             }
             QuerySource::Subgraph => {
-                let client = self.get_orderbook_client(orderbook_address)?;
+                let client = self.get_raindex_subgraph_client(raindex_address)?;
                 for attempt in 1..=attempts {
                     match client
                         .transaction_detail(Id::new(tx_hash.to_string()))
@@ -200,7 +200,7 @@ impl RaindexClient {
                         Ok(transaction) => {
                             return transaction.try_into();
                         }
-                        Err(OrderbookSubgraphClientError::Empty) => {
+                        Err(RaindexSubgraphClientError::Empty) => {
                             if attempt < attempts {
                                 sleep_ms(interval_ms).await;
                                 continue;
@@ -236,7 +236,7 @@ mod test_helpers {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
         use super::*;
-        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS};
         use alloy::primitives::b256;
         use httpmock::MockServer;
         use serde_json::{json, Value};
@@ -286,7 +286,7 @@ mod test_helpers {
             let tx = raindex_client
                 .get_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     None,
                     None,
@@ -330,7 +330,7 @@ mod test_helpers {
             let tx = raindex_client
                 .get_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(DEFAULT_TRANSACTION_POLL_ATTEMPTS),
                     Some(10),
@@ -369,7 +369,7 @@ mod test_helpers {
             let err = raindex_client
                 .get_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(3),
                     Some(10),

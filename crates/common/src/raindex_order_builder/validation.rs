@@ -1,5 +1,5 @@
 use rain_math_float::{Float, FloatError};
-use rain_orderbook_app_settings::order_builder::{DepositValidationCfg, FieldValueValidationCfg};
+use raindex_app_settings::order_builder::{DepositValidationCfg, FieldValueValidationCfg};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -219,7 +219,7 @@ fn validate_boolean(name: &str, value: &str) -> Result<(), BuilderValidationErro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rain_orderbook_app_settings::order_builder::FieldValueValidationCfg;
+    use raindex_app_settings::order_builder::FieldValueValidationCfg;
 
     #[test]
     fn test_validate_number_minimum() {

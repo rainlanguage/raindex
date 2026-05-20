@@ -23,12 +23,12 @@ use rain_math_float::Float;
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    Orderbook, "../../out/OrderBookV6.sol/OrderBookV6.json"
+    Raindex, "../../out/RaindexV6.sol/RaindexV6.json"
 );
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    OrderbookSubParser, "../../out/OrderBookV6SubParser.sol/OrderBookV6SubParser.json"
+    RaindexSubParser, "../../out/RaindexV6SubParser.sol/RaindexV6SubParser.json"
 );
 
 sol!(
@@ -52,12 +52,11 @@ pub struct LocalEvm {
     /// The alloy provider instance of this local blockchain
     pub provider: LocalEvmProvider,
 
-    /// Alloy orderbook contract instance deployed on this blockchain
-    pub orderbook: Orderbook::OrderbookInstance<LocalEvmProvider, AnyNetwork>,
+    /// Alloy raindex contract instance deployed on this blockchain
+    pub raindex: Raindex::RaindexInstance<LocalEvmProvider, AnyNetwork>,
 
-    /// Alloy orderbook subparser contract instance deployed on this blockchain
-    pub orderbook_subparser:
-        OrderbookSubParser::OrderbookSubParserInstance<LocalEvmProvider, AnyNetwork>,
+    /// Alloy raindex subparser contract instance deployed on this blockchain
+    pub raindex_subparser: RaindexSubParser::RaindexSubParserInstance<LocalEvmProvider, AnyNetwork>,
 
     /// Alloy interpreter contract instance deployed on this blockchain
     pub interpreter: Interpreter::InterpreterInstance<LocalEvmProvider, AnyNetwork>,
@@ -152,9 +151,9 @@ impl LocalEvm {
             .await
             .unwrap();
 
-        // deploy orderbook contracts
-        let orderbook = Orderbook::deploy(provider.clone()).await.unwrap();
-        let orderbook_subparser = OrderbookSubParser::deploy(provider.clone()).await.unwrap();
+        // deploy raindex contracts
+        let raindex = Raindex::deploy(provider.clone()).await.unwrap();
+        let raindex_subparser = RaindexSubParser::deploy(provider.clone()).await.unwrap();
 
         // set the multicall 3 contract at its official address
         provider
@@ -174,8 +173,8 @@ impl LocalEvm {
         Self {
             anvil,
             provider,
-            orderbook,
-            orderbook_subparser,
+            raindex,
+            raindex_subparser,
             interpreter,
             store,
             parser,
@@ -292,7 +291,7 @@ impl LocalEvm {
         decimals: u8,
         vault_id: B256,
     ) -> (
-        Orderbook::AddOrderV3,
+        Raindex::AddOrderV3,
         AnyTransactionReceipt,
         AnyTransactionReceipt,
     ) {
@@ -310,11 +309,11 @@ impl LocalEvm {
         &self,
         add_order_calldata: &[u8],
         from: Address,
-    ) -> (Orderbook::AddOrderV3, AnyTransactionReceipt) {
+    ) -> (Raindex::AddOrderV3, AnyTransactionReceipt) {
         let tx_req = WithOtherFields::new(
             TransactionRequest::default()
                 .with_input(add_order_calldata.to_vec())
-                .with_to(*self.orderbook.address())
+                .with_to(*self.raindex.address())
                 .with_from(from),
         );
 
@@ -326,7 +325,7 @@ impl LocalEvm {
             .inner
             .logs()
             .iter()
-            .find_map(|v| v.log_decode::<Orderbook::AddOrderV3>().ok())
+            .find_map(|v| v.log_decode::<Raindex::AddOrderV3>().ok())
             .unwrap()
             .inner
             .data;
@@ -351,7 +350,7 @@ impl LocalEvm {
             .expect("Token with given address is not deployed");
 
         let tx = token_contract
-            .approve(*self.orderbook.address(), deposit_amount)
+            .approve(*self.raindex.address(), deposit_amount)
             .from(from)
             .into_transaction_request();
 
@@ -362,7 +361,7 @@ impl LocalEvm {
             .get_inner();
 
         let tx = self
-            .orderbook
+            .raindex
             .deposit4(token, vault_id, raw_deposit_amount, vec![])
             .from(from)
             .into_transaction_request();

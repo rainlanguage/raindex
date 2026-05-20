@@ -2,7 +2,7 @@
 	import { Button, Dropdown, Label, Checkbox, Input } from 'flowbite-svelte';
 	import { ChevronDownSolid, SearchSolid } from 'flowbite-svelte-icons';
 	import { isEmpty } from 'lodash';
-	import type { Address, RaindexVaultToken } from '@rainlanguage/orderbook';
+	import type { Address, RaindexVaultToken } from '@rainlanguage/raindex';
 	import type { AppStoresInterface } from '../../types/appStores';
 	import type { Readable } from 'svelte/store';
 	import type { QueryObserverResult } from '@tanstack/svelte-query';

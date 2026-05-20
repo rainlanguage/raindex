@@ -1,14 +1,14 @@
 use crate::local_db::query::fetch_erc20_tokens_by_addresses::{build_fetch_stmt, Erc20TokenRow};
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use alloy::primitives::Address;
 
 pub async fn fetch_erc20_tokens_by_addresses<E: LocalDbQueryExecutor + ?Sized>(
     exec: &E,
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     addresses: &[Address],
 ) -> Result<Vec<Erc20TokenRow>, LocalDbQueryError> {
-    if let Some(stmt) = build_fetch_stmt(ob_id, addresses)? {
+    if let Some(stmt) = build_fetch_stmt(raindex_id, addresses)? {
         exec.query_json(&stmt).await
     } else {
         Ok(vec![])
@@ -36,7 +36,7 @@ mod wasm_tests {
         let exec = JsCallbackExecutor::from_ref(&callback);
         let res = super::fetch_erc20_tokens_by_addresses(
             &exec,
-            &OrderbookIdentifier::new(1, Address::ZERO),
+            &RaindexIdentifier::new(1, Address::ZERO),
             &[],
         )
         .await;
@@ -51,7 +51,7 @@ mod wasm_tests {
             Address::from_str("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
             Address::from_str("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
         ];
-        let expected_stmt = build_fetch_stmt(&OrderbookIdentifier::new(10, Address::ZERO), &addrs)
+        let expected_stmt = build_fetch_stmt(&RaindexIdentifier::new(10, Address::ZERO), &addrs)
             .unwrap()
             .unwrap();
 
@@ -64,7 +64,7 @@ mod wasm_tests {
 
         let res = super::fetch_erc20_tokens_by_addresses(
             &exec,
-            &OrderbookIdentifier::new(10, Address::ZERO),
+            &RaindexIdentifier::new(10, Address::ZERO),
             &addrs,
         )
         .await;

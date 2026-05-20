@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { RaindexVault } from '@rainlanguage/orderbook';
+	import type { RaindexVault } from '@rainlanguage/raindex';
 
 	export let vault: RaindexVault;
 
@@ -9,7 +9,7 @@
 		event.stopPropagation();
 		event.preventDefault();
 		// Navigate to vault details page
-		goto(`/vaults/${vault.chainId}-${vault.orderbook}-${vault.id}`);
+		goto(`/vaults/${vault.chainId}-${vault.raindex}-${vault.id}`);
 	};
 </script>
 

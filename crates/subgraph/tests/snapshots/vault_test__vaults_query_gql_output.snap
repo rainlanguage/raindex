@@ -16,7 +16,7 @@ query SgVaultDetailQuery($id: ID!) {
       symbol
       decimals
     }
-    orderbook {
+    raindex {
       id
     }
     ordersAsOutput(orderBy: timestampAdded, orderDirection: desc) {
@@ -55,7 +55,7 @@ query SgVaultDetailQuery($id: ID!) {
           blockNumber
           timestamp
         }
-        orderbook {
+        raindex {
           id
         }
       }
@@ -83,7 +83,7 @@ query SgVaultDetailQuery($id: ID!) {
           blockNumber
           timestamp
         }
-        orderbook {
+        raindex {
           id
         }
         trade {
@@ -116,7 +116,7 @@ query SgVaultDetailQuery($id: ID!) {
           blockNumber
           timestamp
         }
-        orderbook {
+        raindex {
           id
         }
       }
@@ -144,7 +144,7 @@ query SgVaultDetailQuery($id: ID!) {
           blockNumber
           timestamp
         }
-        orderbook {
+        raindex {
           id
         }
         sender

@@ -3,7 +3,7 @@ import {
 	handleRemoveOrder,
 	type HandleRemoveOrderDependencies
 } from '../lib/services/handleRemoveOrder'; // Assuming path is correct
-import type { RaindexClient, RaindexOrder } from '@rainlanguage/orderbook';
+import type { RaindexClient, RaindexOrder } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 
@@ -74,7 +74,7 @@ describe('handleRemoveOrder', () => {
 			modalTitle: 'Removing order',
 			args: {
 				entity: mockOrder,
-				toAddress: mockOrder.orderbook,
+				toAddress: mockOrder.raindex,
 				chainId: mockOrder.chainId,
 				onConfirm: expect.any(Function),
 				calldata: mockCalldata

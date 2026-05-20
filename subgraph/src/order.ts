@@ -1,5 +1,5 @@
 import { Bytes, ethereum, crypto } from "@graphprotocol/graph-ts";
-import { AddOrderV3, RemoveOrderV3 } from "../generated/OrderBook/OrderBook";
+import { AddOrderV3, RemoveOrderV3 } from "../generated/Raindex/Raindex";
 import { AddOrder, Order, RemoveOrder } from "../generated/schema";
 import { getVault } from "./vault";
 import { eventId } from "./interfaces/event";
@@ -18,14 +18,14 @@ export function handleRemoveOrder(event: RemoveOrderV3): void {
   createRemoveOrderEntity(event);
 }
 
-export function makeOrderId(orderbook: Bytes, orderHash: Bytes): Bytes {
-  let bytes = orderbook.concat(orderHash);
+export function makeOrderId(raindex: Bytes, orderHash: Bytes): Bytes {
+  let bytes = raindex.concat(orderHash);
   return Bytes.fromByteArray(crypto.keccak256(bytes));
 }
 
 export function createOrderEntity(event: AddOrderV3): void {
   let order = new Order(makeOrderId(event.address, event.params.orderHash));
-  order.orderbook = event.address;
+  order.raindex = event.address;
   order.active = true;
   order.orderHash = event.params.orderHash;
   order.owner = event.params.sender;
@@ -62,7 +62,7 @@ export function createOrderEntity(event: AddOrderV3): void {
 
 export function createAddOrderEntity(event: AddOrderV3): void {
   let addOrder = new AddOrder(eventId(event));
-  addOrder.orderbook = event.address;
+  addOrder.raindex = event.address;
   addOrder.order = makeOrderId(event.address, event.params.orderHash);
   addOrder.sender = event.params.sender;
   addOrder.transaction = event.transaction.hash;
@@ -71,7 +71,7 @@ export function createAddOrderEntity(event: AddOrderV3): void {
 
 export function createRemoveOrderEntity(event: RemoveOrderV3): void {
   let removeOrder = new RemoveOrder(eventId(event));
-  removeOrder.orderbook = event.address;
+  removeOrder.raindex = event.address;
   removeOrder.order = makeOrderId(event.address, event.params.orderHash);
   removeOrder.sender = event.params.sender;
   removeOrder.transaction = event.transaction.hash;

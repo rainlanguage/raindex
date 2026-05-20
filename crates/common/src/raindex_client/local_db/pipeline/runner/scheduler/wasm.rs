@@ -15,13 +15,13 @@ use crate::raindex_client::local_db::pipeline::status::{
     set_scheduler_state, set_status_callback, ClientStatusBus,
 };
 use crate::raindex_client::local_db::{
-    LocalDb, LocalDbSyncStatusStore, NetworkSyncStatus, OrderbookSyncStatus, SchedulerState,
+    LocalDb, LocalDbSyncStatusStore, NetworkSyncStatus, RaindexSyncStatus, SchedulerState,
     SyncReadiness,
 };
 use gloo_timers::future::TimeoutFuture;
 use js_sys::Function;
-use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
-use rain_orderbook_app_settings::network::NetworkCfg;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+use raindex_app_settings::network::NetworkCfg;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::future::Future;
@@ -90,10 +90,10 @@ pub(crate) fn start(
     status_store: LocalDbSyncStatusStore,
 ) -> Result<SchedulerHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
-    for ob in settings.orderbooks.values() {
+    for raindex_cfg in settings.raindexes.values() {
         networks_map
-            .entry(ob.network.key.clone())
-            .or_insert_with(|| (*ob.network).clone());
+            .entry(raindex_cfg.network.key.clone())
+            .or_insert_with(|| (*raindex_cfg.network).clone());
     }
     let mut networks: Vec<NetworkCfg> = networks_map.into_values().collect();
     networks.sort_by(|a, b| a.key.cmp(&b.key));
@@ -275,13 +275,13 @@ async fn run_network_loop<R>(
                     } else {
                         let first = &report.failures[0];
                         let msg = format!(
-                            "ob {:#x} failed at {:?}: {}",
-                            first.ob_id.orderbook_address,
+                            "raindex {:#x} failed at {:?}: {}",
+                            first.raindex_id.raindex_address,
                             first.stage,
                             first.error.to_readable_msg()
                         );
-                        status_store.record_orderbook_status(OrderbookSyncStatus::failure(
-                            first.ob_id.clone(),
+                        status_store.record_raindex_status(RaindexSyncStatus::failure(
+                            first.raindex_id.clone(),
                             msg.clone(),
                         ));
                         emit_network_status(
@@ -337,7 +337,7 @@ mod wasm_tests {
     use super::*;
     use crate::local_db::pipeline::runner::utils::parse_runner_settings;
     use crate::local_db::pipeline::runner::{RunReport, TargetFailure, TargetStage};
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use crate::raindex_client::local_db::pipeline::status::get_scheduler_state;
     use crate::raindex_client::local_db::LocalDbStatus;
     use alloy::primitives::Address;
@@ -403,8 +403,8 @@ mod wasm_tests {
                         if should_fail {
                             failures.set(failures.get() + 1);
                             let failure = TargetFailure {
-                                ob_id: OrderbookIdentifier::new(1, Address::ZERO),
-                                orderbook_key: None,
+                                raindex_id: RaindexIdentifier::new(1, Address::ZERO),
+                                raindex_key: None,
                                 stage: TargetStage::EngineRun,
                                 error: LocalDbError::CustomError("runner failure".to_string()),
                             };
