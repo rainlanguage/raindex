@@ -1,4 +1,4 @@
-use crate::commands::{Chart, Order, Subgraph, Trade, Vault, Words};
+use crate::commands::{Chart, Order, StrategyBuilder, Subgraph, Trade, Vault, Words};
 use crate::execute::Execute;
 use anyhow::Result;
 use clap::Subcommand;
@@ -34,6 +34,12 @@ pub enum Orderbook {
 
     #[command(name = "local-db", subcommand)]
     LocalDb(LocalDbCommands),
+
+    #[command(
+        name = "strategy-builder",
+        about = "Generate deployment calldata from a registry strategy"
+    )]
+    StrategyBuilder(StrategyBuilder),
 }
 
 impl Orderbook {
@@ -47,6 +53,7 @@ impl Orderbook {
             Orderbook::Subgraph(subgraph) => subgraph.execute().await,
             Orderbook::Words(words) => words.execute().await,
             Orderbook::LocalDb(local_db) => local_db.execute().await,
+            Orderbook::StrategyBuilder(strategy_builder) => strategy_builder.execute().await,
         }
     }
 }
