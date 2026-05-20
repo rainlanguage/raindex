@@ -95,6 +95,16 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
             return Ok(());
         }
 
+        match self.ensure_schema(db, db_schema_version).await {
+            Ok(_) => {}
+            Err(LocalDbError::MissingDbMetadataRow)
+            | Err(LocalDbError::SchemaVersionMismatch { .. }) => {
+                self.reset_db(db, db_schema_version).await?;
+                return Ok(());
+            }
+            Err(err) => return Err(err),
+        }
+
         let BootstrapState {
             has_required_tables,
             ..
@@ -104,15 +114,6 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
 
         if !has_required_tables {
             self.reset_db(db, db_schema_version).await?;
-        }
-
-        match self.ensure_schema(db, db_schema_version).await {
-            Ok(_) => {}
-            Err(LocalDbError::MissingDbMetadataRow)
-            | Err(LocalDbError::SchemaVersionMismatch { .. }) => {
-                self.reset_db(db, db_schema_version).await?;
-            }
-            Err(err) => return Err(err),
         }
 
         Ok(())
@@ -152,6 +153,7 @@ mod tests {
     struct MockDb {
         json_map: HashMap<String, String>,
         text_map: HashMap<String, String>,
+        calls_json: Mutex<Vec<String>>,
         calls_text: Mutex<Vec<String>>,
     }
 
@@ -168,6 +170,9 @@ mod tests {
         }
         fn calls(&self) -> Vec<String> {
             self.calls_text.lock().unwrap().clone()
+        }
+        fn json_calls(&self) -> Vec<String> {
+            self.calls_json.lock().unwrap().clone()
         }
 
         fn with_views(self) -> Self {
@@ -203,6 +208,7 @@ mod tests {
             T: FromDbJson,
         {
             let sql = stmt.sql();
+            self.calls_json.lock().unwrap().push(sql.to_string());
             let Some(body) = self.json_map.get(sql) else {
                 return Err(LocalDbQueryError::database("no json for sql"));
             };
@@ -311,22 +317,10 @@ mod tests {
     #[tokio::test]
     async fn runner_run_resets_on_missing_db_metadata() {
         let adapter = ClientBootstrapAdapter::new();
-        let tables_json = serde_json::to_value(
-            REQUIRED_TABLES
-                .iter()
-                .map(|&t| TableResponse {
-                    name: t.to_string(),
-                })
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
 
         let db = MockDb::default()
             .with_healthy_integrity()
-            .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&fetch_db_metadata_stmt(), json!([])) // triggers reset
-            // inspect_state will look for watermark since table exists
-            .with_json(&fetch_target_watermark_stmt(&runner_ob_id()), json!([]))
             .with_text(&clear_tables_stmt(), "ok")
             .with_text(&create_tables_stmt(), "ok")
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
@@ -349,20 +343,19 @@ mod tests {
             expected_views.iter().all(|stmt| calls.contains(stmt)),
             "missing view creation statements"
         );
+        assert!(
+            !db.json_calls().contains(
+                &fetch_target_watermark_stmt(&runner_ob_id())
+                    .sql()
+                    .to_string()
+            ),
+            "schema recovery should not inspect target watermarks before reset"
+        );
     }
 
     #[tokio::test]
     async fn runner_run_resets_on_schema_mismatch() {
         let adapter = ClientBootstrapAdapter::new();
-        let tables_json = serde_json::to_value(
-            REQUIRED_TABLES
-                .iter()
-                .map(|&t| TableResponse {
-                    name: t.to_string(),
-                })
-                .collect::<Vec<_>>(),
-        )
-        .unwrap();
 
         let mismatched_row = DbMetadataRow {
             id: 1,
@@ -373,8 +366,6 @@ mod tests {
 
         let db = MockDb::default()
             .with_healthy_integrity()
-            .with_json(&fetch_tables_stmt(), tables_json)
-            .with_json(&fetch_target_watermark_stmt(&runner_ob_id()), json!([]))
             .with_json(&fetch_db_metadata_stmt(), json!([mismatched_row]))
             .with_text(&clear_tables_stmt(), "ok")
             .with_text(&create_tables_stmt(), "ok")
@@ -397,6 +388,47 @@ mod tests {
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
             "missing view creation statements"
+        );
+        assert!(
+            !db.json_calls().contains(
+                &fetch_target_watermark_stmt(&runner_ob_id())
+                    .sql()
+                    .to_string()
+            ),
+            "schema recovery should not inspect target watermarks before reset"
+        );
+    }
+
+    #[tokio::test]
+    async fn runner_run_resets_old_schema_before_watermark_query() {
+        let adapter = ClientBootstrapAdapter::new();
+        let old_schema_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION - 1,
+            created_at: None,
+            updated_at: None,
+        };
+
+        let db = MockDb::default()
+            .with_healthy_integrity()
+            .with_json(&fetch_db_metadata_stmt(), json!([old_schema_row]))
+            .with_text(&clear_tables_stmt(), "ok")
+            .with_text(&create_tables_stmt(), "ok")
+            .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
+            .with_views();
+
+        adapter
+            .runner_run(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap();
+
+        assert!(
+            !db.json_calls().contains(
+                &fetch_target_watermark_stmt(&runner_ob_id())
+                    .sql()
+                    .to_string()
+            ),
+            "old schema should reset before preparing current-schema watermark SQL"
         );
     }
 
@@ -440,12 +472,8 @@ mod tests {
     #[tokio::test]
     async fn runner_run_propagates_unexpected_ensure_schema_error() {
         let adapter = ClientBootstrapAdapter::new();
-        let tables_json = required_tables_json();
 
-        let db = MockDb::default()
-            .with_healthy_integrity()
-            .with_json(&fetch_tables_stmt(), tables_json)
-            .with_json(&fetch_target_watermark_stmt(&runner_ob_id()), json!([]));
+        let db = MockDb::default().with_healthy_integrity();
 
         let err = adapter
             .runner_run(&db, Some(DB_SCHEMA_VERSION))
