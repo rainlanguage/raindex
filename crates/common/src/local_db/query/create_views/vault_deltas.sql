@@ -1,4 +1,6 @@
-CREATE VIEW IF NOT EXISTS vault_deltas AS
+DROP VIEW IF EXISTS vault_deltas;
+
+CREATE VIEW vault_deltas AS
 WITH add_order_events AS (
   SELECT *
   FROM order_events
