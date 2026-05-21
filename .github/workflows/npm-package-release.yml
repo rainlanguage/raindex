@@ -3,10 +3,13 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
 jobs:
   release:
     # skip this job if the commit was created by this workflow (prevents infinite loop)
-    if: ${{ github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release')) }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -31,6 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.PUBLISH_PRIVATE_KEY }}
+          ref: ${{ github.head_ref || github.ref_name }}
       # WASM builds require significant disk space; free up space to prevent build failures
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
@@ -154,12 +158,12 @@ jobs:
       - name: Set Version
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/raindex
+          npm version prerelease --preid alpha --no-git-tag-version --no-workspaces-update -w @rainlanguage/raindex
           RAINDEX_NEW_VERSION=$(jq -r '.version' ./packages/raindex/package.json)
           echo "RAINDEX_NEW_VERSION=$RAINDEX_NEW_VERSION" >> $GITHUB_ENV
           jq --arg v "$RAINDEX_NEW_VERSION" '.dependencies."@rainlanguage/raindex" = $v' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json
           npx prettier --write ./packages/ui-components/package.json
-          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/ui-components
+          npm version prerelease --preid alpha --no-git-tag-version --no-workspaces-update -w @rainlanguage/ui-components
           UC_NEW_VERSION=$(jq -r '.version' ./packages/ui-components/package.json)
           echo "UC_NEW_VERSION=$UC_NEW_VERSION" >> $GITHUB_ENV
           jq --indent 4 --arg rd "$RAINDEX_NEW_VERSION" --arg uc "$UC_NEW_VERSION" '
@@ -210,7 +214,7 @@ jobs:
       - name: Push Changes To Remote
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          git push origin
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
           git push -u origin "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
