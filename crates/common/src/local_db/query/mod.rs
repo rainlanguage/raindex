@@ -17,6 +17,7 @@ pub mod fetch_owner_trades;
 pub(crate) mod fetch_owner_trades_common;
 pub mod fetch_owner_trades_count;
 pub mod fetch_store_addresses;
+pub mod fetch_table_columns;
 pub mod fetch_tables;
 pub mod fetch_target_watermark;
 pub mod fetch_trades;
