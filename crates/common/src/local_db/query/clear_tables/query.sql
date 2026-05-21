@@ -1,5 +1,7 @@
 BEGIN TRANSACTION;
 
+DROP VIEW IF EXISTS vault_deltas;
+
 DROP TABLE IF EXISTS target_watermarks;
 DROP TABLE IF EXISTS db_metadata;
 DROP TABLE IF EXISTS context_values;
