@@ -1,10 +1,14 @@
 name: Bootstrap raindex NPM Publish
 
 on:
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   publish:
+    if: ${{ github.head_ref == 'fix-raindex-npm-release-pr-trigger' || github.ref_name == 'fix-raindex-npm-release-pr-trigger' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
