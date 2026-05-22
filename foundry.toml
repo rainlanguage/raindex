@@ -31,11 +31,6 @@ cbor_metadata = false
 # than expose ffi to forge.
 fs_permissions = [
   { access = "read", path = "./meta" },
-  { access = "read", path = "./lib/rain.interpreter/meta/RainterpreterExpressionDeployerNPE2.rain.meta" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterParserNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterStoreNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterExpressionDeployerNPE2" },
   { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta" },
   { access = "read-write", path = "src/generated" },
   { access = "read", path = "./subgraph" },
