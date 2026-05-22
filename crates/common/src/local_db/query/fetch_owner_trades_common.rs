@@ -4,17 +4,12 @@ use alloy::primitives::Address;
 use std::convert::TryFrom;
 
 pub(crate) const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
-pub(crate) const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
+pub(crate) const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND tws.chain_id IN ({list})";
 pub(crate) const TAKE_ORDERS_RAINDEXS_CLAUSE: &str = "/*TAKE_ORDERS_RAINDEXS_CLAUSE*/";
-pub(crate) const TAKE_ORDERS_RAINDEXS_CLAUSE_BODY: &str = "AND t.raindex_address IN ({list})";
+pub(crate) const TAKE_ORDERS_RAINDEXS_CLAUSE_BODY: &str = "AND tws.raindex_address IN ({list})";
 
 pub(crate) const START_TS_CLAUSE: &str = "/*START_TS_CLAUSE*/";
 pub(crate) const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
-
-pub(crate) struct PreparedOwnerTradeFilters {
-    pub chain_ids: Vec<u32>,
-    pub raindexs: Vec<Address>,
-}
 
 pub(crate) fn bind_common_owner_trade_filters(
     stmt: &mut SqlStatement,
@@ -24,7 +19,7 @@ pub(crate) fn bind_common_owner_trade_filters(
     time_filter: &TimeFilter,
     start_ts_body: &str,
     end_ts_body: &str,
-) -> Result<PreparedOwnerTradeFilters, SqlBuildError> {
+) -> Result<(), SqlBuildError> {
     stmt.push(SqlValue::from(owner));
 
     let mut chain_ids = chain_ids.to_vec();
@@ -78,8 +73,5 @@ pub(crate) fn bind_common_owner_trade_filters(
     };
     stmt.bind_param_clause(END_TS_CLAUSE, end_ts_body, end_param)?;
 
-    Ok(PreparedOwnerTradeFilters {
-        chain_ids,
-        raindexs,
-    })
+    Ok(())
 }
