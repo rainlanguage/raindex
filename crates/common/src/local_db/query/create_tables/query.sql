@@ -349,4 +349,49 @@ CREATE TABLE IF NOT EXISTS running_vault_balances (
 CREATE INDEX idx_rvb_owner ON running_vault_balances(chain_id, raindex_address, owner);
 CREATE INDEX idx_rvb_token ON running_vault_balances(chain_id, raindex_address, token, vault_id);
 
+-- Pipeline-maintained read models use the `derived_` prefix. These tables are
+-- not DB-native materialized views; they are rebuilt by local DB sync writes.
+CREATE TABLE IF NOT EXISTS derived_trades (
+    chain_id INTEGER NOT NULL,
+    raindex_address TEXT NOT NULL,
+    trade_id TEXT NOT NULL,
+
+    trade_kind TEXT NOT NULL,
+    trade_side TEXT NOT NULL,
+
+    order_hash TEXT NOT NULL,
+    order_owner TEXT NOT NULL,
+    order_nonce TEXT NOT NULL,
+
+    transaction_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    block_number INTEGER NOT NULL,
+    block_timestamp INTEGER NOT NULL,
+    transaction_sender TEXT NOT NULL,
+
+    input_vault_id TEXT NOT NULL,
+    input_token TEXT NOT NULL,
+    input_delta TEXT NOT NULL,
+    input_running_balance TEXT,
+
+    output_vault_id TEXT NOT NULL,
+    output_token TEXT NOT NULL,
+    output_delta TEXT NOT NULL,
+    output_running_balance TEXT,
+
+    PRIMARY KEY (chain_id, raindex_address, trade_id)
+);
+CREATE INDEX idx_derived_trades_input_token_time
+    ON derived_trades(chain_id, raindex_address, input_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_output_token_time
+    ON derived_trades(chain_id, raindex_address, output_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_owner_time
+    ON derived_trades(chain_id, raindex_address, order_owner, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_taker_time
+    ON derived_trades(chain_id, raindex_address, transaction_sender, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_order_hash_time
+    ON derived_trades(chain_id, raindex_address, order_hash, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_tx
+    ON derived_trades(chain_id, raindex_address, transaction_hash);
+
 COMMIT;
