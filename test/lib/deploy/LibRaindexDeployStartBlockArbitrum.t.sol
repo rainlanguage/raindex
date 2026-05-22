@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
+import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
 
 /// @title LibRaindexDeployStartBlockArbitrumTest

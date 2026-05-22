@@ -11,13 +11,13 @@ import {
     TakeOrdersConfigV5,
     ClearConfigV2,
     TaskV2
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {EvaluableV4, SignedContextV1} from "rain.interpreter.interface/interface/IInterpreterCallerV4.sol";
-import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {EvaluableV4, SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6FlashLenderReentrant
 /// Test that flash borrowers can reenter the raindex, which is necessary for

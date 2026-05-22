@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {Script, console2} from "forge-std-1.16.1/src/Script.sol";
 import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
-import {IMetaBoardV1_2} from "rain.metadata/interface/unstable/IMetaBoardV1_2.sol";
-import {LibDescribedByMeta} from "rain.metadata/lib/LibDescribedByMeta.sol";
-import {LibMetaBoardDeploy} from "rain.metadata/lib/deploy/LibMetaBoardDeploy.sol";
-import {LibDecimalFloatDeploy} from "rain.math.float/lib/deploy/LibDecimalFloatDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
-import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
+import {IMetaBoardV1_2} from "rain-metadata-0.1.0/src/interface/unstable/IMetaBoardV1_2.sol";
+import {LibDescribedByMeta} from "rain-metadata-0.1.0/src/lib/LibDescribedByMeta.sol";
+import {LibMetaBoardDeploy} from "rain-metadata-0.1.0/src/lib/deploy/LibMetaBoardDeploy.sol";
+import {LibDecimalFloatDeploy} from "rain-math-float-0.1.1/src/lib/deploy/LibDecimalFloatDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../src/lib/deploy/LibRaindexDeploy.sol";
 import {CREATION_CODE as RAINDEX_CREATION_CODE} from "../src/generated/RaindexV6.pointers.sol";
 import {CREATION_CODE as SUB_PARSER_CREATION_CODE} from "../src/generated/RaindexV6SubParser.pointers.sol";

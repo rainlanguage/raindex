@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {META_MAGIC_NUMBER_V1} from "rain.metadata/lib/LibMeta.sol";
+import {META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, IOV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IInterpreterV4, SourceIndexV2} from "rain.interpreter.interface/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/IInterpreterStoreV3.sol";
-import {EvaluableV4} from "rain.interpreter.interface/interface/IInterpreterCallerV4.sol";
+import {OrderConfigV4, OrderV4, IOV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IInterpreterV4, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {EvaluableV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
 import {HANDLE_IO_ENTRYPOINT} from "../../../src/concrete/raindex/RaindexV6.sol";
-import {LibBytecode} from "rain.interpreter.interface/lib/bytecode/LibBytecode.sol";
+import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
 
 library LibTestAddOrder {
     /// A little boilerplate to make it easier to build the order that we expect

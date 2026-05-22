@@ -1,7 +1,9 @@
 [profile.default]
 src = 'src'
 out = 'out'
-libs = ['lib']
+# 'dependencies' for soldeer-managed packages, 'lib' kept for the
+# remaining git submodule (sushixswap-v2, which isn't on soldeer).
+libs = ['dependencies', 'lib']
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
@@ -28,31 +30,50 @@ cbor_metadata = false
 # Build metadata used for testing rain meta aware contracts in this folder rather
 # than expose ffi to forge.
 fs_permissions = [
-  { access = "read", path = "./meta"}, {access = "read", path = "./lib/rain.interpreter/meta/RainterpreterExpressionDeployerNPE2.rain.meta"},
+  { access = "read", path = "./meta" },
+  { access = "read", path = "./lib/rain.interpreter/meta/RainterpreterExpressionDeployerNPE2.rain.meta" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterParserNPE2" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterStoreNPE2" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterNPE2" },
   { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterExpressionDeployerNPE2" },
-  { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta"},
+  { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta" },
   { access = "read-write", path = "src/generated" },
   { access = "read", path = "./subgraph" },
 ]
 
 remappings = [
-  "forge-std/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/forge-std/src/",
-  "openzeppelin-contracts/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/openzeppelin-contracts/",
-  "rain.interpreter/=lib/rain.interpreter/src/",
-  "rain.metadata/=lib/rain.interpreter/lib/rain.metadata/src/",
-  "rain.interpreter.interface/=lib/rain.raindex.interface/lib/rain.interpreter.interface/src/",
-  "rain.intorastring/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.intorastring/src/",
-  "rain.sol.codegen/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.sol.codegen/src/",
-  "rain.solmem/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.solmem/src",
-  "rain.math.float/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.math.float/src/",
-  "rain.tofu.erc20-decimals/=lib/rain.interpreter/lib/rain.tofu.erc20-decimals/src/",
-  "rain.deploy/=lib/rain.deploy/src/",
-  "rain.lib.typecast/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.lib.typecast/src/",
+  # Custom remap so @openzeppelin packages' own internal imports resolve.
+  "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.6.1/",
+  # Submodule for sushixswap-v2 (not on Soldeer).
   "sushixswap-v2/=lib/sushixswap-v2/",
 ]
+
+[dependencies]
+forge-std = "1.16.1"
+"@openzeppelin-contracts" = "5.6.1"
+# rainlanguage/rain.interpreter was renamed to rainlanguage/rainlang;
+# its Soldeer registry name follows.
+rainlang = "0.1.2"
+rain-interpreter-interface = "0.1.0"
+# rainlanguage/rain.raindex.interface was renamed to
+# rainlanguage/raindex.interface; Soldeer registry name follows.
+raindex-interface = "0.1.1"
+rain-metadata = "0.1.0"
+rain-intorastring = "0.1.0"
+rain-sol-codegen = "0.1.0"
+rain-solmem = "0.1.3"
+rain-math-float = "0.1.1"
+rain-tofu-erc20-decimals = "0.1.1"
+rain-deploy = "0.1.2"
+rain-lib-typecast = "0.1.0"
+rain-lib-hash = "0.1.0"
+rain-math-binary = "0.1.1"
+rain-string = "0.2.0"
+rain-lib-memkv = "0.1.0"
+rain-math-fixedpoint = "0.1.0"
+
+[soldeer]
+recursive_deps = false
 
 [fuzz]
 runs = 5096

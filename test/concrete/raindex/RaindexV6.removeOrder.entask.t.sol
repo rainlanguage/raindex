@@ -9,11 +9,11 @@ import {
     OrderV4,
     TaskV2,
     SignedContextV1
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
+import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
 
 contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
     using LibOrder for OrderV4;

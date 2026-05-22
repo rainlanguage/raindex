@@ -2,25 +2,25 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test, Vm, console2} from "forge-std/Test.sol";
+import {Test, Vm, console2} from "forge-std-1.16.1/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rain.interpreter.interface/interface/IParserV2.sol";
+import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
 import {
     IRaindexV6,
     IInterpreterV4,
     TaskV2,
     EvaluableV4,
     SignedContextV1
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibDecimalFloat, Float} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
-import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
-import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
 

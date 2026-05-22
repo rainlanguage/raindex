@@ -2,32 +2,32 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
-import {Multicall} from "openzeppelin-contracts/contracts/utils/Multicall.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {Math} from "@openzeppelin-contracts-5.6.1/utils/math/Math.sol";
+import {Multicall} from "@openzeppelin-contracts-5.6.1/utils/Multicall.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin-contracts-5.6.1/utils/ReentrancyGuard.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {LibContext} from "rain.interpreter.interface/lib/caller/LibContext.sol";
-import {LibBytecode} from "rain.interpreter.interface/lib/bytecode/LibBytecode.sol";
+import {LibContext} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
+import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
 import {
     SourceIndexV2,
     StateNamespace,
     IInterpreterV4,
     StackItem,
     EvalV4
-} from "rain.interpreter.interface/interface/IInterpreterV4.sol";
-import {LibUint256Array} from "rain.solmem/lib/LibUint256Array.sol";
-import {LibUint256Matrix} from "rain.solmem/lib/LibUint256Matrix.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/IInterpreterStoreV3.sol";
-import {LibNamespace} from "rain.interpreter.interface/lib/ns/LibNamespace.sol";
-import {LibMeta} from "rain.metadata/lib/LibMeta.sol";
-import {IMetaV1_2} from "rain.metadata/interface/unstable/IMetaV1_2.sol";
+} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {LibUint256Array} from "rain-solmem-0.1.3/src/lib/LibUint256Array.sol";
+import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
+import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
+import {LibMeta} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.0/src/interface/unstable/IMetaV1_2.sol";
 import {LibRaindex} from "../../lib/LibRaindex.sol";
-import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {LibTOFUTokenDecimals, TOFUOutcome} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
-import {ITOFUTokenDecimals} from "rain.tofu.erc20-decimals/interface/ITOFUTokenDecimals.sol";
+import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibTOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
 
 import {
     IRaindexV6,
@@ -45,8 +45,8 @@ import {
     QuoteV2,
     Float,
     IOV2
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IRaindexV6OrderTaker} from "rain.raindex.interface/interface/IRaindexV6OrderTaker.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {LibOrder} from "../../lib/LibOrder.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
@@ -59,10 +59,10 @@ import {
     CONTEXT_VAULT_IO_VAULT_ID
 } from "../../lib/LibRaindex.sol";
 import {RaindexV6FlashLender} from "../../abstract/RaindexV6FlashLender.sol";
-import {LibBytes32Array} from "rain.solmem/lib/LibBytes32Array.sol";
-import {LibBytes32Matrix} from "rain.solmem/lib/LibBytes32Matrix.sol";
+import {LibBytes32Array} from "rain-solmem-0.1.3/src/lib/LibBytes32Array.sol";
+import {LibBytes32Matrix} from "rain-solmem-0.1.3/src/lib/LibBytes32Matrix.sol";
 
-import {LibFormatDecimalFloat} from "rain.math.float/lib/format/LibFormatDecimalFloat.sol";
+import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
 
 /// This will exist in a future version of Open Zeppelin if their main branch is
 /// to be believed.

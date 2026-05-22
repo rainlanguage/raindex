@@ -11,9 +11,9 @@ import {
     ClearConfigV2,
     SignedContextV1,
     TaskV2
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/concrete/raindex/RaindexV6.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract RaindexV6ClearOrderBadStackTest is RaindexV6ExternalRealTest {
     function checkBadStack(

@@ -6,8 +6,8 @@ import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMoc
 import {
     IERC3156FlashBorrower,
     ON_FLASH_LOAN_CALLBACK_SUCCESS
-} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 
 /// @title RaindexV6FlashLenderMockSuccessTest
 /// Show that if the receiver is `RaindexV6FlashBorrower` and the token

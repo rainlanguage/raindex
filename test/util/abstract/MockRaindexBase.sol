@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
 import {
     IRaindexV6,
     TakeOrdersConfigV5,
@@ -14,8 +14,8 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 
 /// @dev Base for mock raindex contracts that stub all IRaindexV6 functions.
 /// Inheritors override flashLoan and/or takeOrders4 with real token transfers.

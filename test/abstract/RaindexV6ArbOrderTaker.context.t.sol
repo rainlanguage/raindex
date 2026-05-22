@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {ChildRaindexV6ArbOrderTaker} from "../util/concrete/ChildRaindexV6ArbOrderTaker.sol";
-import {TaskV2, SignedContextV1, EvaluableV4} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     TakeOrdersConfigV5,
@@ -12,11 +12,11 @@ import {
     OrderConfigV4,
     OrderV4,
     IInterpreterV4
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 import {StateNamespace, LibNamespace} from "../../src/concrete/raindex/RaindexV6.sol";
-import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 contract RaindexV6ArbOrderTakerContextTest is RaindexV6ExternalRealTest {
     function testRaindexV6ArbOrderTakerContext() external {

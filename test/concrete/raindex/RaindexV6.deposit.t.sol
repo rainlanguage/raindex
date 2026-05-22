@@ -2,16 +2,16 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {stdError} from "forge-std/Test.sol";
+import {stdError} from "forge-std-1.16.1/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE, CONSOLE_ADDRESS} from "test/util/lib/LibTestConstants.sol";
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {TaskV2, EvaluableV4, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {TaskV2, EvaluableV4, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {LibDecimalFloat, Float} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {ReentrancyGuard} from "openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+import {ReentrancyGuard} from "@openzeppelin-contracts-5.6.1/utils/ReentrancyGuard.sol";
+import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
 
 /// @title RaindexV6DepositTest
 /// Tests depositing to a raindex.

@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {StackAllocationMismatch} from "rain.interpreter/error/ErrIntegrity.sol";
-import {ExpectedOperand, UnexpectedOperandValue} from "rain.interpreter/error/ErrParse.sol";
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
-import {OpTest, StackItem} from "rain.interpreter/../test/abstract/OpTest.sol";
+import {StackAllocationMismatch} from "rainlang-0.1.2/src/error/ErrIntegrity.sol";
+import {ExpectedOperand, UnexpectedOperandValue} from "rainlang-0.1.2/src/error/ErrParse.sol";
+import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
+import {OpTest, StackItem} from "rainlang-0.1.2/src/../test/abstract/OpTest.sol";
 import {LibRaindexSubParserContextFixture} from "test/util/fixture/LibRaindexSubParserContextFixture.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";

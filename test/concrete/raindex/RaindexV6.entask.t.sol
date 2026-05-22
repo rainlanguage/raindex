@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 
 contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
     function checkReentrancyRW() internal view {

@@ -15,8 +15,8 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 
 contract FlashLendingMockRaindex is IRaindexV6 {
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)

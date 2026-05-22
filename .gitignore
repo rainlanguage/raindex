@@ -24,3 +24,5 @@ packages/raindex/esm.d.ts
 .ai_docs/
 .ai_spec/
 .cursor/
+
+dependencies/

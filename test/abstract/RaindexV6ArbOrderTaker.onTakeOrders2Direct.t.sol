@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std/Test.sol";
+import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
-import {Float} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain.tofu.erc20-decimals/lib/LibTOFUTokenDecimals.sol";
+import {Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 
 contract RaindexV6ArbOrderTakerOnTakeOrders2DirectTest is Test {
