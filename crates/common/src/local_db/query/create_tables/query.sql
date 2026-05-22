@@ -351,6 +351,34 @@ CREATE INDEX idx_rvb_token ON running_vault_balances(chain_id, raindex_address, 
 
 -- Pipeline-maintained read models use the `derived_` prefix. These tables are
 -- not DB-native materialized views; they are rebuilt by local DB sync writes.
+CREATE TABLE IF NOT EXISTS derived_vault_deltas (
+    chain_id INTEGER NOT NULL,
+    raindex_address TEXT NOT NULL,
+    transaction_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    block_number INTEGER NOT NULL,
+    block_timestamp INTEGER NOT NULL,
+    owner TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    token TEXT NOT NULL,
+    vault_id TEXT NOT NULL,
+    delta TEXT NOT NULL,
+    PRIMARY KEY (
+        chain_id,
+        raindex_address,
+        transaction_hash,
+        log_index,
+        owner,
+        kind,
+        token,
+        vault_id
+    )
+);
+CREATE INDEX idx_derived_vault_deltas_window
+    ON derived_vault_deltas(chain_id, raindex_address, block_number, log_index);
+CREATE INDEX idx_derived_vault_deltas_balance_key
+    ON derived_vault_deltas(chain_id, raindex_address, owner, token, vault_id, block_number, log_index);
+
 CREATE TABLE IF NOT EXISTS derived_trades (
     chain_id INTEGER NOT NULL,
     raindex_address TEXT NOT NULL,

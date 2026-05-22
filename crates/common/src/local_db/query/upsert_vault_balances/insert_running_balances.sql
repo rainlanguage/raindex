@@ -6,7 +6,7 @@ WITH latest_blocks AS (
     token,
     vault_id,
     MAX(block_number) AS last_block
-  FROM vault_deltas vd
+  FROM derived_vault_deltas vd
   WHERE vd.chain_id = ?1
     AND vd.raindex_address = ?2
     AND vd.block_number BETWEEN ?3 AND ?4
@@ -26,7 +26,7 @@ delta_batches AS (
     lb.last_block,
     (
       SELECT MAX(vd2.log_index)
-      FROM vault_deltas vd2
+      FROM derived_vault_deltas vd2
       WHERE vd2.chain_id = vd.chain_id
         AND vd2.raindex_address = vd.raindex_address
         AND vd2.owner = vd.owner
@@ -34,7 +34,7 @@ delta_batches AS (
         AND vd2.vault_id = vd.vault_id
         AND vd2.block_number = lb.last_block
     ) AS last_log_index
-  FROM vault_deltas vd
+  FROM derived_vault_deltas vd
   JOIN latest_blocks lb
     ON lb.chain_id = vd.chain_id
    AND lb.raindex_address = vd.raindex_address

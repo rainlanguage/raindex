@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS interpreter_store_sets;
 DROP TABLE IF EXISTS sync_status;
 DROP TABLE IF EXISTS vault_balance_changes;
 DROP TABLE IF EXISTS running_vault_balances;
+DROP TABLE IF EXISTS derived_vault_deltas;
 DROP TABLE IF EXISTS derived_trades;
 
 COMMIT;

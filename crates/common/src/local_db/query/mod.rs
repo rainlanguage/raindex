@@ -31,6 +31,7 @@ pub mod sql_statement;
 pub mod sql_statement_batch;
 pub mod update_last_synced_block;
 pub mod upsert_derived_trades;
+pub mod upsert_derived_vault_deltas;
 pub mod upsert_target_watermark;
 pub mod upsert_vault_balances;
 
