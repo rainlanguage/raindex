@@ -15,9 +15,9 @@ pub struct LocalDbTradeCountRow {
 }
 
 const START_TS_CLAUSE: &str = "/*START_TS_CLAUSE*/";
-const START_TS_BODY: &str = "\nAND block_timestamp >= {param}\n";
+const START_TS_BODY: &str = "\n  AND tws.block_timestamp >= {param}\n";
 const END_TS_CLAUSE: &str = "/*END_TS_CLAUSE*/";
-const END_TS_BODY: &str = "\nAND block_timestamp <= {param}\n";
+const END_TS_BODY: &str = "\n  AND tws.block_timestamp <= {param}\n";
 
 pub fn build_fetch_trade_count_stmt(
     raindex_id: &RaindexIdentifier,
