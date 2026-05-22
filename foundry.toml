@@ -65,7 +65,6 @@ rain-lib-hash = "0.1.0"
 rain-math-binary = "0.1.1"
 rain-string = "0.2.0"
 rain-lib-memkv = "0.1.0"
-rain-math-fixedpoint = "0.1.0"
 
 [soldeer]
 recursive_deps = false

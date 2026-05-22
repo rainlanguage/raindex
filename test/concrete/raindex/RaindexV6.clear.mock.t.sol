@@ -21,10 +21,7 @@ import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotOrderOwner, StackItem, NegativeBounty, ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
 import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
 import {StateNamespace, EvalV4, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {
-    LibFixedPointDecimalArithmeticOpenZeppelin
-} from "rain-math-fixedpoint-0.1.0/src/lib/LibFixedPointDecimalArithmeticOpenZeppelin.sol";
-import {Math} from "@openzeppelin-contracts-4.8.3/utils/math/Math.sol";
+import {Math} from "@openzeppelin-contracts-5.6.1/utils/math/Math.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
@@ -45,7 +42,6 @@ contract MockInterpreter {
 /// @title RaindexV6ClearTest
 /// Tests clearing an order.
 contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
-    using LibFixedPointDecimalArithmeticOpenZeppelin for uint256;
     using Math for uint256;
     using LibDecimalFloat for Float;
 
@@ -789,7 +785,7 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
     ) external {
         // 0 tested separately.
         aliceIORatio18 = bound(aliceIORatio18, 1, 1e18);
-        bobIORatio18 = bound(bobIORatio18, 1e18, uint256(1e18).fixedPointDiv(aliceIORatio18, Math.Rounding.Down));
+        bobIORatio18 = bound(bobIORatio18, 1e18, Math.mulDiv(1e18, 1e18, aliceIORatio18, Math.Rounding.Floor));
 
         Float aliceIORatio = LibDecimalFloat.fromFixedDecimalLosslessPacked(aliceIORatio18, 18);
         Float bobIORatio = LibDecimalFloat.fromFixedDecimalLosslessPacked(bobIORatio18, 18);

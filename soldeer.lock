@@ -1,9 +1,9 @@
 [[dependencies]]
 name = "@openzeppelin-contracts"
-version = "4.8.3"
-url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/4_8_3_22-01-2024_13:13:46_contracts.zip"
-checksum = "c6c0f1d430120cf45a3531a2fe740a4dffa1434ebccac753a59c54bc1ce65db9"
-integrity = "3ecc700e5d25af23c53959baf3cfd3cbadbc0013e80dfca40cee9e7ea34e141d"
+version = "5.6.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@openzeppelin-contracts/5_6_1_15-03-2026_09:19:50_contracts.zip"
+checksum = "a3b6bc661be858c7c27f60a1708cbebe8c71034b4cc1e9fe270d0a05b069352f"
+integrity = "bce03af7ada1eee21a7fff393f238bcd7cd75a022a4db55ffb6b0dbb32433d35"
 
 [[dependencies]]
 name = "forge-std"
@@ -60,13 +60,6 @@ version = "0.1.1"
 url = "https://soldeer-revisions.s3.amazonaws.com/rain-math-binary/0_1_1_09-05-2026_19:49:57_rain.math.zip"
 checksum = "6f966e4f5f59103b62de2004005db508824622495b893a646d0e2a35511f0093"
 integrity = "4cfaa11c0e48ac46824a10fec2184863d114f09c171544b721d782386708dca7"
-
-[[dependencies]]
-name = "rain-math-fixedpoint"
-version = "0.1.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-math-fixedpoint/0_1_0_09-05-2026_20:41:06_rain.math.zip"
-checksum = "3b19166f9f12ed84047f6570992d1bc445eed7705d5ba7e5a94de9f8cc51d572"
-integrity = "8578d71cf511ea2ab2044821c733f06ad5d2a08afc4eb3ff7c14b1af809ab39c"
 
 [[dependencies]]
 name = "rain-math-float"
