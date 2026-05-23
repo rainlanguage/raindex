@@ -23,17 +23,8 @@ keep=(
 git submodule update --init --recursive
 
 nix develop -c forge soldeer install
+nix develop -c forge build
 
-nix develop -i "${keep[@]}" -c bash \
-  -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-rs-prelude)'
-
-nix develop -i "${keep[@]}" -c bash -c '(cd lib/rain.interpreter && rainix-rs-prelude)'
-(cd lib/rain.interpreter && nix develop -i "${keep[@]}" -c bash -c rainlang-prelude)
-
-nix develop -i "${keep[@]}" -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-rs-prelude)'
-
-nix develop -i "${keep[@]}" -c rainix-sol-prelude
-nix develop -i "${keep[@]}" -c rainix-rs-prelude
 nix develop -i "${keep[@]}" -c raindex-prelude
 
 nix develop -i "${keep[@]}" -c forge build
