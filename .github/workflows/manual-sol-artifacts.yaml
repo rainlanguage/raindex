@@ -13,7 +13,6 @@ on:
           - arb-generic-pool-order-taker
           - arb-route-processor-order-taker
           - arb-generic-pool-flash-borrower
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,9 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           fetch-depth: 0
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -42,11 +40,9 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-
       - run: nix develop -c rainix-sol-prelude
       - run: nix develop -c rainix-rs-prelude
       - run: nix develop -c raindex-prelude
-
       - name: deploy to all supported networks
         run: nix develop -c rainix-sol-artifacts
         env:
@@ -54,19 +50,16 @@ jobs:
           DEPLOY_BROADCAST: "1"
           DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
           ETH_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
-
           CI_DEPLOY_ARBITRUM_RPC_URL: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL || vars.CI_DEPLOY_ARBITRUM_RPC_URL || '' }}
           CI_DEPLOY_BASE_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
           CI_DEPLOY_BASE_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || vars.CI_DEPLOY_BASE_SEPOLIA_RPC_URL || '' }}
           CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL || vars.CI_DEPLOY_FLARE_RPC_URL || '' }}
           CI_DEPLOY_POLYGON_RPC_URL: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL || vars.CI_DEPLOY_POLYGON_RPC_URL || '' }}
-
           CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || vars.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || '' }}
           CI_DEPLOY_BASE_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || '' }}
           CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || '' }}
           CI_DEPLOY_FLARE_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || '' }}
           CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || vars.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || '' }}
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

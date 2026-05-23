@@ -4,11 +4,9 @@ on:
     branches:
       - main
   pull_request:
-
 concurrency:
   group: ${{ github.ref }}-rainix
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
 jobs:
   standard-tests:
     permissions:
@@ -52,15 +50,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: true
           fetch-depth: 0
-
       - name: Free disk space
         if: matrix.os == 'ubuntu-latest'
         uses: jlumbroso/free-disk-space@v1.3.1
         with:
           large-packages: ${{ matrix.task != 'rainix-wasm-browser-test' }}
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -76,9 +72,7 @@ jobs:
           # collect garbage until the Nix store size is at most this number
           # before trying to save a new cache
           gc-max-store-size-linux: 10G
-
       - run: ./pointers.sh
-
       - name: Run ${{ matrix.task }}
         env:
           ETH_RPC_URL: ${{ secrets.CI_DEPLOY_BASE_RPC_URL || vars.CI_DEPLOY_BASE_RPC_URL || '' }}
@@ -88,10 +82,9 @@ jobs:
           CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL || vars.CI_DEPLOY_FLARE_RPC_URL || '' }}
           CI_DEPLOY_POLYGON_RPC_URL: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL || vars.CI_DEPLOY_POLYGON_RPC_URL || '' }}
         run: nix develop -c ${{ matrix.task }}
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
-        if: always() 
+        if: always()
         uses: rainlanguage/github-chore/.github/actions/telegram-status-report@main
         with:
           status: ${{ job.status }}
