@@ -21,14 +21,13 @@ raindex_app_settings = { workspace = true }
 raindex_subgraph_client = { workspace = true }
 raindex_bindings = { workspace = true }
 raindex_quote = { workspace = true }
-alloy-ethers-typecast = { workspace = true }
 wasm-bindgen-utils = { workspace = true }
 tokio = { workspace = true, features = [
-    "sync",
-    "macros",
-    "io-util",
-    "rt",
-    "time",
+  "sync",
+  "macros",
+  "io-util",
+  "rt",
+  "time",
 ] }
 alloy = { workspace = true, features = ["dyn-abi"] }
 flate2 = "1.0.34"

@@ -12,7 +12,6 @@ homepage = "https://github.com/rainlanguage/raindex"
 [workspace.dependencies]
 foundry-block-explorers = "0.2.6"
 alloy = { version = "1.0.9", features = ["sol-types", "json", "json-abi"] }
-alloy-ethers-typecast = { git = "https://github.com/rainlanguage/alloy-ethers-typecast", rev = "bcc3a04394aefe191fef4ae8e6e94381a419c99a" }
 anyhow = "1.0.70"
 async-trait = "0.1.77"
 clap = { version = "4.2.5", features = ["cargo", "derive"] }
