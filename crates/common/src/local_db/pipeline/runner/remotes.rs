@@ -81,7 +81,7 @@ mod tests {
     use flate2::write::GzEncoder;
     use httpmock::prelude::*;
     use raindex_app_settings::local_db_manifest::{
-        LocalDbManifest, ManifestNetwork, ManifestRaindex, MANIFEST_VERSION,
+        LocalDbManifest, ManifestNetwork, ManifestRaindex, DB_SCHEMA_VERSION, MANIFEST_VERSION,
     };
     use raindex_app_settings::local_db_remotes::LocalDbRemoteCfg;
     use raindex_app_settings::raindex::RaindexCfg;
@@ -261,7 +261,7 @@ raindexes:
 
         let manifest_one = r#"
 manifest-version: 1
-db-schema-version: 3
+db-schema-version: 4
 networks:
   mainnet:
     chain-id: 1
@@ -275,7 +275,7 @@ networks:
 
         let manifest_two = r#"
 manifest-version: 1
-db-schema-version: 3
+db-schema-version: 4
 networks:
   goerli:
     chain-id: 5
@@ -325,15 +325,17 @@ networks:
         let manifest_one = format!(
             r#"
 manifest-version: {MANIFEST_VERSION}
-db-schema-version: 3
+db-schema-version: {DB_SCHEMA_VERSION}
 networks: {{}}
 "#
         );
-        let manifest_two = r#"
+        let manifest_two = format!(
+            r#"
 manifest-version: 2
-db-schema-version: 3
-networks: {}
-"#;
+db-schema-version: {DB_SCHEMA_VERSION}
+networks: {{}}
+"#
+        );
 
         server_one.mock(|when, then| {
             when.method(GET).path("/");

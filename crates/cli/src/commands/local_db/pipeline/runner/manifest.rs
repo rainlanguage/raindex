@@ -309,7 +309,7 @@ mod tests {
             .expect("manifest build succeeds");
 
         assert_eq!(manifest.manifest_version, 1);
-        assert_eq!(manifest.db_schema_version, 3);
+        assert_eq!(manifest.db_schema_version, DB_SCHEMA_VERSION);
         assert_eq!(manifest.networks.len(), 2);
 
         let anvil = manifest.networks.get("anvil").expect("anvil network");
@@ -495,7 +495,7 @@ mod tests {
 
         assert!(manifest.networks.is_empty());
         assert_eq!(manifest.manifest_version, 1);
-        assert_eq!(manifest.db_schema_version, 3);
+        assert_eq!(manifest.db_schema_version, DB_SCHEMA_VERSION);
     }
 
     #[test]

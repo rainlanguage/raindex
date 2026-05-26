@@ -51,4 +51,7 @@ WHERE chain_id = ?1 AND raindex_address = ?2;
 DELETE FROM running_vault_balances
 WHERE chain_id = ?1 AND raindex_address = ?2;
 
+DELETE FROM derived_vault_deltas
+WHERE chain_id = ?1 AND raindex_address = ?2;
+
 COMMIT;

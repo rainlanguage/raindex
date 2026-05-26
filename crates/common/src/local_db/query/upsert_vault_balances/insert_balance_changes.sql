@@ -23,7 +23,7 @@ filtered AS (
       ORDER BY vd.block_number, vd.log_index
     ) AS rn,
     COALESCE(rvb.balance, FLOAT_ZERO_HEX()) AS prefix_balance
-  FROM vault_deltas vd
+  FROM derived_vault_deltas vd
   JOIN params p
     ON p.chain_id = vd.chain_id
    AND p.raindex_address = vd.raindex_address
