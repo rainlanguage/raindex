@@ -856,7 +856,7 @@ mod test_helpers {
                 return js_sys::JSON::parse(&trade_count_payload).unwrap();
             }
 
-            if sql.contains(" AS trade_kind") {
+            if sql.contains("FROM derived_trades") || sql.contains(" AS trade_kind") {
                 return js_sys::JSON::parse(&trades_payload).unwrap();
             }
 

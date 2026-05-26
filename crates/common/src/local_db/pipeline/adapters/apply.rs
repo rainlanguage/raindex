@@ -6,6 +6,7 @@ use crate::local_db::insert::{
     raw_events_to_statements as build_raw_event_sql,
 };
 use crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow;
+use crate::local_db::query::upsert_derived_trades::upsert_derived_trades_batch;
 use crate::local_db::query::upsert_derived_vault_deltas::upsert_derived_vault_deltas_batch;
 use crate::local_db::query::upsert_target_watermark::upsert_target_watermark_stmt;
 use crate::local_db::query::upsert_vault_balances::upsert_vault_balances_batch;
@@ -89,6 +90,11 @@ pub trait ApplyPipeline {
                 target_info.target_block,
             ));
             batch.extend(upsert_vault_balances_batch(
+                &target_info.raindex_id,
+                target_info.start_block,
+                target_info.target_block,
+            ));
+            batch.extend(upsert_derived_trades_batch(
                 &target_info.raindex_id,
                 target_info.start_block,
                 target_info.target_block,
@@ -367,9 +373,9 @@ mod tests {
             .build_batch(&build_target_info(&raindex_id, 1, 42), &[], &[], &[], &[])
             .expect("batch ok");
 
-        // Expect vault balance refresh plus the watermark and ANALYZE when there is no work.
+        // Expect derived state refreshes plus the watermark and ANALYZE when there is no work.
         let texts: Vec<_> = batch.statements().iter().map(|s| s.sql().trim()).collect();
-        assert_eq!(texts.len(), 6);
+        assert_eq!(texts.len(), 8);
         assert!(texts
             .iter()
             .any(|s| s.contains("DELETE FROM derived_vault_deltas")));
@@ -380,6 +386,12 @@ mod tests {
         assert!(texts
             .iter()
             .any(|s| s.contains("INSERT OR REPLACE INTO running_vault_balances")));
+        assert!(texts
+            .iter()
+            .any(|s| s.contains("DELETE FROM derived_trades")));
+        assert!(texts
+            .iter()
+            .any(|s| s.contains("INSERT OR REPLACE INTO derived_trades")));
         assert!(texts
             .iter()
             .any(|s| s.contains("INSERT INTO target_watermarks")));
@@ -1047,6 +1059,11 @@ mod tests {
             .iter()
             .position(|s| s.sql().starts_with("DELETE FROM derived_vault_deltas"))
             .expect("derived vault deltas refresh present");
+        let idx_derived_trades = batch
+            .statements()
+            .iter()
+            .position(|s| s.sql().starts_with("DELETE FROM derived_trades"))
+            .expect("derived trades refresh present");
 
         assert!(idx_raw < idx_token, "raw should precede token upserts");
         assert!(idx_token < idx_decoded, "token upserts before decoded");
@@ -1055,8 +1072,12 @@ mod tests {
             "decoded before derived vault deltas refresh"
         );
         assert!(
-            idx_derived_vault_deltas < idx_watermark,
-            "derived vault deltas refresh before watermark"
+            idx_derived_vault_deltas < idx_derived_trades,
+            "derived vault deltas refresh before derived trades refresh"
+        );
+        assert!(
+            idx_derived_trades < idx_watermark,
+            "derived trades refresh before watermark"
         );
     }
 

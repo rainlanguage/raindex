@@ -251,6 +251,8 @@ CREATE INDEX idx_withdrawals_token ON withdrawals(chain_id, raindex_address, tok
 
 CREATE INDEX idx_order_events_hash ON order_events(chain_id, raindex_address, order_hash);
 CREATE INDEX idx_order_events_owner ON order_events(chain_id, raindex_address, order_owner);
+CREATE INDEX idx_order_events_owner_nonce_time
+    ON order_events(chain_id, raindex_address, order_owner, order_nonce, event_type, block_number, log_index);
 CREATE INDEX idx_order_events_block ON order_events(chain_id, raindex_address, block_number);
 CREATE INDEX idx_order_events_store ON order_events(chain_id, raindex_address, store_address);
 
@@ -378,5 +380,50 @@ CREATE INDEX idx_derived_vault_deltas_window
     ON derived_vault_deltas(chain_id, raindex_address, block_number, log_index);
 CREATE INDEX idx_derived_vault_deltas_balance_key
     ON derived_vault_deltas(chain_id, raindex_address, owner, token, vault_id, block_number, log_index);
+
+CREATE TABLE IF NOT EXISTS derived_trades (
+    chain_id INTEGER NOT NULL,
+    raindex_address TEXT NOT NULL,
+    trade_id TEXT NOT NULL,
+
+    trade_kind TEXT NOT NULL,
+    trade_side TEXT NOT NULL,
+
+    order_hash TEXT NOT NULL,
+    order_owner TEXT NOT NULL,
+    order_nonce TEXT NOT NULL,
+
+    transaction_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    block_number INTEGER NOT NULL,
+    block_timestamp INTEGER NOT NULL,
+    transaction_sender TEXT NOT NULL,
+
+    input_vault_id TEXT NOT NULL,
+    input_token TEXT NOT NULL,
+    input_delta TEXT NOT NULL,
+    input_running_balance TEXT,
+
+    output_vault_id TEXT NOT NULL,
+    output_token TEXT NOT NULL,
+    output_delta TEXT NOT NULL,
+    output_running_balance TEXT,
+
+    PRIMARY KEY (chain_id, raindex_address, trade_id)
+);
+CREATE INDEX idx_derived_trades_input_token_time
+    ON derived_trades(chain_id, raindex_address, input_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_output_token_time
+    ON derived_trades(chain_id, raindex_address, output_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_owner_time
+    ON derived_trades(chain_id, raindex_address, order_owner, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_taker_time
+    ON derived_trades(chain_id, raindex_address, transaction_sender, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_order_hash_time
+    ON derived_trades(chain_id, raindex_address, order_hash, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_tx
+    ON derived_trades(chain_id, raindex_address, transaction_hash);
+CREATE INDEX idx_derived_trades_time
+    ON derived_trades(chain_id, raindex_address, block_timestamp DESC, block_number DESC, log_index DESC);
 
 COMMIT;

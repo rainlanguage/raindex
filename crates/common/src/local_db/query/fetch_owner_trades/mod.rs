@@ -8,11 +8,6 @@ const QUERY_TEMPLATE: &str = include_str!("query.sql");
 const START_TS_BODY: &str = "\nAND tws.block_timestamp >= {param}\n";
 const END_TS_BODY: &str = "\nAND tws.block_timestamp <= {param}\n";
 
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_EVENTS_RAINDEXS_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXS_CLAUSE*/";
-const CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
-
 const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
 
 #[derive(Debug, Clone)]
@@ -31,7 +26,7 @@ pub fn build_fetch_owner_trades_stmt(
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
 
-    let filters = bind_common_owner_trade_filters(
+    bind_common_owner_trade_filters(
         &mut stmt,
         args.owner,
         &args.chain_ids,
@@ -39,20 +34,6 @@ pub fn build_fetch_owner_trades_stmt(
         &args.time_filter,
         START_TS_BODY,
         END_TS_BODY,
-    )?;
-
-    let chain_ids_iter = || filters.chain_ids.iter().cloned().map(SqlValue::from);
-    let raindexs_iter = || filters.raindexs.iter().cloned().map(SqlValue::from);
-
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE,
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_RAINDEXS_CLAUSE,
-        CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY,
-        raindexs_iter(),
     )?;
 
     if let Some(page) = args.pagination.page {
@@ -91,10 +72,8 @@ mod tests {
         })
         .unwrap();
         assert_eq!(stmt.params[0], SqlValue::Text(hex::encode_prefixed(owner)));
-        assert!(stmt.sql.contains("t.chain_id IN"));
-        assert!(stmt.sql.contains("c.chain_id IN"));
+        assert!(stmt.sql.contains("tws.chain_id IN"));
         assert!(!stmt.sql.contains(TAKE_ORDERS_CHAIN_IDS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_CHAIN_IDS_CLAUSE));
     }
 
     #[test]
@@ -109,10 +88,8 @@ mod tests {
             pagination: PaginationParams::default(),
         })
         .unwrap();
-        assert!(stmt.sql.contains("t.raindex_address IN"));
-        assert!(stmt.sql.contains("c.raindex_address IN"));
+        assert!(stmt.sql.contains("tws.raindex_address IN"));
         assert!(!stmt.sql.contains(TAKE_ORDERS_RAINDEXS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_RAINDEXS_CLAUSE));
     }
 
     #[test]

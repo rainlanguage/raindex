@@ -54,4 +54,7 @@ WHERE chain_id = ?1 AND raindex_address = ?2;
 DELETE FROM derived_vault_deltas
 WHERE chain_id = ?1 AND raindex_address = ?2;
 
+DELETE FROM derived_trades
+WHERE chain_id = ?1 AND raindex_address = ?2;
+
 COMMIT;

@@ -1,5 +1,5 @@
 use crate::local_db::query::fetch_owner_trades_common::bind_common_owner_trade_filters;
-use crate::local_db::query::{SqlBuildError, SqlStatement, SqlValue};
+use crate::local_db::query::{SqlBuildError, SqlStatement};
 use crate::raindex_client::TimeFilter;
 use alloy::primitives::Address;
 
@@ -9,16 +9,6 @@ pub use super::fetch_order_trades_count::LocalDbTradeCountRow;
 
 const START_TS_BODY: &str = "\nAND block_timestamp >= {param}\n";
 const END_TS_BODY: &str = "\nAND block_timestamp <= {param}\n";
-
-const CLEAR_ALICE_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_ALICE_CHAIN_IDS_CLAUSE*/";
-const CLEAR_ALICE_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_ALICE_RAINDEXS_CLAUSE: &str = "/*CLEAR_ALICE_RAINDEXS_CLAUSE*/";
-const CLEAR_ALICE_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
-
-const CLEAR_BOB_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_BOB_CHAIN_IDS_CLAUSE*/";
-const CLEAR_BOB_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_BOB_RAINDEXS_CLAUSE: &str = "/*CLEAR_BOB_RAINDEXS_CLAUSE*/";
-const CLEAR_BOB_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
 
 #[derive(Debug, Clone)]
 pub struct FetchOwnerTradesCountArgs {
@@ -33,7 +23,7 @@ pub fn build_fetch_owner_trades_count_stmt(
 ) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
 
-    let filters = bind_common_owner_trade_filters(
+    bind_common_owner_trade_filters(
         &mut stmt,
         args.owner,
         &args.chain_ids,
@@ -41,30 +31,6 @@ pub fn build_fetch_owner_trades_count_stmt(
         &args.time_filter,
         START_TS_BODY,
         END_TS_BODY,
-    )?;
-
-    let chain_ids_iter = || filters.chain_ids.iter().cloned().map(SqlValue::from);
-    let raindexs_iter = || filters.raindexs.iter().cloned().map(SqlValue::from);
-
-    stmt.bind_list_clause(
-        CLEAR_ALICE_CHAIN_IDS_CLAUSE,
-        CLEAR_ALICE_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_ALICE_RAINDEXS_CLAUSE,
-        CLEAR_ALICE_RAINDEXS_CLAUSE_BODY,
-        raindexs_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_BOB_CHAIN_IDS_CLAUSE,
-        CLEAR_BOB_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_BOB_RAINDEXS_CLAUSE,
-        CLEAR_BOB_RAINDEXS_CLAUSE_BODY,
-        raindexs_iter(),
     )?;
 
     Ok(stmt)
@@ -92,8 +58,7 @@ mod tests {
             time_filter: TimeFilter::default(),
         })
         .unwrap();
-        assert!(stmt.sql.contains("t.chain_id IN"));
-        assert!(stmt.sql.contains("c.chain_id IN"));
+        assert!(stmt.sql.contains("tws.chain_id IN"));
         assert!(!stmt.sql.contains(TAKE_ORDERS_CHAIN_IDS_CLAUSE));
     }
 
