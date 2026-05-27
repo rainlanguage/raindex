@@ -1,3 +1,6 @@
+use crate::transaction::read_call;
+#[cfg(not(target_family = "wasm"))]
+use crate::write_tx::{execute_write_tx, WriteTransactionStatus};
 use crate::{
     dotrain_order::DotrainOrderError,
     rainlang::compose_to_rainlang,
@@ -6,14 +9,8 @@ use crate::{
 use alloy::primitives::{hex::FromHexError, Address, Bytes, B256};
 #[cfg(not(target_family = "wasm"))]
 use alloy::primitives::{FixedBytes, U256};
+use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::SolCall;
-use alloy_ethers_typecast::ReadContractParametersBuilder;
-use alloy_ethers_typecast::{
-    ReadContractParametersBuilderError, ReadableClient, ReadableClientError, WritableClientError,
-    WriteContractParameters,
-};
-#[cfg(not(target_family = "wasm"))]
-use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use dotrain::error::ComposeError;
 use rain_interpreter_bindings::IParserV2::parse2Return;
 use rain_interpreter_bindings::Rainlang::{
@@ -33,11 +30,13 @@ use rain_metadata::{
 };
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
 use raindex_app_settings::deployment::DeploymentCfg;
+use raindex_bindings::provider::{mk_read_provider, ReadProviderError};
 use raindex_bindings::IRaindexV6::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::collections::HashMap;
 use thiserror::Error;
+use url::Url;
 
 pub static RAINDEX_ORDER_ENTRYPOINTS: [&str; 2] = ["calculate-io", "handle-io"];
 pub static RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS: [&str; 1] = ["handle-add-order"];
@@ -47,15 +46,11 @@ pub enum AddOrderArgsError {
     #[error("Empty Front Matter")]
     EmptyFrontmatter,
     #[error(transparent)]
-    ReadableClientError(#[from] ReadableClientError),
-    #[error(transparent)]
-    ReadContractParametersBuilderError(#[from] ReadContractParametersBuilderError),
+    ReadProviderError(#[from] ReadProviderError),
     #[error(transparent)]
     ParserError(#[from] ParserError),
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
-    #[error(transparent)]
-    WritableClientError(#[from] WritableClientError),
     #[error(transparent)]
     TransactionArgs(#[from] TransactionArgsError),
     #[error(transparent)]
@@ -169,39 +164,13 @@ impl AddOrderArgs {
     }
 
     /// Read DISPaiR addresses from the rainlang contract.
-    async fn read_dispair(&self, client: &ReadableClient) -> Result<DISPaiR, AddOrderArgsError> {
-        let deployer: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(expressionDeployerAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let interpreter: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(interpreterAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let store: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(storeAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let parser: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(parserAddressCall {})
-                    .build()?,
-            )
-            .await?;
+    async fn read_dispair(&self, rpcs: &[String]) -> Result<DISPaiR, AddOrderArgsError> {
+        let deployer: Address =
+            read_call(rpcs, self.rainlang, expressionDeployerAddressCall {}).await?;
+        let interpreter: Address =
+            read_call(rpcs, self.rainlang, interpreterAddressCall {}).await?;
+        let store: Address = read_call(rpcs, self.rainlang, storeAddressCall {}).await?;
+        let parser: Address = read_call(rpcs, self.rainlang, parserAddressCall {}).await?;
         Ok(DISPaiR::new(deployer, interpreter, store, parser))
     }
 
@@ -211,13 +180,17 @@ impl AddOrderArgs {
         rpcs: Vec<String>,
         rainlang: String,
     ) -> Result<Vec<u8>, AddOrderArgsError> {
-        let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-        let dispair = self.read_dispair(&client).await?;
+        let dispair = self.read_dispair(&rpcs).await?;
 
-        let client = ReadableClient::new_from_http_urls(rpcs)?;
+        let urls = rpcs
+            .iter()
+            .map(|rpc| rpc.parse::<Url>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(TransactionArgsError::Url)?;
+        let provider = mk_read_provider(&urls)?;
         let parser: ParserV2 = dispair.into();
         let rainlang_parsed: parse2Return = parser
-            .parse_text(rainlang.as_str(), client)
+            .parse_text(rainlang.as_str(), &provider)
             .await
             .map_err(AddOrderArgsError::ParserError)?;
 
@@ -283,8 +256,7 @@ impl AddOrderArgs {
 
         let meta = self.try_generate_meta(rainlang)?;
 
-        let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-        let dispair = self.read_dispair(&client).await?;
+        let dispair = self.read_dispair(&rpcs).await?;
 
         // get the evaluable for the post action
         let post_rainlang = self.compose_addorder_post_task()?;
@@ -356,26 +328,24 @@ impl AddOrderArgs {
     pub async fn get_add_order_call_parameters(
         &self,
         transaction_args: TransactionArgs,
-    ) -> Result<WriteContractParameters<addOrder4Call>, AddOrderArgsError> {
+    ) -> Result<TransactionRequest, AddOrderArgsError> {
         let add_order_call = self.try_into_call(transaction_args.clone().rpcs).await?;
-        let params = transaction_args
-            .try_into_write_contract_parameters(add_order_call, transaction_args.raindex_address)?;
-        Ok(params)
+        let tx_request = transaction_args
+            .try_into_transaction_request(add_order_call, transaction_args.raindex_address)?;
+        Ok(tx_request)
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn execute<S: Fn(WriteTransactionStatus<addOrder4Call>)>(
+    pub async fn execute<S: Fn(WriteTransactionStatus)>(
         &self,
         transaction_args: TransactionArgs,
         transaction_status_changed: S,
     ) -> Result<(), AddOrderArgsError> {
         let (ledger_client, _) = transaction_args.clone().try_into_ledger_client().await?;
 
-        let params = self.get_add_order_call_parameters(transaction_args).await?;
+        let tx_request = self.get_add_order_call_parameters(transaction_args).await?;
 
-        WriteTransaction::new(ledger_client, params, 4, transaction_status_changed)
-            .execute()
-            .await?;
+        execute_write_tx(ledger_client, tx_request, 4, transaction_status_changed).await?;
 
         Ok(())
     }
@@ -1457,7 +1427,10 @@ _ _: 0 0;
             .try_parse_rainlang(vec!["invalid-url".to_string()], rainlang)
             .await
             .unwrap_err();
-        assert!(matches!(err, AddOrderArgsError::ReadableClientError(_)));
+        assert!(matches!(
+            err,
+            AddOrderArgsError::TransactionArgs(TransactionArgsError::Url(_))
+        ));
     }
 
     #[tokio::test]
@@ -1489,14 +1462,7 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::ReadableClientError(
-                    ReadableClientError::AllProvidersFailed(ref msg)
-                )
-                if msg.get(&rpc_url).is_some()
-                    && matches!(
-                        msg.get(&rpc_url).unwrap(),
-                        ReadableClientError::RpcTransportKindError(_)
-                    )
+                AddOrderArgsError::TransactionArgs(TransactionArgsError::Transport(_))
             ),
             "unexpected error variant: {err:?}"
         );
@@ -1732,18 +1698,21 @@ _ _: 0 0;
             .await
             .unwrap();
 
-        assert_eq!(res.call.config.evaluable, add_order_call.config.evaluable);
+        let input = res.input.input.expect("tx request has no input");
+        let decoded = addOrder4Call::abi_decode(&input).unwrap();
+
+        assert_eq!(decoded.config.evaluable, add_order_call.config.evaluable);
         assert_eq!(
-            res.call.config.validInputs,
+            decoded.config.validInputs,
             add_order_call.config.validInputs
         );
         assert_eq!(
-            res.call.config.validOutputs,
+            decoded.config.validOutputs,
             add_order_call.config.validOutputs
         );
-        assert_eq!(res.call.config.meta, add_order_call.config.meta);
-        assert_eq!(res.call.tasks, add_order_call.tasks);
-        assert_eq!(res.address, *local_evm.raindex.address());
+        assert_eq!(decoded.config.meta, add_order_call.config.meta);
+        assert_eq!(decoded.tasks, add_order_call.tasks);
+        assert_eq!(res.to, Some((*local_evm.raindex.address()).into()));
         assert_eq!(res.max_priority_fee_per_gas, Some(100));
         assert_eq!(res.max_fee_per_gas, Some(200));
     }
@@ -1851,14 +1820,7 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::ReadableClientError(
-                    ReadableClientError::AllProvidersFailed(msg)
-                )
-                if msg.get(&rpc_url).is_some()
-                    && matches!(
-                        msg.get(&rpc_url).unwrap(),
-                        ReadableClientError::RpcTransportKindError(_)
-                    )
+                AddOrderArgsError::TransactionArgs(TransactionArgsError::Transport(_))
             ),
             "unexpected error variant: {err:?}"
         );

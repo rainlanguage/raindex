@@ -144,6 +144,15 @@ pub async fn read_chain_id(rpcs: &[String]) -> Result<u64, TransactionArgsError>
     Ok(provider.get_chain_id().await?)
 }
 
+pub async fn read_block_number(rpcs: &[String]) -> Result<u64, TransactionArgsError> {
+    let urls = rpcs
+        .iter()
+        .map(|s| s.parse::<Url>())
+        .collect::<Result<Vec<_>, _>>()?;
+    let provider = mk_read_provider(&urls)?;
+    Ok(provider.get_block_number().await?)
+}
+
 pub async fn read_call<C: SolCall>(
     rpcs: &[String],
     contract: Address,

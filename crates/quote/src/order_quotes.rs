@@ -7,8 +7,10 @@ use crate::{
     OrderQuoteValue,
 };
 use alloy::primitives::{Address, U256};
-use alloy_ethers_typecast::ReadableClient;
+use alloy::providers::Provider;
+use raindex_bindings::provider::mk_read_provider;
 use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
+use raindex_common::transaction::TransactionArgsError;
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -70,9 +72,16 @@ pub async fn get_order_quotes(
     let req_block_number = match block_number {
         Some(block) => block,
         None => {
-            ReadableClient::new_from_http_urls(rpcs.clone())?
+            let urls = rpcs
+                .iter()
+                .map(|rpc| rpc.parse())
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(TransactionArgsError::Url)?;
+            let provider = mk_read_provider(&urls).map_err(TransactionArgsError::ReadProvider)?;
+            provider
                 .get_block_number()
-                .await?
+                .await
+                .map_err(TransactionArgsError::Transport)?
         }
     };
 
@@ -264,7 +273,6 @@ mod tests {
         providers::Provider,
         sol_types::{SolCall, SolValue},
     };
-    use alloy_ethers_typecast::ReadableClientError;
     use rain_math_float::Float;
     use raindex_app_settings::spec_version::SpecVersion;
     use raindex_common::{add_order::AddOrderArgs, dotrain_order::DotrainOrder};
@@ -623,7 +631,7 @@ amount price: 2 3;
 
         assert!(matches!(
             err,
-            Error::RpcCallError(ReadableClientError::CreateReadableClientHttpError(_))
+            Error::TransactionArgsError(TransactionArgsError::Url(_))
         ));
     }
 }

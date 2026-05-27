@@ -1,5 +1,5 @@
 use alloy::primitives::U256;
-use alloy_ethers_typecast::{ReadableClient, ReadableClientError};
+use alloy::providers::Provider;
 use dotrain::{error::ComposeError, RainDocument, Rebind};
 use futures::TryFutureExt;
 use proptest::{
@@ -59,7 +59,7 @@ pub enum TestRunnerError {
     #[error("Scenario not found")]
     ScenarioNotFound(String),
     #[error(transparent)]
-    ReadableClientHttpError(#[from] ReadableClientError),
+    TransactionArgsError(#[from] crate::transaction::TransactionArgsError),
     #[error(transparent)]
     BlockError(#[from] BlockError),
     #[error(transparent)]
@@ -408,9 +408,7 @@ impl TestRunner {
             .map(|rpc| rpc.to_string())
             .collect::<Vec<String>>();
 
-        let block_number = ReadableClient::new_from_http_urls(rpcs.clone())?
-            .get_block_number()
-            .await?;
+        let block_number = crate::transaction::read_block_number(&rpcs).await?;
 
         let blocks = self
             .test_config
