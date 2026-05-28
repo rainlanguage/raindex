@@ -166,6 +166,6 @@ pub async fn read_call<C: SolCall>(
     let tx = TransactionRequest::default()
         .to(contract)
         .input(call.abi_encode().into());
-    let bytes = provider.call(tx).await?;
+    let bytes = provider.call(tx.into()).await?;
     C::abi_decode_returns(&bytes).map_err(|e| TransactionArgsError::AbiDecode(e.to_string()))
 }

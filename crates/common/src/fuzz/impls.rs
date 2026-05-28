@@ -20,7 +20,10 @@ use rain_interpreter_bindings::{
 use rain_interpreter_eval::eval::ForkParseArgs;
 use rain_interpreter_eval::fork::{Forker, NewForkedEvm};
 pub use rain_interpreter_eval::trace::{RainEvalResult, RainEvalResults, TraceSearchError};
-use rain_interpreter_eval::{error::ForkCallError, eval::ForkEvalArgs};
+use rain_interpreter_eval::{
+    error::ForkCallError,
+    eval::{ForkEvalArgs, ForkEvalExt},
+};
 use raindex_app_settings::blocks::BlockError;
 use raindex_app_settings::scenario::ScenarioCfg;
 use raindex_app_settings::yaml::dotrain::DotrainYamlValidation;

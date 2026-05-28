@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
-import {IRouteProcessor} from "sushixswap-v2/src/interfaces/IRouteProcessor.sol";
+import {IRouteProcessor} from "src/interface/IRouteProcessor.sol";
 
 /// @dev Mock route processor that pulls inputToken from sender and sends
 /// outputToken to the recipient. The route bytes are ignored.

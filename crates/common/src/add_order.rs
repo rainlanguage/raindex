@@ -62,6 +62,9 @@ pub enum AddOrderArgsError {
     #[cfg(not(target_family = "wasm"))]
     #[error(transparent)]
     ForkCallError(Box<ForkCallError>),
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    WriteTransactionError(#[from] crate::write_tx::WriteTransactionError),
     #[error("Input token not found for index: {0}")]
     InputTokenNotFound(String),
     #[error("Output token not found for index: {0}")]

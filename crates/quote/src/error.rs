@@ -30,8 +30,6 @@ pub enum FailedQuote {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
-    TransactionArgsError(#[from] raindex_common::transaction::TransactionArgsError),
-    #[error(transparent)]
     UrlParseError(#[from] ParseError),
     #[error(transparent)]
     SubgraphClientError(#[from] RaindexSubgraphClientError),

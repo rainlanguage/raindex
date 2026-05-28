@@ -44,6 +44,7 @@ chrono = { workspace = true }
 futures = { workspace = true }
 rain-error-decoding = { workspace = true }
 rain-interpreter-eval = { workspace = true }
+wasm-bindgen = { workspace = true }
 wasm-bindgen-utils = { workspace = true }
 eyre.workspace = true
 rain-math-float.workspace = true

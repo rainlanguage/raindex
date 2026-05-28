@@ -38,7 +38,7 @@ pub async fn execute_write_tx<
     )));
 
     let pending_tx = provider
-        .send_transaction(tx_request)
+        .send_transaction(tx_request.into())
         .await
         .map_err(|e| WriteTransactionError::Send(e.to_string()))?
         .with_required_confirmations(u64::from(confirmations));

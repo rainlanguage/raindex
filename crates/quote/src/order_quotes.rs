@@ -10,7 +10,6 @@ use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
 use raindex_bindings::provider::mk_read_provider;
 use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
-use raindex_common::transaction::TransactionArgsError;
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -76,12 +75,12 @@ pub async fn get_order_quotes(
                 .iter()
                 .map(|rpc| rpc.parse())
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(TransactionArgsError::Url)?;
-            let provider = mk_read_provider(&urls).map_err(TransactionArgsError::ReadProvider)?;
+                .map_err(Error::UrlParseError)?;
+            let provider = mk_read_provider(&urls).map_err(Error::ReadProviderError)?;
             provider
                 .get_block_number()
                 .await
-                .map_err(TransactionArgsError::Transport)?
+                .map_err(|e| Error::TransportError(e.to_string()))?
         }
     };
 
@@ -629,9 +628,6 @@ amount price: 2 3;
         .await
         .unwrap_err();
 
-        assert!(matches!(
-            err,
-            Error::TransactionArgsError(TransactionArgsError::Url(_))
-        ));
+        assert!(matches!(err, Error::UrlParseError(_)));
     }
 }

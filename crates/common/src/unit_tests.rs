@@ -9,7 +9,7 @@ use proptest::{
 use rain_interpreter_bindings::IInterpreterStoreV3::FullyQualifiedNamespace;
 use rain_interpreter_eval::{
     error::ForkCallError,
-    eval::ForkEvalArgs,
+    eval::{ForkEvalArgs, ForkEvalExt},
     fork::{Forker, NewForkedEvm},
     trace::{RainEvalResultFromRawCallResultError, RainEvalResults},
 };

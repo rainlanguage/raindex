@@ -33,12 +33,12 @@ sol!(
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    "../../lib/rain.interpreter/lib/rain.interpreter.interface/lib/forge-std/src/interfaces//IMulticall3.sol"
+    "../../dependencies/forge-std-1.16.1/src/interfaces/IMulticall3.sol"
 );
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    TOFUTokenDecimals, "../../lib/rain.interpreter/lib/rain.tofu.erc20-decimals/out/TOFUTokenDecimals.sol/TOFUTokenDecimals.json"
+    TOFUTokenDecimals, "../../out/TOFUTokenDecimals.sol/TOFUTokenDecimals.json"
 );
 
 /// A local evm instance that wraps an Anvil instance and provider with

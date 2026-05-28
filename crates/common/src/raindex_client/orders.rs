@@ -30,7 +30,7 @@ use csv::{ReaderBuilder, Terminator};
 use futures::{stream, StreamExt, TryStreamExt};
 use rain_math_float::Float;
 use rain_metaboard_subgraph::metaboard_client::MetaboardSubgraphClient;
-use rain_metaboard_subgraph::types::metas::BigInt as MetaBigInt;
+use rain_metaboard_subgraph::types::metas::Bytes as MetaBytes;
 use rain_metadata::types::dotrain::source_v1::DotrainSourceV1;
 use rain_metadata::{KnownMagic, RainMetaDocumentV1Item};
 use raindex_subgraph_client::{
@@ -1466,7 +1466,7 @@ impl RaindexOrder {
         let subject_hash = order_builder_state.dotrain_hash();
 
         let metabytes = match client
-            .get_metabytes_by_subject(&MetaBigInt(alloy::hex::encode_prefixed(subject_hash)))
+            .get_metabytes_by_subject(&MetaBytes(alloy::hex::encode_prefixed(subject_hash)))
             .await
         {
             Ok(bytes) => bytes,

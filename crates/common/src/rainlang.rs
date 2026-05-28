@@ -168,7 +168,7 @@ mod fork_parse {
     use once_cell::sync::OnceCell;
     use rain_error_decoding::AbiDecodedErrorType;
     use rain_interpreter_eval::error::ForkCallError;
-    use rain_interpreter_eval::eval::ForkParseArgs;
+    use rain_interpreter_eval::eval::{ForkEvalExt, ForkParseArgs};
     use rain_interpreter_eval::fork::Forker;
     use rain_interpreter_eval::fork::NewForkedEvm;
     use std::sync::Arc;

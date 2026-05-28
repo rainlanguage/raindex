@@ -1,9 +1,8 @@
 [profile.default]
 src = 'src'
 out = 'out'
-# 'dependencies' for soldeer-managed packages, 'lib' kept for the
-# remaining git submodule (sushixswap-v2, which isn't on soldeer).
-libs = ['dependencies', 'lib']
+# All Solidity dependencies are Soldeer-managed; no git submodules remain.
+libs = ['dependencies']
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
@@ -39,8 +38,6 @@ fs_permissions = [
 remappings = [
   # Custom remap so @openzeppelin packages' own internal imports resolve.
   "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.6.1/",
-  # Submodule for sushixswap-v2 (not on Soldeer).
-  "sushixswap-v2/=lib/sushixswap-v2/",
 ]
 
 [dependencies]

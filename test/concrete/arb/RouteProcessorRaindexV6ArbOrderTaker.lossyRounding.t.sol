@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {IRouteProcessor} from "sushixswap-v2/src/interfaces/IRouteProcessor.sol";
+import {IRouteProcessor} from "src/interface/IRouteProcessor.sol";
 
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";

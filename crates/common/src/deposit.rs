@@ -22,6 +22,10 @@ pub enum DepositError {
 
     #[error(transparent)]
     FloatError(#[from] FloatError),
+
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    WriteTransactionError(#[from] crate::write_tx::WriteTransactionError),
 }
 
 #[derive(Clone, Serialize, Deserialize)]
