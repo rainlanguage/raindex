@@ -57,7 +57,6 @@
               cd packages/ui-components && npm i && npm run lint
             '';
             additionalBuildInputs = [
-              pkgs.wasm-bindgen-cli
               rainix.rust-toolchain.${system}
               rainix.rust-build-inputs.${system}
             ];

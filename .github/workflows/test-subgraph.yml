@@ -34,8 +34,6 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: |
-          (cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && nix develop -c rainix-sol-prelude)
       - name: Build subgraph
         run: nix develop -c subgraph-build
       - name: Matchstick tests
