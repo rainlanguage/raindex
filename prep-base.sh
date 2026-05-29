@@ -41,12 +41,13 @@ nix develop -i ${keep[@]} -c bash \
   -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-rs-prelude)'
 
 echo "Setting up rain.tofu.erc20-decimals..."
-(cd lib/rain.interpreter/lib/rain.tofu.erc20-decimals && nix develop -c forge build)
+nix develop -i ${keep[@]} -c bash \
+  -c '(cd lib/rain.interpreter/lib/rain.tofu.erc20-decimals && forge build)'
 
 echo "Setting up rain.interpreter..."
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude)'
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainix-rs-prelude)'
-(cd lib/rain.interpreter && nix develop -i ${keep[@]} -c bash -c rainlang-prelude)
+nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainlang-prelude)'
 
 echo "Setting up rain.metadata..."
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-sol-prelude)'

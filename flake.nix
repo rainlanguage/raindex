@@ -2,8 +2,15 @@
   description = "Flake for development workflows.";
 
   inputs = {
-    rainix.url = "github:rainlanguage/rainix";
-    rain.url = "github:rainlanguage/rain.cli";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rainix = {
+      url = "github:rainlanguage/rainix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    rain = {
+      url = "github:rainlanguage/rain.cli";
+      inputs.rainix.follows = "rainix";
+    };
     flake-utils.url = "github:numtide/flake-utils";
   };
 
@@ -18,9 +25,94 @@
       system:
       let
         pkgs = rainix.pkgs.${system};
+        wasm-bindgen-cli = pkgs.wasm-bindgen-cli_0_2_100;
       in
       rec {
-        packages = rec {
+        packages = rainix.packages.${system} // rec {
+          rainix-sol-prelude = rainix.mkTask.${system} {
+            name = "rainix-sol-prelude";
+            additionalBuildInputs = rainix.sol-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              forge install
+              forge build
+            '';
+          };
+
+          rainix-sol-static = rainix.mkTask.${system} {
+            name = "rainix-sol-static";
+            additionalBuildInputs = rainix.sol-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              slither .
+              forge fmt --check
+            '';
+          };
+
+          rainix-sol-legal = rainix.mkTask.${system} {
+            name = "rainix-sol-legal";
+            additionalBuildInputs = rainix.sol-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              reuse lint
+            '';
+          };
+
+          rainix-sol-test = rainix.mkTask.${system} {
+            name = "rainix-sol-test";
+            additionalBuildInputs = rainix.sol-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              forge test -vvv
+            '';
+          };
+
+          rainix-rs-prelude = rainix.mkTask.${system} {
+            name = "rainix-rs-prelude";
+            additionalBuildInputs = rainix.rust-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+            '';
+          };
+
+          rainix-rs-static = rainix.mkTask.${system} {
+            name = "rainix-rs-static";
+            additionalBuildInputs = rainix.rust-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              cargo fmt --all -- --check
+              cargo clippy --all-targets --all-features -- -D clippy::all
+            '';
+          };
+
+          rainix-rs-artifacts = rainix.mkTask.${system} {
+            name = "rainix-rs-artifacts";
+            additionalBuildInputs = rainix.rust-build-inputs.${system};
+            body = ''
+              set -euxo pipefail
+              cargo build --release
+            '';
+          };
+
+          rainlang-prelude = rainix.mkTask.${system} {
+            name = "rainlang-prelude";
+            body = ''
+              set -euxo pipefail
+
+              mkdir -p deployments/latest;
+
+              mkdir -p meta;
+              forge script --silent ./script/BuildAuthoringMeta.sol;
+              rain meta build \
+                -i <(cat ./meta/AuthoringMeta.rain.meta) \
+                -m authoring-meta-v2 \
+                -t cbor \
+                -e deflate \
+                -l none \
+                -o meta/RainlangExpressionDeployer.rain.meta \
+              ;
+            '';
+          };
 
           raindex-prelude = rainix.mkTask.${system} {
             name = "raindex-prelude";
@@ -57,10 +149,9 @@
               cd packages/ui-components && npm i && npm run lint
             '';
             additionalBuildInputs = [
-              pkgs.wasm-bindgen-cli
+              wasm-bindgen-cli
               rainix.rust-toolchain.${system}
-              rainix.rust-build-inputs.${system}
-            ];
+            ] ++ rainix.rust-build-inputs.${system};
           };
 
           raindex-cli-artifact = rainix.mkTask.${system} {
@@ -107,6 +198,9 @@
 
           rainix-wasm-test = rainix.mkTask.${system} {
             name = "rainix-wasm-test";
+            additionalBuildInputs = [
+              wasm-bindgen-cli
+            ];
             body = ''
               set -euxo pipefail
 
@@ -142,6 +236,9 @@
 
           build-js-bindings = rainix.mkTask.${system} {
             name = "build-js-bindings";
+            additionalBuildInputs = [
+              wasm-bindgen-cli
+            ];
             body = ''
               set -euxo pipefail
               cd packages/raindex
@@ -151,6 +248,9 @@
 
           test-js-bindings = rainix.mkTask.${system} {
             name = "test-js-bindings";
+            additionalBuildInputs = [
+              wasm-bindgen-cli
+            ];
             body = ''
               set -euxo pipefail
               cd packages/raindex
@@ -160,11 +260,19 @@
             '';
           };
 
-        }
-        // rainix.packages.${system};
+        };
 
         devShells.default = pkgs.mkShell {
           packages = [
+            wasm-bindgen-cli
+            packages.rainix-sol-prelude
+            packages.rainix-sol-static
+            packages.rainix-sol-legal
+            packages.rainix-sol-test
+            packages.rainix-rs-prelude
+            packages.rainix-rs-static
+            packages.rainix-rs-artifacts
+            packages.rainlang-prelude
             packages.raindex-prelude
             packages.raindex-rs-test
             packages.rainix-wasm-artifacts
@@ -181,7 +289,10 @@
           inherit (rainix.devShells.${system}.default) shellHook buildInputs nativeBuildInputs;
         };
         devShells.webapp-shell = pkgs.mkShell {
-          packages = with pkgs; [ nodejs_20 ];
+          packages = [
+            pkgs.nodejs_22
+            wasm-bindgen-cli
+          ];
           inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
       }
