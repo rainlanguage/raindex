@@ -477,11 +477,17 @@ impl RaindexOrderBuilder {
 #[derive(Error, Debug)]
 pub enum RaindexOrderBuilderWasmError {
     #[error(transparent)]
-    BuilderError(#[from] RaindexOrderBuilderError),
+    BuilderError(Box<RaindexOrderBuilderError>),
     #[error("JavaScript error: {0}")]
     JsError(String),
     #[error(transparent)]
     SerdeWasmBindgenError(#[from] serde_wasm_bindgen::Error),
+}
+
+impl From<RaindexOrderBuilderError> for RaindexOrderBuilderWasmError {
+    fn from(err: RaindexOrderBuilderError) -> Self {
+        Self::BuilderError(Box::new(err))
+    }
 }
 
 impl RaindexOrderBuilderWasmError {
@@ -511,6 +517,10 @@ impl From<RaindexOrderBuilderWasmError> for WasmEncodedError {
 
 #[cfg(test)]
 mod tests {
+    // Helpers/tests below are consumed by #[wasm_bindgen_test] cases, which
+    // don't register as native #[test]s, so they read as dead on the native
+    // clippy target (rainix-rs-static).
+    #![allow(dead_code)]
     use super::*;
     use raindex_app_settings::order_builder::OrderBuilderPresetCfg;
     use raindex_app_settings::spec_version::SpecVersion;

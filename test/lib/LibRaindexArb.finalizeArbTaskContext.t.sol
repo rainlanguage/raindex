@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std/Test.sol";
-import {EvaluableV4, SignedContextV1, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain.interpreter.interface/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rain.interpreter.interface/interface/IParserV2.sol";
-import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
+import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {EvaluableV4, SignedContextV1, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
 import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskContextTest

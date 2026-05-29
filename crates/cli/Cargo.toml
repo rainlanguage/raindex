@@ -9,7 +9,6 @@ homepage.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-alloy-ethers-typecast = { workspace = true }
 alloy = { workspace = true }
 raindex_subgraph_client = { workspace = true }
 raindex_bindings = { workspace = true }
@@ -40,11 +39,11 @@ tokio = { workspace = true, features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { workspace = true, features = [
-    "sync",
-    "macros",
-    "io-util",
-    "rt",
-    "time",
+  "sync",
+  "macros",
+  "io-util",
+  "rt",
+  "time",
 ] }
 
 [dev-dependencies]

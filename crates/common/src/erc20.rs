@@ -1,7 +1,6 @@
 use alloy::network::AnyNetwork;
 use alloy::primitives::{Address, U256};
 use alloy::providers::{MulticallError, Provider};
-use alloy_ethers_typecast::ReadContractParametersBuilderError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
 use raindex_app_settings::token::TokenCfg;
 use raindex_bindings::provider::{mk_read_provider, ReadProvider, ReadProviderError};
@@ -188,12 +187,6 @@ const ERROR_MESSAGE: &str = "Failed to get token information: ";
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("{ERROR_MESSAGE} {msg} - {source}")]
-    ReadContractError {
-        msg: String,
-        #[source]
-        source: ReadContractParametersBuilderError,
-    },
     #[error("{ERROR_MESSAGE} {msg} - {source}")]
     AbiDecodedErrorType {
         msg: String,

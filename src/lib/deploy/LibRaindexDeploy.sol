@@ -79,8 +79,8 @@ library LibRaindexDeploy {
     /// deployed with the rain standard zoltu deployer.
     bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH = GENERIC_POOL_FB_HASH;
 
-    uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 441612693;
-    uint256 constant RAINDEX_START_BLOCK_BASE = 43339885;
-    uint256 constant RAINDEX_START_BLOCK_FLARE = 56972130;
-    uint256 constant RAINDEX_START_BLOCK_POLYGON = 84174550;
+    uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 467989192;
+    uint256 constant RAINDEX_START_BLOCK_BASE = 46645657;
+    uint256 constant RAINDEX_START_BLOCK_FLARE = 61847874;
+    uint256 constant RAINDEX_START_BLOCK_POLYGON = 87623401;
 }

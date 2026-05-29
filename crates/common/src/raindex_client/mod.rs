@@ -476,7 +476,7 @@ pub enum RaindexError {
     #[error("Invalid vault balance change type: {0}")]
     InvalidVaultBalanceChangeType(String),
     #[error(transparent)]
-    Erc20(#[from] crate::erc20::Error),
+    Erc20(Box<crate::erc20::Error>),
     #[error("Float error: {0}")]
     Float(#[from] FloatError),
     #[error("Failed to parse an integer: {0}")]
@@ -539,6 +539,12 @@ impl From<DotrainOrderError> for RaindexError {
 impl From<LocalDbError> for RaindexError {
     fn from(err: LocalDbError) -> Self {
         Self::LocalDbError(Box::new(err))
+    }
+}
+
+impl From<crate::erc20::Error> for RaindexError {
+    fn from(err: crate::erc20::Error) -> Self {
+        Self::Erc20(Box::new(err))
     }
 }
 

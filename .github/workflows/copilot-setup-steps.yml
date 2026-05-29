@@ -1,5 +1,4 @@
 name: Copilot Agent Setup
-
 on:
   workflow_dispatch:
   push:
@@ -16,36 +15,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
-
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 1G
-
       - name: Prepare environment files
         run: |
           set -euxo pipefail
           cp -f .env.example .env
           cp -f packages/webapp/.env.example packages/webapp/.env
           cp -f .env.example crates/common/.env
-
       - name: Prepare repository dependencies
         run: ./prep-all.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID || 'test' }}
           COMMIT_SHA: ${{ github.sha }}
-      
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

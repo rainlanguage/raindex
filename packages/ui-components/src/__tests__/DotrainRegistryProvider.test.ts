@@ -26,6 +26,7 @@ describe("DotrainRegistryProvider", () => {
 
     const registry: NonNullable<DotrainRegistryContext["registry"]> = {
       free: vi.fn(),
+      [Symbol.dispose]: vi.fn(),
       getAllOrderDetails: vi.fn(() => wasmErrorResult),
       getOrderKeys: vi.fn(() => ({ value: [], error: undefined })),
       getDeploymentDetails: vi.fn(() => wasmErrorResult),

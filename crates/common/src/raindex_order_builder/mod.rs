@@ -6,7 +6,6 @@ use crate::{
     utils::amount_formatter::AmountFormatterError,
 };
 use alloy::primitives::Address;
-use alloy_ethers_typecast::ReadableClientError;
 use base64::{engine::general_purpose::URL_SAFE, Engine};
 use flate2::{read::GzDecoder, write::GzEncoder, Compression};
 use rain_math_float::FloatError;
@@ -315,15 +314,9 @@ pub enum RaindexOrderBuilderError {
     #[error(transparent)]
     FromHexError(#[from] alloy::hex::FromHexError),
     #[error(transparent)]
-    ReadableClientError(#[from] ReadableClientError),
-    #[error(transparent)]
     DepositError(#[from] crate::deposit::DepositError),
     #[error(transparent)]
     ParseError(#[from] alloy::primitives::ruint::ParseError),
-    #[error(transparent)]
-    ReadContractParametersBuilderError(
-        #[from] alloy_ethers_typecast::ReadContractParametersBuilderError,
-    ),
     #[error(transparent)]
     UnitsError(#[from] alloy::primitives::utils::UnitsError),
     #[error(transparent)]
@@ -331,7 +324,7 @@ pub enum RaindexOrderBuilderError {
     #[error(transparent)]
     AddOrderArgsError(#[from] crate::add_order::AddOrderArgsError),
     #[error(transparent)]
-    ERC20Error(#[from] crate::erc20::Error),
+    ERC20Error(Box<crate::erc20::Error>),
     #[error(transparent)]
     SolTypesError(#[from] alloy::sol_types::Error),
     #[error(transparent)]
@@ -350,6 +343,12 @@ pub enum RaindexOrderBuilderError {
     NoAddressInMetaboardSubgraph,
     #[error(transparent)]
     MetaboardSubgraphClientError(#[from] MetaboardSubgraphClientError),
+}
+
+impl From<crate::erc20::Error> for RaindexOrderBuilderError {
+    fn from(err: crate::erc20::Error) -> Self {
+        Self::ERC20Error(Box::new(err))
+    }
 }
 
 impl RaindexOrderBuilderError {
@@ -407,14 +406,10 @@ impl RaindexOrderBuilderError {
                 format!("Base64 encoding/decoding error: {}", err),
             Self::FromHexError(err) =>
                 format!("Invalid hexadecimal value: {}", err),
-            Self::ReadableClientError(err) =>
-                format!("Network client error: {}", err),
             Self::DepositError(err) =>
                 format!("Deposit error: {}", err),
             Self::ParseError(err) =>
                 format!("Number parsing error: {}", err),
-            Self::ReadContractParametersBuilderError(err) =>
-                format!("Contract parameter error: {}", err),
             Self::UnitsError(err) =>
                 format!("Unit conversion error: {}", err),
             Self::WritableTransactionExecuteError(err) =>

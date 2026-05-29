@@ -14,9 +14,9 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
-import {LibInterpreterDeploy} from "rain.interpreter/lib/deploy/LibInterpreterDeploy.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
 
 contract GenericPoolRaindexV6ArbOrderTakerSenderTest is GenericPoolRaindexV6ArbOrderTakerTest {
     /// forge-config: default.fuzz.runs = 10

@@ -4,11 +4,9 @@ on:
     branches:
       - main
   pull_request:
-
 concurrency:
   group: ${{ github.ref }}-git-clean
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
 jobs:
   git-clean:
     permissions:
@@ -17,13 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -40,17 +33,13 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-
       # Build metas etc. required to do a correct pointer build.
       - run: ./pointers.sh
-
       # Format the repo after generating pointers so that the pointer files are
       # formatted too.
       - run: nix develop -c forge fmt
-
       # Check if the repo is clean after generating pointers and formatting.
       - run: git diff --exit-code
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always() # This ensures it runs regardless of previous step outcomes

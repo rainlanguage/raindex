@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderConfigV4, OrderV4, TaskV2, TakeOrdersConfigV5} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, TaskV2, TakeOrdersConfigV5} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/concrete/raindex/RaindexV6.sol";
 
 contract RaindexV6TakeOrderBadStackTest is RaindexV6ExternalRealTest {

@@ -2052,13 +2052,13 @@ ${dotrainWithoutVaultIds}`;
       const result = builder.setVaultId("input", "token1", "test");
       if (!result.error) expect.fail("Expected error");
       expect(result.error.msg).toBe(
-        "Invalid value for field 'vault-id': Failed to parse vault id: digit 29 is out of range for base 10 in token 'token1' in inputs of order 'some-order'",
+        "Invalid value for field 'vault-id': Failed to parse vault id: invalid digit: t in token 'token1' in inputs of order 'some-order'",
       );
 
       expect(result.error.msg).toContain("token 'token1'");
       expect(result.error.msg).toContain("order 'some-order'");
       expect(result.error.readableMsg).toBe(
-        "YAML configuration error: Invalid value for field 'vault-id': Failed to parse vault id: digit 29 is out of range for base 10 in token 'token1' in inputs of order 'some-order'",
+        "YAML configuration error: Invalid value for field 'vault-id': Failed to parse vault id: invalid digit: t in token 'token1' in inputs of order 'some-order'",
       );
 
       assert.equal(stateUpdateCallback.mock.calls.length, 4);

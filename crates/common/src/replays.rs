@@ -260,7 +260,9 @@ amount price: 2 1;
 
         assert!(matches!(
             err,
-            Err(TradeReplayerError::ForkerError(ForkCallError::Eyre(_)))
+            Err(TradeReplayerError::ForkerError(
+                ForkCallError::ExecutorError(_)
+            ))
         ));
 
         let local_evm = LocalEvm::new().await;

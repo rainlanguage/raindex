@@ -1,9 +1,9 @@
+use crate::transaction::TransactionArgsError;
 use crate::{
     add_order::{RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS, RAINDEX_ORDER_ENTRYPOINTS},
     rainlang::compose_to_rainlang,
 };
 use alloy::primitives::Address;
-use alloy_ethers_typecast::{ReadableClient, ReadableClientError};
 use dotrain::{error::ComposeError, types::patterns::FRONTMATTER_SEPARATOR, RainDocument};
 use futures::future::join_all;
 use rain_interpreter_parser::{Parser2, ParserError, ParserV2};
@@ -18,6 +18,7 @@ use raindex_app_settings::{
     yaml::{dotrain::DotrainYamlValidation, raindex::RaindexYamlValidation},
 };
 use raindex_app_settings::{scenario::ScenarioCfg, spec_version::SpecVersion};
+use raindex_bindings::provider::{mk_read_provider, ReadProviderError};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::{strict_yaml::Hash as StrictYamlHash, StrictYaml, StrictYamlLoader};
@@ -89,7 +90,10 @@ pub enum DotrainOrderError {
     FetchAuthoringMetaV2WordError(#[from] Box<FetchAuthoringMetaV2WordError>),
 
     #[error(transparent)]
-    ReadableClientError(#[from] ReadableClientError),
+    ReadProviderError(#[from] ReadProviderError),
+
+    #[error(transparent)]
+    TransactionArgsError(#[from] TransactionArgsError),
 
     #[error(transparent)]
     ParserError(#[from] ParserError),
@@ -151,7 +155,10 @@ impl DotrainOrderError {
             DotrainOrderError::FetchAuthoringMetaV2WordError(e) => {
                 format!("Error fetching words from contract authoring metadata: {e}")
             }
-            DotrainOrderError::ReadableClientError(e) => {
+            DotrainOrderError::ReadProviderError(e) => {
+                format!("Problem communicating with the rpc: {e}")
+            }
+            DotrainOrderError::TransactionArgsError(e) => {
                 format!("Problem communicating with the rpc: {e}")
             }
             DotrainOrderError::ParserError(e) => {
@@ -495,14 +502,9 @@ impl DotrainOrder {
             .compose_scenario_to_rainlang(scenario.to_string())
             .await?;
 
-        let rpcs = rainlang_cfg
-            .network
-            .rpcs
-            .iter()
-            .map(|rpc| rpc.to_string())
-            .collect();
-        let client = ReadableClient::new_from_http_urls(rpcs)?;
-        let pragmas = parser.parse_pragma_text(&rainlang, client).await?;
+        let urls = rainlang_cfg.network.rpcs.clone();
+        let provider = mk_read_provider(&urls)?;
+        let pragmas = parser.parse_pragma_text(&rainlang, &provider).await?;
         Ok(pragmas)
     }
 

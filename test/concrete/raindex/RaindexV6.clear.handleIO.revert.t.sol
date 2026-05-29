@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std/Vm.sol";
+import {Vm} from "forge-std-1.16.1/src/Vm.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     ClearConfigV2,
@@ -13,9 +13,9 @@ import {
     SignedContextV1,
     TaskV2,
     Float
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {SourceIndexOutOfBounds} from "rain.interpreter.interface/error/ErrBytecode.sol";
-import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {SourceIndexOutOfBounds} from "rain-interpreter-interface-0.1.0/src/error/ErrBytecode.sol";
+import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 /// @title RaindexV6ClearHandleIORevertTest

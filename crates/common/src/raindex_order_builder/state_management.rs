@@ -399,7 +399,7 @@ mod tests {
     use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
     use std::str::FromStr;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_2NigABOKJ2UmZeSmZeuawjlMzAwQ2lDAwN0RUaMUAEDBjgLxmCD0iX52al5xthMw64SlccD5RXn56bq5qWWlOcXZcP0yULpjJKSAit9_Zz85MScjPziEisLAwtT_aKCZN3SopxqkApGEMkIs9o1xEMEyhQyCauYgEYwCjGyQ6VDQG5QMGZkgfG9_YwZGJjgnkFzuyHcCkNLS5ArUWSN4LJGlpY6UGaEYXZEUUFeuWegaXGuUamrh3N4SmmmY2m2c36gX0iEZ0RQbnaZYZVBqm65rTgsLFJzUpNLdMGG6qakFuTkV-am5pUAAINPx5HKAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByw0qROssIchgiIIStG-ahu0JE1Km1o__oQ_Was3FYv34Z5zc07uvUnDusYb4DKSYSRXmFomngApIXWTg-CAWBUz5AVQK85k61G3x8776h2qTMUMS6YLlXJz7wtwrXXStW2hgoVYq0x3O6TTttMkwHkqDqUDlRmZ0X1v8AG0-TvbHmsJNdEryF65w3cLPZt6ND6_pGHd4m5bWo2grovqqlOpjuv-APUp99NEFsNJO4udvD_ozcM8-s95T03Gnj_0pzHf0D1huPj7NH_BBAs0vjTFIUuE2sVM6hODT8eRygEAAA==";
 
     fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();

@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Script} from "forge-std/Script.sol";
-import {LibCodeGen} from "rain.sol.codegen/lib/LibCodeGen.sol";
-import {LibFs} from "rain.sol.codegen/lib/LibFs.sol";
+import {Script} from "forge-std-1.16.1/src/Script.sol";
+import {LibCodeGen} from "rain-sol-codegen-0.1.0/src/lib/LibCodeGen.sol";
+import {LibFs} from "rain-sol-codegen-0.1.0/src/lib/LibFs.sol";
 import {RaindexV6} from "../src/concrete/raindex/RaindexV6.sol";
 import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
 import {LibRaindexSubParser, EXTERN_PARSE_META_BUILD_DEPTH} from "../src/lib/LibRaindexSubParser.sol";
-import {LibGenParseMeta} from "rain.interpreter.interface/lib/codegen/LibGenParseMeta.sol";
-import {LibRainDeploy} from "rain.deploy/lib/LibRainDeploy.sol";
+import {LibGenParseMeta} from "rain-interpreter-interface-0.1.0/src/lib/codegen/LibGenParseMeta.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {ROUTE_PROCESSOR_4_CREATION_CODE} from "../src/lib/deploy/LibRouteProcessor4CreationCode.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
