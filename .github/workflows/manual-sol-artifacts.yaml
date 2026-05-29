@@ -37,9 +37,8 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: nix develop -c rainix-sol-prelude
-      - run: nix develop -c rainix-rs-prelude
-      - run: nix develop -c raindex-prelude
+      - run: nix develop -c forge soldeer install
+      - run: nix develop -c forge build
       - name: deploy to all supported networks
         run: nix develop -c rainix-sol-artifacts
         env:
