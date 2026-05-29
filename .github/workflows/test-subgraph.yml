@@ -34,6 +34,8 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
+      - name: Install Soldeer dependencies
+        run: nix develop -c forge soldeer install
       - name: Build subgraph
         run: nix develop -c subgraph-build
       - name: Matchstick tests
