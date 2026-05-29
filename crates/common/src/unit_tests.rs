@@ -1,5 +1,4 @@
 use alloy::primitives::U256;
-use alloy::providers::Provider;
 use dotrain::{error::ComposeError, RainDocument, Rebind};
 use futures::TryFutureExt;
 use proptest::{

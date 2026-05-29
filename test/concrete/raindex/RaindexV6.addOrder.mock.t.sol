@@ -7,7 +7,9 @@ import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV2} from "raindex-interfa
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotRainMetaV1, META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.0/src/interface/unstable/IMetaV1_2.sol";
 import {LibMeta} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
-import {IExpressionDeployerV3} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IExpressionDeployerV3.sol";
+import {
+    IExpressionDeployerV3
+} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IExpressionDeployerV3.sol";
 
 /// @title RaindexV6AddOrderMockTest
 /// @notice Tests the addOrder function of the RaindexV6 contract.

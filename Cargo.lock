@@ -5467,9 +5467,9 @@ dependencies = [
 
 [[package]]
 name = "rain-math-float"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8bdd3d50ec4e698d159648b7f2a4600d311465ad98d6d487475f44ed30a2b64"
+checksum = "557abda705cbe7f155c0d383bd7a24e2fce0230bc1218527b8ea667c582c0bb7"
 dependencies = [
  "alloy",
  "getrandom 0.2.16",
@@ -5658,6 +5658,7 @@ dependencies = [
  "flate2",
  "futures",
  "getrandom 0.2.16",
+ "getrandom 0.4.2",
  "gloo-timers 0.2.6",
  "httpmock",
  "itertools 0.14.0",

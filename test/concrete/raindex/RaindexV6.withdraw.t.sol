@@ -12,7 +12,9 @@ import {TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindex
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibDecimalFloatImplementation} from "rain-math-float-0.1.1/src/lib/implementation/LibDecimalFloatImplementation.sol";
+import {
+    LibDecimalFloatImplementation
+} from "rain-math-float-0.1.1/src/lib/implementation/LibDecimalFloatImplementation.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
 
 /// @title RaindexV6WithdrawTest

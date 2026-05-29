@@ -75,6 +75,13 @@ tokio = { workspace = true, features = [
 ] }
 serde-wasm-bindgen = "0.4"
 getrandom = { workspace = true }
+# alloy's `rand` feature pulls getrandom 0.4 transitively (via alloy-primitives),
+# which needs the `wasm_js` feature on wasm — the .cargo/config getrandom_backend
+# cfg only covers 0.2/0.3. common is built standalone by the wasm-pack browser
+# tests, so it must enable this itself rather than rely on js_api.
+getrandom_v04 = { package = "getrandom", version = "0.4", features = [
+  "wasm_js",
+] }
 wasm-bindgen-test = "0.3"
 wasm-bindgen-futures = "0.4"
 

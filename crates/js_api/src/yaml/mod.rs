@@ -210,6 +210,9 @@ impl From<RaindexYamlError> for WasmEncodedError {
 
 #[cfg(test)]
 pub(crate) mod tests {
+    // #[wasm_bindgen_test] helpers/cases read as dead on the native clippy
+    // target (rainix-rs-static); they execute under the wasm test jobs.
+    #![allow(dead_code)]
     use super::*;
     use raindex_app_settings::spec_version::SpecVersion;
     use wasm_bindgen_test::wasm_bindgen_test;

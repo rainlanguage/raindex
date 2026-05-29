@@ -762,6 +762,9 @@ impl DotrainRegistry {
 
 #[cfg(test)]
 mod tests {
+    // #[wasm_bindgen_test] helpers/cases read as dead on the native clippy
+    // target (rainix-rs-static); they execute under the wasm test jobs.
+    #![allow(dead_code)]
     use super::*;
     use raindex_app_settings::spec_version::SpecVersion;
     use std::collections::HashMap;
@@ -1598,7 +1601,7 @@ _ _: 1 1;
             assert!(registry.order_urls.contains_key("second-order"));
             assert_eq!(registry.orders.len(), 2);
 
-            let mut builder1 = registry
+            let builder1 = registry
                 .get_order_builder("first-order".to_string(), "flare".to_string(), None, None)
                 .await
                 .unwrap();

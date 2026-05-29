@@ -49,7 +49,7 @@ thirtyfour = "0.31.0"
 test-context = "0.3.0"
 portpicker = "0.1.1"
 rain-erc = "0.1.1"
-rain-math-float = "0.1.6"
+rain-math-float = "0.1.7"
 rain-error-decoding = "0.1.2"
 # Direct dep required: the #[wasm_bindgen] macro emits `::wasm_bindgen` paths, and
 # without a direct dep the 0.2.122 macro recurses without bound on opaque-class

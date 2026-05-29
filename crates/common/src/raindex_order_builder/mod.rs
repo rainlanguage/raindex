@@ -324,7 +324,7 @@ pub enum RaindexOrderBuilderError {
     #[error(transparent)]
     AddOrderArgsError(#[from] crate::add_order::AddOrderArgsError),
     #[error(transparent)]
-    ERC20Error(#[from] crate::erc20::Error),
+    ERC20Error(Box<crate::erc20::Error>),
     #[error(transparent)]
     SolTypesError(#[from] alloy::sol_types::Error),
     #[error(transparent)]
@@ -343,6 +343,12 @@ pub enum RaindexOrderBuilderError {
     NoAddressInMetaboardSubgraph,
     #[error(transparent)]
     MetaboardSubgraphClientError(#[from] MetaboardSubgraphClientError),
+}
+
+impl From<crate::erc20::Error> for RaindexOrderBuilderError {
+    fn from(err: crate::erc20::Error) -> Self {
+        Self::ERC20Error(Box::new(err))
+    }
 }
 
 impl RaindexOrderBuilderError {
