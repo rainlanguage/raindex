@@ -160,6 +160,41 @@
             '';
           };
 
+          # rainix dropped its trivial sol/rs task wrappers, so define the ones
+          # our CI matrix runs here (tools come from rainix's sol/rs build inputs).
+          rainix-sol-test = rainix.mkTask.${system} {
+            name = "rainix-sol-test";
+            body = ''
+              set -euxo pipefail
+              forge test -vvv
+            '';
+          };
+
+          rainix-sol-static = rainix.mkTask.${system} {
+            name = "rainix-sol-static";
+            body = ''
+              set -euxo pipefail
+              slither .
+              forge fmt --check
+            '';
+          };
+
+          rainix-sol-legal = rainix.mkTask.${system} {
+            name = "rainix-sol-legal";
+            body = ''
+              set -euxo pipefail
+              reuse lint
+            '';
+          };
+
+          rainix-rs-artifacts = rainix.mkTask.${system} {
+            name = "rainix-rs-artifacts";
+            body = ''
+              set -euxo pipefail
+              cargo build --release
+            '';
+          };
+
         }
         // rainix.packages.${system};
 
@@ -173,6 +208,10 @@
             packages.js-install
             packages.build-js-bindings
             packages.test-js-bindings
+            packages.rainix-sol-test
+            packages.rainix-sol-static
+            packages.rainix-sol-legal
+            packages.rainix-rs-artifacts
             rain.defaultPackage.${system}
             packages.raindex-ui-components-prelude
             packages.raindex-cli-artifact
