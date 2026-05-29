@@ -32,6 +32,7 @@ path = [
   "ai_commands/**/",
   "subgraph/**/",
   "crates/**/",
+  "meta/**/",
   "test-resources/**/",
   "prep-base.sh",
   "prep-webapp.sh",
