@@ -26,3 +26,6 @@ packages/raindex/esm.d.ts
 .cursor/
 
 dependencies/
+
+# Local pre-commit hook config
+.pre-commit-config.yaml
