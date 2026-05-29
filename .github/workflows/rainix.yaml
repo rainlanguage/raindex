@@ -8,30 +8,10 @@ concurrency:
   group: ${{ github.ref }}-rainix
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
-  # Solidity static analysis, license check, and tests via rainix's reusable
-  # workflows. raindex's fork tests read foundry.toml rpc_endpoints, which now
-  # point at rainix's *_RPC_URL env names, so map our CI_DEPLOY_* secrets onto
-  # rainix's RPC_URL_*_FORK inputs.
-  solidity:
-    uses: rainlanguage/rainix/.github/workflows/rainix-sol.yaml@main
-    secrets:
-      PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-      EXPLORER_VERIFICATION_KEY: ${{ secrets.EXPLORER_VERIFICATION_KEY }}
-      CI_DEPLOY_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_SEPOLIA_RPC_URL }}
-      RPC_URL_ARBITRUM_FORK: ${{ secrets.CI_DEPLOY_ARBITRUM_RPC_URL }}
-      RPC_URL_BASE_FORK: ${{ secrets.CI_DEPLOY_BASE_RPC_URL }}
-      RPC_URL_BASE_SEPOLIA_FORK: ${{ secrets.CI_DEPLOY_BASE_SEPOLIA_RPC_URL }}
-      RPC_URL_FLARE_FORK: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL }}
-      RPC_URL_POLYGON_FORK: ${{ secrets.CI_DEPLOY_POLYGON_RPC_URL }}
-  # Assert the committed generated artifacts (src/generated pointers + meta)
-  # still match a clean rebuild.
-  copy-artifacts:
-    uses: rainlanguage/rainix/.github/workflows/rainix-copy-artifacts.yaml@main
-    secrets:
-      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
   # Rust / wasm / JS bindings run on raindex's own devshell: they need sqlite3
   # (rusqlite) and the forge-build artifacts, which the slim rainix rs reusables
-  # don't provide.
+  # don't provide. Solidity + artifact checks live in rainix-sol.yaml and
+  # copy-artifacts.yaml (rainix reusables).
   standard-tests:
     permissions:
       id-token: write

@@ -1,0 +1,9 @@
+name: copy-artifacts
+on: [push]
+jobs:
+  copy-artifacts:
+    # Build from committed sources and assert the committed meta/pointer
+    # artifacts are still current (no prelude — committing the artifacts is what
+    # removes the need for one). secrets: inherit carries CACHIX_AUTH_TOKEN.
+    uses: rainlanguage/rainix/.github/workflows/rainix-copy-artifacts.yaml@main
+    secrets: inherit
