@@ -1,6 +1,5 @@
 [workspace]
 members = ["crates/*"]
-exclude = ["lib/rain.interpreter", "lib/rain.raindex.interface"]
 resolver = "2"
 
 [workspace.package]

@@ -20,8 +20,6 @@ keep=(
   -k PUBLIC_WALLETCONNECT_PROJECT_ID
 )
 
-git submodule update --init --recursive
-
 nix develop -c forge soldeer install
 nix develop -c forge build
 
