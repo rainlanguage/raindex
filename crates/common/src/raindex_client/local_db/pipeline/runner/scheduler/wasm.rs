@@ -294,6 +294,8 @@ async fn run_network_loop<R>(
                 RunOutcome::NotLeader => {
                     was_leader_last_cycle = false;
                     set_scheduler_state(SchedulerState::NotLeader);
+                    sync_readiness.mark_ready(chain_id);
+                    status_store.record_chain_ready(chain_id);
                     emit_network_status(
                         &status_store,
                         callback.as_deref(),
@@ -523,6 +525,7 @@ mod wasm_tests {
             closure.forget();
             function
         };
+        let readiness = SyncReadiness::new();
 
         spawn_network_loop(
             runner,
@@ -530,7 +533,7 @@ mod wasm_tests {
             Some(Rc::new(status_callback)),
             Rc::clone(&stop_flag),
             1,
-            SyncReadiness::new(),
+            readiness.clone(),
             LocalDbSyncStatusStore::new(),
         );
 
@@ -551,6 +554,10 @@ mod wasm_tests {
             get_scheduler_state(),
             SchedulerState::Leader,
             "scheduler state should be Leader after recovering"
+        );
+        assert!(
+            readiness.is_ready(1),
+            "observer should be able to read local DB"
         );
     }
 

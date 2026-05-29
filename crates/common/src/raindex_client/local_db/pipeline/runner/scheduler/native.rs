@@ -279,6 +279,8 @@ async fn run_network_loop<R: NativeRunner>(
                     }
                 }
                 RunOutcome::NotLeader => {
+                    sync_readiness.mark_ready(chain_id);
+                    status_store.record_chain_ready(chain_id);
                     status_store.record_network_status(NetworkSyncStatus::active(
                         chain_id,
                         SchedulerState::NotLeader,
@@ -579,11 +581,8 @@ mod tests {
             .run_until(async {
                 let calls = Arc::new(AtomicUsize::new(0));
                 let failures = Arc::new(AtomicUsize::new(0));
-                let runner = RecordingRunner::new(
-                    Arc::clone(&calls),
-                    Arc::clone(&failures),
-                    vec![None, Some(false)],
-                );
+                let runner =
+                    RecordingRunner::new(Arc::clone(&calls), Arc::clone(&failures), vec![None]);
                 let stop_flag = Arc::new(AtomicBool::new(false));
                 let readiness = SyncReadiness::new();
 
@@ -604,11 +603,11 @@ mod tests {
                 stop_flag.store(true, Ordering::SeqCst);
                 tokio::time::sleep(std::time::Duration::from_millis(10)).await;
 
-                assert!(calls.load(Ordering::SeqCst) >= 2);
+                assert!(calls.load(Ordering::SeqCst) >= 1);
                 assert_eq!(failures.load(Ordering::SeqCst), 0);
                 assert!(
                     readiness.is_ready(1),
-                    "chain should be marked ready after successful cycle"
+                    "observer should be able to read local DB"
                 );
             })
             .await;

@@ -21,6 +21,8 @@ pub const REQUIRED_TABLES: &[&str] = &[
     "interpreter_store_sets",
     "vault_balance_changes",
     "running_vault_balances",
+    "derived_vault_deltas",
+    "derived_trades",
 ];
 
 pub fn create_tables_sql() -> &'static str {
@@ -196,6 +198,8 @@ mod tests {
         assert!(by_table["target_watermarks"].contains(&"raindex_address".to_string()));
         assert!(by_table["order_events"].contains(&"order_hash".to_string()));
         assert!(by_table["running_vault_balances"].contains(&"balance".to_string()));
+        assert!(by_table["derived_vault_deltas"].contains(&"delta".to_string()));
+        assert!(by_table["derived_trades"].contains(&"trade_id".to_string()));
         assert!(!by_table["order_ios"].contains(&"foreign".to_string()));
     }
 }

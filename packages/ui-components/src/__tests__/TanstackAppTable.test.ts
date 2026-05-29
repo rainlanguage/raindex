@@ -103,6 +103,20 @@ test("shows empty message", async () => {
   );
 });
 
+test("shows loading skeleton instead of empty message during initial load", async () => {
+  const pages = createPages([]);
+  const mockQuery = createMockQuery(pages, {
+    isLoading: true,
+    isFetching: true,
+    status: "pending" as const,
+    fetchStatus: "fetching" as const,
+  });
+  renderTable(mockQuery);
+
+  expect(await screen.findByTestId("tableLoadingSkeleton")).toBeInTheDocument();
+  expect(screen.queryByTestId("emptyMessage")).not.toBeInTheDocument();
+});
+
 test("renders rows when first page is empty but later pages have data", async () => {
   const pages = writable({
     pages: [[], ["page1"]],

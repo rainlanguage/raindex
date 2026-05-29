@@ -18,7 +18,7 @@ mod tests {
     fn batch_wraps_transaction() {
         let batch = create_views_batch();
         assert!(batch.is_transaction());
-        assert_eq!(batch.len(), 3); // begin + view + commit
+        assert_eq!(batch.len(), 3); // begin + drop/create view + commit
 
         let statements = batch.statements();
         assert_eq!(statements.first().unwrap().sql(), "BEGIN TRANSACTION");
@@ -30,6 +30,8 @@ mod tests {
     fn single_stmt_matches_constant() {
         let stmt = vault_deltas_view_stmt();
         assert_eq!(stmt.sql(), VAULT_DELTAS_VIEW_SQL);
+        assert!(stmt.sql().starts_with("DROP VIEW IF EXISTS vault_deltas;"));
+        assert!(stmt.sql().contains("CREATE VIEW vault_deltas AS"));
         assert!(stmt.params().is_empty());
     }
 }

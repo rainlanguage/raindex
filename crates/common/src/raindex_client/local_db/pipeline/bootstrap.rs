@@ -2,6 +2,7 @@ use crate::local_db::{
     pipeline::adapters::bootstrap::{BootstrapConfig, BootstrapPipeline, BootstrapState},
     query::{
         create_tables::{required_table_schema, REQUIRED_TABLES},
+        create_views::create_views_batch,
         fetch_table_columns::{fetch_table_columns_stmt, TableColumnResponse},
         fetch_tables::{fetch_tables_stmt, TableResponse},
         fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
@@ -171,6 +172,8 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
             || !self.has_required_schema_shape(db, &existing_tables).await?
         {
             self.reset_db(db, db_schema_version).await?;
+        } else {
+            db.execute_batch(&create_views_batch()).await?;
         }
 
         Ok(())
@@ -627,16 +630,23 @@ mod tests {
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
             .with_required_schema_columns()
-            .with_json(&fetch_target_watermark_stmt(&runner_ob_id()), json!([]));
+            .with_json(&fetch_target_watermark_stmt(&runner_ob_id()), json!([]))
+            .with_views();
 
         adapter
             .runner_run(&db, Some(DB_SCHEMA_VERSION))
             .await
             .unwrap();
 
-        assert!(
-            db.calls().is_empty(),
-            "no text queries should be called when schema is ok"
+        let expected_views: Vec<String> = create_views_batch()
+            .statements()
+            .iter()
+            .map(|s| s.sql().to_string())
+            .collect();
+        assert_eq!(
+            db.calls(),
+            expected_views,
+            "schema-ok bootstrap should still refresh replaceable views"
         );
     }
 

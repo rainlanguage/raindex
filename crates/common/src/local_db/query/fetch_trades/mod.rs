@@ -5,29 +5,14 @@ use alloy::primitives::{Address, B256};
 use std::convert::TryFrom;
 
 const QUERY_TEMPLATE: &str = include_str!("query.sql");
+const COUNT_QUERY_TEMPLATE: &str = include_str!("count_query.sql");
 
-const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
-const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
-const TAKE_ORDERS_RAINDEXES_CLAUSE: &str = "/*TAKE_ORDERS_RAINDEXES_CLAUSE*/";
-const TAKE_ORDERS_RAINDEXES_CLAUSE_BODY: &str = "AND t.raindex_address IN ({list})";
-const TAKE_ORDERS_TAKERS_CLAUSE: &str = "/*TAKE_ORDERS_TAKERS_CLAUSE*/";
-const TAKE_ORDERS_TAKERS_CLAUSE_BODY: &str = "AND t.sender IN ({list})";
-
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_EVENTS_RAINDEXES_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXES_CLAUSE*/";
-const CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
-const CLEAR_EVENTS_TAKERS_CLAUSE: &str = "/*CLEAR_EVENTS_TAKERS_CLAUSE*/";
-const CLEAR_EVENTS_TAKERS_CLAUSE_BODY: &str = "AND c.sender IN ({list})";
-const CLEAR_EVENTS_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_EVENTS_ORDER_HASHES_CLAUSE*/";
-const CLEAR_EVENTS_ORDER_HASHES_CLAUSE_BODY: &str =
-    "AND (c.alice_order_hash IN ({list}) OR c.bob_order_hash IN ({list}))";
-const TAKE_TRADES_ORDER_HASHES_CLAUSE: &str = "/*TAKE_TRADES_ORDER_HASHES_CLAUSE*/";
-const TAKE_TRADES_ORDER_HASHES_CLAUSE_BODY: &str = "AND oe.order_hash IN ({list})";
-const CLEAR_ALICE_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_ALICE_ORDER_HASHES_CLAUSE*/";
-const CLEAR_ALICE_ORDER_HASHES_CLAUSE_BODY: &str = "AND mc.alice_order_hash IN ({list})";
-const CLEAR_BOB_ORDER_HASHES_CLAUSE: &str = "/*CLEAR_BOB_ORDER_HASHES_CLAUSE*/";
-const CLEAR_BOB_ORDER_HASHES_CLAUSE_BODY: &str = "AND mc.bob_order_hash IN ({list})";
+const CHAIN_IDS_CLAUSE: &str = "/*CHAIN_IDS_CLAUSE*/";
+const CHAIN_IDS_CLAUSE_BODY: &str = "AND tws.chain_id IN ({list})";
+const RAINDEXES_CLAUSE: &str = "/*RAINDEXES_CLAUSE*/";
+const RAINDEXES_CLAUSE_BODY: &str = "AND tws.raindex_address IN ({list})";
+const TAKERS_CLAUSE: &str = "/*TAKERS_CLAUSE*/";
+const TAKERS_CLAUSE_BODY: &str = "AND tws.transaction_sender IN ({list})";
 const OWNERS_CLAUSE: &str = "/*OWNERS_CLAUSE*/";
 const OWNERS_CLAUSE_BODY: &str = "AND tws.order_owner IN ({list})";
 const ORDER_HASH_CLAUSE: &str = "/*ORDER_HASH_CLAUSE*/";
@@ -66,7 +51,16 @@ pub struct FetchTradesArgs {
 }
 
 pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, SqlBuildError> {
+    build_fetch_trades_stmt_from_template(args, QUERY_TEMPLATE, true)
+}
+
+fn build_fetch_trades_stmt_from_template(
+    args: &FetchTradesArgs,
+    template: &str,
+    include_pagination: bool,
+) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
+    stmt.sql = template.to_string();
 
     let mut chain_ids = args.chain_ids.clone();
     chain_ids.sort_unstable();
@@ -79,40 +73,13 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
     let chain_ids_iter = || chain_ids.iter().cloned().map(SqlValue::from);
     let raindexes_iter = || raindexes.iter().cloned().map(SqlValue::from);
 
-    stmt.bind_list_clause(
-        TAKE_ORDERS_CHAIN_IDS_CLAUSE,
-        TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE,
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        TAKE_ORDERS_RAINDEXES_CLAUSE,
-        TAKE_ORDERS_RAINDEXES_CLAUSE_BODY,
-        raindexes_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_RAINDEXES_CLAUSE,
-        CLEAR_EVENTS_RAINDEXES_CLAUSE_BODY,
-        raindexes_iter(),
-    )?;
+    stmt.bind_list_clause(CHAIN_IDS_CLAUSE, CHAIN_IDS_CLAUSE_BODY, chain_ids_iter())?;
+    stmt.bind_list_clause(RAINDEXES_CLAUSE, RAINDEXES_CLAUSE_BODY, raindexes_iter())?;
     let mut takers = args.takers.clone();
     takers.sort();
     takers.dedup();
     let takers_iter = || takers.iter().cloned().map(SqlValue::from);
-    stmt.bind_list_clause(
-        TAKE_ORDERS_TAKERS_CLAUSE,
-        TAKE_ORDERS_TAKERS_CLAUSE_BODY,
-        takers_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_TAKERS_CLAUSE,
-        CLEAR_EVENTS_TAKERS_CLAUSE_BODY,
-        takers_iter(),
-    )?;
+    stmt.bind_list_clause(TAKERS_CLAUSE, TAKERS_CLAUSE_BODY, takers_iter())?;
     let mut owners = args.owners.clone();
     owners.sort();
     owners.dedup();
@@ -130,26 +97,6 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
     order_hashes.sort();
     order_hashes.dedup();
     let order_hashes_iter = || order_hashes.iter().cloned().map(SqlValue::from);
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_ORDER_HASHES_CLAUSE,
-        CLEAR_EVENTS_ORDER_HASHES_CLAUSE_BODY,
-        order_hashes_iter(),
-    )?;
-    stmt.bind_list_clause(
-        TAKE_TRADES_ORDER_HASHES_CLAUSE,
-        TAKE_TRADES_ORDER_HASHES_CLAUSE_BODY,
-        order_hashes_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_ALICE_ORDER_HASHES_CLAUSE,
-        CLEAR_ALICE_ORDER_HASHES_CLAUSE_BODY,
-        order_hashes_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_BOB_ORDER_HASHES_CLAUSE,
-        CLEAR_BOB_ORDER_HASHES_CLAUSE_BODY,
-        order_hashes_iter(),
-    )?;
     stmt.bind_list_clause(
         ORDER_HASHES_CLAUSE,
         ORDER_HASHES_CLAUSE_BODY,
@@ -186,8 +133,17 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
         .transpose()?;
     stmt.bind_param_clause(END_TS_CLAUSE, END_TS_BODY, end_param)?;
     bind_token_filters(&mut stmt, &args.tokens)?;
-    if let Some(page) = args.pagination.page {
-        let page_size = args.pagination.page_size.unwrap_or(100);
+    if include_pagination {
+        bind_pagination(&mut stmt, &args.pagination);
+    } else {
+        stmt.sql = stmt.sql.replace(PAGINATION_CLAUSE, "");
+    }
+    Ok(stmt)
+}
+
+fn bind_pagination(stmt: &mut SqlStatement, pagination: &PaginationParams) {
+    if let Some(page) = pagination.page {
+        let page_size = pagination.page_size.unwrap_or(100);
         let offset = (page.saturating_sub(1) as u64) * (page_size as u64);
         let limit_placeholder = format!("?{}", stmt.params.len() + 1);
         let offset_placeholder = format!("?{}", stmt.params.len() + 2);
@@ -198,23 +154,12 @@ pub fn build_fetch_trades_stmt(args: &FetchTradesArgs) -> Result<SqlStatement, S
     } else {
         stmt.sql = stmt.sql.replace(PAGINATION_CLAUSE, "");
     }
-    Ok(stmt)
 }
 
 pub fn build_fetch_trades_count_stmt(
     args: &FetchTradesArgs,
 ) -> Result<SqlStatement, SqlBuildError> {
-    let mut args = args.clone();
-    args.pagination = PaginationParams::default();
-    let stmt = build_fetch_trades_stmt(&args)?;
-    let inner_sql = stmt.sql.trim().trim_end_matches(';').trim();
-    Ok(SqlStatement {
-        sql: format!(
-            "SELECT COUNT(*) AS trade_count FROM ({}) AS filtered_trades",
-            inner_sql
-        ),
-        params: stmt.params,
-    })
+    build_fetch_trades_stmt_from_template(args, COUNT_QUERY_TEMPLATE, false)
 }
 
 pub fn extract_trades_count(rows: &[LocalDbTradeCountRow]) -> u64 {
@@ -294,15 +239,11 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(stmt.params.len(), 4);
+        assert_eq!(stmt.params.len(), 2);
         assert_eq!(stmt.params[0], SqlValue::U64(1));
         assert_eq!(stmt.params[1], SqlValue::U64(137));
-        assert_eq!(stmt.params[2], SqlValue::U64(1));
-        assert_eq!(stmt.params[3], SqlValue::U64(137));
-        assert!(stmt.sql.contains("t.chain_id IN (?1, ?2)"));
-        assert!(stmt.sql.contains("c.chain_id IN (?3, ?4)"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_CHAIN_IDS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_CHAIN_IDS_CLAUSE));
+        assert!(stmt.sql.contains("tws.chain_id IN (?1, ?2)"));
+        assert!(!stmt.sql.contains(CHAIN_IDS_CLAUSE));
     }
 
     #[test]
@@ -314,15 +255,11 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(stmt.params.len(), 4);
+        assert_eq!(stmt.params.len(), 2);
         assert_eq!(stmt.params[0], SqlValue::U64(137));
-        assert_eq!(stmt.params[1], SqlValue::U64(137));
-        assert_eq!(stmt.params[2], SqlValue::Text(hex::encode_prefixed(ob)));
-        assert_eq!(stmt.params[3], SqlValue::Text(hex::encode_prefixed(ob)));
-        assert!(stmt.sql.contains("t.raindex_address IN (?3)"));
-        assert!(stmt.sql.contains("c.raindex_address IN (?4)"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_RAINDEXES_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_RAINDEXES_CLAUSE));
+        assert_eq!(stmt.params[1], SqlValue::Text(hex::encode_prefixed(ob)));
+        assert!(stmt.sql.contains("tws.raindex_address IN (?2)"));
+        assert!(!stmt.sql.contains(RAINDEXES_CLAUSE));
     }
 
     #[test]
@@ -354,11 +291,8 @@ mod tests {
         })
         .unwrap();
 
-        assert!(stmt.sql.contains("t.sender IN (?1, ?2)"));
-        assert!(stmt.sql.contains("c.sender IN (?3, ?4)"));
-        assert!(!stmt.sql.contains("tws.transaction_sender IN"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_TAKERS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_TAKERS_CLAUSE));
+        assert!(stmt.sql.contains("tws.transaction_sender IN (?1, ?2)"));
+        assert!(!stmt.sql.contains(TAKERS_CLAUSE));
         assert_eq!(
             stmt.params[0],
             SqlValue::Text(hex::encode_prefixed(taker_a))
@@ -367,14 +301,7 @@ mod tests {
             stmt.params[1],
             SqlValue::Text(hex::encode_prefixed(taker_b))
         );
-        assert_eq!(
-            stmt.params[2],
-            SqlValue::Text(hex::encode_prefixed(taker_a))
-        );
-        assert_eq!(
-            stmt.params[3],
-            SqlValue::Text(hex::encode_prefixed(taker_b))
-        );
+        assert_eq!(stmt.params.len(), 2);
     }
 
     #[test]
@@ -387,24 +314,11 @@ mod tests {
         })
         .unwrap();
 
-        assert!(stmt
-            .sql
-            .contains("c.alice_order_hash IN (?1, ?2) OR c.bob_order_hash IN (?1, ?2)"));
-        assert!(stmt.sql.contains("oe.order_hash IN (?3, ?4)"));
-        assert!(stmt.sql.contains("mc.alice_order_hash IN (?5, ?6)"));
-        assert!(stmt.sql.contains("mc.bob_order_hash IN (?7, ?8)"));
-        assert!(stmt.sql.contains("tws.order_hash IN (?9, ?10)"));
+        assert!(stmt.sql.contains("tws.order_hash IN (?1, ?2)"));
         assert!(!stmt.sql.contains(ORDER_HASHES_CLAUSE));
-        assert!(!stmt.sql.contains(TAKE_TRADES_ORDER_HASHES_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_ALICE_ORDER_HASHES_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_BOB_ORDER_HASHES_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_ORDER_HASHES_CLAUSE));
         assert_eq!(stmt.params[0], SqlValue::Text(hex::encode_prefixed(hash_a)));
         assert_eq!(stmt.params[1], SqlValue::Text(hex::encode_prefixed(hash_b)));
-        assert_eq!(stmt.params[6], SqlValue::Text(hex::encode_prefixed(hash_a)));
-        assert_eq!(stmt.params[7], SqlValue::Text(hex::encode_prefixed(hash_b)));
-        assert_eq!(stmt.params[8], SqlValue::Text(hex::encode_prefixed(hash_a)));
-        assert_eq!(stmt.params[9], SqlValue::Text(hex::encode_prefixed(hash_b)));
+        assert_eq!(stmt.params.len(), 2);
     }
 
     #[test]
@@ -448,11 +362,8 @@ mod tests {
     fn disambiguates_clear_sides_in_trade_id_and_sort_order() {
         let stmt = build_fetch_trades_stmt(&FetchTradesArgs::default()).unwrap();
 
-        assert!(stmt.sql.contains("'alice' AS trade_side"));
-        assert!(stmt.sql.contains("'bob' AS trade_side"));
-        assert!(stmt.sql.contains("WHEN 'alice' THEN '01'"));
-        assert!(stmt.sql.contains("WHEN 'bob' THEN '02'"));
-        assert!(stmt.sql.contains("tws.trade_kind, tws.trade_side\n"));
+        assert!(stmt.sql.contains("tws.trade_id"));
+        assert!(stmt.sql.contains("tws.trade_kind, tws.trade_side"));
     }
 
     #[test]
@@ -466,11 +377,11 @@ mod tests {
         })
         .unwrap();
 
-        assert!(stmt
-            .sql
-            .starts_with("SELECT COUNT(*) AS trade_count FROM ("));
+        assert!(stmt.sql.starts_with("SELECT COUNT(*) AS trade_count"));
+        assert!(stmt.sql.contains("FROM derived_trades tws"));
         assert!(!stmt.sql.contains("LIMIT"));
         assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
+        assert!(!stmt.sql.contains("erc20_tokens"));
     }
 
     #[cfg(not(target_family = "wasm"))]
