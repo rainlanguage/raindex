@@ -16,9 +16,6 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 0
       - uses: DeterminateSystems/nix-installer-action@main
         with:
           determinate: true

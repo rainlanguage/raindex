@@ -49,9 +49,6 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 0
       - name: Free disk space
         if: matrix.os == 'ubuntu-latest'
         uses: jlumbroso/free-disk-space@v1.3.1

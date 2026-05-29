@@ -21,9 +21,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 0
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |

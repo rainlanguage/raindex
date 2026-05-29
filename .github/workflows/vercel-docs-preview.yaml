@@ -19,9 +19,6 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: false
-          fetch-depth: 0
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
       - uses: DeterminateSystems/nix-installer-action@main
