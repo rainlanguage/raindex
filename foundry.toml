@@ -70,11 +70,11 @@ recursive_deps = false
 runs = 5096
 
 [rpc_endpoints]
-arbitrum = "${CI_DEPLOY_ARBITRUM_RPC_URL}"
-base = "${CI_DEPLOY_BASE_RPC_URL}"
-base_sepolia = "${CI_DEPLOY_BASE_SEPOLIA_RPC_URL}"
-flare = "${CI_DEPLOY_FLARE_RPC_URL}"
-polygon = "${CI_DEPLOY_POLYGON_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL}"
+base = "${BASE_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+flare = "${FLARE_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
 
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
