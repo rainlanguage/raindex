@@ -49,6 +49,70 @@
 - Never commit secrets. Copy `.env.example` files (root, `packages/webapp`) and
   populate `PUBLIC_WALLETCONNECT_PROJECT_ID` as required.
 
+## CI & Workflow Conventions
+
+GitHub Actions workflows in `.github/workflows/` follow a consistent shape. New
+work should match.
+
+### Slim shells over default devshell
+
+- Use `nix develop .#wasm-shell` for rust+node work (cargo wasm build, npm
+  workspace builds, vitest, typedoc), and `.#subgraph-shell` for graph CLI work.
+  Both are local re-exports of `rainix`'s slim shells via `flake.nix`, so they
+  pin to the `flake.lock` rainix rev rather than the live
+  `github:rainlanguage/rainix#...` reference (which tracks rainix `main` and
+  bypasses `flake.lock`).
+- Default `nix develop -c` enters the heavy full devshell — only use when you
+  legitimately need the full toolchain (e.g., `copilot-setup-steps`).
+- `npm install --no-check` MUST run from the **workspace root** (not
+  `packages/<x>`) for npm workspaces resolution. Default devshell's shellHook
+  does this on shell entry; slim shells don't, so do it explicitly as the first
+  command inside the `bash -c '...'`.
+
+### Nix infrastructure
+
+- Install nix with `nixbuild/nix-quick-install-action@v30`.
+- Pull/push the shared `rainlanguage` Cachix with `cachix/cachix-action@v15`
+  (set `continue-on-error: true` and `useDaemon: false` alongside
+  `cache-nix-action`, else the nix DB corrupts).
+- Cache the nix store with `nix-community/cache-nix-action@v7` keyed by
+  `**/*.nix` + `**/flake.lock` hashes.
+- Do NOT use `DeterminateSystems/nix-installer-action` or
+  `DeterminateSystems/flakehub-cache-action` — they don't share the
+  `rainlanguage` Cachix that every other workflow warms.
+
+### Build caches
+
+- `Swatinem/rust-cache@v2` after the nix-store cache step for any cargo work
+  (rust-cache caches `~/.cargo/{registry,git}` + `target/`).
+- `actions/cache@v4` over `~/.npm` keyed by `**/package-lock.json` for any
+  `npm install` work.
+
+### Committed derived artifacts
+
+- ABIs that `sol!` macros read are committed under `crates/*/abis/` so cargo can
+  build in slim shells without `forge soldeer install` + `forge build` on the
+  test path.
+- jq-strip forge JSON to deterministic fields only: `{abi}` if no `::deploy()`
+  is called; `{abi, bytecode: (.bytecode | {object,
+  linkReferences})}` if it
+  is. **Drop `sourceMap`** — it embeds a file-ID that depends on solc's input
+  ordering and differs across runners.
+- Vendored solidity files (e.g.,
+  `crates/test_fixtures/contracts/
+  IMulticall3.sol`) keep `sol!` chains
+  working in slim shells without needing the soldeer dep tree on disk.
+- `script/build.sh` regenerates ALL committed derived artifacts;
+  `rainix-copy-artifacts` runs it then `git diff --exit-code` to catch drift.
+
+### Shell quoting
+
+Pass multi-command pipelines as `nix develop ...#X -c bash -c '...'`, NOT as
+`nix develop ...#X -c bash <<INNER ... INNER`. Inner commands (`graph codegen`,
+`npm ci`) read stdin and consume the heredoc body, turning later lines of the
+script into bogus argv. Use single-quoted outer `-c` body with double-quoted jq
+filters (`jq "{abi}" ...`) inside.
+
 ## Agent-Specific Instructions
 
 - Prefer syntax-aware search with ast-grep: Rust
