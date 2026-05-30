@@ -27,4 +27,6 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: rust-${{ github.workflow }}
       - run: nix develop .#wasm-shell -c cargo build --profile release-wasm --target wasm32-unknown-unknown --lib -p raindex_js_api

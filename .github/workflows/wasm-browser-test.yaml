@@ -30,6 +30,8 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: rust-${{ github.workflow }}
       - run: |
           nix develop .#wasm-shell -c bash -c '
             cd crates/common
