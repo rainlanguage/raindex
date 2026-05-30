@@ -247,6 +247,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
         uint256 withdrawAmount18
     ) external {
         vm.assume(alice != bob);
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 

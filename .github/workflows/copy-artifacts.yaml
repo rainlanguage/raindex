@@ -3,7 +3,7 @@ on: [push]
 jobs:
   copy-artifacts:
     # Build from committed sources and assert the committed meta/pointer
-    # artifacts are still current (no prelude — committing the artifacts is what
-    # removes the need for one). secrets: inherit carries CACHIX_AUTH_TOKEN.
+    # artifacts are still current. The meta hook is `script/build-meta.sh`;
+    # pointers + abis use the upstream BuildPointers.sol convention.
     uses: rainlanguage/rainix/.github/workflows/rainix-copy-artifacts.yaml@main
     secrets: inherit
