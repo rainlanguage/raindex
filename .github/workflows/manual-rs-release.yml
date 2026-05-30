@@ -24,7 +24,7 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: nix develop --command cargo release --workspace
+      - run: nix develop .#rust-shell --command cargo release --workspace
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

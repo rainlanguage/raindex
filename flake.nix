@@ -197,6 +197,8 @@
         # bypasses flake.lock and tracks rainix main).
         devShells.wasm-shell = rainix.devShells.${system}.wasm-shell;
         devShells.subgraph-shell = rainix.devShells.${system}.subgraph-shell;
+        devShells.sol-shell = rainix.devShells.${system}.sol-shell;
+        devShells.rust-shell = rainix.devShells.${system}.rust-shell;
       }
     );
 

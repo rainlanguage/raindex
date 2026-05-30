@@ -48,13 +48,19 @@ jobs:
           cp -f .env.example .env
           cp -f packages/webapp/.env.example packages/webapp/.env
           cp -f .env.example crates/common/.env
-      # Inlined bootstrap (formerly ./prep-all.sh):
-      - run: nix develop -c forge soldeer install
-      - run: nix develop -c forge build
-      - run: nix develop -c raindex-ui-components-prelude
-      - run: nix develop -c npm run build -w @rainlanguage/raindex
-      - run: nix develop -c npm run build -w @rainlanguage/ui-components
-      - run: nix develop -c npm run build -w @rainlanguage/webapp
+      # Inlined bootstrap (formerly ./prep-all.sh). All committed ABIs +
+      # vendored IMulticall3.sol mean cargo doesn't need forge build /
+      # soldeer install — forge is still on PATH in .#sol-shell if copilot
+      # needs it later.
+      - run: |
+          nix develop .#wasm-shell -c bash -c '
+            set -euxo pipefail
+            npm install --no-check
+            (cd packages/ui-components && npm i && npm run lint)
+            npm run build -w @rainlanguage/raindex
+            npm run build -w @rainlanguage/ui-components
+            npm run build -w @rainlanguage/webapp
+          '
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()
