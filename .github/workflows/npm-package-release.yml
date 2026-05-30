@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
       # setup node with npm registry for OIDC-based publishing (no NPM_TOKEN needed)
       - name: Setup Node.js

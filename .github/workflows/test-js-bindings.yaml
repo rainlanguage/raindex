@@ -31,7 +31,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.npm
-          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
       # npm install MUST run from the workspace root (not packages/raindex)
       # so npm picks up the workspaces resolution. Default devshell's shellHook
