@@ -1,0 +1,6 @@
+name: rs-static
+on: [push]
+jobs:
+  rs-static:
+    uses: rainlanguage/rainix/.github/workflows/rainix-rs-static.yaml@main
+    secrets: inherit
