@@ -6,7 +6,7 @@ set -euxo pipefail
 
 mkdir -p meta
 forge script --silent ./script/BuildAuthoringMeta.sol
-nix shell github:rainlanguage/rain.cli -c rain meta build \
+nix shell .#rain-cli -c rain meta build \
   -i <(cat ./meta/RaindexV6SubParserAuthoringMeta.rain.meta) \
   -m authoring-meta-v2 \
   -t cbor \

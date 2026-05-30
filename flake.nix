@@ -159,6 +159,13 @@
             '';
           };
 
+          # Re-export the rain CLI from the pinned `rain` flake input so
+          # `nix shell .#rain-cli` resolves to the exact version recorded
+          # in flake.lock (cached on the rainlanguage Cachix). build-meta.sh
+          # uses this instead of `nix shell github:rainlanguage/rain.cli`
+          # so a rain.cli main move can't race the cache push.
+          rain-cli = rain.defaultPackage.${system};
+
         }
         // rainix.packages.${system};
 
