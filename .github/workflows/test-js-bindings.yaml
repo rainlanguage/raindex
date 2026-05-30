@@ -27,6 +27,12 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       # npm install MUST run from the workspace root (not packages/raindex)
       # so npm picks up the workspaces resolution. Default devshell's shellHook
       # does this on entry — slim #wasm-shell doesn't, so we do it explicitly.

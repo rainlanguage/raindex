@@ -37,11 +37,33 @@ jobs:
         with:
           swap-storage: false
       # install nix for building WASM artifacts and running tests
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: nixbuild/nix-quick-install-action@v30
         with:
-          determinate: true
-      # cache nix store to speed up subsequent builds
-      - uses: DeterminateSystems/flakehub-cache-action@main
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      # pull rainix derivations from shared Cachix; push new ones if the
+      # token is set. continue-on-error so a token miss / Cachix outage
+      # degrades gracefully.
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       # setup node with npm registry for OIDC-based publishing (no NPM_TOKEN needed)
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -87,7 +109,8 @@ jobs:
           fi
           echo "Repositories match"
       # install dependencies and build the workspace
-      - run: ./pointers.sh
+      - run: nix develop -c forge soldeer install
+      - run: nix develop -c forge build
       # remove debug artifacts to free disk space before WASM build
       - name: Remove Unused Artifacts
         run: rm -rf ./target/debug

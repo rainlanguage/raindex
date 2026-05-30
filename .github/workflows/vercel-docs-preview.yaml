@@ -21,15 +21,42 @@ jobs:
       - uses: actions/checkout@v4
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: nixbuild/nix-quick-install-action@v30
         with:
-          determinate: true
-      - uses: DeterminateSystems/flakehub-cache-action@main
-      - run: ./prep-all.sh
-        env:
-          PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-      - run: nix develop .#webapp-shell -c npm run docs
-        working-directory: packages/raindex
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      # Slim docs build: workspace-root npm install (for npm workspaces
+      # resolution) then build the raindex wasm package and run typedoc.
+      # Replaces ./prep-all.sh which also did forge install + forge build +
+      # raindex-prelude + raindex-cli build (none of that is read by typedoc).
+      - run: |
+          nix develop .#wasm-shell -c bash -c '
+            set -euxo pipefail
+            npm install --no-check
+            cd packages/raindex
+            npm run build
+            npm run docs
+          '
       - name: Prepare Vercel build output
         run: |
           OUTPUT_DIR="packages/raindex/.vercel/output"
@@ -37,7 +64,7 @@ jobs:
           cp -r packages/raindex/docs/* "${OUTPUT_DIR}/static/"
           echo '{ "version": 3 }' > "${OUTPUT_DIR}/config.json"
       - name: Install Vercel CLI
-        run: npm install --global vercel@canary
+        run: npm install --global vercel@latest
       - name: Pull Vercel Environment Information
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
       - name: Deploy Project Artifacts to Vercel

@@ -27,7 +27,8 @@ keep=(
 )
 
 echo "Preparing base setup..."
-./pointers.sh
+nix develop -c forge soldeer install
+nix develop -c forge build
 
 rm -rf target || true
 

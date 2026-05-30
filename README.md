@@ -40,13 +40,12 @@ allowing developers to more easily create their own frontends for Raindex.
 Then run the following to install dependencies and build the project:
 
 ```bash
-./prep-all.sh
-```
-
-You may need to make the shell script executable:
-
-```bash
-chmod +x prep-all.sh
+nix develop -c forge soldeer install
+nix develop -c forge build
+nix develop -c raindex-ui-components-prelude
+nix develop -c npm run build -w @rainlanguage/raindex
+nix develop -c npm run build -w @rainlanguage/ui-components
+nix develop -c npm run build -w @rainlanguage/webapp
 ```
 
 ### Run Webapp for local development

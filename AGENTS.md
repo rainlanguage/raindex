@@ -8,12 +8,13 @@
   `quote`, `subgraph`, `settings`, `math`, `integration_tests`).
 - JavaScript/Svelte: `packages/*` — `webapp`, `ui-components`, `raindex` (wasm
   wrapper published to npm).
-- Subgraph and tooling: `subgraph/`, `script/`, helper scripts like
-  `prep-all.sh`.
+- Subgraph and tooling: `subgraph/`, `script/`.
 
 ## Build, Test, and Development Commands
 
-- Bootstrap: `./prep-all.sh` (installs deps and builds workspaces).
+- Bootstrap:
+  `nix develop -c forge soldeer install && nix develop -c forge build && nix develop -c raindex-ui-components-prelude && nix develop -c npm run build -w @rainlanguage/raindex && nix develop -c npm run build -w @rainlanguage/ui-components && nix develop -c npm run build -w @rainlanguage/webapp`
+  (installs deps and builds workspaces; see README for the multi-line form).
 - Rust: `cargo build --workspace`; tests: `cargo test`.
 - Solidity (Foundry): `forge build`; tests: `forge test`.
 - Webapp: `cd packages/webapp && npm run dev`.
