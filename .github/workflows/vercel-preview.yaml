@@ -51,7 +51,13 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: ./prep-webapp.sh
+      - run: |
+          set -euxo pipefail
+          nix develop -c forge soldeer install
+          nix develop -c forge build
+          nix develop -c npm run build -w @rainlanguage/raindex
+          nix develop -c npm run build -w @rainlanguage/ui-components
+          nix develop -c npm run build -w @rainlanguage/webapp
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
       - run: nix develop .#webapp-shell -c npm run build

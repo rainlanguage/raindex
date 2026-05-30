@@ -33,7 +33,6 @@ path = [
   "crates/**/",
   "meta/**/",
   "test-resources/**/",
-  "prep-webapp.sh",
   "audit/**/",
   ".coderabbit.yaml",
 ]
