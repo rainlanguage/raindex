@@ -23,22 +23,17 @@ use rain_math_float::Float;
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    Raindex, "../../out/RaindexV6.sol/RaindexV6.json"
+    Raindex, "./abis/RaindexV6.json"
 );
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    RaindexSubParser, "../../out/RaindexV6SubParser.sol/RaindexV6SubParser.json"
+    RaindexSubParser, "./abis/RaindexV6SubParser.json"
 );
 
 sol!(
     #![sol(all_derives = true, rpc = true)]
-    "../../dependencies/forge-std-1.16.1/src/interfaces/IMulticall3.sol"
-);
-
-sol!(
-    #![sol(all_derives = true, rpc = true)]
-    TOFUTokenDecimals, "../../out/TOFUTokenDecimals.sol/TOFUTokenDecimals.json"
+    "./contracts/IMulticall3.sol"
 );
 
 /// A local evm instance that wraps an Anvil instance and provider with
