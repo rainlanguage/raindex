@@ -27,4 +27,14 @@ jq '{abi}' out/RaindexV6.sol/RaindexV6.json > crates/bindings/abis/RaindexV6.jso
 jq '{abi}' out/ERC20.sol/ERC20.json > crates/bindings/abis/ERC20.json
 jq '{abi}' out/IERC20Metadata.sol/IERC20Metadata.json > crates/bindings/abis/IERC20Metadata.json
 jq '{abi}' out/IInterpreterStoreV3.sol/IInterpreterStoreV3.json > crates/bindings/abis/IInterpreterStoreV3.json
+
+mkdir -p crates/test_fixtures/abis
+# {abi, bytecode} — bytecode needed for ::deploy(); .object is the deterministic
+# compiled bytes (linkReferences/sourceMap also stay, both deterministic-given-
+# solc-version since solc 0.8.25 is pinned in foundry.toml).
+jq '{abi, bytecode}' out/RaindexV6.sol/RaindexV6.json > crates/test_fixtures/abis/RaindexV6.json
+jq '{abi, bytecode}' out/RaindexV6SubParser.sol/RaindexV6SubParser.json > crates/test_fixtures/abis/RaindexV6SubParser.json
+
+mkdir -p crates/test_fixtures/contracts
+cp dependencies/forge-std-1.16.1/src/interfaces/IMulticall3.sol crates/test_fixtures/contracts/IMulticall3.sol
 INNER
