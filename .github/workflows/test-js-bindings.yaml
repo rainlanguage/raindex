@@ -27,4 +27,14 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
-      - run: nix develop -c test-js-bindings
+      # npm install MUST run from the workspace root (not packages/raindex)
+      # so npm picks up the workspaces resolution. Default devshell's shellHook
+      # does this on entry — slim #wasm-shell doesn't, so we do it explicitly.
+      - run: |
+          nix develop github:rainlanguage/rainix#wasm-shell -c bash -c '
+            set -euxo pipefail
+            npm install --no-check
+            cd packages/raindex
+            npm run build
+            npm test
+          '
