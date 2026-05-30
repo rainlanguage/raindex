@@ -1,9 +1,7 @@
 name: Copilot Agent Setup
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
 jobs:
   copilot-setup-steps:
     permissions:
