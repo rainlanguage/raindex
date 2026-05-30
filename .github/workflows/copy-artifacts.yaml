@@ -5,6 +5,5 @@ jobs:
     # Build from committed sources and assert the committed meta/pointer
     # artifacts are still current. The meta hook is `script/build-meta.sh`;
     # pointers + abis use the upstream BuildPointers.sol convention.
-    # TODO: revert to @main after rainlanguage/rainix#208 merges.
-    uses: rainlanguage/rainix/.github/workflows/rainix-copy-artifacts.yaml@2026-05-30-copy-artifacts-meta
+    uses: rainlanguage/rainix/.github/workflows/rainix-copy-artifacts.yaml@main
     secrets: inherit
