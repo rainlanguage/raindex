@@ -6,6 +6,7 @@ path = [
   ".gas-snapshot",
   ".github/**/",
   ".gitignore",
+  ".prettierignore",
   ".vscode/**/",
   ".cargo/**/",
   "README.md",
