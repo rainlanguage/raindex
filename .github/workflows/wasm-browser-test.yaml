@@ -31,7 +31,7 @@ jobs:
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
       - run: |
-          nix develop github:rainlanguage/rainix#wasm-shell -c bash -c '
+          nix develop .#wasm-shell -c bash -c '
             cd crates/common
             wasm-pack test --headless --chrome --features browser-tests -- leadership::wasm_tests
             wasm-pack test --headless --chrome --features browser-tests -- scheduler::wasm::wasm_tests

@@ -190,6 +190,13 @@
           packages = with pkgs; [ nodejs_20 ];
           inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
+
+        # Re-export rainix's slim devShells so workflows can reference them
+        # via `.#X-shell` and pick up the flake.lock-pinned rainix rev
+        # instead of live `github:rainlanguage/rainix#X-shell` (which
+        # bypasses flake.lock and tracks rainix main).
+        devShells.wasm-shell = rainix.devShells.${system}.wasm-shell;
+        devShells.subgraph-shell = rainix.devShells.${system}.subgraph-shell;
       }
     );
 

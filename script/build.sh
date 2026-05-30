@@ -15,7 +15,7 @@ set -euxo pipefail
 # Pass the whole pipeline via `bash -c '...'` rather than `bash <<INNER`:
 # graph codegen / npm ci consume the heredoc body off stdin otherwise,
 # turning the rest of the script into bogus argv for the codegen command.
-nix develop github:rainlanguage/rainix#subgraph-shell -c bash -c '
+nix develop .#subgraph-shell -c bash -c '
 set -euxo pipefail
 
 mkdir -p subgraph/abis
@@ -33,8 +33,11 @@ jq "{abi}" out/IERC20Metadata.sol/IERC20Metadata.json > crates/bindings/abis/IER
 jq "{abi}" out/IInterpreterStoreV3.sol/IInterpreterStoreV3.json > crates/bindings/abis/IInterpreterStoreV3.json
 
 mkdir -p crates/test_fixtures/abis
-jq "{abi, bytecode}" out/RaindexV6.sol/RaindexV6.json > crates/test_fixtures/abis/RaindexV6.json
-jq "{abi, bytecode}" out/RaindexV6SubParser.sol/RaindexV6SubParser.json > crates/test_fixtures/abis/RaindexV6SubParser.json
+# bytecode.sourceMap embeds a file-ID that depends on solc input ordering and
+# differs across runners — drop it (debug-only; alloy ::deploy() only reads
+# bytecode.object).
+jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6.sol/RaindexV6.json > crates/test_fixtures/abis/RaindexV6.json
+jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6SubParser.sol/RaindexV6SubParser.json > crates/test_fixtures/abis/RaindexV6SubParser.json
 
 mkdir -p crates/test_fixtures/contracts
 cp dependencies/forge-std-1.16.1/src/interfaces/IMulticall3.sol crates/test_fixtures/contracts/IMulticall3.sol

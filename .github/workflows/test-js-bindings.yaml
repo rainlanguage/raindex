@@ -31,7 +31,7 @@ jobs:
       # so npm picks up the workspaces resolution. Default devshell's shellHook
       # does this on entry — slim #wasm-shell doesn't, so we do it explicitly.
       - run: |
-          nix develop github:rainlanguage/rainix#wasm-shell -c bash -c '
+          nix develop .#wasm-shell -c bash -c '
             set -euxo pipefail
             npm install --no-check
             cd packages/raindex
