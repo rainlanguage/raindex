@@ -1,0 +1,71 @@
+{
+  "abi": [
+    {
+      "type": "function",
+      "name": "get",
+      "inputs": [
+        {
+          "name": "namespace",
+          "type": "uint256",
+          "internalType": "FullyQualifiedNamespace"
+        },
+        {
+          "name": "key",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "set",
+      "inputs": [
+        {
+          "name": "namespace",
+          "type": "uint256",
+          "internalType": "StateNamespace"
+        },
+        {
+          "name": "kvs",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "event",
+      "name": "Set",
+      "inputs": [
+        {
+          "name": "namespace",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "FullyQualifiedNamespace"
+        },
+        {
+          "name": "key",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "value",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    }
+  ]
+}
