@@ -1,7 +1,6 @@
 name: Copilot Agent Setup
 on:
   workflow_dispatch:
-  pull_request:
 jobs:
   copilot-setup-steps:
     permissions:
