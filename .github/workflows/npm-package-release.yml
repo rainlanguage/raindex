@@ -87,7 +87,7 @@ jobs:
           fi
           echo "Repositories match"
       # install dependencies and build the workspace
-      - run: ./prep-base.sh
+      - run: ./pointers.sh
       # remove debug artifacts to free disk space before WASM build
       - name: Remove Unused Artifacts
         run: rm -rf ./target/debug

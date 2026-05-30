@@ -27,23 +27,20 @@ keep=(
 )
 
 echo "Preparing base setup..."
-./prep-base.sh
+./pointers.sh
 
 echo "Setting up UI components..."
-nix develop -i ${keep[@]} -c raindex-ui-components-prelude
+nix develop -i "${keep[@]}" -c raindex-ui-components-prelude
 
 echo "Building packages..."
-nix develop -i ${keep[@]} -c bash -c '(npm run build -w @rainlanguage/raindex)'
-nix develop -i ${keep[@]} -c bash -c '(npm run build -w @rainlanguage/ui-components && npm run build -w @rainlanguage/webapp)'
+nix develop -i "${keep[@]}" -c bash -c '(npm run build -w @rainlanguage/raindex)'
+nix develop -i "${keep[@]}" -c bash -c '(npm run build -w @rainlanguage/ui-components && npm run build -w @rainlanguage/webapp)'
 
 # Temporarily disable command echoing
 set +x
 
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
-
-GREEN='\033[0;32m'
-NC='\033[0m' # No Color
 
 # Print the completion message
 printf "\033[0;32m" # Set text to green
