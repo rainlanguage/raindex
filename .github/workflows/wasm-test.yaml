@@ -26,4 +26,5 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
+      - uses: Swatinem/rust-cache@v2
       - run: nix develop github:rainlanguage/rainix#wasm-shell -c bash -c "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --target wasm32-unknown-unknown --lib -p raindex_quote -p raindex_bindings -p raindex_js_api -p raindex_common"

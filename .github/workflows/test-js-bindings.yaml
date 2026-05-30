@@ -26,6 +26,7 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 8G
+      - uses: Swatinem/rust-cache@v2
       - run: |
           nix develop github:rainlanguage/rainix#wasm-shell -c bash -c '
             cd packages/raindex
