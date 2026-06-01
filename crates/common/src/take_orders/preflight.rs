@@ -1,3 +1,4 @@
+use crate::utils::timing::Timing;
 use alloy::network::TransactionBuilder;
 use alloy::primitives::{Address, Bytes, U256};
 use alloy::providers::Provider;
@@ -8,6 +9,7 @@ use raindex_bindings::provider::ReadProvider;
 use raindex_bindings::IRaindexV6::{takeOrders4Call, TakeOrdersConfigV5};
 use raindex_bindings::IERC20::approveCall;
 use thiserror::Error;
+use tracing::{debug, info, warn};
 
 use crate::erc20::ERC20;
 
@@ -151,6 +153,15 @@ pub async fn simulate_take_orders(
     config: &TakeOrdersConfigV5,
     block_number: Option<u64>,
 ) -> Result<(), String> {
+    let started_at = Timing::now();
+    let order_count = config.orders.len();
+    debug!(
+        raindex = %raindex,
+        taker = %taker,
+        block_number = ?block_number,
+        order_count,
+        "starting take-orders preflight simulation"
+    );
     let calldata = takeOrders4Call {
         config: config.clone(),
     }
@@ -173,8 +184,32 @@ pub async fn simulate_take_orders(
         .await;
 
     match result {
-        Ok(_) => Ok(()),
-        Err(e) => Err(e.to_string()),
+        Ok(_) => {
+            info!(
+                raindex = %raindex,
+                taker = %taker,
+                block_number = ?block_number,
+                order_count,
+                simulation_success = true,
+                duration_ms = started_at.elapsed_ms(),
+                "take-orders preflight simulation succeeded"
+            );
+            Ok(())
+        }
+        Err(e) => {
+            let error = e.to_string();
+            warn!(
+                raindex = %raindex,
+                taker = %taker,
+                block_number = ?block_number,
+                order_count,
+                simulation_success = false,
+                error = %error.chars().take(512).collect::<String>(),
+                duration_ms = started_at.elapsed_ms(),
+                "take-orders preflight simulation failed"
+            );
+            Err(error)
+        }
     }
 }
 
@@ -185,18 +220,30 @@ pub async fn find_failing_order_index(
     config: &TakeOrdersConfigV5,
     block_number: Option<u64>,
 ) -> Option<usize> {
+    let started_at = Timing::now();
     if config.orders.is_empty() {
+        debug!(raindex = %raindex, "cannot find failing order in empty config");
         return None;
     }
 
     if config.orders.len() == 1 {
         let result = simulate_take_orders(provider, raindex, taker, config, block_number).await;
         if result.is_err() {
+            warn!(
+                raindex = %raindex,
+                taker = %taker,
+                block_number = ?block_number,
+                failing_order_index = 0usize,
+                simulations_run = 1usize,
+                duration_ms = started_at.elapsed_ms(),
+                "identified failing order"
+            );
             return Some(0);
         }
         return None;
     }
 
+    let mut simulations_run = 0usize;
     for idx in 0..config.orders.len() {
         let single_order_config = TakeOrdersConfigV5 {
             minimumIO: config.minimumIO,
@@ -210,12 +257,30 @@ pub async fn find_failing_order_index(
         let result =
             simulate_take_orders(provider, raindex, taker, &single_order_config, block_number)
                 .await;
+        simulations_run += 1;
 
         if result.is_err() {
+            warn!(
+                raindex = %raindex,
+                taker = %taker,
+                block_number = ?block_number,
+                failing_order_index = idx,
+                simulations_run,
+                duration_ms = started_at.elapsed_ms(),
+                "identified failing order"
+            );
             return Some(idx);
         }
     }
 
+    warn!(
+        raindex = %raindex,
+        taker = %taker,
+        block_number = ?block_number,
+        simulations_run,
+        duration_ms = started_at.elapsed_ms(),
+        "could not identify failing order"
+    );
     None
 }
 

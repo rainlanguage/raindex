@@ -1,9 +1,11 @@
 use crate::erc20::ERC20;
 use crate::raindex_client::RaindexError;
 use crate::take_orders::{check_taker_allowance, ParsedTakeOrdersMode};
+use crate::utils::timing::Timing;
 use alloy::primitives::Address;
 use rain_math_float::Float;
 use std::ops::Mul;
+use tracing::info;
 use url::Url;
 
 use super::result::build_approval_result;
@@ -21,7 +23,11 @@ pub struct ApprovalCheckParams {
 pub async fn check_approval_needed(
     params: &ApprovalCheckParams,
 ) -> Result<Option<TakeOrdersCalldataResult>, RaindexError> {
+    let started_at = Timing::now();
     let max_sell_cap = calculate_max_sell_cap(params.mode, params.price_cap)?;
+    let formatted_max_sell_cap = max_sell_cap
+        .format()
+        .unwrap_or_else(|_| "<format_error>".to_string());
 
     let erc20 = ERC20::new(params.rpc_urls.clone(), params.sell_token);
     let decimals = erc20.decimals().await?;
@@ -32,7 +38,21 @@ pub async fn check_approval_needed(
             .await
             .map_err(|e| RaindexError::PreflightError(e.to_string()))?;
 
+    let duration_ms = started_at.elapsed_ms();
     if allowance_result.needs_approval {
+        info!(
+            sell_token = %params.sell_token,
+            taker = %params.taker,
+            raindex = %params.raindex,
+            spender = %params.raindex,
+            max_sell_cap = %formatted_max_sell_cap,
+            token_decimals = decimals,
+            required_fixed_amount = %required_u256,
+            current_allowance = %allowance_result.current_allowance,
+            approval_required = true,
+            duration_ms,
+            "approval required for take-orders calldata"
+        );
         Ok(Some(build_approval_result(
             params.sell_token,
             params.raindex,
@@ -40,6 +60,19 @@ pub async fn check_approval_needed(
             decimals,
         )?))
     } else {
+        info!(
+            sell_token = %params.sell_token,
+            taker = %params.taker,
+            raindex = %params.raindex,
+            spender = %params.raindex,
+            max_sell_cap = %formatted_max_sell_cap,
+            token_decimals = decimals,
+            required_fixed_amount = %required_u256,
+            current_allowance = %allowance_result.current_allowance,
+            approval_required = false,
+            duration_ms,
+            "approval check passed"
+        );
         Ok(None)
     }
 }

@@ -17,6 +17,7 @@ use crate::raindex_client::take_orders::{
 use crate::raindex_client::vaults_list::RaindexVaultsList;
 use crate::rpc_client::RpcClient;
 use crate::take_orders::{ParsedTakeOrdersMode, TakeOrdersMode};
+use crate::utils::timing::Timing;
 use crate::{
     meta::TryDecodeRainlangSource,
     raindex_client::{
@@ -46,6 +47,7 @@ use raindex_subgraph_client::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Cursor, str::FromStr};
+use tracing::{debug, info, warn, Level};
 use tsify::Tsify;
 use wasm_bindgen_utils::impl_wasm_traits;
 #[cfg(target_family = "wasm")]
@@ -54,6 +56,7 @@ use wasm_bindgen_utils::prelude::js_sys::BigInt;
 const DEFAULT_PAGE_SIZE: u16 = 100;
 // Limit concurrent dotrain source fetches to avoid overwhelming the subgraph/metaboard.
 const MAX_CONCURRENT_DOTRAIN_SOURCE_FETCHES: usize = 5;
+const MAX_INFO_ORDER_INVENTORY_LOGS: usize = 50;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -183,6 +186,63 @@ fn get_io_by_type(order: &RaindexOrder, vault_type: RaindexVaultType) -> Vec<Rai
         .into_iter()
         .filter(|v| v.vault_type() == Some(vault_type.clone()))
         .collect()
+}
+
+fn format_order_vaults(vaults: &[RaindexVault]) -> Vec<String> {
+    vaults
+        .iter()
+        .map(|vault| {
+            let vault_id = vault.vault_id_string();
+
+            format!(
+                "vault_id={},token={},balance={}",
+                vault_id,
+                vault.token().address(),
+                vault.formatted_balance()
+            )
+        })
+        .collect()
+}
+
+fn log_order_inventory_for_pair(
+    chain_id: u32,
+    sell_token: Address,
+    buy_token: Address,
+    orders: &[RaindexOrder],
+) {
+    if !tracing::enabled!(Level::DEBUG) {
+        return;
+    }
+
+    for (order_index, order) in orders
+        .iter()
+        .take(MAX_INFO_ORDER_INVENTORY_LOGS)
+        .enumerate()
+    {
+        debug!(
+            chain_id,
+            sell_token = %sell_token,
+            buy_token = %buy_token,
+            order_index,
+            order_hash = %order.order_hash(),
+            raindex = %order.raindex(),
+            input_vaults = ?format_order_vaults(&order.inputs),
+            output_vaults = ?format_order_vaults(&order.outputs),
+            "order considered for take-orders pair"
+        );
+    }
+
+    let omitted = orders.len().saturating_sub(MAX_INFO_ORDER_INVENTORY_LOGS);
+    if omitted > 0 {
+        debug!(
+            chain_id,
+            sell_token = %sell_token,
+            buy_token = %buy_token,
+            logged_order_count = MAX_INFO_ORDER_INVENTORY_LOGS,
+            omitted_order_count = omitted,
+            "omitted additional order inventory logs"
+        );
+    }
 }
 
 impl RaindexOrder {
@@ -1323,6 +1383,7 @@ impl RaindexClient {
         sell_token: Address,
         buy_token: Address,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
+        let started_at = Timing::now();
         let filters = GetOrdersFilters {
             owners: vec![],
             active: Some(true),
@@ -1337,6 +1398,24 @@ impl RaindexClient {
 
         let ids = Some(vec![chain_id]);
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+        let local_chain_ids_count = local_ids.len();
+        let subgraph_chain_ids_count = sg_ids.len();
+        let query_source = match (local_db.is_some(), sg_ids.is_empty()) {
+            (true, true) => "local_db",
+            (false, false) => "subgraph",
+            (true, false) => "mixed",
+            (false, true) => "none",
+        };
+
+        info!(
+            chain_id,
+            sell_token = %sell_token,
+            buy_token = %buy_token,
+            query_source,
+            local_chain_ids_count,
+            subgraph_chain_ids_count,
+            "fetching orders for token pair"
+        );
 
         let mut all_orders = Vec::new();
 
@@ -1345,6 +1424,12 @@ impl RaindexClient {
             let result = local_source
                 .list(Some(local_ids), &filters, None, None)
                 .await?;
+            info!(
+                chain_id,
+                source = "local_db",
+                returned_order_count = result.orders.len(),
+                "fetched local orders for token pair"
+            );
             all_orders.extend(result.orders);
         }
 
@@ -1353,13 +1438,44 @@ impl RaindexClient {
             let result = subgraph_source
                 .list(Some(sg_ids), &filters, None, None)
                 .await?;
+            info!(
+                chain_id,
+                source = "subgraph",
+                returned_order_count = result.orders.len(),
+                "fetched subgraph orders for token pair"
+            );
             all_orders.extend(result.orders);
         }
 
         if all_orders.is_empty() {
+            warn!(
+                chain_id,
+                sell_token = %sell_token,
+                buy_token = %buy_token,
+                query_source,
+                local_chain_ids_count,
+                subgraph_chain_ids_count,
+                returned_order_count = 0usize,
+                no_liquidity = true,
+                duration_ms = started_at.elapsed_ms(),
+                "no orders found for token pair"
+            );
             return Err(RaindexError::NoLiquidity);
         }
 
+        info!(
+            chain_id,
+            sell_token = %sell_token,
+            buy_token = %buy_token,
+            query_source,
+            local_chain_ids_count,
+            subgraph_chain_ids_count,
+            returned_order_count = all_orders.len(),
+            no_liquidity = false,
+            duration_ms = started_at.elapsed_ms(),
+            "fetched orders for token pair"
+        );
+        log_order_inventory_for_pair(chain_id, sell_token, buy_token, &all_orders);
         Ok(all_orders)
     }
 }
