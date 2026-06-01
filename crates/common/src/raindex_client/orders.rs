@@ -47,7 +47,7 @@ use raindex_subgraph_client::{
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Cursor, str::FromStr};
-use tracing::{debug, info, warn, Level};
+use tracing::{debug, error, info, info_span, warn, Instrument, Level};
 use tsify::Tsify;
 use wasm_bindgen_utils::impl_wasm_traits;
 #[cfg(target_family = "wasm")]
@@ -57,6 +57,48 @@ const DEFAULT_PAGE_SIZE: u16 = 100;
 // Limit concurrent dotrain source fetches to avoid overwhelming the subgraph/metaboard.
 const MAX_CONCURRENT_DOTRAIN_SOURCE_FETCHES: usize = 5;
 const MAX_INFO_ORDER_INVENTORY_LOGS: usize = 50;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OrderFilterTraceSummary {
+    owners_count: usize,
+    has_active_filter: bool,
+    has_order_hash_filter: bool,
+    input_tokens_count: usize,
+    output_tokens_count: usize,
+    raindexes_count: usize,
+    has_positive_output_vault_balance_filter: bool,
+}
+
+fn summarize_order_filters(filters: &GetOrdersFilters) -> OrderFilterTraceSummary {
+    OrderFilterTraceSummary {
+        owners_count: filters.owners.len(),
+        has_active_filter: filters.active.is_some(),
+        has_order_hash_filter: filters.order_hash.is_some(),
+        input_tokens_count: filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.inputs.as_ref())
+            .map_or(0, Vec::len),
+        output_tokens_count: filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.outputs.as_ref())
+            .map_or(0, Vec::len),
+        raindexes_count: filters.raindex_addresses.as_ref().map_or(0, Vec::len),
+        has_positive_output_vault_balance_filter: filters
+            .has_positive_output_vault_balance
+            .is_some(),
+    }
+}
+
+fn query_source_label(has_local_db: bool, has_subgraph: bool) -> &'static str {
+    match (has_local_db, has_subgraph) {
+        (true, true) => "mixed",
+        (true, false) => "local_db",
+        (false, true) => "subgraph",
+        (false, false) => "none",
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -1043,43 +1085,146 @@ impl RaindexClient {
         page_size: Option<u16>,
     ) -> Result<RaindexOrdersListResult, RaindexError> {
         let filters = filters.unwrap_or_default();
+        let filter_summary = summarize_order_filters(&filters);
         let page_number = page.unwrap_or(1).max(1);
         let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
         let ids = chain_ids.map(|ChainIds(ids)| ids);
+        let requested_chain_ids_count = ids.as_ref().map_or(0, Vec::len);
+        let span = info_span!(
+            "get_orders",
+            requested_chain_ids_count,
+            page = page_number,
+            page_size,
+            owners_count = filter_summary.owners_count,
+            has_active_filter = filter_summary.has_active_filter,
+            has_order_hash_filter = filter_summary.has_order_hash_filter,
+            input_tokens_count = filter_summary.input_tokens_count,
+            output_tokens_count = filter_summary.output_tokens_count,
+            raindexes_count = filter_summary.raindexes_count,
+            has_positive_output_vault_balance_filter =
+                filter_summary.has_positive_output_vault_balance_filter,
+        );
 
-        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+        async move {
+            let started_at = Timing::now();
+            let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+            let local_chain_ids_count = local_ids.len();
+            let subgraph_chain_ids_count = sg_ids.len();
+            let query_source = query_source_label(local_db.is_some(), !sg_ids.is_empty());
 
-        let mut all_orders = Vec::new();
-        let mut total_count: u32 = 0;
+            info!(
+                query_source,
+                local_chain_ids_count, subgraph_chain_ids_count, "fetching orders"
+            );
 
-        if let Some(db) = local_db {
-            let local_source = LocalDbOrders::new(&db, ClientRef::new(self.clone()));
-            let result = local_source
-                .list(
-                    Some(local_ids),
-                    &filters,
-                    Some(page_number),
-                    Some(page_size),
-                )
-                .await?;
-            total_count += result.total_count;
-            all_orders.extend(result.orders);
+            let mut all_orders = Vec::new();
+            let mut total_count: u32 = 0;
+            let mut local_rows = 0usize;
+            let mut subgraph_rows = 0usize;
+
+            if let Some(db) = local_db {
+                let local_started_at = Timing::now();
+                let local_source = LocalDbOrders::new(&db, ClientRef::new(self.clone()));
+                let result = local_source
+                    .list(
+                        Some(local_ids),
+                        &filters,
+                        Some(page_number),
+                        Some(page_size),
+                    )
+                    .instrument(info_span!("orders.fetching_local_db"))
+                    .await
+                    .map_err(|err| {
+                        error!(
+                            source = "local_db",
+                            duration_ms = local_started_at.elapsed_ms(),
+                            error = %err,
+                            "failed fetching orders"
+                        );
+                        err
+                    })?;
+                local_rows = result.orders.len();
+                total_count += result.total_count;
+                all_orders.extend(result.orders);
+                info!(
+                    source = "local_db",
+                    returned_order_count = local_rows,
+                    total_count = result.total_count,
+                    duration_ms = local_started_at.elapsed_ms(),
+                    "fetched orders"
+                );
+            }
+
+            if !sg_ids.is_empty() {
+                let subgraph_started_at = Timing::now();
+                let subgraph_source = SubgraphOrders::new(self);
+                let result = subgraph_source
+                    .list(Some(sg_ids), &filters, Some(page_number), Some(page_size))
+                    .instrument(info_span!("orders.fetching_subgraph"))
+                    .await
+                    .map_err(|err| {
+                        error!(
+                            source = "subgraph",
+                            duration_ms = subgraph_started_at.elapsed_ms(),
+                            error = %err,
+                            "failed fetching orders"
+                        );
+                        err
+                    })?;
+                subgraph_rows = result.orders.len();
+                total_count += result.total_count;
+                all_orders.extend(result.orders);
+                info!(
+                    source = "subgraph",
+                    returned_order_count = subgraph_rows,
+                    total_count = result.total_count,
+                    duration_ms = subgraph_started_at.elapsed_ms(),
+                    "fetched orders"
+                );
+            }
+
+            let dotrain_started_at = Timing::now();
+            let orders = fetch_orders_dotrain_sources(all_orders)
+                .instrument(info_span!("orders.fetching_dotrain_sources"))
+                .await
+                .map_err(|err| {
+                    error!(
+                        local_rows,
+                        subgraph_rows,
+                        duration_ms = dotrain_started_at.elapsed_ms(),
+                        error = %err,
+                        "failed fetching order dotrain sources"
+                    );
+                    err
+                })?;
+            info!(
+                local_rows,
+                subgraph_rows,
+                returned_order_count = orders.len(),
+                total_count,
+                duration_ms = dotrain_started_at.elapsed_ms(),
+                "fetched order dotrain sources"
+            );
+
+            info!(
+                query_source,
+                local_chain_ids_count,
+                subgraph_chain_ids_count,
+                local_rows,
+                subgraph_rows,
+                returned_order_count = orders.len(),
+                total_count,
+                duration_ms = started_at.elapsed_ms(),
+                "completed get_orders"
+            );
+
+            Ok(RaindexOrdersListResult {
+                orders,
+                total_count,
+            })
         }
-
-        if !sg_ids.is_empty() {
-            let subgraph_source = SubgraphOrders::new(self);
-            let result = subgraph_source
-                .list(Some(sg_ids), &filters, Some(page_number), Some(page_size))
-                .await?;
-            total_count += result.total_count;
-            all_orders.extend(result.orders);
-        }
-
-        let orders = fetch_orders_dotrain_sources(all_orders).await?;
-        Ok(RaindexOrdersListResult {
-            orders,
-            total_count,
-        })
+        .instrument(span)
+        .await
     }
 
     /// Retrieves a specific order by its hash from a particular blockchain network
@@ -1334,45 +1479,115 @@ impl RaindexClient {
         raindex_id: &RaindexIdentifier,
         order_hash: B256,
     ) -> Result<RaindexOrder, RaindexError> {
-        let raindex_cfg = self.get_raindex_by_address(raindex_id.raindex_address)?;
-        if raindex_cfg.network.chain_id != raindex_id.chain_id {
-            return Err(RaindexError::RaindexNotFound(
-                raindex_id.raindex_address.to_string(),
-                raindex_id.chain_id,
-            ));
-        }
+        let span = info_span!(
+            "get_order_by_hash",
+            chain_id = raindex_id.chain_id,
+            raindex = %raindex_id.raindex_address,
+            order_hash = %order_hash,
+        );
 
-        match self.query_source(raindex_id.chain_id) {
-            QuerySource::LocalDb(local_db) => {
-                let local_source = LocalDbOrders::new(&local_db, ClientRef::new(self.clone()));
-                let mut order = local_source
-                    .get_by_hash(raindex_id, &order_hash)
-                    .await?
-                    .ok_or_else(|| {
-                        RaindexError::OrderNotFound(
-                            raindex_id.raindex_address.to_string(),
-                            raindex_id.chain_id,
-                            order_hash,
-                        )
-                    })?;
-                order.fetch_dotrain_source().await?;
-                Ok(order)
+        async move {
+            let started_at = Timing::now();
+            let raindex_cfg = self.get_raindex_by_address(raindex_id.raindex_address)?;
+            if raindex_cfg.network.chain_id != raindex_id.chain_id {
+                let err = RaindexError::RaindexNotFound(
+                    raindex_id.raindex_address.to_string(),
+                    raindex_id.chain_id,
+                );
+                warn!(
+                    configured_chain_id = raindex_cfg.network.chain_id,
+                    duration_ms = started_at.elapsed_ms(),
+                    error = %err,
+                    "order lookup rejected for mismatched raindex chain"
+                );
+                return Err(err);
             }
-            QuerySource::Subgraph => {
-                let mut order = SubgraphOrders::new(self)
-                    .get_by_hash(raindex_id, &order_hash)
-                    .await?
-                    .ok_or_else(|| {
-                        RaindexError::OrderNotFound(
-                            raindex_id.raindex_address.to_string(),
-                            raindex_id.chain_id,
-                            order_hash,
-                        )
-                    })?;
-                order.fetch_dotrain_source().await?;
-                Ok(order)
-            }
+
+            let mut order = match self.query_source(raindex_id.chain_id) {
+                QuerySource::LocalDb(local_db) => {
+                    let source_started_at = Timing::now();
+                    let local_source = LocalDbOrders::new(&local_db, ClientRef::new(self.clone()));
+                    let order = local_source
+                        .get_by_hash(raindex_id, &order_hash)
+                        .instrument(info_span!("order.fetching_local_db"))
+                        .await
+                        .map_err(|err| {
+                            error!(
+                                source = "local_db",
+                                duration_ms = source_started_at.elapsed_ms(),
+                                error = %err,
+                                "failed fetching order by hash"
+                            );
+                            err
+                        })?
+                        .ok_or_else(|| {
+                            RaindexError::OrderNotFound(
+                                raindex_id.raindex_address.to_string(),
+                                raindex_id.chain_id,
+                                order_hash,
+                            )
+                        })?;
+                    info!(
+                        source = "local_db",
+                        duration_ms = source_started_at.elapsed_ms(),
+                        "fetched order by hash"
+                    );
+                    order
+                }
+                QuerySource::Subgraph => {
+                    let source_started_at = Timing::now();
+                    let order = SubgraphOrders::new(self)
+                        .get_by_hash(raindex_id, &order_hash)
+                        .instrument(info_span!("order.fetching_subgraph"))
+                        .await
+                        .map_err(|err| {
+                            error!(
+                                source = "subgraph",
+                                duration_ms = source_started_at.elapsed_ms(),
+                                error = %err,
+                                "failed fetching order by hash"
+                            );
+                            err
+                        })?
+                        .ok_or_else(|| {
+                            RaindexError::OrderNotFound(
+                                raindex_id.raindex_address.to_string(),
+                                raindex_id.chain_id,
+                                order_hash,
+                            )
+                        })?;
+                    info!(
+                        source = "subgraph",
+                        duration_ms = source_started_at.elapsed_ms(),
+                        "fetched order by hash"
+                    );
+                    order
+                }
+            };
+
+            let dotrain_started_at = Timing::now();
+            order.fetch_dotrain_source().await.map_err(|err| {
+                error!(
+                    duration_ms = dotrain_started_at.elapsed_ms(),
+                    error = %err,
+                    "failed fetching order dotrain source"
+                );
+                err
+            })?;
+            info!(
+                has_dotrain_source = order.rainlang().is_some(),
+                duration_ms = dotrain_started_at.elapsed_ms(),
+                "fetched order dotrain source"
+            );
+
+            info!(
+                duration_ms = started_at.elapsed_ms(),
+                "completed get_order_by_hash"
+            );
+            Ok(order)
         }
+        .instrument(span)
+        .await
     }
 }
 
@@ -1779,6 +1994,47 @@ mod tests {
             format!("0x{}", alloy::hex::encode(encoded))
         }
         use std::str::FromStr;
+
+        #[test]
+        fn order_filter_trace_summary_counts_optional_filters() {
+            let filters = GetOrdersFilters {
+                owners: vec![address!("0000000000000000000000000000000000000001")],
+                active: Some(true),
+                order_hash: Some(b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                )),
+                tokens: Some(GetOrdersTokenFilter {
+                    inputs: Some(vec![address!("0000000000000000000000000000000000000003")]),
+                    outputs: Some(vec![
+                        address!("0000000000000000000000000000000000000004"),
+                        address!("0000000000000000000000000000000000000005"),
+                    ]),
+                }),
+                raindex_addresses: Some(vec![address!("0000000000000000000000000000000000000006")]),
+                has_positive_output_vault_balance: Some(true),
+            };
+
+            assert_eq!(
+                summarize_order_filters(&filters),
+                OrderFilterTraceSummary {
+                    owners_count: 1,
+                    has_active_filter: true,
+                    has_order_hash_filter: true,
+                    input_tokens_count: 1,
+                    output_tokens_count: 2,
+                    raindexes_count: 1,
+                    has_positive_output_vault_balance_filter: true,
+                }
+            );
+        }
+
+        #[test]
+        fn query_source_label_describes_selected_sources() {
+            assert_eq!(query_source_label(true, true), "mixed");
+            assert_eq!(query_source_label(true, false), "local_db");
+            assert_eq!(query_source_label(false, true), "subgraph");
+            assert_eq!(query_source_label(false, false), "none");
+        }
 
         async fn build_client_with_metaboard(
             metaboard_url: &str,

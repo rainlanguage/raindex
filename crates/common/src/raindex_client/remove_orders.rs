@@ -5,10 +5,12 @@ use crate::raindex_client::local_db::orders::LocalDbOrders;
 use crate::raindex_client::orders::{fetch_orders_dotrain_sources, RaindexOrder};
 use crate::raindex_client::QuerySource;
 use crate::retry::{retry_with_constant_interval, RetryError};
+use crate::utils::timing::Timing;
 use alloy::primitives::{hex::decode, Bytes, B256};
 use alloy::sol_types::{SolCall, SolValue};
 use raindex_bindings::IRaindexV6::{removeOrder3Call, OrderV4};
 use raindex_subgraph_client::types::order_detail_traits::OrderDetailError;
+use tracing::{error, info, info_span};
 
 const DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS: usize = 10;
 const DEFAULT_REMOVE_ORDER_POLL_INTERVAL_MS: u64 = 1_000;
@@ -198,11 +200,38 @@ impl RaindexOrder {
         unchecked_return_type = "Hex"
     )]
     pub fn get_remove_calldata(&self) -> Result<Bytes, RaindexError> {
+        let started_at = Timing::now();
+        let span = info_span!(
+            "get_remove_calldata",
+            chain_id = self.chain_id(),
+            raindex = %self.raindex(),
+            order_hash = %self.order_hash(),
+        );
+        let _entered = span.enter();
+
+        info!("building remove order calldata");
+        let order = match self.try_into() {
+            Ok(order) => order,
+            Err(err) => {
+                error!(
+                    duration_ms = started_at.elapsed_ms(),
+                    error = %err,
+                    "failed decoding order for remove calldata"
+                );
+                return Err(RaindexError::from(err));
+            }
+        };
         let remove_order_call = removeOrder3Call {
-            order: self.try_into()?,
+            order,
             tasks: vec![],
         };
-        Ok(Bytes::copy_from_slice(&remove_order_call.abi_encode()))
+        let calldata = Bytes::copy_from_slice(&remove_order_call.abi_encode());
+        info!(
+            calldata_len = calldata.len(),
+            duration_ms = started_at.elapsed_ms(),
+            "built remove order calldata"
+        );
+        Ok(calldata)
     }
 }
 

@@ -13,8 +13,46 @@ use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use tracing::{debug, info, warn};
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_utils::prelude::js_sys::Date;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
+
+struct QuoteTiming {
+    #[cfg(not(target_family = "wasm"))]
+    started_at: std::time::Instant,
+    #[cfg(target_family = "wasm")]
+    started_at_ms: f64,
+}
+
+impl QuoteTiming {
+    fn now() -> Self {
+        Self {
+            #[cfg(not(target_family = "wasm"))]
+            started_at: std::time::Instant::now(),
+            #[cfg(target_family = "wasm")]
+            started_at_ms: Date::now(),
+        }
+    }
+
+    fn elapsed_ms(&self) -> u64 {
+        #[cfg(not(target_family = "wasm"))]
+        {
+            self.started_at.elapsed().as_millis() as u64
+        }
+
+        #[cfg(target_family = "wasm")]
+        {
+            let elapsed = Date::now() - self.started_at_ms;
+            if elapsed.is_finite() && elapsed > 0.0 {
+                elapsed as u64
+            } else {
+                0
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
@@ -68,6 +106,17 @@ pub async fn get_order_quotes(
     counterparty: Address,
     injector: &dyn SignedContextInjector,
 ) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
+    let started_at = QuoteTiming::now();
+    info!(
+        order_count = orders.len(),
+        rpc_url_count = rpcs.len(),
+        block_number = ?block_number,
+        chunk_size = ?chunk_size,
+        counterparty = %counterparty,
+        "starting quote pair sweep"
+    );
+
+    let block_started_at = QuoteTiming::now();
     let req_block_number = match block_number {
         Some(block) => block,
         None => {
@@ -83,6 +132,12 @@ pub async fn get_order_quotes(
                 .map_err(|e| Error::TransportError(e.to_string()))?
         }
     };
+    info!(
+        requested_block_number = ?block_number,
+        resolved_block_number = req_block_number,
+        duration_ms = block_started_at.elapsed_ms(),
+        "resolved quote block number"
+    );
 
     // Responses are assembled in strict iteration order. Pairs whose oracle
     // fetch failed get a failure response stored immediately; quoted pairs
@@ -96,7 +151,12 @@ pub async fn get_order_quotes(
     let mut all_quote_targets: Vec<QuoteTarget> = Vec::new();
     let mut all_signed_contexts: Vec<Vec<SignedContextV1>> = Vec::new();
     let mut quoted_slot_indices: Vec<usize> = Vec::new();
+    let mut skipped_self_trade_pair_count = 0usize;
+    let mut oracle_fetch_count = 0usize;
+    let mut oracle_fetch_failure_count = 0usize;
+    let mut injected_context_count = 0usize;
 
+    let target_build_started_at = QuoteTiming::now();
     for order in &orders {
         let order_struct: OrderV4 = order.clone().try_into()?;
         let raindex = Address::from_str(&order.raindex.id.0)?;
@@ -105,6 +165,7 @@ pub async fn get_order_quotes(
         for (input_index, input) in order_struct.validInputs.iter().enumerate() {
             for (output_index, output) in order_struct.validOutputs.iter().enumerate() {
                 if input.token == output.token {
+                    skipped_self_trade_pair_count += 1;
                     continue;
                 }
 
@@ -140,6 +201,8 @@ pub async fn get_order_quotes(
                 // for oracle-backed orders reflect current oracle prices against past chain
                 // state, which may not represent a quote that actually existed.
                 let oracle_context = if let Some(ref url) = oracle_url {
+                    oracle_fetch_count += 1;
+                    let oracle_started_at = QuoteTiming::now();
                     let body = crate::oracle::encode_oracle_body(
                         &order_struct,
                         input_index as u32,
@@ -147,11 +210,31 @@ pub async fn get_order_quotes(
                         counterparty,
                     );
                     match crate::oracle::fetch_signed_context(url, body).await {
-                        Ok(ctx) => Ok(vec![ctx]),
-                        Err(e) => Err(format!(
-                            "Oracle fetch failed for pair ({}, {}): {}",
-                            input_index, output_index, e
-                        )),
+                        Ok(ctx) => {
+                            debug!(
+                                raindex = %raindex,
+                                input_index,
+                                output_index,
+                                duration_ms = oracle_started_at.elapsed_ms(),
+                                "fetched quote oracle context"
+                            );
+                            Ok(vec![ctx])
+                        }
+                        Err(e) => {
+                            oracle_fetch_failure_count += 1;
+                            warn!(
+                                raindex = %raindex,
+                                input_index,
+                                output_index,
+                                duration_ms = oracle_started_at.elapsed_ms(),
+                                error = %e,
+                                "quote oracle context fetch failed"
+                            );
+                            Err(format!(
+                                "Oracle fetch failed for pair ({}, {}): {}",
+                                input_index, output_index, e
+                            ))
+                        }
                     }
                 } else {
                     Ok(vec![])
@@ -177,6 +260,7 @@ pub async fn get_order_quotes(
                                 counterparty,
                             )
                             .await;
+                        injected_context_count += injected.len();
                         let composed: Vec<SignedContextV1> =
                             oracle_ctx.into_iter().chain(injected).collect();
 
@@ -208,38 +292,66 @@ pub async fn get_order_quotes(
             }
         }
     }
+    info!(
+        order_count = orders.len(),
+        target_count = all_quote_targets.len(),
+        response_slot_count = all_responses.len(),
+        skipped_self_trade_pair_count,
+        oracle_fetch_count,
+        oracle_fetch_failure_count,
+        injected_context_count,
+        duration_ms = target_build_started_at.elapsed_ms(),
+        "built quote targets"
+    );
 
+    let batch_quote_started_at = QuoteTiming::now();
     let quote_results: Vec<BatchOrderQuotesResponse> = match BatchQuoteTarget(all_quote_targets)
         .do_quote(rpcs, Some(req_block_number), counterparty, chunk_size)
         .await
     {
-        Ok(quote_values) => quote_values
-            .into_iter()
-            .zip(all_pairs)
-            .zip(all_signed_contexts)
-            .map(
-                |((quote_result, pair), signed_context)| match quote_result {
-                    Ok(data) => BatchOrderQuotesResponse {
-                        pair,
-                        block_number: req_block_number,
-                        success: true,
-                        data: Some(data),
-                        error: None,
-                        signed_context,
+        Ok(quote_values) => {
+            let failed_quote_count = quote_values.iter().filter(|result| result.is_err()).count();
+            let successful_quote_count = quote_values.len().saturating_sub(failed_quote_count);
+            info!(
+                successful_quote_count,
+                failed_quote_count,
+                duration_ms = batch_quote_started_at.elapsed_ms(),
+                "completed quote batch RPC"
+            );
+            quote_values
+                .into_iter()
+                .zip(all_pairs)
+                .zip(all_signed_contexts)
+                .map(
+                    |((quote_result, pair), signed_context)| match quote_result {
+                        Ok(data) => BatchOrderQuotesResponse {
+                            pair,
+                            block_number: req_block_number,
+                            success: true,
+                            data: Some(data),
+                            error: None,
+                            signed_context,
+                        },
+                        Err(e) => BatchOrderQuotesResponse {
+                            pair,
+                            block_number: req_block_number,
+                            success: false,
+                            data: None,
+                            error: Some(e.to_string()),
+                            signed_context,
+                        },
                     },
-                    Err(e) => BatchOrderQuotesResponse {
-                        pair,
-                        block_number: req_block_number,
-                        success: false,
-                        data: None,
-                        error: Some(e.to_string()),
-                        signed_context,
-                    },
-                },
-            )
-            .collect(),
+                )
+                .collect()
+        }
         Err(e) => {
             let error = e.to_string();
+            warn!(
+                quoted_pair_count = all_pairs.len(),
+                duration_ms = batch_quote_started_at.elapsed_ms(),
+                error = %error,
+                "quote batch RPC failed"
+            );
             all_pairs
                 .into_iter()
                 .zip(all_signed_contexts)
@@ -260,7 +372,20 @@ pub async fn get_order_quotes(
         all_responses[slot_idx] = Some(response);
     }
 
-    Ok(all_responses.into_iter().map(|r| r.unwrap()).collect())
+    let responses: Vec<_> = all_responses.into_iter().map(|r| r.unwrap()).collect();
+    let successful_quote_count = responses.iter().filter(|response| response.success).count();
+    let failed_quote_count = responses.len().saturating_sub(successful_quote_count);
+    info!(
+        order_count = orders.len(),
+        response_count = responses.len(),
+        successful_quote_count,
+        failed_quote_count,
+        resolved_block_number = req_block_number,
+        duration_ms = started_at.elapsed_ms(),
+        "completed quote pair sweep"
+    );
+
+    Ok(responses)
 }
 
 #[cfg(test)]

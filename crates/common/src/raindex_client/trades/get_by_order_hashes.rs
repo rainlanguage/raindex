@@ -9,8 +9,40 @@ use raindex_subgraph_client::types::common::{
 };
 use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use std::collections::{HashMap, HashSet};
+use tracing::{info, info_span, Instrument};
 use tsify::Tsify;
 use wasm_bindgen_utils::{impl_wasm_traits, wasm_export};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TradesByOrderHashesFilterTraceSummary {
+    owners_count: usize,
+    takers_count: usize,
+    input_tokens_count: usize,
+    output_tokens_count: usize,
+    raindexes_count: usize,
+    has_time_filter: bool,
+}
+
+fn summarize_trades_by_order_hashes_filters(
+    filters: &GetTradesByOrderHashesFilters,
+) -> TradesByOrderHashesFilterTraceSummary {
+    TradesByOrderHashesFilterTraceSummary {
+        owners_count: filters.owners.len(),
+        takers_count: filters.takers.len(),
+        input_tokens_count: filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.inputs.as_ref())
+            .map_or(0, Vec::len),
+        output_tokens_count: filters
+            .tokens
+            .as_ref()
+            .and_then(|tokens| tokens.outputs.as_ref())
+            .map_or(0, Vec::len),
+        raindexes_count: filters.raindex_addresses.as_ref().map_or(0, Vec::len),
+        has_time_filter: filters.time_filter.is_some(),
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
 pub struct OrderHashes(#[tsify(type = "Hex[]")] pub Vec<B256>);
@@ -214,148 +246,198 @@ impl RaindexClient {
         let started = Timing::now();
         let requested_order_hashes_count = order_hashes.0.len();
         let order_hashes = unique_order_hashes_preserving_order(order_hashes.0);
-        if order_hashes.is_empty() {
-            return Ok(RaindexTradesByOrderHashResult {
-                trades_by_order_hash: Vec::new(),
-                total_count: 0,
-            });
-        }
-
         let filters = filters.unwrap_or_default();
-        let input_tokens_count = filters
-            .tokens
-            .as_ref()
-            .and_then(|tokens| tokens.inputs.as_ref())
-            .map_or(0, Vec::len);
-        let output_tokens_count = filters
-            .tokens
-            .as_ref()
-            .and_then(|tokens| tokens.outputs.as_ref())
-            .map_or(0, Vec::len);
-        let takers_count = filters.takers.len();
-        let owners_count = filters.owners.len();
-        let raindexes_count = filters.raindex_addresses.as_ref().map_or(0, Vec::len);
+        let filter_summary = summarize_trades_by_order_hashes_filters(&filters);
         let ids = chain_ids.map(|ChainIds(ids)| ids);
         let requested_chain_ids_count = ids.as_ref().map_or(0, Vec::len);
-        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
-        let local_chain_ids_count = local_ids.len();
-        let subgraph_chain_ids_count = sg_ids.len();
-
-        let mut all_trades = Vec::new();
-        let mut local_rows = 0usize;
-        let mut subgraph_rows_before_token_filter = 0usize;
-        let mut subgraph_rows_after_token_filter = 0usize;
-
-        if let Some(db) = local_db {
-            let local_tokens = filters
-                .tokens
-                .clone()
-                .map(|tokens| FetchTradesTokensFilter {
-                    inputs: tokens.inputs.unwrap_or_default(),
-                    outputs: tokens.outputs.unwrap_or_default(),
-                })
-                .unwrap_or_default();
-            let local_started = Timing::now();
-            let local_trades = fetch_trades(
-                &db,
-                FetchTradesArgs {
-                    chain_ids: local_ids,
-                    raindex_addresses: filters.raindex_addresses.clone().unwrap_or_default(),
-                    owners: filters.owners.clone(),
-                    takers: filters.takers.clone(),
-                    order_hash: None,
-                    order_hashes: order_hashes.clone(),
-                    tokens: local_tokens,
-                    time_filter: filters.time_filter.clone().unwrap_or_default(),
-                    pagination: PaginationParams::default(),
-                },
-            )
-            .await?;
-            local_rows = local_trades.len();
-            all_trades.extend(
-                local_trades
-                    .into_iter()
-                    .map(RaindexTrade::try_from_local_db_trade)
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
-            tracing::debug!(
-                order_hashes_count = order_hashes.len(),
-                rows = local_rows,
-                duration_ms = local_started.elapsed_ms(),
-                "getTradesByOrderHashes local DB completed"
-            );
-        }
-
-        if !sg_ids.is_empty() {
-            let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
-            let sg_filters = build_sg_filters(filters.clone(), &order_hashes);
-            let sg_token_filter = filters
-                .tokens
-                .clone()
-                .and_then(Option::<SgTradesTokensFilterArgs>::from)
-                .map(normalize_trade_tokens);
-            let name_to_chain_id: HashMap<&str, u32> = multi_subgraph_args
-                .iter()
-                .flat_map(|(chain_id, args)| args.iter().map(|arg| (arg.name.as_str(), *chain_id)))
-                .collect();
-            let client = MultiRaindexSubgraphClient::new(
-                multi_subgraph_args.values().flatten().cloned().collect(),
-            );
-            let subgraph_started = Timing::now();
-            let sg_trades = client.trades_list_all(sg_filters).await?;
-            subgraph_rows_before_token_filter = sg_trades.len();
-            let sg_trades: Vec<_> = if let Some(tokens) = sg_token_filter {
-                sg_trades
-                    .into_iter()
-                    .filter(|trade| sg_trade_matches_token_filter(&trade.trade, &tokens))
-                    .collect()
-            } else {
-                sg_trades
-            };
-            subgraph_rows_after_token_filter = sg_trades.len();
-            for trade_with_name in sg_trades {
-                let chain_id = name_to_chain_id
-                    .get(trade_with_name.subgraph_name.as_str())
-                    .copied()
-                    .ok_or(RaindexError::SubgraphNotFound(
-                        trade_with_name.subgraph_name.clone(),
-                        trade_with_name.trade.id.0.clone(),
-                    ))?;
-                all_trades.push(RaindexTrade::try_from_sg_trade(
-                    chain_id,
-                    trade_with_name.trade,
-                )?);
-            }
-            tracing::debug!(
-                order_hashes_count = order_hashes.len(),
-                rows_before_token_filter = subgraph_rows_before_token_filter,
-                rows_after_token_filter = subgraph_rows_after_token_filter,
-                duration_ms = subgraph_started.elapsed_ms(),
-                "getTradesByOrderHashes subgraph completed"
-            );
-        }
-
-        let result = group_trades_by_order_hash(order_hashes, all_trades);
-        tracing::debug!(
+        let span = info_span!(
+            "get_trades_by_order_hashes",
             requested_chain_ids_count,
-            local_chain_ids_count,
-            subgraph_chain_ids_count,
             requested_order_hashes_count,
-            unique_order_hashes_count = result.trades_by_order_hash.len(),
-            owners_count,
-            takers_count,
-            raindexes_count,
-            input_tokens_count,
-            output_tokens_count,
-            local_rows,
-            subgraph_rows_before_token_filter,
-            subgraph_rows_after_token_filter,
-            total_count = result.total_count,
-            duration_ms = started.elapsed_ms(),
-            "getTradesByOrderHashes completed"
+            unique_order_hashes_count = order_hashes.len(),
+            owners_count = filter_summary.owners_count,
+            takers_count = filter_summary.takers_count,
+            input_tokens_count = filter_summary.input_tokens_count,
+            output_tokens_count = filter_summary.output_tokens_count,
+            raindexes_count = filter_summary.raindexes_count,
+            has_time_filter = filter_summary.has_time_filter,
         );
 
-        Ok(result)
+        async move {
+            if order_hashes.is_empty() {
+                info!(
+                    requested_order_hashes_count,
+                    duration_ms = started.elapsed_ms(),
+                    "skipped get_trades_by_order_hashes for empty order hash list"
+                );
+                return Ok(RaindexTradesByOrderHashResult {
+                    trades_by_order_hash: Vec::new(),
+                    total_count: 0,
+                });
+            }
+
+            let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+            let local_chain_ids_count = local_ids.len();
+            let subgraph_chain_ids_count = sg_ids.len();
+
+            info!(
+                local_chain_ids_count,
+                subgraph_chain_ids_count, "fetching trades by order hashes"
+            );
+
+            let mut all_trades = Vec::new();
+            let mut local_rows = 0usize;
+            let mut subgraph_rows_before_token_filter = 0usize;
+            let mut subgraph_rows_after_token_filter = 0usize;
+
+            if let Some(db) = local_db {
+                let local_tokens = filters
+                    .tokens
+                    .clone()
+                    .map(|tokens| FetchTradesTokensFilter {
+                        inputs: tokens.inputs.unwrap_or_default(),
+                        outputs: tokens.outputs.unwrap_or_default(),
+                    })
+                    .unwrap_or_default();
+                let local_started = Timing::now();
+                let local_trades = fetch_trades(
+                    &db,
+                    FetchTradesArgs {
+                        chain_ids: local_ids,
+                        raindex_addresses: filters.raindex_addresses.clone().unwrap_or_default(),
+                        owners: filters.owners.clone(),
+                        takers: filters.takers.clone(),
+                        order_hash: None,
+                        order_hashes: order_hashes.clone(),
+                        tokens: local_tokens,
+                        time_filter: filters.time_filter.clone().unwrap_or_default(),
+                        pagination: PaginationParams::default(),
+                    },
+                )
+                .await?;
+                local_rows = local_trades.len();
+                all_trades.extend(
+                    local_trades
+                        .into_iter()
+                        .map(RaindexTrade::try_from_local_db_trade)
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+                tracing::debug!(
+                    order_hashes_count = order_hashes.len(),
+                    rows = local_rows,
+                    duration_ms = local_started.elapsed_ms(),
+                    "getTradesByOrderHashes local DB completed"
+                );
+                info!(
+                    source = "local_db",
+                    order_hashes_count = order_hashes.len(),
+                    rows = local_rows,
+                    duration_ms = local_started.elapsed_ms(),
+                    "fetched trades by order hashes"
+                );
+            }
+
+            if !sg_ids.is_empty() {
+                let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
+                let sg_filters = build_sg_filters(filters.clone(), &order_hashes);
+                let sg_token_filter = filters
+                    .tokens
+                    .clone()
+                    .and_then(Option::<SgTradesTokensFilterArgs>::from)
+                    .map(normalize_trade_tokens);
+                let name_to_chain_id: HashMap<&str, u32> = multi_subgraph_args
+                    .iter()
+                    .flat_map(|(chain_id, args)| {
+                        args.iter().map(|arg| (arg.name.as_str(), *chain_id))
+                    })
+                    .collect();
+                let client = MultiRaindexSubgraphClient::new(
+                    multi_subgraph_args.values().flatten().cloned().collect(),
+                );
+                let subgraph_started = Timing::now();
+                let sg_trades = client.trades_list_all(sg_filters).await?;
+                subgraph_rows_before_token_filter = sg_trades.len();
+                let sg_trades: Vec<_> = if let Some(tokens) = sg_token_filter {
+                    sg_trades
+                        .into_iter()
+                        .filter(|trade| sg_trade_matches_token_filter(&trade.trade, &tokens))
+                        .collect()
+                } else {
+                    sg_trades
+                };
+                subgraph_rows_after_token_filter = sg_trades.len();
+                for trade_with_name in sg_trades {
+                    let chain_id = name_to_chain_id
+                        .get(trade_with_name.subgraph_name.as_str())
+                        .copied()
+                        .ok_or(RaindexError::SubgraphNotFound(
+                            trade_with_name.subgraph_name.clone(),
+                            trade_with_name.trade.id.0.clone(),
+                        ))?;
+                    all_trades.push(RaindexTrade::try_from_sg_trade(
+                        chain_id,
+                        trade_with_name.trade,
+                    )?);
+                }
+                tracing::debug!(
+                    order_hashes_count = order_hashes.len(),
+                    rows_before_token_filter = subgraph_rows_before_token_filter,
+                    rows_after_token_filter = subgraph_rows_after_token_filter,
+                    duration_ms = subgraph_started.elapsed_ms(),
+                    "getTradesByOrderHashes subgraph completed"
+                );
+                info!(
+                    source = "subgraph",
+                    order_hashes_count = order_hashes.len(),
+                    rows_before_token_filter = subgraph_rows_before_token_filter,
+                    rows_after_token_filter = subgraph_rows_after_token_filter,
+                    duration_ms = subgraph_started.elapsed_ms(),
+                    "fetched trades by order hashes"
+                );
+            }
+
+            let result = group_trades_by_order_hash(order_hashes, all_trades);
+            tracing::debug!(
+                requested_chain_ids_count,
+                local_chain_ids_count,
+                subgraph_chain_ids_count,
+                requested_order_hashes_count,
+                unique_order_hashes_count = result.trades_by_order_hash.len(),
+                owners_count = filter_summary.owners_count,
+                takers_count = filter_summary.takers_count,
+                raindexes_count = filter_summary.raindexes_count,
+                input_tokens_count = filter_summary.input_tokens_count,
+                output_tokens_count = filter_summary.output_tokens_count,
+                local_rows,
+                subgraph_rows_before_token_filter,
+                subgraph_rows_after_token_filter,
+                total_count = result.total_count,
+                duration_ms = started.elapsed_ms(),
+                "getTradesByOrderHashes completed"
+            );
+            info!(
+                requested_chain_ids_count,
+                local_chain_ids_count,
+                subgraph_chain_ids_count,
+                requested_order_hashes_count,
+                unique_order_hashes_count = result.trades_by_order_hash.len(),
+                owners_count = filter_summary.owners_count,
+                takers_count = filter_summary.takers_count,
+                raindexes_count = filter_summary.raindexes_count,
+                input_tokens_count = filter_summary.input_tokens_count,
+                output_tokens_count = filter_summary.output_tokens_count,
+                local_rows,
+                subgraph_rows_before_token_filter,
+                subgraph_rows_after_token_filter,
+                total_count = result.total_count,
+                duration_ms = started.elapsed_ms(),
+                "completed get_trades_by_order_hashes"
+            );
+
+            Ok(result)
+        }
+        .instrument(span)
+        .await
     }
 }
 
@@ -363,7 +445,39 @@ impl RaindexClient {
 mod tests {
     use super::*;
     use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
-    use alloy::primitives::{b256, Bytes};
+    use alloy::primitives::{address, b256, Bytes};
+
+    #[test]
+    fn trades_by_order_hashes_filter_trace_summary_counts_optional_filters() {
+        let filters = GetTradesByOrderHashesFilters {
+            owners: vec![address!("0000000000000000000000000000000000000001")],
+            takers: vec![
+                address!("0000000000000000000000000000000000000002"),
+                address!("0000000000000000000000000000000000000003"),
+            ],
+            tokens: Some(GetTradesTokenFilter {
+                inputs: Some(vec![address!("0000000000000000000000000000000000000004")]),
+                outputs: Some(vec![address!("0000000000000000000000000000000000000005")]),
+            }),
+            raindex_addresses: Some(vec![address!("0000000000000000000000000000000000000006")]),
+            time_filter: Some(TimeFilter {
+                start: Some(1),
+                end: Some(2),
+            }),
+        };
+
+        assert_eq!(
+            summarize_trades_by_order_hashes_filters(&filters),
+            TradesByOrderHashesFilterTraceSummary {
+                owners_count: 1,
+                takers_count: 2,
+                input_tokens_count: 1,
+                output_tokens_count: 1,
+                raindexes_count: 1,
+                has_time_filter: true,
+            }
+        );
+    }
 
     fn local_trade(order_hash: B256, block_timestamp: u64, trade_id: u8) -> LocalDbOrderTrade {
         LocalDbOrderTrade {
