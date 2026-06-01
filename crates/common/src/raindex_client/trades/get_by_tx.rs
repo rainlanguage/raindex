@@ -1,9 +1,27 @@
 use super::*;
 use crate::local_db::query::fetch_trades_by_tx::FetchTradesByTxArgs;
 use crate::raindex_client::local_db::query::fetch_trades_by_tx::fetch_trades_by_tx;
+use crate::utils::timing::Timing;
 use alloy::primitives::{Address, B256};
 use raindex_subgraph_client::MultiRaindexSubgraphClient;
 use std::str::FromStr;
+use tracing::{error, info, info_span, Instrument};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TransactionTradeTraceSummary {
+    requested_chain_ids_count: usize,
+    raindexes_count: usize,
+}
+
+fn summarize_transaction_trade_filters(
+    chain_ids: &Option<Vec<u32>>,
+    raindex_addresses: &Option<Vec<Address>>,
+) -> TransactionTradeTraceSummary {
+    TransactionTradeTraceSummary {
+        requested_chain_ids_count: chain_ids.as_ref().map_or(0, Vec::len),
+        raindexes_count: raindex_addresses.as_ref().map_or(0, Vec::len),
+    }
+}
 
 #[wasm_export]
 impl RaindexClient {
@@ -52,75 +70,147 @@ impl RaindexClient {
         raindex_addresses: Option<Vec<Address>>,
         tx_hash: B256,
     ) -> Result<RaindexTradesListResult, RaindexError> {
+        let started_at = Timing::now();
         let ids = chain_ids.map(|ChainIds(ids)| ids);
-        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
-        let raindex_addresses_for_local_db = raindex_addresses.clone().unwrap_or_default();
+        let filter_summary = summarize_transaction_trade_filters(&ids, &raindex_addresses);
+        let span = info_span!(
+            "get_trades_for_transaction",
+            tx_hash = %tx_hash,
+            requested_chain_ids_count = filter_summary.requested_chain_ids_count,
+            raindexes_count = filter_summary.raindexes_count,
+        );
 
-        let mut all_trades = Vec::new();
+        async move {
+            let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+            let local_chain_ids_count = local_ids.len();
+            let subgraph_chain_ids_count = sg_ids.len();
+            let raindex_addresses_for_local_db = raindex_addresses.clone().unwrap_or_default();
 
-        if let Some(db) = local_db.filter(|_| !local_ids.is_empty()) {
-            let trades = fetch_trades_by_tx(
-                &db,
-                FetchTradesByTxArgs {
-                    chain_ids: local_ids,
-                    raindex_addresses: raindex_addresses_for_local_db,
-                    tx_hash,
-                },
-            )
-            .await?;
-            let raindex_trades: Vec<RaindexTrade> = trades
-                .into_iter()
-                .map(RaindexTrade::try_from_local_db_trade)
-                .collect::<Result<_, _>>()?;
-            all_trades.extend(raindex_trades);
-        }
+            info!(
+                local_chain_ids_count,
+                subgraph_chain_ids_count, "fetching trades for transaction"
+            );
 
-        if !sg_ids.is_empty() {
-            let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
-            let raindex_in = raindex_addresses
-                .as_deref()
-                .filter(|addresses| !addresses.is_empty())
-                .map(|addresses| {
-                    addresses
-                        .iter()
-                        .map(|address| address.to_string().to_lowercase())
-                        .collect::<Vec<_>>()
-                });
-            if !multi_subgraph_args.is_empty() {
-                let name_to_chain_id: std::collections::HashMap<&str, u32> = multi_subgraph_args
-                    .iter()
-                    .flat_map(|(chain_id, args)| {
-                        args.iter().map(|arg| (arg.name.as_str(), *chain_id))
-                    })
-                    .collect();
-                let client = MultiRaindexSubgraphClient::new(
-                    multi_subgraph_args.values().flatten().cloned().collect(),
+            let mut all_trades = Vec::new();
+            let mut local_rows = 0usize;
+            let mut subgraph_rows = 0usize;
+
+            if let Some(db) = local_db.filter(|_| !local_ids.is_empty()) {
+                let local_started_at = Timing::now();
+                let trades = fetch_trades_by_tx(
+                    &db,
+                    FetchTradesByTxArgs {
+                        chain_ids: local_ids,
+                        raindex_addresses: raindex_addresses_for_local_db,
+                        tx_hash,
+                    },
+                )
+                .await
+                .map_err(|err| {
+                    error!(
+                        source = "local_db",
+                        local_chain_ids_count,
+                        duration_ms = local_started_at.elapsed_ms(),
+                        error = %err,
+                        "failed fetching trades for transaction"
+                    );
+                    RaindexError::from(err)
+                })?;
+                let raindex_trades: Vec<RaindexTrade> = trades
+                    .into_iter()
+                    .map(RaindexTrade::try_from_local_db_trade)
+                    .collect::<Result<_, _>>()?;
+                local_rows = raindex_trades.len();
+                all_trades.extend(raindex_trades);
+                info!(
+                    source = "local_db",
+                    local_chain_ids_count,
+                    rows = local_rows,
+                    duration_ms = local_started_at.elapsed_ms(),
+                    "fetched trades for transaction"
                 );
-                let sg_trades = client
-                    .trades_by_transaction(tx_hash.to_string(), raindex_in)
-                    .await?;
-                for trade_with_name in sg_trades {
-                    let chain_id = name_to_chain_id
-                        .get(trade_with_name.subgraph_name.as_str())
-                        .copied()
-                        .ok_or(RaindexError::SubgraphNotFound(
-                            trade_with_name.subgraph_name.clone(),
-                            trade_with_name.trade.id.0.clone(),
-                        ))?;
-                    let trade = RaindexTrade::try_from_sg_trade(chain_id, trade_with_name.trade)?;
-                    all_trades.push(trade);
+            }
+
+            if !sg_ids.is_empty() {
+                let subgraph_started_at = Timing::now();
+                let multi_subgraph_args = self.get_multi_subgraph_args(Some(sg_ids))?;
+                let raindex_in = raindex_addresses
+                    .as_deref()
+                    .filter(|addresses| !addresses.is_empty())
+                    .map(|addresses| {
+                        addresses
+                            .iter()
+                            .map(|address| address.to_string().to_lowercase())
+                            .collect::<Vec<_>>()
+                    });
+                if !multi_subgraph_args.is_empty() {
+                    let name_to_chain_id: std::collections::HashMap<&str, u32> =
+                        multi_subgraph_args
+                            .iter()
+                            .flat_map(|(chain_id, args)| {
+                                args.iter().map(|arg| (arg.name.as_str(), *chain_id))
+                            })
+                            .collect();
+                    let client = MultiRaindexSubgraphClient::new(
+                        multi_subgraph_args.values().flatten().cloned().collect(),
+                    );
+                    let sg_trades = client
+                        .trades_by_transaction(tx_hash.to_string(), raindex_in)
+                        .await
+                        .map_err(|err| {
+                            error!(
+                                source = "subgraph",
+                                subgraph_chain_ids_count,
+                                duration_ms = subgraph_started_at.elapsed_ms(),
+                                error = %err,
+                                "failed fetching trades for transaction"
+                            );
+                            RaindexError::from(err)
+                        })?;
+                    subgraph_rows = sg_trades.len();
+                    for trade_with_name in sg_trades {
+                        let chain_id = name_to_chain_id
+                            .get(trade_with_name.subgraph_name.as_str())
+                            .copied()
+                            .ok_or(RaindexError::SubgraphNotFound(
+                                trade_with_name.subgraph_name.clone(),
+                                trade_with_name.trade.id.0.clone(),
+                            ))?;
+                        let trade =
+                            RaindexTrade::try_from_sg_trade(chain_id, trade_with_name.trade)?;
+                        all_trades.push(trade);
+                    }
+                    info!(
+                        source = "subgraph",
+                        subgraph_chain_ids_count,
+                        rows = subgraph_rows,
+                        duration_ms = subgraph_started_at.elapsed_ms(),
+                        "fetched trades for transaction"
+                    );
                 }
             }
+
+            let total_count = all_trades.len() as u64;
+            let summary = RaindexPairSummary::from_trades(&all_trades)?;
+
+            info!(
+                local_chain_ids_count,
+                subgraph_chain_ids_count,
+                local_rows,
+                subgraph_rows,
+                total_count,
+                duration_ms = started_at.elapsed_ms(),
+                "completed get_trades_for_transaction"
+            );
+
+            Ok(RaindexTradesListResult {
+                trades: all_trades,
+                total_count,
+                summary: Some(summary),
+            })
         }
-
-        let total_count = all_trades.len() as u64;
-        let summary = RaindexPairSummary::from_trades(&all_trades)?;
-
-        Ok(RaindexTradesListResult {
-            trades: all_trades,
-            total_count,
-            summary: Some(summary),
-        })
+        .instrument(span)
+        .await
     }
 }
 
@@ -181,13 +271,28 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
+        use super::super::{summarize_transaction_trade_filters, TransactionTradeTraceSummary};
         use crate::raindex_client::tests::get_test_yaml;
         use crate::raindex_client::trades::test_helpers::get_sg_trade_json;
         use crate::raindex_client::{ChainIds, RaindexClient};
-        use alloy::primitives::{b256, Address, Bytes};
+        use alloy::primitives::{address, b256, Address, Bytes};
         use httpmock::MockServer;
         use serde_json::json;
         use std::str::FromStr;
+
+        #[test]
+        fn transaction_trade_trace_summary_counts_optional_filters() {
+            let chain_ids = Some(vec![1, 137]);
+            let raindexes = Some(vec![address!("0x1111111111111111111111111111111111111111")]);
+
+            assert_eq!(
+                summarize_transaction_trade_filters(&chain_ids, &raindexes),
+                TransactionTradeTraceSummary {
+                    requested_chain_ids_count: 2,
+                    raindexes_count: 1,
+                }
+            );
+        }
 
         #[tokio::test]
         async fn test_returns_trades() {
