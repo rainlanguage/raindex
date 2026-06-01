@@ -279,6 +279,7 @@ mod tests {
         use httpmock::MockServer;
         use serde_json::json;
         use std::str::FromStr;
+        use tracing_test::traced_test;
 
         #[test]
         fn transaction_trade_trace_summary_counts_optional_filters() {
@@ -336,6 +337,7 @@ mod tests {
             );
         }
 
+        #[traced_test]
         #[tokio::test]
         async fn test_empty_result() {
             let sg_server = MockServer::start_async().await;
@@ -369,6 +371,7 @@ mod tests {
             assert_eq!(result.total_count(), 0);
             assert!(result.trades().is_empty());
             assert!(result.summary().is_some());
+            assert!(logs_contain("completed get_trades_for_transaction"));
         }
 
         #[tokio::test]

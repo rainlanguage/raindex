@@ -530,12 +530,19 @@ impl RaindexClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::raindex_client::tests::get_test_yaml;
     use alloy::primitives::{address, b256};
+    #[cfg(not(target_family = "wasm"))]
+    use httpmock::MockServer;
     use raindex_subgraph_client::types::common::{
         SgErc20, SgRaindex, SgTradeEvent, SgTradeEventTypename, SgTradeRef,
         SgTradeStructPartialOrder, SgTradeVaultBalanceChange, SgTransaction,
         SgVaultBalanceChangeVault,
     };
+    #[cfg(not(target_family = "wasm"))]
+    use serde_json::json;
+    #[cfg(not(target_family = "wasm"))]
+    use tracing_test::traced_test;
 
     #[test]
     fn trade_filter_trace_summary_counts_optional_filters() {
@@ -672,6 +679,46 @@ mod tests {
         assert!(filters.input_vault_balance_change_.is_none());
         assert!(filters.output_vault_balance_change_.is_none());
         assert!(filters.trade_event_.is_none());
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[traced_test]
+    #[tokio::test]
+    async fn test_get_trades_empty_result_logs_completion() {
+        let sg_server = MockServer::start_async().await;
+        sg_server.mock(|when, then| {
+            when.path("/sg");
+            then.status(200).json_body_obj(&json!({
+                "data": { "trades": [] }
+            }));
+        });
+
+        let client = RaindexClient::new(
+            vec![get_test_yaml(
+                &sg_server.url("/sg"),
+                &sg_server.url("/sg"),
+                "http://localhost:3000",
+                "http://localhost:3000",
+            )],
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let result = client
+            .get_trades(
+                Some(ChainIds(vec![1])),
+                Some(GetTradesFilters::default()),
+                Some(1),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.total_count(), 0);
+        assert!(result.trades().is_empty());
+        assert!(logs_contain("completed get_trades"));
     }
 
     fn test_sg_trade(input_token: Address, output_token: Address) -> SgTrade {

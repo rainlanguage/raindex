@@ -445,7 +445,14 @@ impl RaindexClient {
 mod tests {
     use super::*;
     use crate::local_db::query::fetch_order_trades::LocalDbOrderTrade;
+    use crate::raindex_client::tests::get_test_yaml;
     use alloy::primitives::{address, b256, Bytes};
+    #[cfg(not(target_family = "wasm"))]
+    use httpmock::MockServer;
+    #[cfg(not(target_family = "wasm"))]
+    use serde_json::json;
+    #[cfg(not(target_family = "wasm"))]
+    use tracing_test::traced_test;
 
     #[test]
     fn trades_by_order_hashes_filter_trace_summary_counts_optional_filters() {
@@ -540,6 +547,48 @@ mod tests {
         assert!(result.trades_by_order_hash[0].trades.is_empty());
         assert_eq!(result.trades_by_order_hash[1].order_hash, hash_b);
         assert_eq!(result.trades_by_order_hash[1].trades.len(), 1);
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[traced_test]
+    #[tokio::test]
+    async fn get_trades_by_order_hashes_empty_result_logs_completion() {
+        let sg_server = MockServer::start_async().await;
+        sg_server.mock(|when, then| {
+            when.path("/sg");
+            then.status(200).json_body_obj(&json!({
+                "data": { "trades": [] }
+            }));
+        });
+
+        let client = RaindexClient::new(
+            vec![get_test_yaml(
+                &sg_server.url("/sg"),
+                &sg_server.url("/sg"),
+                "http://localhost:3000",
+                "http://localhost:3000",
+            )],
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let order_hash =
+            b256!("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let result = client
+            .get_trades_by_order_hashes(
+                Some(ChainIds(vec![1])),
+                OrderHashes(vec![order_hash]),
+                Some(GetTradesByOrderHashesFilters::default()),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.total_count(), 0);
+        assert_eq!(result.trades_by_order_hash().len(), 1);
+        assert!(result.trades_by_order_hash()[0].trades().is_empty());
+        assert!(logs_contain("completed get_trades_by_order_hashes"));
     }
 
     #[test]

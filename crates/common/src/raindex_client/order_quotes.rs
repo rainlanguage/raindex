@@ -456,6 +456,7 @@ mod tests {
         use rain_math_float::Float;
         use raindex_subgraph_client::utils::float::{F0_5, F2};
         use serde_json::{json, Value};
+        use tracing_test::traced_test;
 
         sol!(
             struct quoteReturn {
@@ -620,11 +621,13 @@ mod tests {
             assert_eq!(res.pair.output_index, 0);
         }
 
+        #[traced_test]
         #[tokio::test]
         async fn test_get_order_quotes_batch_empty() {
             let result = get_order_quotes_batch(&[], None, None).await;
             assert!(result.is_ok());
             assert!(result.unwrap().is_empty());
+            assert!(logs_contain("quote batch skipped for empty order list"));
         }
 
         #[tokio::test]

@@ -197,6 +197,7 @@ mod local_evm_tests {
     use crate::take_orders::TakeOrdersMode;
     use alloy::primitives::U256;
     use raindex_test_fixtures::LocalEvm;
+    use tracing_test::traced_test;
     use url::Url;
 
     fn make_mode(mode: TakeOrdersMode, amount: &str) -> ParsedTakeOrdersMode {
@@ -206,6 +207,7 @@ mod local_evm_tests {
         }
     }
 
+    #[traced_test]
     #[tokio::test]
     async fn test_check_approval_needed_insufficient_allowance_returns_approval() {
         let mut local_evm = LocalEvm::new().await;
@@ -267,6 +269,7 @@ mod local_evm_tests {
             !approval_info.calldata().is_empty(),
             "calldata should not be empty"
         );
+        assert!(logs_contain("approval required for take-orders calldata"));
     }
 
     #[tokio::test]

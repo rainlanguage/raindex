@@ -1971,6 +1971,7 @@ mod tests {
         use serde_json::{json, Value};
         use std::collections::BTreeMap;
         use std::sync::Arc;
+        use tracing_test::traced_test;
 
         fn sample_dotrain_source() -> DotrainSourceV1 {
             DotrainSourceV1("sample dotrain source".to_string())
@@ -2723,6 +2724,7 @@ mod tests {
             }
         }
 
+        #[traced_test]
         #[tokio::test]
         async fn test_get_orders() {
             let sg_server = MockServer::start_async().await;
@@ -2841,6 +2843,7 @@ mod tests {
 
             assert_eq!(result.orders().len(), 2);
             assert_eq!(result.total_count(), 2);
+            assert!(logs_contain("completed get_orders"));
 
             let expected_order1 = RaindexOrder::try_from_sg_order(
                 Arc::new(raindex_client.clone()),
