@@ -172,6 +172,17 @@ struct OrderIOCalculationV4 {
     bytes32[] kvs;
 }
 
+/// The input and output tokens shared by every order in a `takeOrders4` batch,
+/// and the taker IO still remaining to fill as the batch is processed.
+/// @param inputToken The input token every order in the batch must use.
+/// @param outputToken The output token every order in the batch must use.
+/// @param remainingTakerIO The taker IO left to fill across the batch.
+struct TakeOrdersBatch {
+    address inputToken;
+    address outputToken;
+    Float remainingTakerIO;
+}
+
 /// @title RaindexV6
 /// See `IRaindexV6` for more documentation.
 contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, RaindexV6FlashLender {
@@ -428,8 +439,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
-        address orderInputToken = config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token;
-        address orderOutputToken = config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token;
+        TakeOrdersBatch memory batch = TakeOrdersBatch({
+            inputToken: config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token,
+            outputToken: config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token,
+            remainingTakerIO: config.maximumIO
+        });
 
         // Allocate a region of memory to hold pointers. We don't know how many
         // will run at this point, but we conservatively set aside a slot for
@@ -454,20 +468,19 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // observes earlier same-owner writes within the batch.
             OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
 
-            Float remainingTakerIO = config.maximumIO;
-            if (!remainingTakerIO.gt(Float.wrap(0))) {
+            if (!batch.remainingTakerIO.gt(Float.wrap(0))) {
                 revert ZeroMaximumIO();
             }
 
             uint256 i = 0;
-            while (i < config.orders.length && remainingTakerIO.gt(Float.wrap(0))) {
+            while (i < config.orders.length && batch.remainingTakerIO.gt(Float.wrap(0))) {
                 takeOrderConfig = config.orders[i];
                 order = takeOrderConfig.order;
                 // Every order needs the same input token.
                 // Every order needs the same output token.
                 if (
-                    (order.validInputs[takeOrderConfig.inputIOIndex].token != orderInputToken)
-                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != orderOutputToken)
+                    (order.validInputs[takeOrderConfig.inputIOIndex].token != batch.inputToken)
+                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != batch.outputToken)
                 ) {
                     revert TokenMismatch();
                 }
@@ -478,8 +491,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 if (sOrders[orderHash] == ORDER_DEAD) {
                     emit OrderNotFound(msg.sender, order.owner, orderHash);
                 } else {
-                    OrderIOCalculationV4 memory orderIOCalculation =
-                        calculateOrderIOBatched(takeOrderConfig, evaluatedCalculations);
+                    OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
+                        order,
+                        takeOrderConfig.inputIOIndex,
+                        takeOrderConfig.outputIOIndex,
+                        msg.sender,
+                        takeOrderConfig.signedContext,
+                        latestOwnerKvs(evaluatedCalculations, order.owner)
+                    );
                     evaluatedCalculations[i] = orderIOCalculation;
 
                     // Skip orders that are too expensive rather than revert as we have
@@ -496,7 +515,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         if (config.IOIsInput) {
                             // Taker is just "market buying" the order output max.
                             // Can't exceed the remaining taker input.
-                            takerInput = orderIOCalculation.outputMax.min(remainingTakerIO);
+                            takerInput = orderIOCalculation.outputMax.min(batch.remainingTakerIO);
 
                             // Slither false positive because it sees the div on
                             // the else branch and triggers a
@@ -507,15 +526,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                             //slither-disable-next-line divide-before-multiply
                             takerOutput = orderIOCalculation.IORatio.mul(takerInput);
 
-                            remainingTakerIO = remainingTakerIO.sub(takerInput);
+                            batch.remainingTakerIO = batch.remainingTakerIO.sub(takerInput);
                         } else {
                             // Taker is "market selling" up to the order output max.
                             Float orderMaxInput = orderIOCalculation.IORatio.mul(orderIOCalculation.outputMax);
-                            takerOutput = orderMaxInput.min(remainingTakerIO);
+                            takerOutput = orderMaxInput.min(batch.remainingTakerIO);
                             // This rounds down which favours the order/dex.
                             takerInput = takerOutput.div(orderIOCalculation.IORatio);
 
-                            remainingTakerIO = remainingTakerIO.sub(takerOutput);
+                            batch.remainingTakerIO = batch.remainingTakerIO.sub(takerOutput);
                         }
 
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
@@ -562,14 +581,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         //   external data (e.g. prices) that could be modified by the caller's
         //   trades.
 
-        pushTokens(msg.sender, orderOutputToken, totalTakerInput);
+        pushTokens(msg.sender, batch.outputToken, totalTakerInput);
 
         if (config.data.length > 0) {
             IRaindexV6OrderTaker(msg.sender)
-                .onTakeOrders2(orderOutputToken, orderInputToken, totalTakerInput, totalTakerOutput, config.data);
+                .onTakeOrders2(batch.outputToken, batch.inputToken, totalTakerInput, totalTakerOutput, config.data);
         }
 
-        pullTokens(msg.sender, orderInputToken, totalTakerOutput);
+        pullTokens(msg.sender, batch.inputToken, totalTakerOutput);
 
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
@@ -683,23 +702,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Calculates an order's IO, seeding the calculate eval with the most
-    /// recent earlier same-owner order's calculate kvs as `stateOverlay`.
-    function calculateOrderIOBatched(
-        TakeOrderConfigV4 memory takeOrderConfig,
-        OrderIOCalculationV4[] memory evaluatedCalculations
-    ) internal view returns (OrderIOCalculationV4 memory) {
-        OrderV4 memory order = takeOrderConfig.order;
-        return calculateOrderIO(
-            order,
-            takeOrderConfig.inputIOIndex,
-            takeOrderConfig.outputIOIndex,
-            msg.sender,
-            takeOrderConfig.signedContext,
-            latestOwnerKvs(evaluatedCalculations, order.owner)
-        );
-    }
-
     /// @dev The most recently evaluated same-owner order's calculate kvs, or an
     /// empty overlay if the owner has no earlier order in the batch. Each eval
     /// returns the full state KV (the seeded `stateOverlay` merged with new
@@ -727,16 +729,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         return new bytes32[](0);
     }
 
-    /// @dev Caps an order's output max at the owner's output vault balance.
-    function capOutputMaxToVaultBalance(OrderV4 memory order, uint256 outputIOIndex, Float outputMax)
-        internal
-        view
-        returns (Float)
-    {
-        IOV2 memory output = order.validOutputs[outputIOIndex];
-        return outputMax.min(_vaultBalance(order.owner, output.token, output.vaultId));
-    }
-
     /// Main entrypoint into an order calculates the amount and IO ratio. Both
     /// are always treated as Float values and then rescaled according to the
     /// order's definition of each token's actual fixed point decimals.
@@ -760,13 +752,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32[] memory stateOverlay
     ) internal view returns (OrderIOCalculationV4 memory) {
         unchecked {
-            bytes32 orderHash = order.hash();
-
             bytes32[][] memory context;
             {
                 bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
                 callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
-                    orderHash, bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
+                    order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
                 );
 
                 {
@@ -851,8 +841,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             }
 
             // The order owner can't send more than the smaller of their vault
-            // balance or their per-order limit.
-            orderOutputMax = capOutputMaxToVaultBalance(order, outputIOIndex, orderOutputMax);
+            // balance or their per-order limit. The output vault balance is the
+            // balance field (index 3) of the output vault column already built
+            // into the calculate context above, so it is reused rather than read
+            // from storage a second time.
+            orderOutputMax = orderOutputMax.min(Float.wrap(context[CONTEXT_VAULT_OUTPUTS_COLUMN][3]));
 
             // Populate the context with the output max rescaled and vault capped.
             context[CONTEXT_CALCULATIONS_COLUMN] =
