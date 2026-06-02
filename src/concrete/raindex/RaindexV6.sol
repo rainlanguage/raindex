@@ -176,8 +176,8 @@ struct OrderIOCalculationV4 {
 /// and the taker IO still remaining to fill as the batch is processed.
 /// @param inputToken The input token every order in the batch must use.
 /// @param outputToken The output token every order in the batch must use.
-/// @param remainingTakerIO The taker IO left to fill across the batch.
-struct TakeOrdersBatch {
+/// @param remainingTakerIO The taker IO left to fill across the io.
+struct TakeOrdersIO {
     address inputToken;
     address outputToken;
     Float remainingTakerIO;
@@ -439,7 +439,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
-        TakeOrdersBatch memory batch = TakeOrdersBatch({
+        TakeOrdersIO memory io = TakeOrdersIO({
             inputToken: config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token,
             outputToken: config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token,
             remainingTakerIO: config.maximumIO
@@ -465,22 +465,22 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // Each evaluated order's calculation, indexed by its batch position.
             // A later same-owner order seeds its calculate eval with the most
             // recent earlier same-owner order's kvs (see `latestOwnerKvs`) so it
-            // observes earlier same-owner writes within the batch.
+            // observes earlier same-owner writes within the io.
             OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
 
-            if (!batch.remainingTakerIO.gt(Float.wrap(0))) {
+            if (!io.remainingTakerIO.gt(Float.wrap(0))) {
                 revert ZeroMaximumIO();
             }
 
             uint256 i = 0;
-            while (i < config.orders.length && batch.remainingTakerIO.gt(Float.wrap(0))) {
+            while (i < config.orders.length && io.remainingTakerIO.gt(Float.wrap(0))) {
                 takeOrderConfig = config.orders[i];
                 order = takeOrderConfig.order;
                 // Every order needs the same input token.
                 // Every order needs the same output token.
                 if (
-                    (order.validInputs[takeOrderConfig.inputIOIndex].token != batch.inputToken)
-                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != batch.outputToken)
+                    (order.validInputs[takeOrderConfig.inputIOIndex].token != io.inputToken)
+                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != io.outputToken)
                 ) {
                     revert TokenMismatch();
                 }
@@ -515,7 +515,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         if (config.IOIsInput) {
                             // Taker is just "market buying" the order output max.
                             // Can't exceed the remaining taker input.
-                            takerInput = orderIOCalculation.outputMax.min(batch.remainingTakerIO);
+                            takerInput = orderIOCalculation.outputMax.min(io.remainingTakerIO);
 
                             // Slither false positive because it sees the div on
                             // the else branch and triggers a
@@ -526,15 +526,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                             //slither-disable-next-line divide-before-multiply
                             takerOutput = orderIOCalculation.IORatio.mul(takerInput);
 
-                            batch.remainingTakerIO = batch.remainingTakerIO.sub(takerInput);
+                            io.remainingTakerIO = io.remainingTakerIO.sub(takerInput);
                         } else {
                             // Taker is "market selling" up to the order output max.
                             Float orderMaxInput = orderIOCalculation.IORatio.mul(orderIOCalculation.outputMax);
-                            takerOutput = orderMaxInput.min(batch.remainingTakerIO);
+                            takerOutput = orderMaxInput.min(io.remainingTakerIO);
                             // This rounds down which favours the order/dex.
                             takerInput = takerOutput.div(orderIOCalculation.IORatio);
 
-                            batch.remainingTakerIO = batch.remainingTakerIO.sub(takerOutput);
+                            io.remainingTakerIO = io.remainingTakerIO.sub(takerOutput);
                         }
 
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
@@ -581,14 +581,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         //   external data (e.g. prices) that could be modified by the caller's
         //   trades.
 
-        pushTokens(msg.sender, batch.outputToken, totalTakerInput);
+        pushTokens(msg.sender, io.outputToken, totalTakerInput);
 
         if (config.data.length > 0) {
             IRaindexV6OrderTaker(msg.sender)
-                .onTakeOrders2(batch.outputToken, batch.inputToken, totalTakerInput, totalTakerOutput, config.data);
+                .onTakeOrders2(io.outputToken, io.inputToken, totalTakerInput, totalTakerOutput, config.data);
         }
 
-        pullTokens(msg.sender, batch.inputToken, totalTakerOutput);
+        pullTokens(msg.sender, io.inputToken, totalTakerOutput);
 
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
@@ -703,7 +703,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @dev The most recently evaluated same-owner order's calculate kvs, or an
-    /// empty overlay if the owner has no earlier order in the batch. Each eval
+    /// empty overlay if the owner has no earlier order in the io. Each eval
     /// returns the full state KV (the seeded `stateOverlay` merged with new
     /// writes), so the latest same-owner kvs already carries every earlier
     /// same-owner write in the batch and is seeded directly with no
