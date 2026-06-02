@@ -375,14 +375,19 @@ mod tests {
 
         // Expect derived state refreshes plus the watermark and ANALYZE when there is no work.
         let texts: Vec<_> = batch.statements().iter().map(|s| s.sql().trim()).collect();
-        assert_eq!(texts.len(), 8);
+        assert_eq!(texts.len(), 9);
         assert!(texts
             .iter()
             .any(|s| s.contains("DELETE FROM derived_vault_deltas")));
         assert!(texts
             .iter()
             .any(|s| s.contains("INSERT OR REPLACE INTO derived_vault_deltas")));
-        assert!(texts.iter().any(|s| s.contains("vault_balance_changes")));
+        assert!(texts
+            .iter()
+            .any(|s| s.contains("DELETE FROM vault_balance_changes")));
+        assert!(texts
+            .iter()
+            .any(|s| s.contains("INSERT OR IGNORE INTO vault_balance_changes")));
         assert!(texts
             .iter()
             .any(|s| s.contains("INSERT OR REPLACE INTO running_vault_balances")));

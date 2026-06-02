@@ -85,6 +85,9 @@ getrandom_v04 = { package = "getrandom", version = "0.4", features = [
 wasm-bindgen-test = "0.3"
 wasm-bindgen-futures = "0.4"
 
+[dev-dependencies]
+tracing-test = "0.2.6"
+
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 httpmock = "0.7.0"
 raindex_test_fixtures = { workspace = true }
