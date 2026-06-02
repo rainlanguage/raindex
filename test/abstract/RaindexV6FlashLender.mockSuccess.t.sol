@@ -31,4 +31,34 @@ contract RaindexV6FlashLenderMockSuccessTest is RaindexV6ExternalMockTest {
         );
         assertTrue(iRaindex.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data));
     }
+
+    /// The `onFlashLoan` callback MUST receive exactly the loan initiator
+    /// (`msg.sender`), the loaned token, the loaned amount, the flash fee (which
+    /// is always 0 for Raindex), and the verbatim data. Pinning every argument
+    /// catches mutations that swap the initiator, the token, the amount, or the
+    /// fee passed to the borrower.
+    function testFlashLoanCallbackArgs(address initiator, uint256 amount, bytes memory data) public {
+        vm.assume(initiator != address(0));
+
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+
+        address receiver = address(0xDEADBEEF);
+        vm.etch(receiver, hex"FE");
+        vm.mockCall(
+            receiver,
+            abi.encodeWithSelector(IERC3156FlashBorrower.onFlashLoan.selector),
+            abi.encode(ON_FLASH_LOAN_CALLBACK_SUCCESS)
+        );
+
+        // The fee MUST be 0 and the initiator MUST be the caller of `flashLoan`.
+        vm.expectCall(
+            receiver,
+            abi.encodeWithSelector(
+                IERC3156FlashBorrower.onFlashLoan.selector, initiator, address(iToken0), amount, uint256(0), data
+            )
+        );
+        vm.prank(initiator);
+        assertTrue(iRaindex.flashLoan(IERC3156FlashBorrower(receiver), address(iToken0), amount, data));
+    }
 }
