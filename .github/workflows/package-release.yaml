@@ -1,0 +1,11 @@
+name: Package Release
+on:
+  push:
+    branches:
+      - main
+jobs:
+  release:
+    uses: rainlanguage/rainix/.github/workflows/rainix-autopublish.yaml@main
+    with:
+      soldeer-package: raindex
+    secrets: inherit
