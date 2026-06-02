@@ -4,6 +4,7 @@ pub mod deposit;
 pub mod dotrain_add_order_lsp;
 pub mod dotrain_order;
 pub mod erc20;
+pub mod erc4626;
 pub mod fuzz;
 pub mod local_db;
 pub mod meta;

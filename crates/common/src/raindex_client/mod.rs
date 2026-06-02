@@ -477,6 +477,8 @@ pub enum RaindexError {
     InvalidVaultBalanceChangeType(String),
     #[error(transparent)]
     Erc20(Box<crate::erc20::Error>),
+    #[error(transparent)]
+    Erc4626(Box<crate::erc4626::Error>),
     #[error("Float error: {0}")]
     Float(#[from] FloatError),
     #[error("Failed to parse an integer: {0}")]
@@ -545,6 +547,12 @@ impl From<LocalDbError> for RaindexError {
 impl From<crate::erc20::Error> for RaindexError {
     fn from(err: crate::erc20::Error) -> Self {
         Self::Erc20(Box::new(err))
+    }
+}
+
+impl From<crate::erc4626::Error> for RaindexError {
+    fn from(err: crate::erc4626::Error) -> Self {
+        Self::Erc4626(Box::new(err))
     }
 }
 
@@ -670,6 +678,7 @@ impl RaindexError {
                 format!("Invalid vault balance change type: {}", typ)
             }
             RaindexError::Erc20(err) => format!("Failed to get ERC20 info: {err}"),
+            RaindexError::Erc4626(err) => format!("Failed to get ERC4626 info: {err}"),
             RaindexError::Float(err) => format!("Float error: {err}"),
             RaindexError::ParseInt(err) => format!("Failed to parse an integer: {err}"),
             RaindexError::TryFromUint(err) => format!("Failed to convert to u8: {err}"),

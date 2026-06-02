@@ -41,6 +41,34 @@ sol!(
 );
 
 sol!(
+    #![sol(all_derives = true, rpc)]
+    interface IERC4626 {
+        function asset() external view returns (address);
+        function decimals() external view returns (uint8);
+        function convertToAssets(uint256 shares) external view returns (uint256);
+        function convertToShares(uint256 assets) external view returns (uint256);
+    }
+);
+
+sol!(
+    #![sol(all_derives = true)]
+    interface IMulticall3 {
+        struct Call3 {
+            address target;
+            bool allowFailure;
+            bytes callData;
+        }
+
+        struct Result {
+            bool success;
+            bytes returnData;
+        }
+
+        function aggregate3(Call3[] calldata calls) external payable returns (Result[] memory returnData);
+    }
+);
+
+sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
     IInterpreterStoreV3, "./abis/IInterpreterStoreV3.json"
