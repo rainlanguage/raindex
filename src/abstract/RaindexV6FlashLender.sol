@@ -17,6 +17,12 @@ import {IERC3156FlashLender} from "raindex-interface-0.1.1/src/interface/ierc315
 /// @param result The value that was returned by `onFlashLoan`.
 error FlashLenderCallbackFailed(bytes32 result);
 
+/// Thrown by `flashFee` for a token Raindex cannot lend (it holds none, i.e.
+/// `maxFlashLoan(token) == 0`), as ERC-3156 requires `flashFee` to revert for
+/// unsupported tokens.
+/// @param token The unsupported token.
+error FlashLenderUnsupportedToken(address token);
+
 /// @dev Flash fee is always 0 for raindex as there's no entity to take
 /// revenue for `Raindex` and its more important anyway that flashloans happen
 /// to connect external liquidity to live orders via arbitrage.
@@ -67,7 +73,16 @@ abstract contract RaindexV6FlashLender is IERC3156FlashLender, ERC165 {
     }
 
     /// @inheritdoc IERC3156FlashLender
-    function flashFee(address, uint256) external pure override returns (uint256) {
+    /// @dev Reverts for an unsupported token (one Raindex holds no balance of,
+    /// i.e. `maxFlashLoan(token) == 0`) as ERC-3156 requires, rather than
+    /// returning a fee for a loan that could never settle.
+    function flashFee(address token, uint256) external view override returns (uint256) {
+        // Strict equality is intentional: a token Raindex holds zero balance of
+        // is by definition unsupported. Any nonzero balance means supported.
+        //slither-disable-next-line incorrect-equality
+        if (IERC20(token).balanceOf(address(this)) == 0) {
+            revert FlashLenderUnsupportedToken(token);
+        }
         return FLASH_FEE;
     }
 

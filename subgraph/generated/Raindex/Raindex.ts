@@ -1215,21 +1215,21 @@ export class Raindex extends ethereum.SmartContract {
     return ethereum.CallResult.fromValue(value[0].toBoolean());
   }
 
-  flashFee(param0: Address, param1: BigInt): BigInt {
+  flashFee(token: Address, param1: BigInt): BigInt {
     let result = super.call("flashFee", "flashFee(address,uint256):(uint256)", [
-      ethereum.Value.fromAddress(param0),
+      ethereum.Value.fromAddress(token),
       ethereum.Value.fromUnsignedBigInt(param1),
     ]);
 
     return result[0].toBigInt();
   }
 
-  try_flashFee(param0: Address, param1: BigInt): ethereum.CallResult<BigInt> {
+  try_flashFee(token: Address, param1: BigInt): ethereum.CallResult<BigInt> {
     let result = super.tryCall(
       "flashFee",
       "flashFee(address,uint256):(uint256)",
       [
-        ethereum.Value.fromAddress(param0),
+        ethereum.Value.fromAddress(token),
         ethereum.Value.fromUnsignedBigInt(param1),
       ],
     );

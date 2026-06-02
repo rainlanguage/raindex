@@ -6,7 +6,7 @@ dataSources:
     name: Raindex
     network: sepolia
     source:
-      address: "0xa560e58C77B8A841f80B4741Ad08E9260Edcab9F"
+      address: "0x83507d7E14556A1822E6959982BebA6024245FA8"
       abi: Raindex
       startBlock: 0
     mapping:
