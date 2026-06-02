@@ -37,11 +37,35 @@ jobs:
         with:
           swap-storage: false
       # install nix for building WASM artifacts and running tests
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: nixbuild/nix-quick-install-action@v30
         with:
-          determinate: true
-      # cache nix store to speed up subsequent builds
-      - uses: DeterminateSystems/flakehub-cache-action@main
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      # pull rainix derivations from shared Cachix; push new ones if the
+      # token is set. continue-on-error so a token miss / Cachix outage
+      # degrades gracefully.
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 8G
+      - uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: rust-${{ github.workflow }}
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       # setup node with npm registry for OIDC-based publishing (no NPM_TOKEN needed)
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -86,11 +110,11 @@ jobs:
             exit 1
           fi
           echo "Repositories match"
-      # install dependencies and build the workspace
-      - run: ./prep-base.sh
-      # remove debug artifacts to free disk space before WASM build
-      - name: Remove Unused Artifacts
-        run: rm -rf ./target/debug
+      # forge install + build is no longer needed here — all sol! macros
+      # read committed ABIs under crates/*/abis/, and the wasm + npm builds
+      # below don't shell out to forge. The prior "Remove Unused Artifacts"
+      # / debug-dir scrubs went with forge; rust-cache + free-disk-space@v1
+      # handle disk budget for the remaining WASM builds.
       # WASM linker can run out of memory on GitHub runners; add swap to prevent OOM
       - name: Add swap space
         run: |
@@ -104,20 +128,23 @@ jobs:
           sudo swapon /swapfile
       # build and test WASM bindings
       - name: Test JS/TS Binding 1/2
-        run: nix develop -c rainix-wasm-test
-      # cleanup between test phases to prevent disk space exhaustion
-      - name: Remove Test Artifacts
         run: |
-          rm -rf ./target/debug
-          rm -rf ./target/wasm32-unknown-unknown/debug
+          nix develop .#wasm-shell -c bash -c "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test --target wasm32-unknown-unknown --lib -p raindex_quote -p raindex_bindings -p raindex_js_api -p raindex_common"
       # run JS/TS integration tests against WASM bindings
       - name: Test JS/TS Binding 2/2
-        run: nix develop -c test-js-bindings
+        run: |
+          nix develop .#wasm-shell -c bash -c '
+            set -euxo pipefail
+            npm install --no-check
+            cd packages/raindex
+            npm run build
+            npm test
+          '
       # build and test UI components before publishing
       - name: Build UI Components
-        run: nix develop -c npm run build -w @rainlanguage/ui-components
+        run: nix develop .#wasm-shell -c npm run build -w @rainlanguage/ui-components
       - name: Test UI Components
-        run: nix develop -c npm run test -w @rainlanguage/ui-components
+        run: nix develop .#wasm-shell -c npm run test -w @rainlanguage/ui-components
       # check for npm package blacklists pkgs across all raindex related packages
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main

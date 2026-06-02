@@ -1,11 +1,11 @@
 use super::*;
 use crate::add_order::RAINDEX_ORDER_ENTRYPOINTS;
+use crate::transaction::{read_block_number, TransactionArgsError};
 use alloy::primitives::private::rand;
 use alloy::primitives::Address;
 use alloy::primitives::B256;
 use alloy::primitives::U256;
 use alloy::sol_types::SolCall;
-use alloy_ethers_typecast::{ReadableClient, ReadableClientError};
 use dotrain::{error::ComposeError, RainDocument, Rebind};
 use futures::TryFutureExt;
 use proptest::prelude::RngCore;
@@ -20,7 +20,10 @@ use rain_interpreter_bindings::{
 use rain_interpreter_eval::eval::ForkParseArgs;
 use rain_interpreter_eval::fork::{Forker, NewForkedEvm};
 pub use rain_interpreter_eval::trace::{RainEvalResult, RainEvalResults, TraceSearchError};
-use rain_interpreter_eval::{error::ForkCallError, eval::ForkEvalArgs};
+use rain_interpreter_eval::{
+    error::ForkCallError,
+    eval::{ForkEvalArgs, ForkEvalExt},
+};
 use raindex_app_settings::blocks::BlockError;
 use raindex_app_settings::scenario::ScenarioCfg;
 use raindex_app_settings::yaml::dotrain::DotrainYamlValidation;
@@ -84,7 +87,7 @@ pub enum FuzzRunnerError {
     #[error(transparent)]
     JoinError(#[from] tokio::task::JoinError),
     #[error(transparent)]
-    ReadableClientHttpError(#[from] ReadableClientError),
+    TransactionArgsError(#[from] TransactionArgsError),
     #[error(transparent)]
     BlockError(#[from] BlockError),
     #[error(transparent)]
@@ -217,9 +220,7 @@ impl FuzzRunner {
             .map(|rpc| rpc.to_string())
             .collect::<Vec<String>>();
 
-        let block_number = ReadableClient::new_from_http_urls(rpcs.clone())?
-            .get_block_number()
-            .await?;
+        let block_number = read_block_number(&rpcs).await?;
 
         let blocks = scenario
             .blocks
@@ -613,21 +614,8 @@ impl FuzzRunner {
                     .map(|rpc| rpc.to_string())
                     .collect::<Vec<String>>();
 
-                match ReadableClient::new_from_http_urls(rpcs) {
-                    Ok(v) => match v.get_block_number().await {
-                        Ok(bn) => bn,
-                        Err(e) => {
-                            result.pairs_data.push(DeploymentDebugPairData {
-                                order: deployment.order.key.clone(),
-                                scenario: scenario.key.clone(),
-                                pair: "".to_string(),
-                                result: None,
-                                error: Some(e.to_string()),
-                            });
-                            data_map.insert(deployment_key.clone(), result);
-                            continue;
-                        }
-                    },
+                match read_block_number(&rpcs).await {
+                    Ok(bn) => bn,
                     Err(e) => {
                         result.pairs_data.push(DeploymentDebugPairData {
                             order: deployment.order.key.clone(),

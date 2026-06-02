@@ -10,16 +10,18 @@ publish = false
 
 [dependencies]
 serde_json = { workspace = true }
-rain_interpreter_test_fixtures = { package = "rainlang_test_fixtures", path = "../../lib/rain.interpreter/crates/test_fixtures" }
+# Not published (publish = false), so it stays a git dep like rain-interpreter-eval,
+# pinned to the same rainlang rev family as the published bindings/dispair/parser.
+rain_interpreter_test_fixtures = { package = "rainlang_test_fixtures", git = "https://github.com/rainlanguage/rainlang", rev = "580205d244a94097b06602ecda36faedf54d7775" }
 rain-math-float.workspace = true
 alloy = { workspace = true, features = [
-    "node-bindings",
-    "sol-types",
-    "rpc-types",
-    "provider-http",
-    "network",
-    "contract",
-    "signer-local",
+  "node-bindings",
+  "sol-types",
+  "rpc-types",
+  "provider-http",
+  "network",
+  "contract",
+  "signer-local",
 ] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]

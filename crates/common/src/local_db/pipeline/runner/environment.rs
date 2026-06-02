@@ -154,7 +154,7 @@ mod tests {
     use crate::rpc_client::LogEntryResponse;
     use alloy::primitives::{address, b256, Address, B256};
     use async_trait::async_trait;
-    use raindex_app_settings::local_db_manifest::MANIFEST_VERSION;
+    use raindex_app_settings::local_db_manifest::{DB_SCHEMA_VERSION, MANIFEST_VERSION};
     use raindex_app_settings::local_db_remotes::LocalDbRemoteCfg;
     use raindex_app_settings::raindex::RaindexCfg;
     use raindex_app_settings::spec_version::SpecVersion;
@@ -725,7 +725,7 @@ raindexes:
         let manifest_yaml = format!(
             r#"
 manifest-version: {version}
-db-schema-version: 3
+db-schema-version: {db_schema_version}
 networks:
   mainnet:
     chain-id: 1
@@ -737,6 +737,7 @@ networks:
         end-block-time-ms: 1000
 "#,
             version = MANIFEST_VERSION,
+            db_schema_version = DB_SCHEMA_VERSION,
             base = server.base_url()
         );
 

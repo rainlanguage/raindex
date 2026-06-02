@@ -1,7 +1,6 @@
 out
 cache
 result
-meta
 target
 .DS_Store
 .env
@@ -24,3 +23,8 @@ packages/raindex/esm.d.ts
 .ai_docs/
 .ai_spec/
 .cursor/
+
+dependencies/
+
+# Local pre-commit hook config
+.pre-commit-config.yaml

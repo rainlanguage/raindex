@@ -8,7 +8,7 @@ use rain_math_float::Float;
 use rain_metaboard_subgraph::metaboard_client::{
     MetaboardSubgraphClient, MetaboardSubgraphClientError,
 };
-use rain_metaboard_subgraph::types::metas::BigInt as MetaBigInt;
+use rain_metaboard_subgraph::types::metas::Bytes as MetaBytes;
 use rain_metadata::RainMetaDocumentV1Item;
 use raindex_app_settings::{
     order::{OrderIOCfg, VaultType},
@@ -598,7 +598,7 @@ impl RaindexOrderBuilder {
 
         let client = self.get_metaboard_client()?;
         match client
-            .get_metabytes_by_subject(&MetaBigInt(format!("0x{}", alloy::hex::encode(subject))))
+            .get_metabytes_by_subject(&MetaBytes(format!("0x{}", alloy::hex::encode(subject))))
             .await
         {
             Ok(metas) => Ok(metas.is_empty()),

@@ -1,0 +1,6 @@
+name: rainix-sol
+on: [push]
+jobs:
+  rainix-sol:
+    uses: rainlanguage/rainix/.github/workflows/rainix-sol.yaml@main
+    secrets: inherit

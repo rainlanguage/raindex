@@ -508,7 +508,7 @@ _: 1;
         assert!(matches!(
             res,
             Err(QuoteDebuggerError::ForkerError(err))
-            if err.to_string().to_lowercase().contains("could not instantiate forked environment")
+            if err.to_string().to_lowercase().contains("http error 400")
         ));
     }
 }

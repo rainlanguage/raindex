@@ -2,15 +2,15 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {
     SourceIndexV2,
     StateNamespace,
     StackItem,
     EvalV4
-} from "rain.interpreter.interface/interface/IInterpreterV4.sol";
-import {LibNamespace, FullyQualifiedNamespace} from "rain.interpreter.interface/lib/ns/LibNamespace.sol";
-import {LibContext} from "rain.interpreter.interface/lib/caller/LibContext.sol";
+} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {LibNamespace, FullyQualifiedNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
+import {LibContext} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
 
 /// @dev Raindex context is actually fairly complex. The calling context column
 /// is populated before calculate order, but the remaining columns are only

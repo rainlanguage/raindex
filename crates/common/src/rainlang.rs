@@ -163,12 +163,12 @@ pub use fork_parse::*;
 
 #[cfg(not(target_family = "wasm"))]
 mod fork_parse {
+    use crate::transaction::{read_block_number, TransactionArgsError};
     use alloy::primitives::{bytes::Bytes, Address};
-    use alloy_ethers_typecast::{ReadableClient, ReadableClientError};
     use once_cell::sync::OnceCell;
     use rain_error_decoding::AbiDecodedErrorType;
     use rain_interpreter_eval::error::ForkCallError;
-    use rain_interpreter_eval::eval::ForkParseArgs;
+    use rain_interpreter_eval::eval::{ForkEvalExt, ForkParseArgs};
     use rain_interpreter_eval::fork::Forker;
     use rain_interpreter_eval::fork::NewForkedEvm;
     use std::sync::Arc;
@@ -191,7 +191,7 @@ mod fork_parse {
         #[error("Fork Call Reverted: {0}")]
         ForkCallReverted(#[from] AbiDecodedErrorType),
         #[error(transparent)]
-        ReadableClientError(#[from] ReadableClientError),
+        TransactionArgsError(#[from] TransactionArgsError),
         #[error("Failed to read Parser address from rainlang")]
         ReadParserAddressFailed,
         #[error("Invalid input args: {0}")]
@@ -219,10 +219,7 @@ mod fork_parse {
         // Prepare evm fork
         let block_number_val = match block_number {
             Some(b) => b,
-            None => {
-                let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-                client.get_block_number().await?
-            }
+            None => read_block_number(rpcs).await?,
         };
 
         // Lazily initialize the global `FORKER` (if required) and obtain a lock.
@@ -382,13 +379,9 @@ _ _: 1 2;
                     .unwrap_err();
 
             assert!(
-                matches!(&err,
-                    ForkParseError::ReadableClientError(ReadableClientError::AllProvidersFailed(ref msg))
-                    if msg.get(&rpc_url).is_some()
-                        && matches!(
-                            msg.get(&rpc_url).unwrap(),
-                            ReadableClientError::ReadBlockNumberError(_)
-                        )
+                matches!(
+                    &err,
+                    ForkParseError::TransactionArgsError(TransactionArgsError::Transport(_))
                 ),
                 "unexpected error variant: {err:?}"
             );

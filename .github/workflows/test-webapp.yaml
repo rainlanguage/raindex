@@ -4,11 +4,9 @@ on:
     branches:
       - main
   pull_request:
-
 concurrency:
   group: ${{ github.ref }}-webapp
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
 jobs:
   test:
     permissions:
@@ -19,18 +17,19 @@ jobs:
       COMMIT_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
@@ -42,40 +41,34 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 10G
-
-      - run: ./prep-webapp.sh
+      - run: |
+          nix develop .#wasm-shell -c bash -c '
+            set -euxo pipefail
+            npm install --no-check
+            npm run build -w @rainlanguage/raindex
+            npm run build -w @rainlanguage/ui-components
+            npm run build -w @rainlanguage/webapp
+          '
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID || 'test' }}
           COMMIT_SHA: ${{ github.sha }}
-          CARGO_HOME: ${{ github.workspace }}/.cargo
-          CARGO_TARGET_DIR: ${{ github.workspace }}/.cargo/target
-
-      - name: Cleanup Rust artifacts after prep
-        run: rm -rf target || true
-
-      - run: nix develop -c npm run svelte-lint-format-check -w @rainlanguage/webapp
+      - run: nix develop .#wasm-shell -c npm run svelte-lint-format-check -w @rainlanguage/webapp
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID || 'test' }}
-
-      - run: nix develop -c npm run test -w @rainlanguage/webapp
+      - run: nix develop .#wasm-shell -c npm run test -w @rainlanguage/webapp
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID || 'test' }}
-
       # check for npm package blacklists pkgs across all packages
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/raindex
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/ui-components
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/webapp
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

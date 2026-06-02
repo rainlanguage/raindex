@@ -32,6 +32,7 @@ mod tests {
         assert!(stmt.params.is_empty());
         let lower = stmt.sql.to_lowercase();
         assert!(lower.contains("begin transaction"));
+        assert!(lower.contains("drop view if exists vault_deltas"));
         assert!(lower.contains("drop table if exists"));
         assert!(lower.contains("vacuum"));
     }

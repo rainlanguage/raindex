@@ -25,6 +25,8 @@ pub mod types;
 pub mod unit_tests;
 pub mod utils;
 pub mod withdraw;
+#[cfg(not(target_family = "wasm"))]
+pub mod write_tx;
 pub use dotrain;
 pub use dotrain_lsp;
 #[cfg(test)]

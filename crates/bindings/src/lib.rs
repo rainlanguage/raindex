@@ -3,13 +3,13 @@ use alloy::sol;
 sol!(
     #![sol(all_derives = true, rpc)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IRaindexV6, "../../out/IRaindexV6.sol/IRaindexV6.json"
+    IRaindexV6, "./abis/IRaindexV6.json"
 );
 
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    Raindex, "../../out/RaindexV6.sol/RaindexV6.json"
+    Raindex, "./abis/RaindexV6.json"
 );
 
 // Inline definition avoids non-deterministic artifact collision between
@@ -32,18 +32,18 @@ sol!(
 
 sol!(
     #![sol(all_derives = true)]
-    ERC20, "../../out/ERC20.sol/ERC20.json"
+    ERC20, "./abis/ERC20.json"
 );
 
 sol!(
     #![sol(all_derives = true, rpc)]
-    IERC20Metadata, "../../out/IERC20Metadata.sol/IERC20Metadata.json"
+    IERC20Metadata, "./abis/IERC20Metadata.json"
 );
 
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IInterpreterStoreV3, "../../out/IInterpreterStoreV3.sol/IInterpreterStoreV3.json"
+    IInterpreterStoreV3, "./abis/IInterpreterStoreV3.json"
 );
 
 pub mod provider;

@@ -309,10 +309,9 @@ impl BatchQuoteSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::hex;
     use alloy::hex::ToHexExt;
+    use alloy::primitives::keccak256;
     use alloy::primitives::Bytes;
-    use alloy::primitives::{address, keccak256};
     use alloy::primitives::{hex::encode_prefixed, U256};
     use alloy::sol_types::{SolCall, SolValue};
     use httpmock::{Method::POST, MockServer};

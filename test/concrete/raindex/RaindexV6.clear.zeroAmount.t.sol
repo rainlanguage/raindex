@@ -9,7 +9,7 @@ import {
     TaskV2,
     SignedContextV1,
     ClearConfigV2
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
 

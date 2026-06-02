@@ -1,62 +1,6 @@
 name: Subgraph unit tests
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-
-concurrency:
-  group: ${{ github.ref }}-subgraph
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
+on: [push]
 jobs:
-  test:
-    permissions:
-      id-token: write
-      contents: read
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
-
-      - uses: nixbuild/nix-quick-install-action@v30
-        with:
-          nix_conf: |
-            keep-env-derivations = true
-            keep-outputs = true
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v6
-        with:
-          # restore and save a cache using this key
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          # if there's no cache hit, restore a cache by this prefix
-          restore-prefixes-first-match: nix-${{ runner.os }}-
-          # collect garbage until the Nix store size (in bytes) is at most this number
-          # before trying to save a new cache
-          # 1G = 1073741824
-          gc-max-store-size-linux: 1G
-
-      - run: |
-          (cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && nix develop -c rainix-sol-prelude)
-
-      - name: Build subgraph
-        run: nix develop -c subgraph-build
-
-      - name: Matchstick tests
-        run: nix develop -c subgraph-test
-
-      # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
-      - name: Forward CI Status
-        if: always()
-        uses: rainlanguage/github-chore/.github/actions/telegram-status-report@main
-        with:
-          status: ${{ job.status }}
-          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
+  subgraph-test:
+    uses: rainlanguage/rainix/.github/workflows/rainix-subgraph-test.yaml@main
+    secrets: inherit

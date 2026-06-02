@@ -10,9 +10,9 @@ import {
     TakeOrdersConfigV5,
     EvaluableV4,
     SignedContextV1
-} from "rain.raindex.interface/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {TokenMismatch} from "../../../src/concrete/raindex/RaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderTokenMismatchTest
 /// @notice A test harness for testing the RaindexV6 takeOrder function.

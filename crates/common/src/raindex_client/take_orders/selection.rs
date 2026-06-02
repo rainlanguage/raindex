@@ -6,9 +6,17 @@ use crate::take_orders::{
     TakeOrderCandidate,
 };
 use crate::utils::float::cmp_float;
+use crate::utils::timing::Timing;
 use alloy::primitives::Address;
 use rain_math_float::Float;
 use std::collections::HashMap;
+use tracing::{debug, info, warn};
+
+fn format_float(value: Float) -> String {
+    value
+        .format()
+        .unwrap_or_else(|_| "<format_error>".to_string())
+}
 
 pub(crate) async fn build_candidates_for_chain(
     orders: &[RaindexOrder],
@@ -19,6 +27,7 @@ pub(crate) async fn build_candidates_for_chain(
     counterparty: Address,
     injector: &dyn SignedContextInjector,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
+    let started_at = Timing::now();
     let candidates = build_take_order_candidates_for_pair(
         orders,
         sell_token,
@@ -30,8 +39,24 @@ pub(crate) async fn build_candidates_for_chain(
     )
     .await?;
     if candidates.is_empty() {
+        warn!(
+            sell_token = %sell_token,
+            buy_token = %buy_token,
+            orders_count = orders.len(),
+            candidates_count = 0usize,
+            duration_ms = started_at.elapsed_ms(),
+            "no take-order candidates available"
+        );
         return Err(RaindexError::NoLiquidity);
     }
+    info!(
+        sell_token = %sell_token,
+        buy_token = %buy_token,
+        orders_count = orders.len(),
+        candidates_count = candidates.len(),
+        duration_ms = started_at.elapsed_ms(),
+        "built take-order candidates for chain"
+    );
     Ok(candidates)
 }
 
@@ -57,6 +82,8 @@ pub(crate) fn select_best_raindex_simulation(
     price_cap: Float,
 ) -> Result<(Address, SimulationResult), RaindexError> {
     let mut raindex_candidates: HashMap<Address, Vec<TakeOrderCandidate>> = HashMap::new();
+    let started_at = Timing::now();
+    let total_candidate_count = candidates.len();
     for candidate in candidates {
         raindex_candidates
             .entry(candidate.raindex)
@@ -68,8 +95,18 @@ pub(crate) fn select_best_raindex_simulation(
     let is_buy_mode = mode.is_buy_mode();
 
     let mut best_result: Option<(Address, SimulationResult)> = None;
+    let raindex_count = raindex_candidates.len();
+    let mut skipped_empty_sims = 0usize;
+    info!(
+        raindex_count,
+        total_candidate_count,
+        mode = ?mode.mode,
+        "selecting best raindex simulation"
+    );
 
     for (raindex_addr, candidates) in raindex_candidates {
+        let candidate_count = candidates.len();
+        info!(raindex = %raindex_addr, candidate_count, "simulating raindex candidates");
         let sim = if is_buy_mode {
             simulate_buy_over_candidates(candidates, target, price_cap)?
         } else {
@@ -77,10 +114,19 @@ pub(crate) fn select_best_raindex_simulation(
         };
 
         if sim.legs.is_empty() {
+            skipped_empty_sims += 1;
+            info!(raindex = %raindex_addr, candidate_count, "skipping raindex with empty simulation");
             continue;
         }
 
         let achieved = sim.total_output;
+        debug!(
+            raindex = %raindex_addr,
+            legs_count = sim.legs.len(),
+            total_input = %format_float(sim.total_input),
+            total_output = %format_float(sim.total_output),
+            "raindex simulation achieved output"
+        );
 
         let is_better = match &best_result {
             None => true,
@@ -94,8 +140,15 @@ pub(crate) fn select_best_raindex_simulation(
                     let best_worst = worst_price(best_sim)?;
                     match (sim_worst, best_worst) {
                         (Some(sw), Some(bw)) => match cmp_float(&sw, &bw)? {
-                            std::cmp::Ordering::Less => true,
-                            std::cmp::Ordering::Equal => raindex_addr < *best_addr,
+                            std::cmp::Ordering::Less => {
+                                debug!(raindex = %raindex_addr, best_raindex = %best_addr, "tie-break selected lower worst price");
+                                true
+                            }
+                            std::cmp::Ordering::Equal => {
+                                let wins = raindex_addr < *best_addr;
+                                debug!(raindex = %raindex_addr, best_raindex = %best_addr, selected = wins, "tie-break compared raindex address");
+                                wins
+                            }
                             std::cmp::Ordering::Greater => false,
                         },
                         _ => raindex_addr < *best_addr,
@@ -111,7 +164,32 @@ pub(crate) fn select_best_raindex_simulation(
         }
     }
 
-    best_result.ok_or(RaindexError::NoLiquidity)
+    match best_result {
+        Some((selected_raindex, selected_sim)) => {
+            info!(
+                raindex_count,
+                total_candidate_count,
+                skipped_empty_sims,
+                selected_raindex = %selected_raindex,
+                selected_total_input = %format_float(selected_sim.total_input),
+                selected_total_output = %format_float(selected_sim.total_output),
+                selected_legs_count = selected_sim.legs.len(),
+                duration_ms = started_at.elapsed_ms(),
+                "selected best raindex simulation"
+            );
+            Ok((selected_raindex, selected_sim))
+        }
+        None => {
+            warn!(
+                raindex_count,
+                total_candidate_count,
+                skipped_empty_sims,
+                duration_ms = started_at.elapsed_ms(),
+                "no raindex simulation produced liquidity"
+            );
+            Err(RaindexError::NoLiquidity)
+        }
+    }
 }
 
 #[cfg(test)]

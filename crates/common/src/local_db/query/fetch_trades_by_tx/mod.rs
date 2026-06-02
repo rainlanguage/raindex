@@ -3,15 +3,10 @@ use alloy::primitives::{Address, B256};
 
 const QUERY_TEMPLATE: &str = include_str!("query.sql");
 
-const TAKE_ORDERS_CHAIN_IDS_CLAUSE: &str = "/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/";
-const TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY: &str = "AND t.chain_id IN ({list})";
-const TAKE_ORDERS_RAINDEXS_CLAUSE: &str = "/*TAKE_ORDERS_RAINDEXS_CLAUSE*/";
-const TAKE_ORDERS_RAINDEXS_CLAUSE_BODY: &str = "AND t.raindex_address IN ({list})";
-
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE: &str = "/*CLEAR_EVENTS_CHAIN_IDS_CLAUSE*/";
-const CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY: &str = "AND c.chain_id IN ({list})";
-const CLEAR_EVENTS_RAINDEXS_CLAUSE: &str = "/*CLEAR_EVENTS_RAINDEXS_CLAUSE*/";
-const CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY: &str = "AND c.raindex_address IN ({list})";
+const CHAIN_IDS_CLAUSE: &str = "/*CHAIN_IDS_CLAUSE*/";
+const CHAIN_IDS_CLAUSE_BODY: &str = "AND tws.chain_id IN ({list})";
+const RAINDEXES_CLAUSE: &str = "/*RAINDEXES_CLAUSE*/";
+const RAINDEXES_CLAUSE_BODY: &str = "AND tws.raindex_address IN ({list})";
 
 #[derive(Debug, Clone)]
 pub struct FetchTradesByTxArgs {
@@ -38,26 +33,8 @@ pub fn build_fetch_trades_by_tx_stmt(
     let chain_ids_iter = || chain_ids.iter().cloned().map(SqlValue::from);
     let raindexs_iter = || raindexs.iter().cloned().map(SqlValue::from);
 
-    stmt.bind_list_clause(
-        TAKE_ORDERS_CHAIN_IDS_CLAUSE,
-        TAKE_ORDERS_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE,
-        CLEAR_EVENTS_CHAIN_IDS_CLAUSE_BODY,
-        chain_ids_iter(),
-    )?;
-    stmt.bind_list_clause(
-        TAKE_ORDERS_RAINDEXS_CLAUSE,
-        TAKE_ORDERS_RAINDEXS_CLAUSE_BODY,
-        raindexs_iter(),
-    )?;
-    stmt.bind_list_clause(
-        CLEAR_EVENTS_RAINDEXS_CLAUSE,
-        CLEAR_EVENTS_RAINDEXS_CLAUSE_BODY,
-        raindexs_iter(),
-    )?;
+    stmt.bind_list_clause(CHAIN_IDS_CLAUSE, CHAIN_IDS_CLAUSE_BODY, chain_ids_iter())?;
+    stmt.bind_list_clause(RAINDEXES_CLAUSE, RAINDEXES_CLAUSE_BODY, raindexs_iter())?;
     Ok(stmt)
 }
 
@@ -78,19 +55,15 @@ mod tests {
             tx_hash,
         })
         .unwrap();
-        assert_eq!(stmt.params.len(), 5);
+        assert_eq!(stmt.params.len(), 3);
         assert_eq!(
             stmt.params[0],
             SqlValue::Text(hex::encode_prefixed(tx_hash))
         );
         assert_eq!(stmt.params[1], SqlValue::U64(1));
         assert_eq!(stmt.params[2], SqlValue::U64(137));
-        assert_eq!(stmt.params[3], SqlValue::U64(1));
-        assert_eq!(stmt.params[4], SqlValue::U64(137));
-        assert!(stmt.sql.contains("t.chain_id IN (?2, ?3)"));
-        assert!(stmt.sql.contains("c.chain_id IN (?4, ?5)"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_CHAIN_IDS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_CHAIN_IDS_CLAUSE));
+        assert!(stmt.sql.contains("tws.chain_id IN (?2, ?3)"));
+        assert!(!stmt.sql.contains(CHAIN_IDS_CLAUSE));
     }
 
     #[test]
@@ -103,18 +76,14 @@ mod tests {
             tx_hash,
         })
         .unwrap();
-        assert_eq!(stmt.params.len(), 5);
+        assert_eq!(stmt.params.len(), 3);
         assert_eq!(
             stmt.params[0],
             SqlValue::Text(hex::encode_prefixed(tx_hash))
         );
         assert_eq!(stmt.params[1], SqlValue::U64(137));
-        assert_eq!(stmt.params[2], SqlValue::U64(137));
-        assert_eq!(stmt.params[3], SqlValue::Text(hex::encode_prefixed(ob)));
-        assert_eq!(stmt.params[4], SqlValue::Text(hex::encode_prefixed(ob)));
-        assert!(stmt.sql.contains("t.raindex_address IN (?4)"));
-        assert!(stmt.sql.contains("c.raindex_address IN (?5)"));
-        assert!(!stmt.sql.contains(TAKE_ORDERS_RAINDEXS_CLAUSE));
-        assert!(!stmt.sql.contains(CLEAR_EVENTS_RAINDEXS_CLAUSE));
+        assert_eq!(stmt.params[2], SqlValue::Text(hex::encode_prefixed(ob)));
+        assert!(stmt.sql.contains("tws.raindex_address IN (?3)"));
+        assert!(!stmt.sql.contains(RAINDEXES_CLAUSE));
     }
 }

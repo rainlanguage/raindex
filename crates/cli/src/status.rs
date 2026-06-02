@@ -1,9 +1,7 @@
-use alloy::sol_types::SolCall;
-use alloy_ethers_typecast::WriteTransactionStatus;
-use std::fmt::Debug;
+use raindex_common::write_tx::WriteTransactionStatus;
 use tracing::info;
 
-pub fn display_write_transaction_status<T: SolCall + Debug>(status: WriteTransactionStatus<T>) {
+pub fn display_write_transaction_status(status: WriteTransactionStatus) {
     match status {
         WriteTransactionStatus::PendingPrepare(_) => {
             info!("⏳  Preparing transaction. Please wait.");

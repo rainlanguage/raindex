@@ -2,7 +2,6 @@ use alloy::{
     primitives::{hex::FromHexError, U256},
     providers::MulticallError,
 };
-use alloy_ethers_typecast::ReadableClientError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
 use raindex_bindings::provider::ReadProviderError;
 use raindex_subgraph_client::{
@@ -30,8 +29,6 @@ pub enum FailedQuote {
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error(transparent)]
-    RpcCallError(#[from] ReadableClientError),
     #[error(transparent)]
     UrlParseError(#[from] ParseError),
     #[error(transparent)]

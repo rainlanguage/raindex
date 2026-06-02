@@ -1,6 +1,7 @@
 use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
+use crate::utils::timing::Timing;
 use alloy::primitives::Address;
 use rain_math_float::Float;
 use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
@@ -10,6 +11,7 @@ use raindex_quote::{
 };
 use raindex_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
+use tracing::{debug, error, info, info_span, warn, Instrument};
 use wasm_bindgen_utils::impl_wasm_traits;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
@@ -133,25 +135,8 @@ impl RaindexOrder {
         )]
         chunk_size: Option<u32>,
     ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
-        let rpcs = self.get_rpc_urls()?;
-        let sg_order = self.clone().into_sg_order()?;
-
-        let order_quotes = get_order_quotes(
-            vec![sg_order],
-            block_number,
-            rpcs.iter().map(|s| s.to_string()).collect(),
-            chunk_size.map(|v| v as usize),
-            Address::ZERO,
-            &NoopInjector,
-        )
-        .await?;
-
-        let mut result_order_quotes = vec![];
-        for order_quote in order_quotes {
-            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
-            result_order_quotes.push(data);
-        }
-        Ok(result_order_quotes)
+        self.get_quotes_with_injector(block_number, chunk_size, Address::ZERO, &NoopInjector)
+            .await
     }
 }
 
@@ -169,25 +154,86 @@ impl RaindexOrder {
         counterparty: Address,
         injector: &dyn SignedContextInjector,
     ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
-        let rpcs = self.get_rpc_urls()?;
-        let sg_order = self.clone().into_sg_order()?;
+        let span = info_span!(
+            "get_order_quotes",
+            chain_id = self.chain_id(),
+            raindex = %self.raindex(),
+            order_hash = %self.order_hash(),
+            block_number = ?block_number,
+            chunk_size = ?chunk_size,
+            counterparty = %counterparty,
+        );
 
-        let order_quotes = get_order_quotes(
-            vec![sg_order],
-            block_number,
-            rpcs.iter().map(|s| s.to_string()).collect(),
-            chunk_size.map(|v| v as usize),
-            counterparty,
-            injector,
-        )
-        .await?;
+        async move {
+            let started_at = Timing::now();
+            let rpcs = self.get_rpc_urls()?;
+            let rpc_url_count = rpcs.len();
+            let sg_order = self.clone().into_sg_order()?;
 
-        let mut result_order_quotes = vec![];
-        for order_quote in order_quotes {
-            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
-            result_order_quotes.push(data);
+            info!(rpc_url_count, "starting order quotes");
+
+            let quote_started_at = Timing::now();
+            let order_quotes = get_order_quotes(
+                vec![sg_order],
+                block_number,
+                rpcs.iter().map(|s| s.to_string()).collect(),
+                chunk_size.map(|v| v as usize),
+                counterparty,
+                injector,
+            )
+            .instrument(info_span!("order_quotes.executing_batch_quote"))
+            .await
+            .map_err(|err| {
+                error!(
+                    rpc_url_count,
+                    duration_ms = quote_started_at.elapsed_ms(),
+                    error = %err,
+                    "failed executing order quotes"
+                );
+                err
+            })?;
+
+            let conversion_started_at = Timing::now();
+            let result_order_quotes = order_quotes
+                .into_iter()
+                .map(RaindexOrderQuote::try_from_batch_order_quotes_response)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|err| {
+                    error!(
+                        duration_ms = conversion_started_at.elapsed_ms(),
+                        error = %err,
+                        "failed converting order quotes"
+                    );
+                    err
+                })?;
+
+            let successful_quote_count = result_order_quotes
+                .iter()
+                .filter(|quote| quote.success)
+                .count();
+            let failed_quote_count = result_order_quotes
+                .len()
+                .saturating_sub(successful_quote_count);
+            for quote in result_order_quotes.iter().filter(|quote| !quote.success) {
+                debug!(
+                    input_index = quote.pair.input_index,
+                    output_index = quote.pair.output_index,
+                    error = ?quote.error,
+                    "order quote failed"
+                );
+            }
+            info!(
+                rpc_url_count,
+                quote_count = result_order_quotes.len(),
+                successful_quote_count,
+                failed_quote_count,
+                duration_ms = started_at.elapsed_ms(),
+                "completed order quotes"
+            );
+            Ok(result_order_quotes)
         }
-        Ok(result_order_quotes)
+        .instrument(span)
+        .await
     }
 }
 
@@ -269,13 +315,23 @@ pub async fn get_order_quotes_batch_with_injector(
     counterparty: Address,
     injector: &dyn SignedContextInjector,
 ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
+    let started_at = Timing::now();
     if orders.is_empty() {
+        info!(
+            order_count = 0usize,
+            "quote batch skipped for empty order list"
+        );
         return Ok(vec![]);
     }
 
     let expected_chain_id = orders[0].chain_id();
     for order in &orders[1..] {
         if order.chain_id() != expected_chain_id {
+            warn!(
+                expected_chain_id,
+                found_chain_id = order.chain_id(),
+                "quote batch rejected mixed chain IDs"
+            );
             return Err(RaindexError::PreflightError(format!(
                 "All orders must share the same chain ID, expected {} but found {}",
                 expected_chain_id,
@@ -289,6 +345,7 @@ pub async fn get_order_quotes_batch_with_injector(
         .into_iter()
         .map(|u| u.to_string())
         .collect();
+    let rpc_url_count = rpcs.len();
 
     let sg_orders = orders
         .iter()
@@ -310,6 +367,17 @@ pub async fn get_order_quotes_batch_with_injector(
             Ok::<usize, RaindexError>(count)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let total_pair_count: usize = pair_counts.iter().sum();
+
+    info!(
+        order_count = orders.len(),
+        expected_chain_id,
+        total_pair_count,
+        chunk_size = ?chunk_size,
+        block_number = ?block_number,
+        rpc_url_count,
+        "starting order quote batch"
+    );
 
     let flat_results = get_order_quotes(
         sg_orders,
@@ -325,6 +393,16 @@ pub async fn get_order_quotes_batch_with_injector(
         .into_iter()
         .map(RaindexOrderQuote::try_from_batch_order_quotes_response)
         .collect::<Result<Vec<_>, _>>()?;
+    let successful_quote_count = flat_raindex.iter().filter(|quote| quote.success).count();
+    let failed_quote_count = flat_raindex.len().saturating_sub(successful_quote_count);
+    for quote in flat_raindex.iter().filter(|quote| !quote.success) {
+        debug!(
+            input_index = quote.pair.input_index,
+            output_index = quote.pair.output_index,
+            error = ?quote.error,
+            "order quote failed"
+        );
+    }
 
     let mut result = Vec::with_capacity(orders.len());
     let mut offset = 0;
@@ -332,6 +410,31 @@ pub async fn get_order_quotes_batch_with_injector(
         result.push(flat_raindex[offset..offset + count].to_vec());
         offset += count;
     }
+    for (order, quotes) in orders.iter().zip(&result) {
+        for quote in quotes.iter().filter(|quote| !quote.success) {
+            debug!(
+                order_hash = %order.order_hash(),
+                raindex = %order.raindex(),
+                input_index = quote.pair.input_index,
+                output_index = quote.pair.output_index,
+                error = ?quote.error,
+                "order quote failed for order"
+            );
+        }
+    }
+
+    info!(
+        order_count = orders.len(),
+        expected_chain_id,
+        total_pair_count,
+        chunk_size = ?chunk_size,
+        block_number = ?block_number,
+        rpc_url_count,
+        successful_quote_count,
+        failed_quote_count,
+        duration_ms = started_at.elapsed_ms(),
+        "completed order quote batch"
+    );
 
     Ok(result)
 }
@@ -353,6 +456,7 @@ mod tests {
         use rain_math_float::Float;
         use raindex_subgraph_client::utils::float::{F0_5, F2};
         use serde_json::{json, Value};
+        use tracing_test::traced_test;
 
         sol!(
             struct quoteReturn {
@@ -517,11 +621,13 @@ mod tests {
             assert_eq!(res.pair.output_index, 0);
         }
 
+        #[traced_test]
         #[tokio::test]
         async fn test_get_order_quotes_batch_empty() {
             let result = get_order_quotes_batch(&[], None, None).await;
             assert!(result.is_ok());
             assert!(result.unwrap().is_empty());
+            assert!(logs_contain("quote batch skipped for empty order list"));
         }
 
         #[tokio::test]

@@ -6,7 +6,7 @@ dataSources:
     name: Raindex
     network: sepolia
     source:
-      address: "0x7242ce1ffe34297921c54cD7f9343c411E1E7759"
+      address: "0x83507d7E14556A1822E6959982BebA6024245FA8"
       abi: Raindex
       startBlock: 0
     mapping:
@@ -19,11 +19,11 @@ dataSources:
         - Transaction
       abis:
         - name: Raindex
-          file: ../out/RaindexV6.sol/RaindexV6.json
+          file: ./abis/Raindex.json
         - name: ERC20
-          file: ../out/ERC20.sol/ERC20.json
+          file: ./abis/ERC20.json
         - name: DecimalFloat
-          file: ../out/DecimalFloat.sol/DecimalFloat.json
+          file: ./abis/DecimalFloat.json
       eventHandlers:
         - event: DepositV2(address,address,bytes32,uint256)
           handler: handleDeposit

@@ -117,6 +117,12 @@ pub struct RaindexVault {
     orders_as_outputs: Vec<RaindexOrderAsIO>,
 }
 
+impl RaindexVault {
+    pub(crate) fn vault_id_string(&self) -> String {
+        self.vault_id.to_string()
+    }
+}
+
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
 impl RaindexVault {

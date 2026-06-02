@@ -22,17 +22,23 @@ filtered AS (
       PARTITION BY vd.chain_id, vd.raindex_address, vd.owner, vd.token, vd.vault_id
       ORDER BY vd.block_number, vd.log_index
     ) AS rn,
-    COALESCE(rvb.balance, FLOAT_ZERO_HEX()) AS prefix_balance
-  FROM vault_deltas vd
+    COALESCE(
+      (
+        SELECT FLOAT_SUM(prev.delta ORDER BY prev.block_number, prev.log_index)
+        FROM derived_vault_deltas prev
+        WHERE prev.chain_id = vd.chain_id
+          AND prev.raindex_address = vd.raindex_address
+          AND prev.owner = vd.owner
+          AND prev.token = vd.token
+          AND prev.vault_id = vd.vault_id
+          AND prev.block_number < p.start_block
+      ),
+      FLOAT_ZERO_HEX()
+    ) AS prefix_balance
+  FROM derived_vault_deltas vd
   JOIN params p
     ON p.chain_id = vd.chain_id
    AND p.raindex_address = vd.raindex_address
-  LEFT JOIN running_vault_balances rvb
-    ON rvb.chain_id = vd.chain_id
-   AND rvb.raindex_address = vd.raindex_address
-   AND rvb.owner = vd.owner
-   AND rvb.token = vd.token
-   AND rvb.vault_id = vd.vault_id
   WHERE vd.block_number BETWEEN p.start_block AND p.end_block
 ),
 ordered AS (

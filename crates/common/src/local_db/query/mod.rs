@@ -17,6 +17,7 @@ pub mod fetch_owner_trades;
 pub(crate) mod fetch_owner_trades_common;
 pub mod fetch_owner_trades_count;
 pub mod fetch_store_addresses;
+pub mod fetch_table_columns;
 pub mod fetch_tables;
 pub mod fetch_target_watermark;
 pub mod fetch_trades;
@@ -29,6 +30,8 @@ pub mod integrity_check;
 pub mod sql_statement;
 pub mod sql_statement_batch;
 pub mod update_last_synced_block;
+pub mod upsert_derived_trades;
+pub mod upsert_derived_vault_deltas;
 pub mod upsert_target_watermark;
 pub mod upsert_vault_balances;
 

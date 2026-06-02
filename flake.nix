@@ -57,7 +57,6 @@
               cd packages/ui-components && npm i && npm run lint
             '';
             additionalBuildInputs = [
-              pkgs.wasm-bindgen-cli
               rainix.rust-toolchain.${system}
               rainix.rust-build-inputs.${system}
             ];
@@ -160,6 +159,13 @@
             '';
           };
 
+          # Re-export the rain CLI from the pinned `rain` flake input so
+          # `nix shell .#rain-cli` resolves to the exact version recorded
+          # in flake.lock (cached on the rainlanguage Cachix). build-meta.sh
+          # uses this instead of `nix shell github:rainlanguage/rain.cli`
+          # so a rain.cli main move can't race the cache push.
+          rain-cli = rain.defaultPackage.${system};
+
         }
         // rainix.packages.${system};
 
@@ -184,6 +190,15 @@
           packages = with pkgs; [ nodejs_20 ];
           inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
+
+        # Re-export rainix's slim devShells so workflows can reference them
+        # via `.#X-shell` and pick up the flake.lock-pinned rainix rev
+        # instead of live `github:rainlanguage/rainix#X-shell` (which
+        # bypasses flake.lock and tracks rainix main).
+        devShells.wasm-shell = rainix.devShells.${system}.wasm-shell;
+        devShells.subgraph-shell = rainix.devShells.${system}.subgraph-shell;
+        devShells.sol-shell = rainix.devShells.${system}.sol-shell;
+        devShells.rust-shell = rainix.devShells.${system}.rust-shell;
       }
     );
 

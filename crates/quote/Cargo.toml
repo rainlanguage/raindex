@@ -19,7 +19,6 @@ raindex_subgraph_client = { workspace = true }
 futures = { workspace = true }
 rain-error-decoding = { workspace = true }
 alloy = { workspace = true, features = ["sol-types"] }
-alloy-ethers-typecast = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
