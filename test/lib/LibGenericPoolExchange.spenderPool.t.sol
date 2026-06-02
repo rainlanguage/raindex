@@ -82,4 +82,19 @@ contract LibGenericPoolExchangeSpenderPoolTest is Test {
         assertTrue(pool.called(), "empty call still reaches the pool");
         assertEq(token.allowance(address(iHarness), spender), 0, "approval revoked after the call");
     }
+
+    /// The call to the pool forwards the exchanger's *entire* ETH balance, not a
+    /// fixed or zero amount. Fund the harness with a fuzzed balance and assert
+    /// the whole balance lands at the pool and none is left behind.
+    function testForwardsEntireEthBalanceToPool(address spender, uint256 balance) external {
+        MockToken token = new MockToken("Token", "TKN", 18);
+        FallbackPool pool = new FallbackPool();
+        vm.assume(spender != address(0));
+        vm.deal(address(iHarness), balance);
+
+        iHarness.exchange(address(token), abi.encode(spender, address(pool), bytes("")));
+
+        assertEq(address(pool).balance, balance, "entire balance forwarded to pool");
+        assertEq(address(iHarness).balance, 0, "no ETH left at the exchanger");
+    }
 }
