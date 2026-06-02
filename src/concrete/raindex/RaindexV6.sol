@@ -705,11 +705,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
     /// @dev Calculates an order's IO, seeding the calculate eval with the
     /// batch's prior same-owner calculate writes as `stateOverlay`.
-    function calculateOrderIOBatched(TakeOrderConfigV4 memory takeOrderConfig, CalculateKvsAccumulator memory accumulator)
-        internal
-        view
-        returns (OrderIOCalculationV4 memory)
-    {
+    function calculateOrderIOBatched(
+        TakeOrderConfigV4 memory takeOrderConfig,
+        CalculateKvsAccumulator memory accumulator
+    ) internal view returns (OrderIOCalculationV4 memory) {
         OrderV4 memory order = takeOrderConfig.order;
         return calculateOrderIO(
             order,
