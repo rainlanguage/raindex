@@ -172,15 +172,21 @@ struct OrderIOCalculationV4 {
     bytes32[] kvs;
 }
 
+/// One evaluated order's calculate-phase kvs paired with its owner namespace.
+/// @param owner Owner namespace the kvs belong to.
+/// @param kvs Calculate-phase kvs the order wrote.
+struct OwnerCalculateKvs {
+    address owner;
+    bytes32[] kvs;
+}
+
 /// Running record of evaluated orders' calculate-phase kvs within a single
-/// `takeOrders4` batch, keyed by owner so each owner's writes are threaded only
-/// into that owner's subsequent orders via `stateOverlay`.
-/// @param owners Owner of each evaluated order (parallel to `kvs`).
-/// @param kvs Calculate-phase kvs of each evaluated order.
-/// @param count Number of evaluated orders recorded.
-struct BatchCalculateState {
-    address[] owners;
-    bytes32[][] kvs;
+/// `takeOrders4` batch. Each entry carries its owner so that an owner's writes
+/// are threaded only into that owner's subsequent orders via `stateOverlay`.
+/// @param evaluated One entry per evaluated order, in evaluation order.
+/// @param count Number of entries populated in `evaluated`.
+struct CalculateKvsAccumulator {
+    OwnerCalculateKvs[] evaluated;
     uint256 count;
 }
 
@@ -463,9 +469,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // Per-owner record of each evaluated order's calculate-phase kvs,
             // seeded into later same-owner orders' calculate evals via
             // `stateOverlay` so they observe earlier writes within the batch.
-            BatchCalculateState memory batchState = BatchCalculateState({
-                owners: new address[](config.orders.length), kvs: new bytes32[][](config.orders.length), count: 0
-            });
+            CalculateKvsAccumulator memory accumulator =
+                CalculateKvsAccumulator({evaluated: new OwnerCalculateKvs[](config.orders.length), count: 0});
 
             Float remainingTakerIO = config.maximumIO;
             if (!remainingTakerIO.gt(Float.wrap(0))) {
@@ -492,10 +497,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     emit OrderNotFound(msg.sender, order.owner, orderHash);
                 } else {
                     OrderIOCalculationV4 memory orderIOCalculation =
-                        calculateOrderIOBatched(takeOrderConfig, batchState);
-                    batchState.owners[batchState.count] = order.owner;
-                    batchState.kvs[batchState.count] = orderIOCalculation.kvs;
-                    batchState.count++;
+                        calculateOrderIOBatched(takeOrderConfig, accumulator);
+                    accumulator.evaluated[accumulator.count] =
+                        OwnerCalculateKvs({owner: order.owner, kvs: orderIOCalculation.kvs});
+                    accumulator.count++;
 
                     // Skip orders that are too expensive rather than revert as we have
                     // no way of knowing if a specific order becomes too expensive
@@ -700,7 +705,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
     /// @dev Calculates an order's IO, seeding the calculate eval with the
     /// batch's prior same-owner calculate writes as `stateOverlay`.
-    function calculateOrderIOBatched(TakeOrderConfigV4 memory takeOrderConfig, BatchCalculateState memory batchState)
+    function calculateOrderIOBatched(TakeOrderConfigV4 memory takeOrderConfig, CalculateKvsAccumulator memory accumulator)
         internal
         view
         returns (OrderIOCalculationV4 memory)
@@ -712,40 +717,45 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             takeOrderConfig.outputIOIndex,
             msg.sender,
             takeOrderConfig.signedContext,
-            buildBatchStateOverlay(batchState.owners, batchState.kvs, batchState.count, order.owner)
+            buildStateOverlay(accumulator, order.owner)
         );
     }
 
     /// @dev Concatenates, in evaluation order, the calculate-phase kvs of the
-    /// first `count` evaluated orders whose owner equals `owner`, forming the
+    /// accumulator's evaluated orders whose owner equals `owner`, forming the
     /// `stateOverlay` for the next same-owner order's calculate eval. Later
     /// pairs override earlier ones for a repeated key when the interpreter seeds
     /// them.
-    /// @param owners Owner of each evaluated order so far (parallel to `kvsList`).
-    /// @param kvsList Calculate-phase kvs of each evaluated order so far.
-    /// @param count Number of evaluated orders recorded in `owners`/`kvsList`.
+    /// @param accumulator The evaluated orders' calculate kvs recorded so far.
     /// @param owner The owner namespace to collect writes for.
-    function buildBatchStateOverlay(address[] memory owners, bytes32[][] memory kvsList, uint256 count, address owner)
+    function buildStateOverlay(CalculateKvsAccumulator memory accumulator, address owner)
         internal
         pure
         returns (bytes32[] memory overlay)
     {
+        OwnerCalculateKvs[] memory evaluated = accumulator.evaluated;
+        uint256 count = accumulator.count;
         uint256 total = 0;
         for (uint256 j = 0; j < count; j++) {
-            if (owners[j] == owner) {
-                total += kvsList[j].length;
+            if (evaluated[j].owner == owner) {
+                total += evaluated[j].kvs.length;
             }
         }
         overlay = new bytes32[](total);
-        uint256 w = 0;
+        // Copy each matching order's kvs as one contiguous block. `dest` starts
+        // at the overlay's first element (past the length word) and advances by
+        // each copied block.
+        uint256 dest;
+        assembly ("memory-safe") {
+            dest := add(overlay, 0x20)
+        }
         for (uint256 j = 0; j < count; j++) {
-            if (owners[j] == owner) {
-                bytes32[] memory kvs = kvsList[j];
-                for (uint256 k = 0; k < kvs.length; k++) {
-                    overlay[w] = kvs[k];
-                    unchecked {
-                        w++;
-                    }
+            if (evaluated[j].owner == owner) {
+                bytes32[] memory kvs = evaluated[j].kvs;
+                assembly ("memory-safe") {
+                    let size := mul(mload(kvs), 0x20)
+                    mcopy(dest, add(kvs, 0x20), size)
+                    dest := add(dest, size)
                 }
             }
         }
