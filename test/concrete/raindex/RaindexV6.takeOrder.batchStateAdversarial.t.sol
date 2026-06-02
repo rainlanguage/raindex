@@ -175,4 +175,33 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         list[2] = b;
         assertTrue(take(list).eq(LibDecimalFloat.packLossless(1, 0)), "dead order must not break same-owner threading");
     }
+
+    /// The recording happens before the skip checks, so an order skipped for
+    /// OrderExceedsMaxRatio (distinct from the zero-amount skip) also threads its
+    /// calculate write. A (ratio 1000 > maximumIORatio 1) is ratio-skipped but
+    /// writes key 0; B then sees it and skips -> total 0. Without threading the
+    /// ratio-skipped write, B fills -> total 1.
+    function testRatioSkippedOrderWritesAreThreaded() external {
+        mockTransfers();
+        address o = owner("grace");
+        fund(o);
+        OrderV4 memory a = addOrder(o, ":set(0 1),_ _:1 1000;:;");
+        OrderV4 memory b = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        orders[0] =
+            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        orders[1] =
+            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+            orders: orders,
+            minimumIO: LibDecimalFloat.packLossless(0, 0),
+            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
+            maximumIORatio: LibDecimalFloat.packLossless(1, 0),
+            IOIsInput: true,
+            data: ""
+        });
+        vm.prank(iBob);
+        (Float total,) = iRaindex.takeOrders4(config);
+        assertTrue(total.isZero(), "ratio-skipped order's calculate write must thread");
+    }
 }
