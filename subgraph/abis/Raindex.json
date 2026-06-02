@@ -516,7 +516,7 @@
       "name": "flashFee",
       "inputs": [
         {
-          "name": "",
+          "name": "token",
           "type": "address",
           "internalType": "address"
         },
@@ -533,7 +533,7 @@
           "internalType": "uint256"
         }
       ],
-      "stateMutability": "pure"
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -2056,6 +2056,17 @@
           "name": "result",
           "type": "bytes32",
           "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "FlashLenderUnsupportedToken",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
         }
       ]
     },

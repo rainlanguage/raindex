@@ -77,6 +77,9 @@ abstract contract RaindexV6FlashLender is IERC3156FlashLender, ERC165 {
     /// i.e. `maxFlashLoan(token) == 0`) as ERC-3156 requires, rather than
     /// returning a fee for a loan that could never settle.
     function flashFee(address token, uint256) external view override returns (uint256) {
+        // Strict equality is intentional: a token Raindex holds zero balance of
+        // is by definition unsupported. Any nonzero balance means supported.
+        //slither-disable-next-line incorrect-equality
         if (IERC20(token).balanceOf(address(this)) == 0) {
             revert FlashLenderUnsupportedToken(token);
         }
