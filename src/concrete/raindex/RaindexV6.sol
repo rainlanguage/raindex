@@ -172,16 +172,15 @@ struct OrderIOCalculationV4 {
     bytes32[] kvs;
 }
 
-/// Running record of evaluated orders' calculate-phase kvs within a single
-/// `takeOrders4` batch, keyed by owner so each owner's writes are threaded only
-/// into that owner's subsequent orders via `stateOverlay`.
-/// @param owners Owner of each evaluated order (parallel to `kvs`).
-/// @param kvs Calculate-phase kvs of each evaluated order.
-/// @param count Number of evaluated orders recorded.
-struct BatchCalculateState {
-    address[] owners;
-    bytes32[][] kvs;
-    uint256 count;
+/// The input and output tokens shared by every order in a `takeOrders4` batch,
+/// and the taker IO still remaining to fill as the batch is processed.
+/// @param inputToken The input token every order in the batch must use.
+/// @param outputToken The output token every order in the batch must use.
+/// @param remainingTakerIO The taker IO left to fill across the io.
+struct TakeOrdersIO {
+    address inputToken;
+    address outputToken;
+    Float remainingTakerIO;
 }
 
 /// @title RaindexV6
@@ -440,8 +439,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
-        address orderInputToken = config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token;
-        address orderOutputToken = config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token;
+        TakeOrdersIO memory io = TakeOrdersIO({
+            inputToken: config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token,
+            outputToken: config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token,
+            remainingTakerIO: config.maximumIO
+        });
 
         // Allocate a region of memory to hold pointers. We don't know how many
         // will run at this point, but we conservatively set aside a slot for
@@ -460,27 +462,25 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
 
         {
-            // Per-owner record of each evaluated order's calculate-phase kvs,
-            // seeded into later same-owner orders' calculate evals via
-            // `stateOverlay` so they observe earlier writes within the batch.
-            BatchCalculateState memory batchState = BatchCalculateState({
-                owners: new address[](config.orders.length), kvs: new bytes32[][](config.orders.length), count: 0
-            });
+            // Each evaluated order's calculation, indexed by its batch position.
+            // A later same-owner order seeds its calculate eval with the most
+            // recent earlier same-owner order's kvs (see `latestOwnerKvs`) so it
+            // observes earlier same-owner writes within the io.
+            OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
 
-            Float remainingTakerIO = config.maximumIO;
-            if (!remainingTakerIO.gt(Float.wrap(0))) {
+            if (!io.remainingTakerIO.gt(Float.wrap(0))) {
                 revert ZeroMaximumIO();
             }
 
             uint256 i = 0;
-            while (i < config.orders.length && remainingTakerIO.gt(Float.wrap(0))) {
+            while (i < config.orders.length && io.remainingTakerIO.gt(Float.wrap(0))) {
                 takeOrderConfig = config.orders[i];
                 order = takeOrderConfig.order;
                 // Every order needs the same input token.
                 // Every order needs the same output token.
                 if (
-                    (order.validInputs[takeOrderConfig.inputIOIndex].token != orderInputToken)
-                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != orderOutputToken)
+                    (order.validInputs[takeOrderConfig.inputIOIndex].token != io.inputToken)
+                        || (order.validOutputs[takeOrderConfig.outputIOIndex].token != io.outputToken)
                 ) {
                     revert TokenMismatch();
                 }
@@ -491,11 +491,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 if (sOrders[orderHash] == ORDER_DEAD) {
                     emit OrderNotFound(msg.sender, order.owner, orderHash);
                 } else {
-                    OrderIOCalculationV4 memory orderIOCalculation =
-                        calculateOrderIOBatched(takeOrderConfig, batchState);
-                    batchState.owners[batchState.count] = order.owner;
-                    batchState.kvs[batchState.count] = orderIOCalculation.kvs;
-                    batchState.count++;
+                    OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
+                        order,
+                        takeOrderConfig.inputIOIndex,
+                        takeOrderConfig.outputIOIndex,
+                        msg.sender,
+                        takeOrderConfig.signedContext,
+                        latestOwnerKvs(evaluatedCalculations, order.owner)
+                    );
+                    evaluatedCalculations[i] = orderIOCalculation;
 
                     // Skip orders that are too expensive rather than revert as we have
                     // no way of knowing if a specific order becomes too expensive
@@ -511,7 +515,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         if (config.IOIsInput) {
                             // Taker is just "market buying" the order output max.
                             // Can't exceed the remaining taker input.
-                            takerInput = orderIOCalculation.outputMax.min(remainingTakerIO);
+                            takerInput = orderIOCalculation.outputMax.min(io.remainingTakerIO);
 
                             // Slither false positive because it sees the div on
                             // the else branch and triggers a
@@ -522,15 +526,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                             //slither-disable-next-line divide-before-multiply
                             takerOutput = orderIOCalculation.IORatio.mul(takerInput);
 
-                            remainingTakerIO = remainingTakerIO.sub(takerInput);
+                            io.remainingTakerIO = io.remainingTakerIO.sub(takerInput);
                         } else {
                             // Taker is "market selling" up to the order output max.
                             Float orderMaxInput = orderIOCalculation.IORatio.mul(orderIOCalculation.outputMax);
-                            takerOutput = orderMaxInput.min(remainingTakerIO);
+                            takerOutput = orderMaxInput.min(io.remainingTakerIO);
                             // This rounds down which favours the order/dex.
                             takerInput = takerOutput.div(orderIOCalculation.IORatio);
 
-                            remainingTakerIO = remainingTakerIO.sub(takerOutput);
+                            io.remainingTakerIO = io.remainingTakerIO.sub(takerOutput);
                         }
 
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
@@ -577,14 +581,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         //   external data (e.g. prices) that could be modified by the caller's
         //   trades.
 
-        pushTokens(msg.sender, orderOutputToken, totalTakerInput);
+        pushTokens(msg.sender, io.outputToken, totalTakerInput);
 
         if (config.data.length > 0) {
             IRaindexV6OrderTaker(msg.sender)
-                .onTakeOrders2(orderOutputToken, orderInputToken, totalTakerInput, totalTakerOutput, config.data);
+                .onTakeOrders2(io.outputToken, io.inputToken, totalTakerInput, totalTakerOutput, config.data);
         }
 
-        pullTokens(msg.sender, orderInputToken, totalTakerOutput);
+        pullTokens(msg.sender, io.inputToken, totalTakerOutput);
 
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
@@ -698,67 +702,31 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Calculates an order's IO, seeding the calculate eval with the
-    /// batch's prior same-owner calculate writes as `stateOverlay`.
-    function calculateOrderIOBatched(TakeOrderConfigV4 memory takeOrderConfig, BatchCalculateState memory batchState)
-        internal
-        view
-        returns (OrderIOCalculationV4 memory)
-    {
-        OrderV4 memory order = takeOrderConfig.order;
-        return calculateOrderIO(
-            order,
-            takeOrderConfig.inputIOIndex,
-            takeOrderConfig.outputIOIndex,
-            msg.sender,
-            takeOrderConfig.signedContext,
-            buildBatchStateOverlay(batchState.owners, batchState.kvs, batchState.count, order.owner)
-        );
-    }
-
-    /// @dev Concatenates, in evaluation order, the calculate-phase kvs of the
-    /// first `count` evaluated orders whose owner equals `owner`, forming the
-    /// `stateOverlay` for the next same-owner order's calculate eval. Later
-    /// pairs override earlier ones for a repeated key when the interpreter seeds
-    /// them.
-    /// @param owners Owner of each evaluated order so far (parallel to `kvsList`).
-    /// @param kvsList Calculate-phase kvs of each evaluated order so far.
-    /// @param count Number of evaluated orders recorded in `owners`/`kvsList`.
-    /// @param owner The owner namespace to collect writes for.
-    function buildBatchStateOverlay(address[] memory owners, bytes32[][] memory kvsList, uint256 count, address owner)
+    /// @dev The most recently evaluated same-owner order's calculate kvs, or an
+    /// empty overlay if the owner has no earlier order in the io. Each eval
+    /// returns the full state KV (the seeded `stateOverlay` merged with new
+    /// writes), so the latest same-owner kvs already carries every earlier
+    /// same-owner write in the batch and is seeded directly with no
+    /// concatenation. Not-yet-evaluated and skipped (dead) entries are
+    /// zero-owner so they are ignored by the scan.
+    /// @param evaluatedCalculations Each evaluated order's calculation, indexed
+    /// by batch position.
+    /// @param owner The owner namespace to seed writes for.
+    function latestOwnerKvs(OrderIOCalculationV4[] memory evaluatedCalculations, address owner)
         internal
         pure
-        returns (bytes32[] memory overlay)
+        returns (bytes32[] memory)
     {
-        uint256 total = 0;
-        for (uint256 j = 0; j < count; j++) {
-            if (owners[j] == owner) {
-                total += kvsList[j].length;
+        for (uint256 j = evaluatedCalculations.length; j > 0;) {
+            unchecked {
+                j--;
+            }
+            OrderIOCalculationV4 memory calculation = evaluatedCalculations[j];
+            if (calculation.order.owner == owner) {
+                return calculation.kvs;
             }
         }
-        overlay = new bytes32[](total);
-        uint256 w = 0;
-        for (uint256 j = 0; j < count; j++) {
-            if (owners[j] == owner) {
-                bytes32[] memory kvs = kvsList[j];
-                for (uint256 k = 0; k < kvs.length; k++) {
-                    overlay[w] = kvs[k];
-                    unchecked {
-                        w++;
-                    }
-                }
-            }
-        }
-    }
-
-    /// @dev Caps an order's output max at the owner's output vault balance.
-    function capOutputMaxToVaultBalance(OrderV4 memory order, uint256 outputIOIndex, Float outputMax)
-        internal
-        view
-        returns (Float)
-    {
-        IOV2 memory output = order.validOutputs[outputIOIndex];
-        return outputMax.min(_vaultBalance(order.owner, output.token, output.vaultId));
+        return new bytes32[](0);
     }
 
     /// Main entrypoint into an order calculates the amount and IO ratio. Both
@@ -784,13 +752,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32[] memory stateOverlay
     ) internal view returns (OrderIOCalculationV4 memory) {
         unchecked {
-            bytes32 orderHash = order.hash();
-
             bytes32[][] memory context;
             {
                 bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
                 callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
-                    orderHash, bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
+                    order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
                 );
 
                 {
@@ -875,8 +841,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             }
 
             // The order owner can't send more than the smaller of their vault
-            // balance or their per-order limit.
-            orderOutputMax = capOutputMaxToVaultBalance(order, outputIOIndex, orderOutputMax);
+            // balance or their per-order limit. The output vault balance is the
+            // balance field (index 3) of the output vault column already built
+            // into the calculate context above, so it is reused rather than read
+            // from storage a second time.
+            orderOutputMax = orderOutputMax.min(Float.wrap(context[CONTEXT_VAULT_OUTPUTS_COLUMN][3]));
 
             // Populate the context with the output max rescaled and vault capped.
             context[CONTEXT_CALCULATIONS_COLUMN] =
