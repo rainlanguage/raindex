@@ -91,4 +91,69 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
             "stateful calculate-phase cap must hold within a single takeOrders4 batch"
         );
     }
+
+    /// The intra-batch state threading is scoped per owner namespace. Two orders
+    /// with DIFFERENT owners, both using store key 0 as a "fill once" flag, must
+    /// each fill independently: owner B's calculate read of key 0 must not see
+    /// owner A's calculate write. If the overlay leaked across owners, owner B
+    /// would be skipped and the total would be 1 instead of 2.
+    function testH01CrossOwnerStateIsolation() external {
+        address ownerA = address(uint160(uint256(keccak256("ownerA.rain.test"))));
+        address ownerB = address(uint160(uint256(keccak256("ownerB.rain.test"))));
+        address bob = address(uint160(uint256(keccak256("bob.rain.test"))));
+
+        // Fund both owners' output vaults.
+        vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.prank(ownerA);
+        iRaindex.deposit4(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        );
+        vm.prank(ownerB);
+        iRaindex.deposit4(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        );
+
+        OrderV4 memory orderA = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ownerA,
+            "used:get(0),:set(0 1),_ _:if(used 0 1) 1;:;",
+            address(iToken0),
+            bytes32(uint256(0x01)),
+            address(iToken1),
+            bytes32(uint256(0x01))
+        );
+        OrderV4 memory orderB = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ownerB,
+            "used:get(0),:set(0 1),_ _:if(used 0 1) 1;:;",
+            address(iToken0),
+            bytes32(uint256(0x01)),
+            address(iToken1),
+            bytes32(uint256(0x01))
+        );
+
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        orders[0] = TakeOrderConfigV4({
+            order: orderA, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        });
+        orders[1] = TakeOrderConfigV4({
+            order: orderB, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        });
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+
+        vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector, bob), abi.encode(true));
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, bob, address(iRaindex)),
+            abi.encode(true)
+        );
+
+        vm.prank(bob);
+        (Float totalTakerInput,) = iRaindex.takeOrders4(config);
+
+        assertTrue(
+            totalTakerInput.eq(LibDecimalFloat.packLossless(2, 0)),
+            "different owners' calculate state must be isolated within a batch"
+        );
+    }
 }
