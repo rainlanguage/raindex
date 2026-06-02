@@ -57,6 +57,9 @@ contract LibRaindexDoPostTest is Test {
             abi.encodeWithSelector(IInterpreterV4.eval4.selector),
             abi.encode(new StackItem[](0), new bytes32[](0))
         );
+        // Assert eval4 actually ran, so the test can't pass vacuously if doPost
+        // were to skip the task entirely (then store.set would also not be hit).
+        vm.expectCall(interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector));
         vm.mockCallRevert(store, abi.encodeWithSelector(IInterpreterStoreV3.set.selector), bytes("set must be skipped"));
 
         TaskV2[] memory post = new TaskV2[](1);
@@ -78,6 +81,8 @@ contract LibRaindexDoPostTest is Test {
         vm.mockCall(
             interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector), abi.encode(new StackItem[](0), writes)
         );
+        // Pin the full path: eval4 runs, returns writes, and store.set receives them.
+        vm.expectCall(interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector));
         vm.mockCall(store, abi.encodeWithSelector(IInterpreterStoreV3.set.selector), bytes(""));
         vm.expectCall(store, abi.encodeWithSelector(IInterpreterStoreV3.set.selector));
 
