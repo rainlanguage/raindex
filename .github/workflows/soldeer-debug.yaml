@@ -1,0 +1,31 @@
+name: Debug Soldeer Push
+on:
+  workflow_dispatch: {}
+jobs:
+  token:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect SOLDEER_API_TOKEN validity (no secret leaked)
+        env:
+          SOLDEER_API_TOKEN: ${{ secrets.SOLDEER_API_TOKEN }}
+        run: |
+          echo "token length: ${#SOLDEER_API_TOKEN}  segments: $(printf '%s' "$SOLDEER_API_TOKEN" | awk -F. '{print NF}')"
+
+          echo "=== decode JWT payload exp/iat (payload is signed, not secret) ==="
+          payload=$(printf '%s' "$SOLDEER_API_TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          pad=$(( (4 - ${#payload} % 4) % 4 )); [ "$pad" -gt 0 ] && payload="$payload$(printf '=%.0s' $(seq 1 $pad))"
+          decoded=$(printf '%s' "$payload" | base64 -d 2>/dev/null || true)
+          echo "claims: $(printf '%s' "$decoded" | grep -oE '"(exp|iat|nbf|type|token_type)":("?[^",}]+"?)' | tr '\n' ' ')"
+          exp=$(printf '%s' "$decoded" | grep -oE '"exp":[0-9]+' | grep -oE '[0-9]+' | head -1)
+          now=$(date +%s)
+          if [ -n "$exp" ]; then
+            echo "now=$now exp=$exp delta=$((exp-now))s -> $([ "$exp" -lt "$now" ] && echo '*** EXPIRED ***' || echo valid)"
+          else
+            echo "no exp claim (long-lived token?)"
+          fi
+
+          echo "=== authenticated POST to upload endpoint, no body (401 => token rejected; other 4xx => token accepted) ==="
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $SOLDEER_API_TOKEN" \
+            "https://api.soldeer.xyz/api/v1/revision/upload" || echo "curl_err")
+          echo "http=$code  body=$(head -c 300 /tmp/resp.txt)"
