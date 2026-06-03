@@ -48,6 +48,7 @@ import {
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {LibOrder} from "../../lib/LibOrder.sol";
+import {LibTakeOrdersOverlay} from "../../lib/LibTakeOrdersOverlay.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
@@ -176,7 +177,7 @@ struct OrderIOCalculationV4 {
 /// and the taker IO still remaining to fill as the batch is processed.
 /// @param inputToken The input token every order in the batch must use.
 /// @param outputToken The output token every order in the batch must use.
-/// @param remainingTakerIO The taker IO left to fill across the io.
+/// @param remainingTakerIO The taker IO left to fill across the batch.
 struct TakeOrdersIO {
     address inputToken;
     address outputToken;
@@ -465,7 +466,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // Each evaluated order's calculation, indexed by its batch position.
             // A later same-owner order seeds its calculate eval with the most
             // recent earlier same-owner order's kvs (see `latestOwnerKvs`) so it
-            // observes earlier same-owner writes within the io.
+            // observes earlier same-owner writes within the batch.
             OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
 
             if (!io.remainingTakerIO.gt(Float.wrap(0))) {
@@ -497,7 +498,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         takeOrderConfig.outputIOIndex,
                         msg.sender,
                         takeOrderConfig.signedContext,
-                        latestOwnerKvs(evaluatedCalculations, order.owner)
+                        LibTakeOrdersOverlay.latestOwnerKvs(evaluatedCalculations, order.owner)
                     );
                     evaluatedCalculations[i] = orderIOCalculation;
 
@@ -700,33 +701,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         if (clearStateChange.aliceOutput.isZero() && clearStateChange.bobOutput.isZero()) {
             revert ClearZeroAmount();
         }
-    }
-
-    /// @dev The most recently evaluated same-owner order's calculate kvs, or an
-    /// empty overlay if the owner has no earlier order in the io. Each eval
-    /// returns the full state KV (the seeded `stateOverlay` merged with new
-    /// writes), so the latest same-owner kvs already carries every earlier
-    /// same-owner write in the batch and is seeded directly with no
-    /// concatenation. Not-yet-evaluated and skipped (dead) entries are
-    /// zero-owner so they are ignored by the scan.
-    /// @param evaluatedCalculations Each evaluated order's calculation, indexed
-    /// by batch position.
-    /// @param owner The owner namespace to seed writes for.
-    function latestOwnerKvs(OrderIOCalculationV4[] memory evaluatedCalculations, address owner)
-        internal
-        pure
-        returns (bytes32[] memory)
-    {
-        for (uint256 j = evaluatedCalculations.length; j > 0;) {
-            unchecked {
-                j--;
-            }
-            OrderIOCalculationV4 memory calculation = evaluatedCalculations[j];
-            if (calculation.order.owner == owner) {
-                return calculation.kvs;
-            }
-        }
-        return new bytes32[](0);
     }
 
     /// Main entrypoint into an order calculates the amount and IO ratio. Both
