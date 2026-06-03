@@ -2,30 +2,30 @@ name: Debug Soldeer Push
 on:
   workflow_dispatch: {}
 jobs:
-  debug:
+  token:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Endpoint reachability from the runner
-        run: |
-          echo "=== GET revision (the change-gate uses this; known to work) ==="
-          curl -sS -o /dev/null -w "http=%{http_code} time=%{time_total}s\n" \
-            "https://api.soldeer.xyz/api/v1/revision?project_name=raindex&offset=0&limit=1" || echo "GET errored"
-          echo "=== POST upload endpoint reachability (no body/auth, just connect) ==="
-          curl -sv -X POST --max-time 30 "https://api.soldeer.xyz/api/v1/revision/upload" 2>&1 \
-            | grep -iE "Trying|Connected to|SSL connection|subjectAltName|^< HTTP|Could not resolve|Connection refused|timed out|Recv failure|Empty reply|Cloudflare|cf-ray" | head -25 || true
-      - uses: nixbuild/nix-quick-install-action@v30
-        with:
-          nix_conf: |
-            keep-env-derivations = true
-            keep-outputs = true
-      - name: Soldeer push (verbose)
+      - name: Inspect SOLDEER_API_TOKEN validity (no secret leaked)
         env:
           SOLDEER_API_TOKEN: ${{ secrets.SOLDEER_API_TOKEN }}
         run: |
-          echo "SOLDEER_API_TOKEN length: ${#SOLDEER_API_TOKEN}"
-          RUST_LOG=trace nix develop github:rainlanguage/rainix#sol-shell -c forge soldeer push raindex~0.1.0 > /tmp/push.log 2>&1 || echo "push exited non-zero (captured)"
-          echo "=== relevant lines ==="
-          grep -iE "not connected|error|connect|tcp|dns|resolve|tls|ssl|http|reqwest|hyper|upload|revision|Unauthorized|forbidden|status|Bearer|Zip|Done" /tmp/push.log | tail -70 || true
-          echo "=== last 40 raw lines ==="
-          tail -40 /tmp/push.log
+          echo "token length: ${#SOLDEER_API_TOKEN}  segments: $(printf '%s' "$SOLDEER_API_TOKEN" | awk -F. '{print NF}')"
+
+          echo "=== decode JWT payload exp/iat (payload is signed, not secret) ==="
+          payload=$(printf '%s' "$SOLDEER_API_TOKEN" | cut -d. -f2 | tr '_-' '/+')
+          pad=$(( (4 - ${#payload} % 4) % 4 )); [ "$pad" -gt 0 ] && payload="$payload$(printf '=%.0s' $(seq 1 $pad))"
+          decoded=$(printf '%s' "$payload" | base64 -d 2>/dev/null || true)
+          echo "claims: $(printf '%s' "$decoded" | grep -oE '"(exp|iat|nbf|type|token_type)":("?[^",}]+"?)' | tr '\n' ' ')"
+          exp=$(printf '%s' "$decoded" | grep -oE '"exp":[0-9]+' | grep -oE '[0-9]+' | head -1)
+          now=$(date +%s)
+          if [ -n "$exp" ]; then
+            echo "now=$now exp=$exp delta=$((exp-now))s -> $([ "$exp" -lt "$now" ] && echo '*** EXPIRED ***' || echo valid)"
+          else
+            echo "no exp claim (long-lived token?)"
+          fi
+
+          echo "=== authenticated POST to upload endpoint, no body (401 => token rejected; other 4xx => token accepted) ==="
+          code=$(curl -sS -o /tmp/resp.txt -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer $SOLDEER_API_TOKEN" \
+            "https://api.soldeer.xyz/api/v1/revision/upload" || echo "curl_err")
+          echo "http=$code  body=$(head -c 300 /tmp/resp.txt)"
