@@ -122,4 +122,61 @@ contract RaindexV6VaultBalanceRevertTest is Test {
         // The owner actually received the pushed tokens.
         assertEq(realToken.balanceOf(owner), 1e18, "owner balance");
     }
+
+    /// Decreasing a non-zero vault SUBTRACTS the amount from the old balance:
+    /// it returns (oldBalance, oldBalance - amount), persists the new balance to
+    /// storage, and a follow-up read reflects the reduced balance. Pins the
+    /// `.sub` arithmetic, the (old, new) return tuple ordering, and the storage
+    /// write — a mutation that adds instead of subtracts, returns the amount or
+    /// both-new, or skips the write is caught.
+    function testDecreaseNonZeroSubtracts() external {
+        // Seed the vault with 10 via an increase from the zero balance.
+        (Float seedOld, Float seedNew) =
+            harness.exposedIncrease(owner, token, VAULT, LibDecimalFloat.packLossless(10, 0));
+        assertTrue(seedOld.eq(Float.wrap(0)), "seed old");
+        assertTrue(seedNew.eq(LibDecimalFloat.packLossless(10, 0)), "seed new");
+
+        // Decrease by 3: returns (10, 7).
+        (Float oldBalance, Float newBalance) =
+            harness.exposedDecrease(owner, token, VAULT, LibDecimalFloat.packLossless(3, 0));
+        assertTrue(oldBalance.eq(LibDecimalFloat.packLossless(10, 0)), "old balance is pre-decrease 10");
+        assertTrue(newBalance.eq(LibDecimalFloat.packLossless(7, 0)), "new balance is 10 - 3 = 7");
+
+        // The reduced balance is persisted: reading the vault returns 7.
+        assertTrue(
+            harness.vaultBalance2(owner, token, VAULT).eq(LibDecimalFloat.packLossless(7, 0)), "stored balance is 7"
+        );
+
+        // A second decrease compounds off the stored 7, not the original 10:
+        // returns (7, 5) and persists 5.
+        (Float old2, Float new2) = harness.exposedDecrease(owner, token, VAULT, LibDecimalFloat.packLossless(2, 0));
+        assertTrue(old2.eq(LibDecimalFloat.packLossless(7, 0)), "second old reads stored 7");
+        assertTrue(new2.eq(LibDecimalFloat.packLossless(5, 0)), "second new is 7 - 2 = 5");
+        assertTrue(
+            harness.vaultBalance2(owner, token, VAULT).eq(LibDecimalFloat.packLossless(5, 0)), "stored balance is 5"
+        );
+    }
+
+    /// Decreasing a vault-0 balance ALWAYS returns (0, 0) and PULLS tokens from
+    /// the owner into the contract (vault 0 holds no internal balance, every
+    /// decrease is a compound matching deposit). Pins both the (0, 0) return and
+    /// the pull side-effect (owner's tokens move to the harness) so a mutation
+    /// echoing the amount back, or pushing instead of pulling, or storing a
+    /// balance, is caught.
+    function testDecreaseVaultZeroPullsAndReturnsZero() external {
+        MockToken realToken = new MockToken("Token", "TKN", 18);
+        // The owner holds tokens and has approved the harness so the pull works.
+        realToken.mint(owner, 5e18);
+        vm.prank(owner);
+        realToken.approve(address(harness), 5e18);
+
+        (Float oldBalance, Float newBalance) =
+            harness.exposedDecrease(owner, address(realToken), bytes32(0), LibDecimalFloat.packLossless(2, 0));
+
+        assertTrue(oldBalance.eq(Float.wrap(0)), "vault-0 old balance not zero");
+        assertTrue(newBalance.eq(Float.wrap(0)), "vault-0 new balance not zero");
+        // Two whole tokens were pulled from the owner into the harness.
+        assertEq(realToken.balanceOf(owner), 3e18, "owner balance after pull");
+        assertEq(realToken.balanceOf(address(harness)), 2e18, "harness balance after pull");
+    }
 }
