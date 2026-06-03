@@ -40,6 +40,14 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     //   col 8 withdraw        (6 rows) -> 24..29
     uint256 internal constant SLOT_BASE_SENDER = 0;
 
+    // Calling-context column (col 1) slots. Deposit/withdraw row words route to
+    // the SAME (CONTEXT_CALLING_CONTEXT_COLUMN, row) as these order words, so
+    // solc deduplicates them to a shared 16-bit pointer. This lets the
+    // deposit/withdraw column OFFSETS be pinned by cross-column pointer equality.
+    uint256 internal constant SLOT_CALLING_ORDER_HASH = 2; // calling-context row 0
+    uint256 internal constant SLOT_CALLING_ORDER_OWNER = 3; // calling-context row 1
+    uint256 internal constant SLOT_CALLING_ORDER_COUNTERPARTY = 4; // calling-context row 2
+
     uint256 internal constant SLOT_DEPOSIT_DEPOSITOR = 19;
     uint256 internal constant SLOT_DEPOSIT_TOKEN = 20;
     uint256 internal constant SLOT_DEPOSIT_VAULT_ID = 21;
@@ -163,5 +171,83 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
             pointerAt(SLOT_DEPOSIT_TOKEN) != pointerAt(SLOT_DEPOSIT_VAULT_ID),
             "row-0 token parser is not row-1 vault-id"
         );
+    }
+
+    /// Pins the DEPOSIT column to flat offset +1 of the signed-context start
+    /// column (i.e. column 7, slots 19..23). The deposit row words route into
+    /// CONTEXT_CALLING_CONTEXT_COLUMN rows 0/1/2, the SAME (col,row) as
+    /// order-hash/order-owner/order-counterparty, so solc deduplicates them to a
+    /// shared 16-bit pointer. Asserting that the deposit token/vault-id/before
+    /// slots equal the corresponding calling-context order slots fixes BOTH that
+    /// the deposit sub-array is assigned to this column AND that the column sits
+    /// at the expected flat offset. A mutation that assigns the deposit array to
+    /// `CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2` (overwriting/displacing the
+    /// withdraw column) shifts these pointers off the asserted slots and is
+    /// caught here (independently of the table-length guard).
+    function testDepositColumnAtOffsetPlusOne() external view {
+        assertEq(
+            pointerAt(SLOT_DEPOSIT_TOKEN),
+            pointerAt(SLOT_CALLING_ORDER_HASH),
+            "deposit-token (col 7 row 0) aliases calling-context order-hash (row 0)"
+        );
+        assertEq(
+            pointerAt(SLOT_DEPOSIT_VAULT_ID),
+            pointerAt(SLOT_CALLING_ORDER_OWNER),
+            "deposit-vault-id (col 7 row 1) aliases calling-context order-owner (row 1)"
+        );
+        assertEq(
+            pointerAt(SLOT_DEPOSIT_VAULT_BEFORE),
+            pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
+            "deposit-vault-before (col 7 row 2) aliases calling-context order-counterparty (row 2)"
+        );
+        // The three calling-context pointers are themselves pairwise distinct, so
+        // the equalities above genuinely pin each deposit row to its own row, not
+        // a coincidence of three equal functions.
+        assertTrue(
+            pointerAt(SLOT_CALLING_ORDER_HASH) != pointerAt(SLOT_CALLING_ORDER_OWNER), "order-hash != order-owner"
+        );
+        assertTrue(
+            pointerAt(SLOT_CALLING_ORDER_OWNER) != pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
+            "order-owner != order-counterparty"
+        );
+    }
+
+    /// Pins the WITHDRAW column to flat offset +2 of the signed-context start
+    /// column (i.e. column 8, slots 24..29). Like deposits, the withdraw row
+    /// words 0/1/2 alias the calling-context order words, but the withdraw column
+    /// has a SIXTH slot — withdraw-target-amount — routing to
+    /// CONTEXT_CALLING_CONTEXT_COLUMN row 4, a row reached by NO order word and NO
+    /// deposit word, so its pointer is unique to this slot. A mutation that swaps
+    /// the deposit and withdraw column offsets places the withdraw column at +1
+    /// (5-slot deposit array follows), so slot 29 no longer holds the unique
+    /// row-4 target pointer and the asserted aliases land on the wrong rows.
+    function testWithdrawColumnAtOffsetPlusTwo() external view {
+        assertEq(
+            pointerAt(SLOT_WITHDRAW_TOKEN),
+            pointerAt(SLOT_CALLING_ORDER_HASH),
+            "withdraw-token (col 8 row 0) aliases calling-context order-hash (row 0)"
+        );
+        assertEq(
+            pointerAt(SLOT_WITHDRAW_VAULT_ID),
+            pointerAt(SLOT_CALLING_ORDER_OWNER),
+            "withdraw-vault-id (col 8 row 1) aliases calling-context order-owner (row 1)"
+        );
+        assertEq(
+            pointerAt(SLOT_WITHDRAW_VAULT_BEFORE),
+            pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
+            "withdraw-vault-before (col 8 row 2) aliases calling-context order-counterparty (row 2)"
+        );
+        // withdraw-target-amount routes to calling-context row 4, a row no order
+        // word and no deposit slot reaches, so its pointer is unique to slot 29.
+        uint16 target = pointerAt(SLOT_WITHDRAW_TARGET_AMOUNT);
+        assertTrue(target != pointerAt(SLOT_CALLING_ORDER_HASH), "withdraw-target != order-hash (row 0)");
+        assertTrue(target != pointerAt(SLOT_CALLING_ORDER_OWNER), "withdraw-target != order-owner (row 1)");
+        assertTrue(
+            target != pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY), "withdraw-target != order-counterparty (row 2)"
+        );
+        assertTrue(target != pointerAt(SLOT_DEPOSIT_TOKEN), "withdraw-target != any deposit row pointer (token)");
+        assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_ID), "withdraw-target != any deposit row pointer (vault-id)");
+        assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_BEFORE), "withdraw-target != deposit before");
+        assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_AFTER), "withdraw-target != deposit after");
     }
 }
