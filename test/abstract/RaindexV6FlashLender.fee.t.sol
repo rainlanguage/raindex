@@ -32,6 +32,29 @@ contract RaindexV6FlashLenderFeeTest is RaindexV6ExternalMockTest {
         iRaindex.flashFee(address(iToken0), amount);
     }
 
+    /// Deterministic boundary of the strict-equality support guard: a balance
+    /// of exactly 0 reverts `FlashLenderUnsupportedToken`, while a balance of
+    /// exactly 1 (the smallest supported balance) returns fee 0 — pinning the
+    /// `== 0` guard against off-by-one mutations (`<= 1`, `< 1`, etc).
+    function testFlashFeeZeroBalanceBoundary(uint256 amount) public {
+        // Balance 0: unsupported, reverts.
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(iRaindex)),
+            abi.encode(uint256(0))
+        );
+        vm.expectRevert(abi.encodeWithSelector(FlashLenderUnsupportedToken.selector, address(iToken0)));
+        iRaindex.flashFee(address(iToken0), amount);
+
+        // Balance 1: smallest supported balance, returns fee 0 (no revert).
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(iRaindex)),
+            abi.encode(uint256(1))
+        );
+        assertEq(iRaindex.flashFee(address(iToken0), amount), 0);
+    }
+
     /// `flashFee` and `maxFlashLoan` agree on support per ERC-3156: a token is
     /// unsupported iff `maxFlashLoan == 0`, in which case `flashFee` reverts;
     /// otherwise `flashFee` returns 0.
