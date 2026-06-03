@@ -53,4 +53,51 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
         assertEq(result.inputToken.balanceOf(address(result.arb)), 0, "arb inputToken");
         assertEq(result.outputToken.balanceOf(address(result.arb)), 0, "arb outputToken");
     }
+
+    /// Companion to the above: the output (context<1 1>) and gas (context<1 2>)
+    /// columns must carry the correct NON-ZERO Floats, not just zero. The
+    /// sibling test only ever sees zero output/gas, so a mutation zeroing either
+    /// column would survive it. Here input profit is zero while output profit is
+    /// 20 and gas is 1 ether, pinning all three columns at distinct values.
+    function testFinalizeArbContextNonZeroOutputAndGas() external {
+        LibInterpreterDeploy.etchRainlang(vm);
+
+        IParserV2 parser = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
+
+        // 0 input profit → Float(0); 20e18 output profit (18 dp) → Float(20);
+        // 1 ether gas swept (packed at -18) → Float(1).
+        bytes memory taskBytecode = parser.parse2(
+            bytes(
+                string.concat(
+                    ":ensure(equal-to(context<1 0>() 0) \"input\"),",
+                    ":ensure(equal-to(context<1 1>() 20) \"output\"),",
+                    ":ensure(equal-to(context<1 2>() 1) \"gas\");"
+                )
+            )
+        );
+
+        TaskV2 memory task = TaskV2({
+            evaluable: EvaluableV4(
+                IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
+                IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
+                taskBytecode
+            ),
+            signedContext: new SignedContextV1[](0)
+        });
+
+        // Raindex has 100e18 output, pulls 80e18 input. Exchange has 80e18 input.
+        // Arb swaps 80e18 output → 80e18 input, all pulled by raindex (0 input
+        // profit), leaving 20e18 output profit; 1 ether is returned and swept.
+        // Task expression reverts if any context value is wrong.
+        ArbResult memory result = LibTestArb.setupAndArb(vm, 80e18, 100e18, 80e18, 80e18, task, 1 ether);
+
+        // Sanity check balances.
+        assertEq(result.inputToken.balanceOf(address(this)), 0, "no input profit");
+        assertEq(result.outputToken.balanceOf(address(this)), 20e18, "sender outputToken profit");
+        assertEq(result.inputToken.balanceOf(address(result.arb)), 0, "arb inputToken");
+        assertEq(result.outputToken.balanceOf(address(result.arb)), 0, "arb outputToken");
+    }
+
+    /// Needed to receive the swept gas in the non-zero gas scenario.
+    receive() external payable {}
 }

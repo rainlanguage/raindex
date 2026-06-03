@@ -273,12 +273,12 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
                     vm.expectCall(
                         clear.aliceConfig.validOutputs[0].token,
                         abi.encodeWithSelector(IERC20.balanceOf.selector, clear.alice),
-                        2
+                        1
                     );
                     vm.expectCall(
                         clear.aliceConfig.validOutputs[0].token,
                         abi.encodeWithSelector(IERC20.allowance.selector, clear.alice),
-                        2
+                        1
                     );
                     if (amount18 > 0) {
                         vm.expectCall(
@@ -361,12 +361,12 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
                     vm.expectCall(
                         clear.bobConfig.validOutputs[0].token,
                         abi.encodeWithSelector(IERC20.balanceOf.selector, clear.bob),
-                        2
+                        1
                     );
                     vm.expectCall(
                         clear.bobConfig.validOutputs[0].token,
                         abi.encodeWithSelector(IERC20.allowance.selector, clear.bob),
-                        2
+                        1
                     );
                     if (bobAmount18 > 0) {
                         vm.expectCall(

@@ -7,6 +7,7 @@ import {LibRaindex} from "src/lib/LibRaindex.sol";
 import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IInterpreterV4, StackItem} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {StateNamespace} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v2/IInterpreterStoreV2.sol";
 import {EvaluableV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
 import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 
@@ -81,10 +82,17 @@ contract LibRaindexDoPostTest is Test {
         vm.mockCall(
             interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector), abi.encode(new StackItem[](0), writes)
         );
-        // Pin the full path: eval4 runs, returns writes, and store.set receives them.
+        // Pin the full path: eval4 runs, returns writes, and store.set receives
+        // them. The expectCall pins the FULL calldata — the namespace
+        // (derived from msg.sender == this test) and the exact writes — so a
+        // mutation forwarding different writes or a different namespace to
+        // store.set is caught, not just any call to the selector.
         vm.expectCall(interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector));
         vm.mockCall(store, abi.encodeWithSelector(IInterpreterStoreV3.set.selector), bytes(""));
-        vm.expectCall(store, abi.encodeWithSelector(IInterpreterStoreV3.set.selector));
+        vm.expectCall(
+            store,
+            abi.encodeCall(IInterpreterStoreV3.set, (StateNamespace.wrap(uint256(uint160(address(this)))), writes))
+        );
 
         TaskV2[] memory post = new TaskV2[](1);
         post[0] = TaskV2({
