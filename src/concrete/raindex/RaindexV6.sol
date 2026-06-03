@@ -541,7 +541,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
                         totalTakerInput = totalTakerInput.add(takerInput);
 
-                        recordVaultIO(takerOutput, takerInput, orderIOCalculation);
+                        // Pull the order's output into the orderbook now (money
+                        // in); defer any vault-0 input push (money out) until
+                        // after the taker's payment is pulled below, so the
+                        // orderbook is never insolvent (Protofire M01, #2618).
+                        recordVaultOutput(takerInput, orderIOCalculation);
+                        recordVaultInput(takerOutput, orderIOCalculation, true);
                         emit TakeOrderV3(msg.sender, takeOrderConfig, takerInput, takerOutput);
 
                         // Add the pointer to the order IO calculation to the array
@@ -590,6 +595,35 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
 
         pullTokens(msg.sender, io.inputToken, totalTakerOutput);
+
+        // The taker's payment has now been pulled in, so the orderbook holds the
+        // input token. Flush the vault-0 input pushes that were deferred in the
+        // loop above (money out). Every order shares `io.inputToken` and the sum
+        // of these pushes equals `totalTakerOutput`, so the orderbook is solvent
+        // (Protofire M01, #2618). Done before handle IO so each owner has
+        // received their input by the time their handle IO entrypoint runs.
+        unchecked {
+            for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
+                OrderIOCalculationV4 memory orderIOCalculation = orderIOCalculationsToHandle[i];
+                bytes32 inputVaultId =
+                    orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
+                //slither-disable-next-line incorrect-equality
+                if (inputVaultId == bytes32(0)) {
+                    increaseVaultBalance(
+                        orderIOCalculation.order.owner,
+                        address(
+                            uint160(
+                                uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN])
+                            )
+                        ),
+                        inputVaultId,
+                        Float.wrap(
+                            orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF]
+                        )
+                    );
+                }
+            }
+        }
 
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
@@ -661,8 +695,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         ClearStateChangeV2 memory clearStateChange =
             calculateClearStateChange(aliceOrderIOCalculation, bobOrderIOCalculation);
 
-        recordVaultIO(clearStateChange.aliceInput, clearStateChange.aliceOutput, aliceOrderIOCalculation);
-        recordVaultIO(clearStateChange.bobInput, clearStateChange.bobOutput, bobOrderIOCalculation);
+        // Pull both orders' outputs into the orderbook (money in) before pushing
+        // either order's input out (money out). Alice's input token is Bob's
+        // output token and vice versa, so both pulls must precede both pushes
+        // for the orderbook to stay solvent (Protofire M01, #2618).
+        recordVaultOutput(clearStateChange.aliceOutput, aliceOrderIOCalculation);
+        recordVaultOutput(clearStateChange.bobOutput, bobOrderIOCalculation);
+        recordVaultInput(clearStateChange.aliceInput, aliceOrderIOCalculation, false);
+        recordVaultInput(clearStateChange.bobInput, bobOrderIOCalculation, false);
 
         {
             Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
@@ -780,8 +820,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 context = LibContext.build(callingContext, signedContext);
             }
 
-            // The state changes produced here are handled in _recordVaultIO so
-            // that local storage writes happen before writes on the interpreter.
+            // The state changes produced here are handled in recordVaultOutput
+            // and recordVaultInput so that local storage writes happen before
+            // writes on the interpreter.
             StateNamespace namespace = StateNamespace.wrap(uint256(uint160(order.owner)));
             // Slither false positive. External calls within loops are fine if
             // the caller controls which orders are eval'd as they can drop
@@ -904,35 +945,65 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Given an order, final input and output amounts and the IO
-    /// calculation verbatim from `_calculateOrderIO`, update the order owner's
-    /// vault balances accordingly. The input and output balance diffs are
-    /// written into the context matrix before vault balances are adjusted.
-    /// @param input The Float input amount to credit to the order owner's
-    /// input vault.
+    /// @dev Records the OUTPUT (decrease) leg of an order's IO: writes the
+    /// output balance diff into the context matrix and decreases the order
+    /// owner's output vault balance. For `vaultId == 0` this pulls tokens
+    /// directly INTO the orderbook. This is the "money in" leg and is always run
+    /// before the matching `recordVaultInput` "money out" leg so the orderbook
+    /// is never asked to push tokens it does not yet hold (Protofire M01,
+    /// #2618).
     /// @param output The Float output amount to debit from the order owner's
     /// output vault.
     /// @param orderIOCalculation The order IO calculation produced by
-    /// `_calculateOrderIO`, containing the order, context matrix and
-    /// namespace.
-    function recordVaultIO(Float input, Float output, OrderIOCalculationV4 memory orderIOCalculation) internal {
-        orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
+    /// `calculateOrderIO`, containing the order, context matrix and namespace.
+    function recordVaultOutput(Float output, OrderIOCalculationV4 memory orderIOCalculation) internal {
         orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(output);
-
-        increaseVaultBalance(
-            orderIOCalculation.order.owner,
-            address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))),
-            orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID],
-            input
-        );
-        // Increase before decreasing so that if vault id == 0 then we push
-        // tokens before pulling them.
         decreaseVaultBalance(
             orderIOCalculation.order.owner,
             address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))),
             orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID],
             output
         );
+    }
+
+    /// @dev Records the INPUT (increase) leg of an order's IO: writes the input
+    /// balance diff into the context matrix, increases the order owner's input
+    /// vault balance, and emits the now fully populated context. For
+    /// `vaultId == 0` the increase is a direct push of tokens OUT of the
+    /// orderbook to the owner, so it must only run after all "money in" legs of
+    /// the settlement have completed (Protofire M01, #2618).
+    ///
+    /// `clear3` settles two orders adjacently so it pushes inline, after both
+    /// `recordVaultOutput` pulls. `takeOrders4` only pulls the taker's payment
+    /// after its per-order loop, so it passes `deferVaultZeroPush == true` to
+    /// skip the vault-0 push here and flushes it after that pull instead. The
+    /// context write and emit happen regardless of the deferral, so event
+    /// ordering is preserved; and the vault-0 increase touches no storage
+    /// (vault 0's internal balance is always 0), so deferring the push has no
+    /// effect on intra-batch calculate reads.
+    /// @param input The Float input amount to credit to the order owner's input
+    /// vault.
+    /// @param orderIOCalculation The order IO calculation produced by
+    /// `calculateOrderIO`, containing the order, context matrix and namespace.
+    /// @param deferVaultZeroPush When true, a `vaultId == 0` input push is
+    /// skipped here and must be flushed by the caller once the orderbook is
+    /// solvent.
+    function recordVaultInput(Float input, OrderIOCalculationV4 memory orderIOCalculation, bool deferVaultZeroPush)
+        internal
+    {
+        orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
+        bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
+        //slither-disable-next-line incorrect-equality
+        if (!(deferVaultZeroPush && inputVaultId == bytes32(0))) {
+            increaseVaultBalance(
+                orderIOCalculation.order.owner,
+                address(
+                    uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
+                ),
+                inputVaultId,
+                input
+            );
+        }
 
         // Emit the context only once in its fully populated form rather than two
         // nearly identical emissions of a partial and full context.
