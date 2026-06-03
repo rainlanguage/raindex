@@ -45,6 +45,8 @@ contract RaindexV6VaultBalanceHarness is RaindexV6 {
 /// negative `amount` (`NegativeVaultBalanceChange`) and a decrease that would
 /// drive the balance below zero (`NegativeVaultBalance`).
 contract RaindexV6VaultBalanceRevertTest is Test {
+    using LibDecimalFloat for Float;
+
     RaindexV6VaultBalanceHarness internal harness;
     address internal owner = makeAddr("owner");
     address internal token = makeAddr("token");
@@ -99,5 +101,25 @@ contract RaindexV6VaultBalanceRevertTest is Test {
         MockToken realToken = new MockToken("Token", "TKN", 18);
         vm.expectRevert(NegativePush.selector);
         harness.exposedPush(owner, address(realToken), LibDecimalFloat.packLossless(-1, 0));
+    }
+
+    /// Increasing a vault-0 balance ALWAYS returns (0, 0): vault 0 holds no
+    /// internal balance, it pushes tokens straight out to the owner, so the
+    /// reported old and new balances are both exactly zero regardless of the
+    /// amount. Pins the return values so a mutation echoing the amount back is
+    /// caught.
+    function testIncreaseVaultZeroReturnsZero() external {
+        MockToken realToken = new MockToken("Token", "TKN", 18);
+        // The harness pushes tokens out to the owner for vault 0, so it needs a
+        // balance to transfer.
+        realToken.mint(address(harness), 1e18);
+
+        (Float oldBalance, Float newBalance) =
+            harness.exposedIncrease(owner, address(realToken), bytes32(0), LibDecimalFloat.packLossless(1, 0));
+
+        assertTrue(oldBalance.eq(Float.wrap(0)), "old balance not zero");
+        assertTrue(newBalance.eq(Float.wrap(0)), "new balance not zero");
+        // The owner actually received the pushed tokens.
+        assertEq(realToken.balanceOf(owner), 1e18, "owner balance");
     }
 }
