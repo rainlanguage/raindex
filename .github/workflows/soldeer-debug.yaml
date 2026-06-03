@@ -1,0 +1,31 @@
+name: Debug Soldeer Push
+on:
+  workflow_dispatch: {}
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Endpoint reachability from the runner
+        run: |
+          echo "=== GET revision (the change-gate uses this; known to work) ==="
+          curl -sS -o /dev/null -w "http=%{http_code} time=%{time_total}s\n" \
+            "https://api.soldeer.xyz/api/v1/revision?project_name=raindex&offset=0&limit=1" || echo "GET errored"
+          echo "=== POST upload endpoint reachability (no body/auth, just connect) ==="
+          curl -sv -X POST --max-time 30 "https://api.soldeer.xyz/api/v1/revision/upload" 2>&1 \
+            | grep -iE "Trying|Connected to|SSL connection|subjectAltName|^< HTTP|Could not resolve|Connection refused|timed out|Recv failure|Empty reply|Cloudflare|cf-ray" | head -25 || true
+      - uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - name: Soldeer push (verbose)
+        env:
+          SOLDEER_API_TOKEN: ${{ secrets.SOLDEER_API_TOKEN }}
+        run: |
+          echo "SOLDEER_API_TOKEN length: ${#SOLDEER_API_TOKEN}"
+          RUST_LOG=trace nix develop github:rainlanguage/rainix#sol-shell -c forge soldeer push raindex~0.1.0 > /tmp/push.log 2>&1 || echo "push exited non-zero (captured)"
+          echo "=== relevant lines ==="
+          grep -iE "not connected|error|connect|tcp|dns|resolve|tls|ssl|http|reqwest|hyper|upload|revision|Unauthorized|forbidden|status|Bearer|Zip|Done" /tmp/push.log | tail -70 || true
+          echo "=== last 40 raw lines ==="
+          tail -40 /tmp/push.log
