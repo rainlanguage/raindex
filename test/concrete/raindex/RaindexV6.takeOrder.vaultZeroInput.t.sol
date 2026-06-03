@@ -17,23 +17,14 @@ import {
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderVaultZeroInputTest
-/// @notice Regression tests for Protofire audit finding M01 (#2618):
-/// `vaultId == 0` is "vaultless" mode, where an order owner's INPUT is settled
-/// as a direct wallet transfer (`increaseVaultBalance` -> `pushTokens`) rather
-/// than an internal vault credit. The bug (reproduced originally in #2435) was
-/// that this push was performed BEFORE the orderbook had pulled in the funds
-/// that back it — the taker's payment in `takeOrders4` (pulled after the order
-/// loop) and the counterparty's output in `clear3` (Bob's `recordVaultIO` ran
-/// after Alice's). So a logically fundable trade reverted with
-/// `ERC20InsufficientBalance` unless the orderbook happened to hold unrelated
-/// ambient balance of the input token.
-///
-/// The fix enforces "pull every incoming token before pushing any outgoing
-/// token": `takeOrders4` defers vault-0 input pushes until after the taker
-/// payment is pulled, and `clear3` pulls both orders' outputs before pushing
-/// either input. These tests use real `MockToken` ERC20s with ZERO ambient
-/// orderbook balance, so they revert against the pre-fix ordering and pass only
-/// once the orderbook is solvent at every push.
+/// @notice An order with a `vaultId == 0` INPUT is settled as a direct wallet
+/// transfer to the owner (`increaseVaultBalance` -> `pushTokens`) rather than an
+/// internal vault credit. The orderbook must pull every incoming token before it
+/// pushes that input out: `takeOrders4` defers vault-0 input pushes until after
+/// the taker payment is pulled, and `clear3` pulls both orders' outputs before
+/// pushing either input. These tests use real `MockToken` ERC20s with zero
+/// ambient orderbook balance, so a vault-0 input is fully funded by the
+/// counterparty alone.
 contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
 
@@ -62,10 +53,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     }
 
     /// `takeOrders4`: an order whose INPUT is `token0` at vault 0 fills against a
-    /// taker who holds `token0`, while the orderbook holds NO ambient `token0`.
-    /// Pre-fix this reverts: the vault-0 input is pushed to the owner inside the
-    /// order loop, before the taker's `token0` payment is pulled after it. The
-    /// fix defers that push until after the pull, so the orderbook is solvent.
+    /// taker who holds `token0`, while the orderbook holds no ambient `token0`.
+    /// The vault-0 input is pushed to the owner only after the taker's `token0`
+    /// payment has been pulled, so the trade is funded by the taker alone.
     function testM01VaultZeroInputSucceedsWithoutAmbientBalance() external {
         // Owner: input token0 @ vault 0 (wallet), output token1 @ a normal vault.
         _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
@@ -96,10 +86,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     }
 
     /// `clear3`: Alice's INPUT is `token0` at vault 0, funded by Bob's `token0`
-    /// vault-0 OUTPUT. Pre-fix this reverts: Alice's `recordVaultIO` pushes her
-    /// vault-0 input to her wallet as the first token movement, before Bob's
-    /// `recordVaultIO` pulls his output that backs it. The fix pulls both
-    /// outputs before pushing either input, with NO ambient balance needed.
+    /// vault-0 OUTPUT. Both orders' outputs are pulled before either input is
+    /// pushed, so Alice's vault-0 input is funded by Bob's output with no ambient
+    /// balance needed.
     ///
     ///   Alice: input = token0 (vault 0, wallet),  output = token1 (vault 0x01)
     ///   Bob:   input = token1 (vault 0x01),        output = token0 (vault 0, wallet)
