@@ -56,7 +56,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     /// taker who holds `token0`, while the orderbook holds no ambient `token0`.
     /// The vault-0 input is pushed to the owner only after the taker's `token0`
     /// payment has been pulled, so the trade is funded by the taker alone.
-    function testM01VaultZeroInputSucceedsWithoutAmbientBalance() external {
+    function testVaultZeroInputSucceedsWithoutAmbientBalance() external {
         // Owner: input token0 @ vault 0 (wallet), output token1 @ a normal vault.
         _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
         OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
@@ -92,7 +92,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     ///
     ///   Alice: input = token0 (vault 0, wallet),  output = token1 (vault 0x01)
     ///   Bob:   input = token1 (vault 0x01),        output = token0 (vault 0, wallet)
-    function testM01ClearVaultZeroInputSucceedsWithoutAmbientBalance() external {
+    function testClearVaultZeroInputSucceedsWithoutAmbientBalance() external {
         // Alice funds her token1 output vault.
         _deposit(alice, token1, OUTPUT_VAULT_ID, 10);
 
