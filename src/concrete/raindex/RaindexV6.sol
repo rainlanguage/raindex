@@ -541,12 +541,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
                         totalTakerInput = totalTakerInput.add(takerInput);
 
-                        // Pull the order's output into the orderbook now; defer
-                        // any vault-0 input push until after the taker's payment
+                        // Pull the order's output into the orderbook now; the
+                        // vault-0 input push is settled after the taker's payment
                         // is pulled below, so the orderbook holds the input token
                         // before it is pushed to the owner.
                         recordVaultOutput(takerInput, orderIOCalculation);
-                        recordVaultInput(takerOutput, orderIOCalculation, true);
+                        recordVaultInput(takerOutput, orderIOCalculation);
                         emit TakeOrderV3(msg.sender, takeOrderConfig, takerInput, takerOutput);
 
                         // Add the pointer to the order IO calculation to the array
@@ -597,31 +597,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         pullTokens(msg.sender, io.inputToken, totalTakerOutput);
 
         // The taker's payment has now been pulled in, so the orderbook holds the
-        // input token. Flush the vault-0 input pushes that were deferred in the
-        // loop above. Every order shares `io.inputToken` and the sum of these
-        // pushes equals `totalTakerOutput`, so the orderbook always holds enough.
-        // Done before handle IO so each owner has received their input by the
-        // time their handle IO entrypoint runs.
+        // input token. Settle the vault-0 input pushes. Every order shares
+        // `io.inputToken` and the sum of these pushes equals `totalTakerOutput`,
+        // so the orderbook always holds enough. Done before handle IO so each
+        // owner has received their input by the time their handle IO runs.
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
-                OrderIOCalculationV4 memory orderIOCalculation = orderIOCalculationsToHandle[i];
-                bytes32 inputVaultId =
-                    orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
-                //slither-disable-next-line incorrect-equality
-                if (inputVaultId == bytes32(0)) {
-                    increaseVaultBalance(
-                        orderIOCalculation.order.owner,
-                        address(
-                            uint160(
-                                uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN])
-                            )
-                        ),
-                        inputVaultId,
-                        Float.wrap(
-                            orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF]
-                        )
-                    );
-                }
+                pushVaultZeroInput(orderIOCalculationsToHandle[i]);
             }
         }
 
@@ -701,8 +683,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         // each token before it is pushed.
         recordVaultOutput(clearStateChange.aliceOutput, aliceOrderIOCalculation);
         recordVaultOutput(clearStateChange.bobOutput, bobOrderIOCalculation);
-        recordVaultInput(clearStateChange.aliceInput, aliceOrderIOCalculation, false);
-        recordVaultInput(clearStateChange.bobInput, bobOrderIOCalculation, false);
+        recordVaultInput(clearStateChange.aliceInput, aliceOrderIOCalculation);
+        recordVaultInput(clearStateChange.bobInput, bobOrderIOCalculation);
+        pushVaultZeroInput(aliceOrderIOCalculation);
+        pushVaultZeroInput(bobOrderIOCalculation);
 
         {
             Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
@@ -965,31 +949,20 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @dev Records the INPUT (increase) leg of an order's IO: writes the input
-    /// balance diff into the context matrix, increases the order owner's input
-    /// vault balance, and emits the now fully populated context. For
-    /// `vaultId == 0` the increase is a direct push of tokens OUT of the
-    /// orderbook to the owner, so it must only run after the orderbook holds the
-    /// token (i.e. after the matching pulls).
-    ///
-    /// When `deferVaultZeroPush` is true the `vaultId == 0` push is skipped here
-    /// and the caller flushes it later; the context write and emit still happen,
-    /// so event ordering is unchanged. The vault-0 increase touches no storage
-    /// (vault 0's internal balance is always 0), so deferring the push has no
-    /// effect on intra-batch calculate reads.
+    /// balance diff into the context matrix, credits the order owner's input
+    /// vault balance, and emits the now fully populated context. A `vaultId == 0`
+    /// input has no internal balance; it is a direct push of tokens out of the
+    /// orderbook, which the caller settles separately via `pushVaultZeroInput`
+    /// once the orderbook holds the token, so it is skipped here.
     /// @param input The Float input amount to credit to the order owner's input
     /// vault.
     /// @param orderIOCalculation The order IO calculation produced by
     /// `calculateOrderIO`, containing the order, context matrix and namespace.
-    /// @param deferVaultZeroPush When true, a `vaultId == 0` input push is
-    /// skipped here and must be flushed by the caller once the orderbook holds
-    /// the input token.
-    function recordVaultInput(Float input, OrderIOCalculationV4 memory orderIOCalculation, bool deferVaultZeroPush)
-        internal
-    {
+    function recordVaultInput(Float input, OrderIOCalculationV4 memory orderIOCalculation) internal {
         orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
         bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
         //slither-disable-next-line incorrect-equality
-        if (!(deferVaultZeroPush && inputVaultId == bytes32(0))) {
+        if (inputVaultId != bytes32(0)) {
             increaseVaultBalance(
                 orderIOCalculation.order.owner,
                 address(
@@ -1003,6 +976,27 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         // Emit the context only once in its fully populated form rather than two
         // nearly identical emissions of a partial and full context.
         emit ContextV2(msg.sender, orderIOCalculation.context);
+    }
+
+    /// @dev Settles a `vaultId == 0` input by pushing the recorded input amount
+    /// out of the orderbook to the order owner. No-op for internal input vaults,
+    /// which `recordVaultInput` already credited. Must run only after the
+    /// orderbook holds the input token, i.e. after the matching pulls.
+    /// @param orderIOCalculation The order IO calculation whose input leg was
+    /// recorded by `recordVaultInput`.
+    function pushVaultZeroInput(OrderIOCalculationV4 memory orderIOCalculation) internal {
+        bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
+        //slither-disable-next-line incorrect-equality
+        if (inputVaultId == bytes32(0)) {
+            increaseVaultBalance(
+                orderIOCalculation.order.owner,
+                address(
+                    uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
+                ),
+                inputVaultId,
+                Float.wrap(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF])
+            );
+        }
     }
 
     /// @dev Persists interpreter state writes then evaluates the handle IO
