@@ -11,6 +11,7 @@ import {
     NegativePush
 } from "src/concrete/raindex/RaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
@@ -101,6 +102,118 @@ contract RaindexV6VaultBalanceRevertTest is Test {
         MockToken realToken = new MockToken("Token", "TKN", 18);
         vm.expectRevert(NegativePush.selector);
         harness.exposedPush(owner, address(realToken), LibDecimalFloat.packLossless(-1, 0));
+    }
+
+    /// Pulling an amount that does NOT divide evenly into the token's fixed
+    /// decimals rounds the truncated fixed-decimal amount UP by one base unit
+    /// (favouring the dex, never the counterparty). With a 6-decimal token and a
+    /// Float of 15e-7 (= 0.0000015), the lossy conversion truncates to 1 base
+    /// unit (0.000001) but the lost remainder forces a round-up to 2 base units.
+    /// The harness pulls exactly 2 base units from the owner and reports 2 as the
+    /// fixed-decimal amount. Pins the `if (!lossless) { ++amount18; }` rounding:
+    /// a mutation that drops the increment pulls 1 instead of 2.
+    function testPullRoundsUpOnLoss() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        // Owner holds and approves enough to cover the rounded-up pull.
+        realToken.mint(owner, 10);
+        vm.prank(owner);
+        realToken.approve(address(harness), 10);
+
+        // 15e-7 at 6 decimals: 15 * 10^(-7+6) = 15 / 10 = 1, remainder 5 lost.
+        (uint256 amount, uint8 decimals) =
+            harness.exposedPull(owner, address(realToken), LibDecimalFloat.packLossless(15, -7));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 2, "rounded-up fixed-decimal amount is 2 not 1");
+        // The contract actually pulled the rounded-up 2 base units.
+        assertEq(realToken.balanceOf(owner), 8, "owner balance after pull");
+        assertEq(realToken.balanceOf(address(harness)), 2, "harness balance after pull");
+    }
+
+    /// Pulling an amount that DOES divide evenly into the token's fixed decimals
+    /// is lossless and is NOT rounded up. With a 6-decimal token and a Float of
+    /// 3e-6 (= 0.000003) the conversion yields exactly 3 base units with no loss,
+    /// so no increment happens. Pins the `!lossless` predicate guarding the
+    /// round-up: a mutation that always increments (or inverts the predicate)
+    /// would pull 4 instead of 3.
+    function testPullNoRoundWhenLossless() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        realToken.mint(owner, 10);
+        vm.prank(owner);
+        realToken.approve(address(harness), 10);
+
+        // 3e-6 at 6 decimals: 3 * 10^(-6+6) = 3, lossless.
+        (uint256 amount, uint8 decimals) =
+            harness.exposedPull(owner, address(realToken), LibDecimalFloat.packLossless(3, -6));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 3, "lossless amount is 3 not rounded to 4");
+        assertEq(realToken.balanceOf(owner), 7, "owner balance after pull");
+        assertEq(realToken.balanceOf(address(harness)), 3, "harness balance after pull");
+    }
+
+    /// Pulling an amount that converts to zero fixed-decimal units skips the
+    /// token transfer entirely (the `if (amount18 > 0)` guard). A zero Float
+    /// passes the negative guard, converts losslessly to 0 base units, and
+    /// `transferFrom` is NEVER invoked. Asserted with an `expectCall(..., 0)`:
+    /// a zero-value ERC20 transfer succeeds (does not revert), so the discriminator
+    /// is the call-count, not a revert. A mutation forcing the transfer on a zero
+    /// amount makes exactly one `transferFrom(owner, harness, 0)` call and fails
+    /// the zero-count expectation.
+    function testPullZeroSkipsTransfer() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        // Assert transferFrom is NOT called for a zero amount.
+        vm.expectCall(
+            address(realToken),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(harness), uint256(0)),
+            0
+        );
+        (uint256 amount, uint8 decimals) = harness.exposedPull(owner, address(realToken), Float.wrap(0));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 0, "zero amount returned");
+        assertEq(realToken.balanceOf(owner), 0, "owner untouched");
+        assertEq(realToken.balanceOf(address(harness)), 0, "harness untouched");
+    }
+
+    /// Pushing an amount that does NOT divide evenly into the token's fixed
+    /// decimals TRUNCATES the fixed-decimal amount (rounds DOWN), the OPPOSITE of
+    /// pull which rounds up. With a 6-decimal token and a Float of 15e-7 the
+    /// lossy conversion yields 1 base unit and push transfers exactly 1 (NOT 2).
+    /// Pins that push has no round-up: a mutation copying pull's `++amount`
+    /// rounding into push would transfer 2 instead of 1.
+    function testPushTruncatesOnLoss() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        // The harness holds tokens to push out.
+        realToken.mint(address(harness), 10);
+
+        // 15e-7 at 6 decimals truncates to 1 (push does NOT round up).
+        (uint256 amount, uint8 decimals) =
+            harness.exposedPush(owner, address(realToken), LibDecimalFloat.packLossless(15, -7));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 1, "truncated fixed-decimal amount is 1 not 2");
+        assertEq(realToken.balanceOf(owner), 1, "owner received truncated 1");
+        assertEq(realToken.balanceOf(address(harness)), 9, "harness balance after push");
+    }
+
+    /// Pushing an amount that converts to zero fixed-decimal units skips the
+    /// token transfer entirely (the `if (amount > 0)` guard). A zero Float
+    /// converts losslessly to 0 base units, and `transfer` is NEVER invoked.
+    /// Asserted with an `expectCall(..., 0)` since a zero-value ERC20 transfer
+    /// succeeds rather than reverts: a mutation forcing the transfer on a zero
+    /// amount makes exactly one `transfer(owner, 0)` call and fails the
+    /// zero-count expectation.
+    function testPushZeroSkipsTransfer() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        // Assert transfer is NOT called for a zero amount.
+        vm.expectCall(address(realToken), abi.encodeWithSelector(IERC20.transfer.selector, owner, uint256(0)), 0);
+        (uint256 amount, uint8 decimals) = harness.exposedPush(owner, address(realToken), Float.wrap(0));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 0, "zero amount returned");
+        assertEq(realToken.balanceOf(owner), 0, "owner untouched");
+        assertEq(realToken.balanceOf(address(harness)), 0, "harness untouched");
     }
 
     /// Increasing a vault-0 balance ALWAYS returns (0, 0): vault 0 holds no
