@@ -36,6 +36,12 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 /// as its output, so a sequential batch totals 4 and an inconsistent one totals
 /// 2. The internal-vault and calculate-write cases pass today; the vault-0 input
 /// and handle-IO cases fail, pinning the two seams.
+///
+/// Further baselines map the boundary: effects are isolated per owner, the first
+/// order in a batch sees no later effect, and handle-IO-to-handle-IO IS
+/// consistent (handle-IO entrypoints run in order over a direct SSTORE/SLOAD
+/// store) — so the handle-IO seam is specifically a later `calculate` reading an
+/// earlier order's handle-IO write, not handle-IO ordering.
 contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
 
@@ -237,5 +243,81 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
         OrderV4 memory a = addOrder(o, FILL, INTERNAL_VAULT);
         OrderV4 memory b = addOrder(o, "full:equal-to(context<4 3>() 100),_ _:if(full 1 0) 1;:;", INTERNAL_VAULT);
         assertTrue(take(a, b).eq(LibDecimalFloat.packLossless(1, 0)), "B must see A's output vault decrease and skip");
+    }
+
+    /// Characterises the boundary of the handle-IO seam. Handle-IO entrypoints
+    /// run in order and the store is a direct SSTORE/SLOAD, so a later order's
+    /// handle-IO should observe an earlier order's handle-IO write. B's handle-IO
+    /// reverts via `ensure` if A's write is missing; if both fill (total 2) the
+    /// seam is calculate-reading-handle-IO specifically, not handle-IO to
+    /// handle-IO.
+    function testHandleIOWriteVisibleToLaterHandleIO() external {
+        mockTransfers();
+        address o = owner("ivan");
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, "_ _:1 1;:set(0 1);", INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(o, "_ _:1 1;:ensure(get(0) \"B sees A\");", INTERNAL_VAULT);
+        assertTrue(take(a, b).eq(LibDecimalFloat.packLossless(2, 0)), "B handle-IO must see A handle-IO write");
+    }
+
+    /// Inconsistent (FAILS today) and pins per-owner isolation: P's order A and
+    /// Q's order M each credit their own vault-0; P's order B reads P's vault-0
+    /// input balance as its output. A correct sequential, owner-keyed batch lets
+    /// B see exactly A's credit (1) -> total 1+1+1 = 3. Today B is blind -> 2. A
+    /// fix that leaked Q's credit into P's read would give 4.
+    function testVaultZeroInputCreditIsolatedPerOwner() external {
+        mockTransfers();
+        address p = owner("pat");
+        address q = owner("quinn");
+        mockVaultZeroReads(p);
+        mockVaultZeroReads(q);
+        fundOutput(p);
+        fundOutput(q);
+        OrderV4 memory a = addOrder(p, FILL, VAULT_ZERO);
+        OrderV4 memory m = addOrder(q, FILL, VAULT_ZERO);
+        OrderV4 memory b = addOrder(p, OUTPUT_INPUT_BALANCE, VAULT_ZERO);
+        assertTrue(take3(a, m, b).eq(LibDecimalFloat.packLossless(3, 0)), "B must see only P's own vault-0 credit");
+    }
+
+    /// Baseline (consistent): calculate writes are namespaced per owner, so P's
+    /// order B reads P's key (5), not Q's (99). B outputs 5 -> total 1+1+5 = 7.
+    function testCalculateWriteIsolatedPerOwner() external {
+        mockTransfers();
+        address p = owner("rita");
+        address q = owner("sam");
+        fundOutput(p);
+        fundOutput(q);
+        OrderV4 memory a = addOrder(p, ":set(0 5),_ _:1 1;:;", INTERNAL_VAULT);
+        OrderV4 memory m = addOrder(q, ":set(0 99),_ _:1 1;:;", INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(p, "v:get(0),_ _:v 1;:;", INTERNAL_VAULT);
+        assertTrue(take3(a, m, b).eq(LibDecimalFloat.packLossless(7, 0)), "B must read only P's own calculate write");
+    }
+
+    /// Baseline (consistent): the first order in a batch sees no later order's
+    /// effect. A reads its input balance and only fills while empty; it runs
+    /// first, so it fills, then B fills and credits the vault -> total 2. A fix
+    /// must not retroactively expose B's credit to A.
+    function testFirstOrderSeesNoLaterOrderState() external {
+        mockTransfers();
+        address o = owner("tara");
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, FILL_WHILE_INPUT_EMPTY, INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(o, FILL, INTERNAL_VAULT);
+        assertTrue(take(a, b).eq(LibDecimalFloat.packLossless(2, 0)), "first order must not see a later order's credit");
+    }
+
+    /// Inconsistent (FAILS today): a single order C depends on BOTH seams at once
+    /// — A's vault-0 input credit and A's handle-IO write. C fills only if it sees
+    /// both. Today it sees neither -> total 1. A sequential batch -> 2.
+    function testVaultZeroAndHandleIOReadsCompound() external {
+        mockTransfers();
+        address o = owner("umar");
+        mockVaultZeroReads(o);
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, "_ _:1 1;:set(0 1);", VAULT_ZERO);
+        OrderV4 memory c = addOrder(o, "bal:context<3 3>(),k:get(0),_ _:if(bal if(k 1 0) 0) 1;:;", VAULT_ZERO);
+        assertTrue(
+            take(a, c).eq(LibDecimalFloat.packLossless(2, 0)), "C must see A's vault-0 credit and handle-IO write"
+        );
     }
 }
