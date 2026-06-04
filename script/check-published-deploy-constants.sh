@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: LicenseRef-DCL-1.0
+# SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+#
 # Prints "OK" iff every version published to the soldeer registry for `raindex`
 # has a full suite of pinned deploy constants in LibRaindexDeploy.sol: a
 # DEPLOYED_ADDRESS and DEPLOYED_CODEHASH (suffixed with the version) for each of
