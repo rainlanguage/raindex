@@ -100,6 +100,39 @@ contract RaindexV6FlashLenderTransferTest is RaindexV6ExternalMockTest {
         }
     }
 
+    /// A successful flash loan is net-neutral for the lender: the exact `amount`
+    /// is sent out to the receiver and the exact `amount + FLASH_FEE` (== amount,
+    /// fee 0) is pulled back, so the lender's balance is unchanged and the
+    /// receiver holds zero afterwards. Uses a fixed nonzero amount and asserts
+    /// concrete balances so it kills both the transfer-OUT amount mutation
+    /// (`amount`->`amount+1` over-sends and the round-trip can't repay) and the
+    /// transfer-BACK amount mutation (`amount`->`amount-1` leaves the lender
+    /// short) for ANY nonzero amount, not just the fuzzed `amount == 0` underflow
+    /// edge.
+    function testFlashLoanNetNeutralBalances() public {
+        uint256 amount = 1e24;
+        TKN tkn = new TKN(address(iRaindex), amount);
+
+        uint256 lenderBalanceBefore = tkn.balanceOf(address(iRaindex));
+        assertEq(lenderBalanceBefore, amount);
+
+        Bob bob = new Bob();
+        Alice alice = new Alice(IPull(address(bob)), true);
+
+        // Receiver starts with nothing.
+        assertEq(tkn.balanceOf(address(alice)), 0);
+
+        bool result = iRaindex.flashLoan(IERC3156FlashBorrower(address(alice)), address(tkn), amount, "");
+        assertTrue(result);
+
+        // Net-neutral: the lender's balance is exactly restored and the receiver
+        // is left holding nothing (it sent the full amount back).
+        assertEq(tkn.balanceOf(address(iRaindex)), lenderBalanceBefore);
+        assertEq(tkn.balanceOf(address(alice)), 0);
+        // Bob (the intermediary) also nets to zero.
+        assertEq(tkn.balanceOf(address(bob)), 0);
+    }
+
     /// Alice can send tokens to Carol, who will return not all of them and then
     /// the loan will fail.
     /// forge-config: default.fuzz.runs = 100
