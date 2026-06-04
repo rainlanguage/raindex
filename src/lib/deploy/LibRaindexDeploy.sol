@@ -39,6 +39,17 @@ library LibRaindexDeploy {
     /// standard zoltu deployer.
     bytes32 constant RAINDEX_DEPLOYED_CODEHASH = RAINDEX_HASH;
 
+    /// The deployed address of the `RaindexV6` contract at the published `0.1.0`
+    /// tag. Pinned as a literal (not derived from the current pointers) so it
+    /// keeps referencing the `0.1.0` deployment after `RAINDEX_DEPLOYED_ADDRESS`
+    /// above advances to a newer version.
+    address constant RAINDEX_DEPLOYED_ADDRESS_0_1_0 = 0xb05D73E6BCc26AEB5b67Ff68C6E9C6151073e3cE;
+
+    /// The runtime code hash of the `RaindexV6` contract at the published `0.1.0`
+    /// tag.
+    bytes32 constant RAINDEX_DEPLOYED_CODEHASH_0_1_0 =
+        0xf5d6441f79933283777975573d385f5fc48c71f50ec85ef900dc947995e2f33d;
+
     /// The address of the `RaindexV6SubParser` contract when deployed with
     /// the rain standard zoltu deployer.
     address constant SUB_PARSER_DEPLOYED_ADDRESS = SUB_PARSER_ADDR;
