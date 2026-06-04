@@ -320,4 +320,22 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
             take(a, c).eq(LibDecimalFloat.packLossless(2, 0)), "C must see A's vault-0 credit and handle-IO write"
         );
     }
+
+    /// The vault-0 input slot is a transient in-batch accumulator: it must be
+    /// zeroed once settled so it never leaks into a later read or a later batch.
+    /// `mockVaultZeroReads` pins the wallet at zero, so after the take the vault-0
+    /// balance is exactly the slot, which must be zero.
+    function testVaultZeroInputSlotZeroedAfterTake() external {
+        mockTransfers();
+        address o = owner("walt");
+        mockVaultZeroReads(o);
+        fundOutput(o);
+        OrderV4 memory a = addOrderNonce(o, FILL, VAULT_ZERO, 1);
+        OrderV4 memory b = addOrderNonce(o, FILL, VAULT_ZERO, 2);
+        take(a, b);
+        assertTrue(
+            iRaindex.vaultBalance2(o, address(iToken0), VAULT_ZERO).isZero(),
+            "vault-0 input slot must be zeroed after settlement"
+        );
+    }
 }
