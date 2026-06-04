@@ -234,7 +234,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             //slither-disable-next-line unused-return
             (Float ownerTokenApproval,) =
                 LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).allowance(owner, address(this)), decimals);
-            return ownerTokenBalance.min(ownerTokenApproval);
+            // Vault 0's effective balance is the live wallet (capped by allowance)
+            // plus any credit accrued so far in this batch but not yet pushed out
+            // (the vault-0 slot, always zero at rest). The slot is an additive
+            // delta on the wallet, never a replacement, so a later order in the
+            // same batch sees an earlier order's vault-0 credit.
+            return ownerTokenBalance.min(ownerTokenApproval).add(sVaultBalances[owner][token][bytes32(0)]);
         }
     }
 
@@ -560,6 +565,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                             // Store the pointer to the order IO calculation.
                             mstore(add(orderIOCalculationsToHandle, mul(newLength, 0x20)), orderIOCalculation)
                         }
+
+                        // Run handle IO for this order before the next order
+                        // calculates, committing its calculate and handle-IO store
+                        // writes so a later order's calculate reads them. Handle IO
+                        // sees this order's vault-0 input via the accrued slot; the
+                        // push itself is still deferred to after the taker pull.
+                        handleIO(orderIOCalculation);
                     }
                 }
 
@@ -597,19 +609,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         pullTokens(msg.sender, io.inputToken, totalTakerOutput);
 
         // The taker's payment has now been pulled in, so the orderbook holds the
-        // input token. Settle the vault-0 input pushes. Every order shares
-        // `io.inputToken` and the sum of these pushes equals `totalTakerOutput`,
-        // so the orderbook always holds enough. Done before handle IO so each
-        // owner has received their input by the time their handle IO runs.
+        // input token. Settle the vault-0 input pushes accrued during the loop.
+        // Every order shares `io.inputToken` and the sum of these pushes equals
+        // `totalTakerOutput`, so the orderbook always holds enough. Handle IO
+        // already ran per order in the loop, against the accrued vault-0 balances.
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
                 pushVaultZeroInput(orderIOCalculationsToHandle[i]);
-            }
-        }
-
-        unchecked {
-            for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
-                handleIO(orderIOCalculationsToHandle[i]);
             }
         }
     }
@@ -951,26 +957,33 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// @dev Records the INPUT (increase) leg of an order's IO: writes the input
     /// balance diff into the context matrix, credits the order owner's input
     /// vault balance, and emits the now fully populated context. A `vaultId == 0`
-    /// input has no internal balance; it is a direct push of tokens out of the
-    /// orderbook, which the caller settles separately via `pushVaultZeroInput`
-    /// once the orderbook holds the token, so it is skipped here.
+    /// input has no internal balance and is ultimately a push of tokens out of
+    /// the orderbook; the credit is accrued in the always-zero vault-0 slot as a
+    /// transient in-batch balance so a later order's calculate reads it, and the
+    /// push itself is settled by `pushVaultZeroInput` once the orderbook holds
+    /// the token.
     /// @param input The Float input amount to credit to the order owner's input
     /// vault.
     /// @param orderIOCalculation The order IO calculation produced by
     /// `calculateOrderIO`, containing the order, context matrix and namespace.
     function recordVaultInput(Float input, OrderIOCalculationV4 memory orderIOCalculation) internal {
         orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
+        address owner = orderIOCalculation.order.owner;
+        address token =
+            address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN])));
         bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
         //slither-disable-next-line incorrect-equality
-        if (inputVaultId != bytes32(0)) {
-            increaseVaultBalance(
-                orderIOCalculation.order.owner,
-                address(
-                    uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
-                ),
-                inputVaultId,
-                input
-            );
+        if (inputVaultId == bytes32(0)) {
+            // Accrue into the vault-0 slot rather than pushing now. `_vaultBalance`
+            // reads this slot on top of the wallet, so the credit is visible to
+            // later orders in the same batch; `pushVaultZeroInput` settles and
+            // zeroes it after the orderbook holds the token.
+            if (input.lt(Float.wrap(0))) {
+                revert NegativeVaultBalanceChange(input);
+            }
+            sVaultBalances[owner][token][inputVaultId] = sVaultBalances[owner][token][inputVaultId].add(input);
+        } else {
+            increaseVaultBalance(owner, token, inputVaultId, input);
         }
 
         // Emit the context only once in its fully populated form rather than two
@@ -978,9 +991,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         emit ContextV2(msg.sender, orderIOCalculation.context);
     }
 
-    /// @dev Settles a `vaultId == 0` input by pushing the recorded input amount
-    /// out of the orderbook to the order owner. No-op for internal input vaults,
-    /// which `recordVaultInput` already credited. Must run only after the
+    /// @dev Settles the `vaultId == 0` input accrued by `recordVaultInput` by
+    /// pushing it out of the orderbook to the order owner and zeroing the
+    /// transient vault-0 slot. No-op for internal input vaults. Same-owner orders
+    /// share the slot, so the net credit is pushed once (the first flush) and
+    /// later flushes for the same owner/token are no-ops. Must run only after the
     /// orderbook holds the input token, i.e. after the matching pulls.
     /// @param orderIOCalculation The order IO calculation whose input leg was
     /// recorded by `recordVaultInput`.
@@ -988,14 +1003,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
         //slither-disable-next-line incorrect-equality
         if (inputVaultId == bytes32(0)) {
-            increaseVaultBalance(
-                orderIOCalculation.order.owner,
-                address(
-                    uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
-                ),
-                inputVaultId,
-                Float.wrap(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF])
+            address owner = orderIOCalculation.order.owner;
+            address token = address(
+                uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
             );
+            Float accrued = sVaultBalances[owner][token][inputVaultId];
+            //slither-disable-next-line incorrect-equality
+            if (!accrued.isZero()) {
+                sVaultBalances[owner][token][inputVaultId] = Float.wrap(0);
+                pushTokens(owner, token, accrued);
+            }
         }
     }
 
