@@ -48,7 +48,6 @@ import {
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {LibOrder} from "../../lib/LibOrder.sol";
-import {LibTakeOrdersOverlay} from "../../lib/LibTakeOrdersOverlay.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
@@ -468,12 +467,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
 
         {
-            // Each evaluated order's calculation, indexed by its batch position.
-            // A later same-owner order seeds its calculate eval with the most
-            // recent earlier same-owner order's kvs (see `latestOwnerKvs`) so it
-            // observes earlier same-owner writes within the batch.
-            OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
-
             if (!io.remainingTakerIO.gt(Float.wrap(0))) {
                 revert ZeroMaximumIO();
             }
@@ -497,15 +490,20 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 if (sOrders[orderHash] == ORDER_DEAD) {
                     emit OrderNotFound(msg.sender, order.owner, orderHash);
                 } else {
+                    // No state overlay: calculate reads only committed store
+                    // state. Each taken order commits its calculate and handle-IO
+                    // writes via `handleIO` below, before the next order
+                    // calculates, so a later same-owner order observes earlier
+                    // TAKEN orders' writes through the store. An untaken order
+                    // runs no `handleIO`, so it makes no state change at all.
                     OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
                         order,
                         takeOrderConfig.inputIOIndex,
                         takeOrderConfig.outputIOIndex,
                         msg.sender,
                         takeOrderConfig.signedContext,
-                        LibTakeOrdersOverlay.latestOwnerKvs(evaluatedCalculations, order.owner)
+                        new bytes32[](0)
                     );
-                    evaluatedCalculations[i] = orderIOCalculation;
 
                     // Skip orders that are too expensive rather than revert as we have
                     // no way of knowing if a specific order becomes too expensive
