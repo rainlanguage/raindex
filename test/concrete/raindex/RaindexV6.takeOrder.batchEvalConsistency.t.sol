@@ -338,4 +338,37 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
             "vault-0 input slot must be zeroed after settlement"
         );
     }
+
+    bytes32 internal constant OTHER_INTERNAL_VAULT = bytes32(uint256(0x05));
+
+    /// The vault-0 input slot and internal `sVaultBalances` are independent
+    /// accounting paths. A credits the vault-0 slot; B reads a different internal
+    /// input vault and must NOT see A's credit, so it fills. Total 2. A read that
+    /// folded the vault-0 slot into an internal balance would make B skip (total 1).
+    function testVaultZeroCreditDoesNotLeakIntoInternalRead() external {
+        mockTransfers();
+        address o = owner("xena");
+        mockVaultZeroReads(o);
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, FILL, VAULT_ZERO);
+        OrderV4 memory b = addOrder(o, FILL_WHILE_INPUT_EMPTY, OTHER_INTERNAL_VAULT);
+        assertTrue(
+            take(a, b).eq(LibDecimalFloat.packLossless(2, 0)), "a vault-0 credit must not appear in an internal read"
+        );
+    }
+
+    /// The reverse: A credits an internal input vault; B reads vault 0 and must
+    /// NOT see it, so it fills. Total 2. An accrue that routed internal credits
+    /// into the vault-0 slot would make B skip (total 1).
+    function testInternalCreditDoesNotLeakIntoVaultZeroRead() external {
+        mockTransfers();
+        address o = owner("yuri");
+        mockVaultZeroReads(o);
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, FILL, OTHER_INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(o, FILL_WHILE_INPUT_EMPTY, VAULT_ZERO);
+        assertTrue(
+            take(a, b).eq(LibDecimalFloat.packLossless(2, 0)), "an internal credit must not appear in a vault-0 read"
+        );
+    }
 }
