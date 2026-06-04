@@ -31,6 +31,19 @@ contract RaindexV6SubParserPointersTest is Test {
         assertEq(actual, expected);
     }
 
+    /// `authoringMetaV2` is the single source of truth for every context word's
+    /// name AND its human-readable description. The committed authoring meta
+    /// file is produced verbatim from `authoringMetaV2()` (see
+    /// `script/BuildAuthoringMeta.sol`), so the function's full byte output must
+    /// equal that file. The parse-meta path above only encodes the words, so it
+    /// is blind to the descriptions; pinning the raw bytes here additionally
+    /// binds every description string and the ordering of all 30 entries.
+    function testSubParserAuthoringMetaV2MatchesFile() external view {
+        bytes memory expected = vm.readFileBinary("meta/RaindexV6SubParserAuthoringMeta.rain.meta");
+        bytes memory actual = LibRaindexSubParser.authoringMetaV2();
+        assertEq(actual, expected);
+    }
+
     function testSubParserFunctionPointers() external pure {
         RaindexV6SubParser extern = RaindexV6SubParser(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS);
         bytes memory expected = extern.buildSubParserWordParsers();
