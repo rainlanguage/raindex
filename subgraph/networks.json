@@ -8,13 +8,13 @@
   "matic": {
     "Raindex": {
       "address": "0x4F4527919DA654C1718Ca6Ef194F6547226685f6",
-      "startBlock": 87914409
+      "startBlock": 87914243
     }
   },
   "base": {
     "Raindex": {
       "address": "0x4F4527919DA654C1718Ca6Ef194F6547226685f6",
-      "startBlock": 46893620
+      "startBlock": 46893385
     }
   },
   "flare": {

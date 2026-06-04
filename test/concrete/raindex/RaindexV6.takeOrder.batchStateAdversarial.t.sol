@@ -205,9 +205,7 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         });
         vm.prank(iBob);
         (Float total,) = iRaindex.takeOrders4(config);
-        assertTrue(
-            total.eq(LibDecimalFloat.packLossless(1, 0)), "ratio-untaken order's write must not be visible to B"
-        );
+        assertTrue(total.eq(LibDecimalFloat.packLossless(1, 0)), "ratio-untaken order's write must not be visible to B");
     }
 
     /// The strongest no-state-change check: an untaken order's write is not
