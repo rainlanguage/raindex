@@ -47,6 +47,26 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         iRaindex.deposit4(address(iToken0), vaultId, LibDecimalFloat.packLossless(0, 0), new TaskV2[](0));
     }
 
+    /// Depositing a negative amount is caught by the same non-positive guard as
+    /// zero and reverts ZeroDepositAmount (NOT NegativePull from pullTokens). The
+    /// guard is `!depositAmount.gt(0)` which is true for both zero and negatives,
+    /// so a negative deposit never reaches the token pull.
+    /// forge-config: default.fuzz.runs = 100
+    function testDepositNegative(address depositor, bytes32 vaultId, uint256 magnitude18) external {
+        vm.assume(vaultId != bytes32(0));
+        magnitude18 = bound(magnitude18, 1, uint256(int256(type(int224).max)) / 10);
+        // A strictly negative deposit amount.
+        // magnitude18 is bound above so safe to typecast.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        Float amount = LibDecimalFloat.packLossless(-int256(magnitude18), -18);
+        assertTrue(amount.lt(Float.wrap(0)));
+        vm.prank(depositor);
+        vm.expectRevert(
+            abi.encodeWithSelector(IRaindexV6.ZeroDepositAmount.selector, address(depositor), address(iToken0), vaultId)
+        );
+        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+    }
+
     /// Depositing vaultID of zero should revert.
     function testDepositZeroVaultId(address depositor, address token, Float amount) external {
         vm.assume(amount.gt(Float.wrap(0)));
