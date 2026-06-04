@@ -31,6 +31,10 @@ jobs:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 1G
+      # subgraph-deploy runs a forge build, which needs the soldeer dependencies
+      # installed. Without this every import fails to resolve and the build aborts.
+      - run: nix develop -c forge soldeer install
+      - run: nix develop -c forge build
       - run: nix develop -c subgraph-deploy
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
