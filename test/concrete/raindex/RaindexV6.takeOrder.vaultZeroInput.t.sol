@@ -131,4 +131,73 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "alice token1 output vault debited"
         );
     }
+
+    function _take(OrderV4 memory a, OrderV4 memory b) internal returns (Float, Float) {
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        orders[0] =
+            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        orders[1] =
+            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        vm.prank(bob);
+        return iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+    }
+
+    /// Two same-owner vault-0 input orders in one batch. Their input credits
+    /// accrue in the loop and settle as a single netted push to the owner after
+    /// the taker's aggregate payment is pulled. With zero ambient `token0` all 3
+    /// units flow taker -> orderbook -> owner; if the push were inline (before the
+    /// pull) the first order would revert.
+    function testVaultZeroInputMultipleSameOwnerNettedWithoutAmbientBalance() external {
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory order1 = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        // Distinct output max keeps this a distinct order from order1.
+        OrderV4 memory order2 = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 2 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        token0.mint(bob, 3e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 3e18);
+        assertEq(token0.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token0");
+
+        (Float totalTakerInput, Float totalTakerOutput) = _take(order1, order2);
+
+        assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(3, 0)), "3 token0 filled across both orders");
+        assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(3, 0)), "3 token1 filled across both orders");
+
+        assertEq(token0.balanceOf(owner), 3e18, "owner received both vault-0 inputs (1 + 2), netted");
+        assertEq(token0.balanceOf(bob), 0, "taker paid token0 for both");
+        assertEq(token1.balanceOf(bob), 3e18, "taker received token1 for both");
+        assertEq(token0.balanceOf(address(iRaindex)), 0, "token0 passed straight through the orderbook");
+        assertEq(token1.balanceOf(address(iRaindex)), 7e18, "remaining token1 stays in the owner's output vault");
+    }
+
+    /// Two different-owner vault-0 input orders in one batch. Each owner's input
+    /// is pushed to them after the loop (per owner, not netted across owners),
+    /// all funded by the taker's single aggregate payment. Zero ambient `token0`.
+    function testVaultZeroInputMultipleOwnersWithoutAmbientBalance() external {
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        _deposit(alice, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory ownerOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory aliceOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, alice, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        token0.mint(bob, 2e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 2e18);
+        assertEq(token0.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token0");
+
+        _take(ownerOrder, aliceOrder);
+
+        assertEq(token0.balanceOf(owner), 1e18, "owner received their own vault-0 input");
+        assertEq(token0.balanceOf(alice), 1e18, "alice received their own vault-0 input");
+        assertEq(token0.balanceOf(bob), 0, "taker paid token0 for both");
+        assertEq(token1.balanceOf(bob), 2e18, "taker received token1 for both");
+        assertEq(token0.balanceOf(address(iRaindex)), 0, "token0 passed straight through the orderbook");
+    }
 }
