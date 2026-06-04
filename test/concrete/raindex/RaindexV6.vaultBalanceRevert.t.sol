@@ -216,6 +216,64 @@ contract RaindexV6VaultBalanceRevertTest is Test {
         assertEq(realToken.balanceOf(address(harness)), 0, "harness untouched");
     }
 
+    /// Pulling a positive amount SMALLER than one base unit (the sub-unit
+    /// "almost zero" range, 0 < x < 1 base unit) must round UP to exactly 1 base
+    /// unit and pull it — it must NOT truncate to zero and skip the transfer,
+    /// which would let a non-zero credit be funded by a zero pull. With a
+    /// 6-decimal token and a Float of 1e-7 (= 0.1 base units) the lossy
+    /// conversion truncates to 0, but because it is lossy the round-up forces 1.
+    /// This pins the 0->1 ceil boundary specifically: testPullRoundsUpOnLoss
+    /// exercises 1.5 -> 2 (already >= 1) and testPullZeroSkipsTransfer exercises
+    /// exactly 0, so a mutation that only increments an already-non-zero
+    /// truncation (`if (!lossless && amount18 != 0)`) survives both of those but
+    /// is killed here.
+    function testPullSubUnitRoundsUpToOne() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        realToken.mint(owner, 10);
+        vm.prank(owner);
+        realToken.approve(address(harness), 10);
+
+        // The contract pulls exactly 1 base unit (not 0) for the sub-unit amount.
+        vm.expectCall(
+            address(realToken),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(harness), uint256(1)),
+            1
+        );
+        // 1e-7 at 6 decimals: 1 * 10^(-7+6) = 0.1, truncates to 0 but lossy -> ++ -> 1.
+        (uint256 amount, uint8 decimals) =
+            harness.exposedPull(owner, address(realToken), LibDecimalFloat.packLossless(1, -7));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 1, "sub-unit amount rounds up to 1 not 0");
+        assertEq(realToken.balanceOf(owner), 9, "owner balance after sub-unit pull");
+        assertEq(realToken.balanceOf(address(harness)), 1, "harness pulled exactly 1");
+    }
+
+    /// Pushing a positive amount SMALLER than one base unit (sub-unit "almost
+    /// zero") TRUNCATES to zero and skips the transfer — push rounds DOWN, so the
+    /// residual stays in the contract rather than paying out a base unit of dust.
+    /// With a 6-decimal token and a Float of 1e-7 (= 0.1 base units) push
+    /// transfers nothing. Pins that push does NOT lift a sub-unit amount to 1
+    /// (the over-pay direction): testPushTruncatesOnLoss exercises 1.5 -> 1
+    /// (>= 1) and testPushZeroSkipsTransfer exercises exactly 0, so a mutation
+    /// paying out 1 base unit for a sub-unit amount survives both but is killed
+    /// here.
+    function testPushSubUnitTruncatesToZero() external {
+        MockToken realToken = new MockToken("Token", "TKN", 6);
+        realToken.mint(address(harness), 10);
+
+        // No transfer at all for a sub-unit (truncated-to-zero) push.
+        vm.expectCall(address(realToken), abi.encodeWithSelector(IERC20.transfer.selector, owner, uint256(0)), 0);
+        // 1e-7 at 6 decimals: 0.1 base units, push truncates DOWN to 0 -> skip.
+        (uint256 amount, uint8 decimals) =
+            harness.exposedPush(owner, address(realToken), LibDecimalFloat.packLossless(1, -7));
+
+        assertEq(decimals, 6, "decimals");
+        assertEq(amount, 0, "sub-unit amount truncates to 0 not 1");
+        assertEq(realToken.balanceOf(owner), 0, "owner received nothing");
+        assertEq(realToken.balanceOf(address(harness)), 10, "harness untouched");
+    }
+
     /// Increasing a vault-0 balance ALWAYS returns (0, 0): vault 0 holds no
     /// internal balance, it pushes tokens straight out to the owner, so the
     /// reported old and new balances are both exactly zero regardless of the
