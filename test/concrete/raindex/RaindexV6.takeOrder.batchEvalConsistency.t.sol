@@ -7,6 +7,9 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderV4,
+    OrderConfigV4,
+    EvaluableV4,
+    IOV2,
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     SignedContextV1,
@@ -25,12 +28,14 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 ///   - earlier order's calculate set -> threaded into later calculate   -> VISIBLE
 ///   - earlier order's handle-IO set -> committed after the loop         -> NOT visible
 ///
-/// Each pair below uses two same-owner orders: order A fills and produces an
-/// effect; order B reads that effect in `calculate` and only fills while it has
-/// NOT observed it (`if(seen 0 1)`). So a fully sequential batch fills exactly
-/// one order (total 1 — B observes A and skips); an inconsistent one fills both
-/// (total 2 — B is blind to A). The internal-vault and calculate-write cases
-/// pass today; the vault-0 and handle-IO cases fail, pinning the two seams.
+/// The pairwise tests use two same-owner orders: A fills and produces an effect;
+/// B reads it in `calculate` and only fills while it has NOT observed it
+/// (`if(seen 0 1)`). A sequential batch fills one order (total 1 — B skips); an
+/// inconsistent one fills both (total 2 — B is blind to A). The chain tests add
+/// a third order: A and B both produce an effect and C reads the accumulated sum
+/// as its output, so a sequential batch totals 4 and an inconsistent one totals
+/// 2. The internal-vault and calculate-write cases pass today; the vault-0 input
+/// and handle-IO cases fail, pinning the two seams.
 contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
 
@@ -72,6 +77,30 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
         return LibTestTakeOrder.addOrderWithExpression(
             vm, o, expr, address(iToken0), inputVaultId, address(iToken1), INTERNAL_VAULT
         );
+    }
+
+    /// Like `addOrder` but with an explicit nonce, so two otherwise-identical
+    /// orders (same owner, expression and vaults) are distinct orders rather than
+    /// a duplicate that emits no `AddOrderV3`.
+    function addOrderNonce(address o, bytes memory expr, bytes32 inputVaultId, uint256 nonce)
+        internal
+        returns (OrderV4 memory)
+    {
+        IOV2[] memory inputs = new IOV2[](1);
+        inputs[0] = IOV2({token: address(iToken0), vaultId: inputVaultId});
+        IOV2[] memory outputs = new IOV2[](1);
+        outputs[0] = IOV2({token: address(iToken1), vaultId: INTERNAL_VAULT});
+        OrderConfigV4 memory config = OrderConfigV4({
+            evaluable: EvaluableV4({interpreter: iInterpreter, store: iStore, bytecode: iParserV2.parse2(expr)}),
+            validInputs: inputs,
+            validOutputs: outputs,
+            nonce: bytes32(nonce),
+            secret: 0,
+            meta: ""
+        });
+        vm.prank(o);
+        iRaindex.addOrder4(config, new TaskV2[](0));
+        return OrderV4(o, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
     }
 
     function take(OrderV4 memory a, OrderV4 memory b) internal returns (Float totalTakerInput) {
@@ -137,5 +166,76 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
         OrderV4 memory a = addOrder(o, "_ _:1 1;:set(0 1);", INTERNAL_VAULT);
         OrderV4 memory b = addOrder(o, "seen:get(0),_ _:if(seen 0 1) 1;:;", INTERNAL_VAULT);
         assertTrue(take(a, b).eq(LibDecimalFloat.packLossless(1, 0)), "B must see A's handle-IO write and skip");
+    }
+
+    function take3(OrderV4 memory a, OrderV4 memory b, OrderV4 memory c) internal returns (Float totalTakerInput) {
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](3);
+        orders[0] =
+            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        orders[1] =
+            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        orders[2] =
+            TakeOrderConfigV4({order: c, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        vm.prank(iTaker);
+        (totalTakerInput,) = iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+    }
+
+    // C: output as much as its input vault holds (reads the accumulated balance,
+    // not just whether it is nonzero).
+    bytes constant OUTPUT_INPUT_BALANCE = "_ _:context<3 3>() 1;:;";
+
+    /// Baseline (consistent): internal input credits from A and B accumulate and
+    /// the sum is visible to C's calculate. C outputs 2 -> total 1+1+2 = 4.
+    function testInternalInputBalanceAccumulatesAcrossSameOwnerChain() external {
+        mockTransfers();
+        address o = owner("erin");
+        fundOutput(o);
+        OrderV4 memory a = addOrderNonce(o, FILL, INTERNAL_VAULT, 1);
+        OrderV4 memory b = addOrderNonce(o, FILL, INTERNAL_VAULT, 2);
+        OrderV4 memory c = addOrder(o, OUTPUT_INPUT_BALANCE, INTERNAL_VAULT);
+        assertTrue(take3(a, b, c).eq(LibDecimalFloat.packLossless(4, 0)), "C must see the sum of A and B input credits");
+    }
+
+    /// Inconsistent (FAILS today): vault-0 input credits from A and B are token
+    /// pushes deferred past the loop, so C reads a zero balance and outputs
+    /// nothing -> total 1+1+0 = 2. A sequential batch gives 4.
+    function testVaultZeroInputBalanceAccumulatesAcrossSameOwnerChain() external {
+        mockTransfers();
+        address o = owner("frank");
+        mockVaultZeroReads(o);
+        fundOutput(o);
+        OrderV4 memory a = addOrderNonce(o, FILL, VAULT_ZERO, 1);
+        OrderV4 memory b = addOrderNonce(o, FILL, VAULT_ZERO, 2);
+        OrderV4 memory c = addOrder(o, OUTPUT_INPUT_BALANCE, VAULT_ZERO);
+        assertTrue(
+            take3(a, b, c).eq(LibDecimalFloat.packLossless(4, 0)), "C must see the sum of A and B vault-0 credits"
+        );
+    }
+
+    /// Inconsistent (FAILS today): A sets a counter and B increments it, both in
+    /// handle-IO; C's calculate reads it as its output. Handle-IO commits after
+    /// the loop, so C reads 0 and outputs nothing -> total 2. Sequential: C reads
+    /// 2 -> total 4.
+    function testHandleIOWriteAccumulatesAcrossSameOwnerChain() external {
+        mockTransfers();
+        address o = owner("grace");
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, "_ _:1 1;:set(0 1);", INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(o, "_ _:1 1;:set(0 add(get(0) 1));", INTERNAL_VAULT);
+        OrderV4 memory c = addOrder(o, "v:get(0),_ _:v 1;:;", INTERNAL_VAULT);
+        assertTrue(take3(a, b, c).eq(LibDecimalFloat.packLossless(4, 0)), "C must see A and B handle-IO writes");
+    }
+
+    /// Baseline (consistent): an order's output vault decrease is applied in-loop,
+    /// so a later same-owner order observes the reduced balance. A consumes 1 of
+    /// the 100 output vault; B fills only while the vault is still full, observes
+    /// A's decrease and skips -> total 1.
+    function testOutputVaultBalanceVisibleToLaterSameOwnerOrder() external {
+        mockTransfers();
+        address o = owner("heidi");
+        fundOutput(o);
+        OrderV4 memory a = addOrder(o, FILL, INTERNAL_VAULT);
+        OrderV4 memory b = addOrder(o, "full:equal-to(context<4 3>() 100),_ _:if(full 1 0) 1;:;", INTERNAL_VAULT);
+        assertTrue(take(a, b).eq(LibDecimalFloat.packLossless(1, 0)), "B must see A's output vault decrease and skip");
     }
 }
