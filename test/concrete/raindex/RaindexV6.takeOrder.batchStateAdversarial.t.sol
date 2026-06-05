@@ -281,4 +281,23 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
             "tx2: ratio-untaken key-0 reader fills (A gone), key-1 reader skips (B kept)"
         );
     }
+
+    /// recordVaultInput / recordVaultOutput populate the per-order balance-DIFF
+    /// cells that handle-IO reads as the amounts traded this fill: the input diff
+    /// is context<3 4>() and the output diff is context<4 4>() (column 3/4, row
+    /// CONTEXT_VAULT_IO_BALANCE_DIFF). A 1:1 fill of 1 must report diff 1 on both
+    /// legs. The order's handle-IO ensures exactly that, so it fills only if both
+    /// diffs are written correctly; a wrong/zero diff makes handle-IO revert.
+    function testVaultBalanceDiffsWrittenToHandleIOContext() external {
+        mockTransfers();
+        address o = owner("nate");
+        fund(o);
+        OrderV4[] memory list = new OrderV4[](1);
+        list[0] =
+            addOrder(o, "_ _:1 1;:ensure(every(equal-to(context<3 4>() 1) equal-to(context<4 4>() 1)) \"diffs\");");
+        assertTrue(
+            take(list).eq(LibDecimalFloat.packLossless(1, 0)),
+            "order fills only if both balance-diffs (input + output) reach handle-IO context"
+        );
+    }
 }
