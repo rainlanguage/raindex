@@ -284,4 +284,85 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "carol's pooled vault balance is untouched"
         );
     }
+
+    /// The OUTPUT side of vault 0: a `vaultId == 0` OUTPUT is funded directly from
+    /// the order owner's wallet (`recordVaultOutput` -> `decreaseVaultBalance`
+    /// pulls the token in) and handed to the taker, so a third party's pooled
+    /// balance of the output token is untouched. Owner outputs token1 from vault
+    /// 0; the taker supplies token0 and receives token1; carol's pooled token1 is
+    /// unchanged and the token0 input is credited to the owner's normal vault.
+    function testVaultZeroOutputDoesNotTouchPooledBalance() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        bytes32 inputVaultId = bytes32(uint256(0x02));
+        _deposit(carol, token1, poolVaultId, 50);
+
+        // Owner funds the vault-0 output from their wallet.
+        token1.mint(owner, 1e18);
+        vm.prank(owner);
+        token1.approve(address(iRaindex), 1e18);
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), inputVaultId, address(token1), bytes32(0)
+        );
+
+        // Taker supplies token0 (the order's input), receives token1 (the output).
+        token0.mint(bob, 1e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 1e18);
+        assertEq(token1.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's token1 pool pre-take");
+
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+
+        assertEq(token1.balanceOf(owner), 0, "owner's wallet funded the vault-0 output");
+        assertEq(token1.balanceOf(bob), 1e18, "taker received the vault-0 output");
+        assertEq(token0.balanceOf(bob), 0, "taker supplied token0");
+        assertEq(token1.balanceOf(address(iRaindex)), 50e18, "vault-0 output must not touch the token1 pool");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token1), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled token1 untouched"
+        );
+        assertTrue(
+            iRaindex.vaultBalance2(owner, address(token0), inputVaultId).eq(LibDecimalFloat.packLossless(1, 0)),
+            "owner's token0 input vault credited"
+        );
+    }
+
+    /// A capped (partial) fill accrues only the ACTUAL filled vault-0 input, not
+    /// the order's offered max. The order offers up to 5 but the owner's output
+    /// vault holds only 2 token1, so the output (and thus the matching token0
+    /// input) is capped at 2. The owner must receive exactly 2 token0 — funded by
+    /// the taker — and the pooled token0 must be untouched. Accruing the offered
+    /// max instead of the filled amount would push 5 and drain the pool by 3.
+    function testVaultZeroInputPartialFillAccruesActualNotMax() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        // Output vault holds only 2, capping the order's offered-5 output at 2.
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 2);
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 5 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        // Taker could fund 5 but only 2 will fill.
+        token0.mint(bob, 5e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 5e18);
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-take");
+
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+
+        assertEq(token0.balanceOf(owner), 2e18, "owner received exactly the 2 filled, not the offered 5");
+        assertEq(token0.balanceOf(bob), 3e18, "taker spent only the 2 that filled, keeps 3");
+        assertEq(token1.balanceOf(bob), 2e18, "taker received the 2 available token1");
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "partial vault-0 fill must not touch the pool");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled token0 untouched"
+        );
+    }
 }
