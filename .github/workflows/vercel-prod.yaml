@@ -40,18 +40,7 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: |
-          nix develop .#wasm-shell -c bash -c '
-            set -euxo pipefail
-            npm install --no-check
-            npm run build -w @rainlanguage/raindex
-            npm run build -w @rainlanguage/ui-components
-            npm run build -w @rainlanguage/webapp
-          '
-        env:
-          PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-      - run: nix develop .#webapp-shell -c npm run build
-        working-directory: packages/webapp
+      - run: ./script/vercel-build.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
       # check for npm package blacklists pkgs across all packages
