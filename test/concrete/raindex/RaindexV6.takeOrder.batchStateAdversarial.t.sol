@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Vm} from "forge-std-1.16.1/src/Test.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
@@ -299,5 +300,28 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
             take(list).eq(LibDecimalFloat.packLossless(1, 0)),
             "order fills only if both balance-diffs (input + output) reach handle-IO context"
         );
+    }
+
+    /// M01 collapsed two near-duplicate ContextV2 emissions into a single
+    /// fully-populated emit per filled order. ContextV2 is the orderbook's
+    /// contract-context notification consumed off-chain (the subgraph), so it
+    /// must be emitted exactly once per fill — never dropped, never doubled.
+    function testContextV2EmittedOncePerFilledOrder() external {
+        mockTransfers();
+        address o = owner("olive");
+        fund(o);
+        OrderV4[] memory list = new OrderV4[](1);
+        list[0] = addOrder(o, "_ _:1 1;:;");
+        vm.recordLogs();
+        take(list);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 sig = keccak256("ContextV2(address,bytes32[][])");
+        uint256 count;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == sig) {
+                count++;
+            }
+        }
+        assertEq(count, 1, "exactly one ContextV2 emitted per filled order");
     }
 }
