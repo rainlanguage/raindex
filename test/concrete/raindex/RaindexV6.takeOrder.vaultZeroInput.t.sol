@@ -652,4 +652,25 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "carol's pooled token0 untouched"
         );
     }
+
+    /// `_vaultBalance` for vault 0 reads the token's live decimals via TOFU and
+    /// reverts on an inconsistency rather than computing a balance from changed
+    /// decimals. This guard is redundant in the take/clear path (calculateOrderIO
+    /// checks the token's TOFU first and reverts), so its only independent surface
+    /// is the `vaultBalance2` view getter. token0's TOFU is established at 18 by a
+    /// deposit; once its reported decimals change to 6, a vault-0 `vaultBalance2`
+    /// read must revert TokenDecimalsReadFailure.
+    function testVaultBalance2VaultZeroRevertsOnInconsistentDecimals() external {
+        bytes4 decimalsSel = bytes4(keccak256("decimals()"));
+        // Establish token0's TOFU at 18 decimals (the deposit's pull writes it).
+        vm.mockCall(address(token0), abi.encodeWithSelector(decimalsSel), abi.encode(uint8(18)));
+        _deposit(owner, token0, OUTPUT_VAULT_ID, 1);
+
+        // The token now reports different decimals -> TOFU is inconsistent.
+        vm.mockCall(address(token0), abi.encodeWithSelector(decimalsSel), abi.encode(uint8(6)));
+
+        // Reverts (TokenDecimalsReadFailure) rather than returning a balance.
+        vm.expectRevert();
+        iRaindex.vaultBalance2(owner, address(token0), bytes32(0));
+    }
 }
