@@ -200,4 +200,88 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         assertEq(token1.balanceOf(bob), 2e18, "taker received token1 for both");
         assertEq(token0.balanceOf(address(iRaindex)), 0, "token0 passed straight through the orderbook");
     }
+
+    /// Pool safety across REPEATED takes: a vault-0 input is a pure pass-through
+    /// funded by the taker, so the orderbook's holdings of the input token must
+    /// not change across the batch — and must never dip into OTHER users' pooled
+    /// balances of that token. A third party parks 50 token0 in a normal vault;
+    /// the owner then fills a vault-0 input order twice. Each take the owner must
+    /// receive exactly one unit and the pool must stay at exactly 50.
+    ///
+    /// This is the strongest guard on the transient vault-0 slot. If take 1 left
+    /// the slot non-zero (a dangling credit), take 2 would re-push it: the owner
+    /// would receive 2 on the second take and the pool would drop to 49. If the
+    /// push ever exceeded the accrued amount, the pool would drop on take 1.
+    /// Either way the orderbook would be paying out tokens it does not own —
+    /// draining the third party — and this test catches it to the wei.
+    function testVaultZeroInputPoolUntouchedAcrossRepeatedTakes() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        // Carol's token0 sits in the orderbook as a pooled vault balance.
+        _deposit(carol, token0, poolVaultId, 50);
+
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        // Taker funds exactly two units across two takes.
+        token0.mint(bob, 2e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 2e18);
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-take");
+
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+        assertEq(token0.balanceOf(owner), 1e18, "take 1: owner receives exactly one unit");
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "take 1: pool intact");
+
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+        assertEq(token0.balanceOf(owner), 2e18, "take 2: owner receives exactly one more unit, no dangling re-push");
+        assertEq(token0.balanceOf(bob), 0, "taker funded exactly two units total");
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "take 2: pool still intact, no drain from a dangling slot");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled vault balance untouched across both takes"
+        );
+    }
+
+    /// Same pool safety for `clear3`'s vault-0 input push: Alice's vault-0 token0
+    /// input is funded entirely by Bob's token0 output, so a third party's pooled
+    /// token0 is untouched. A vault-0 push that exceeded what Bob supplied would
+    /// drain the pool.
+    function testClearVaultZeroInputDoesNotTouchPooledBalance() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        _deposit(alice, token1, OUTPUT_VAULT_ID, 10);
+        token0.mint(bob, 1e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 1e18);
+
+        OrderV4 memory aliceOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, alice, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory bobOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, bob, "_ _: 1 1;:;", address(token1), OUTPUT_VAULT_ID, address(token0), bytes32(0)
+        );
+
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-clear");
+
+        iRaindex.clear3(
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        );
+
+        assertEq(token0.balanceOf(alice), 1e18, "alice received her vault-0 input");
+        assertEq(token0.balanceOf(bob), 0, "bob funded his vault-0 output in full");
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "clear vault-0 push must not touch the pooled balance");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled vault balance is untouched"
+        );
+    }
 }
