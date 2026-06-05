@@ -533,4 +533,46 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         );
         assertTrue(iRaindex.vaultBalance2(bob, address(token0), OUTPUT_VAULT_ID).isZero(), "bob's output vault drawn");
     }
+
+    /// Vault-0 settlement with a NON-18-decimal input token (6 decimals, USDC-
+    /// like). The accrued slot is a decimal-agnostic Float; the push converts it
+    /// back to the token's own units. Conservation must hold to the wei across
+    /// that round-trip — the taker funds the input, the owner receives exactly
+    /// 1.0 (= 1e6 units), and a pooled balance of the 6-decimal token is
+    /// untouched. Guards the Float<->units rescale specifically on the vault-0
+    /// path.
+    function testVaultZeroInputSixDecimalTokenConserves() external {
+        MockToken token0d6 = new MockToken("Six", "TK6", 6);
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+
+        // Carol pools 50.0 of the 6-decimal token.
+        token0d6.mint(carol, 50e6);
+        vm.startPrank(carol);
+        token0d6.approve(address(iRaindex), 50e6);
+        iRaindex.deposit4(address(token0d6), poolVaultId, LibDecimalFloat.packLossless(50, 0), new TaskV2[](0));
+        vm.stopPrank();
+
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0d6), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        token0d6.mint(bob, 1e6);
+        vm.prank(bob);
+        token0d6.approve(address(iRaindex), 1e6);
+        assertEq(token0d6.balanceOf(address(iRaindex)), 50e6, "orderbook holds only carol's 6-decimal pool pre-take");
+
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+
+        assertEq(token0d6.balanceOf(owner), 1e6, "owner received the 6-decimal vault-0 input (1.0 -> 1e6)");
+        assertEq(token0d6.balanceOf(bob), 0, "taker funded the input in full");
+        assertEq(token0d6.balanceOf(address(iRaindex)), 50e6, "6-decimal pool untouched to the wei");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0d6), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's 6-decimal pool vault untouched"
+        );
+    }
 }
