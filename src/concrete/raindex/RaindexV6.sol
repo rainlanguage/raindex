@@ -258,7 +258,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         nonReentrant
         nonZeroVaultId(msg.sender, token, vaultId)
     {
-        if (!depositAmount.gt(Float.wrap(0))) {
+        if (!depositAmount.gt(LibDecimalFloat.FLOAT_ZERO)) {
             revert ZeroDepositAmount(msg.sender, token, vaultId);
         }
 
@@ -298,7 +298,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         Float beforeBalance;
         Float afterBalance;
         {
-            if (!targetAmount.gt(Float.wrap(0))) {
+            if (!targetAmount.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert ZeroWithdrawTargetAmount(msg.sender, token, vaultId);
             }
             Float currentVaultBalance = _vaultBalance(msg.sender, token, vaultId);
@@ -413,7 +413,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32 orderHash = quoteConfig.order.hash();
 
         if (sOrders[orderHash] != ORDER_LIVE) {
-            return (false, Float.wrap(0), Float.wrap(0));
+            return (false, LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         }
 
         checkTokenSelfTrade(quoteConfig.order, quoteConfig.inputIOIndex, quoteConfig.outputIOIndex);
@@ -467,12 +467,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
 
         {
-            if (!io.remainingTakerIO.gt(Float.wrap(0))) {
+            if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert ZeroMaximumIO();
             }
 
             uint256 i = 0;
-            while (i < config.orders.length && io.remainingTakerIO.gt(Float.wrap(0))) {
+            while (i < config.orders.length && io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 takeOrderConfig = config.orders[i];
                 order = takeOrderConfig.order;
                 // Every order needs the same input token.
@@ -699,7 +699,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // A negative bounty means there is a spread between the orders.
             // This is a critical error because it means the DEX could be
             // exploited if allowed.
-            if (aliceBounty.lt(Float.wrap(0)) || bobBounty.lt(Float.wrap(0))) {
+            if (aliceBounty.lt(LibDecimalFloat.FLOAT_ZERO) || bobBounty.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeBounty();
             }
 
@@ -872,7 +872,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         internal
         returns (Float, Float)
     {
-        if (amount.lt(Float.wrap(0))) {
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativeVaultBalanceChange(amount);
         }
 
@@ -883,14 +883,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             pushTokens(owner, token, amount);
             // The internal balance of vault 0 is always 0 as every transfer in
             // is effectively a compound matching withdrawal.
-            return (Float.wrap(0), Float.wrap(0));
+            return (LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         } else {
             Float oldBalance = sVaultBalances[owner][token][vaultId];
             Float newBalance = oldBalance.add(amount);
 
             // This should never be possible as amount is positive and floats are
             // effectively impossible to overflow, but we check it anyway to be safe.
-            if (newBalance.lt(Float.wrap(0))) {
+            if (newBalance.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeVaultBalance(newBalance);
             }
             sVaultBalances[owner][token][vaultId] = newBalance;
@@ -905,7 +905,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         internal
         returns (Float, Float)
     {
-        if (amount.lt(Float.wrap(0))) {
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativeVaultBalanceChange(amount);
         }
 
@@ -916,7 +916,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             pullTokens(owner, token, amount);
             // The internal balance of vault 0 is always 0 as every balance
             // decrease is effectively a compound matching deposit.
-            return (Float.wrap(0), Float.wrap(0));
+            return (LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         } else {
             Float oldBalance = sVaultBalances[owner][token][vaultId];
             Float newBalance = oldBalance.sub(amount);
@@ -924,7 +924,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // This can definitely happen, so needs to be guarded against.
             // There's no specific check anywhere else that vault balances don't go
             // negative, so this function should be used everywhere for safety.
-            if (newBalance.lt(Float.wrap(0))) {
+            if (newBalance.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeVaultBalance(newBalance);
             }
             sVaultBalances[owner][token][vaultId] = newBalance;
@@ -976,7 +976,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // reads this slot on top of the wallet, so the credit is visible to
             // later orders in the same batch; `pushVaultZeroInput` settles and
             // zeroes it after the orderbook holds the token.
-            if (input.lt(Float.wrap(0))) {
+            if (input.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeVaultBalanceChange(input);
             }
             sVaultBalances[owner][token][inputVaultId] = sVaultBalances[owner][token][inputVaultId].add(input);
@@ -1008,7 +1008,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             Float accrued = sVaultBalances[owner][token][inputVaultId];
             //slither-disable-next-line incorrect-equality
             if (!accrued.isZero()) {
-                sVaultBalances[owner][token][inputVaultId] = Float.wrap(0);
+                sVaultBalances[owner][token][inputVaultId] = LibDecimalFloat.FLOAT_ZERO;
                 pushTokens(owner, token, accrued);
             }
         }
@@ -1110,7 +1110,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
             revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
         }
-        if (amount.lt(Float.wrap(0))) {
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePull();
         }
 
@@ -1135,7 +1135,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
         }
 
-        if (amountFloat.lt(Float.wrap(0))) {
+        if (amountFloat.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePush();
         }
 
