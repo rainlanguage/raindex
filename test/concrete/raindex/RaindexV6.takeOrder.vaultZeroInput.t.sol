@@ -365,4 +365,47 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "carol's pooled token0 untouched"
         );
     }
+
+    /// Settlement isolation: one owner fills two same-token (token0) input orders
+    /// in one batch — A via vault 0 (pushed to the wallet) and B via a normal
+    /// vault (credited internally). The two must settle to DISTINCT places: A's
+    /// unit lands in the owner's wallet and B's unit in the internal vault, with
+    /// neither leaking into the other and a third party's pooled token0 untouched.
+    /// Over-pushing the vault-0 slot would put 2 in the wallet instead of 1.
+    function testVaultZeroAndInternalInputSettleToDistinctPlaces() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        bytes32 internalVaultId = bytes32(uint256(0x02));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory vaultZeroOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory internalOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), internalVaultId, address(token1), OUTPUT_VAULT_ID
+        );
+
+        token0.mint(bob, 2e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 2e18);
+
+        _take(vaultZeroOrder, internalOrder);
+
+        // A (vault 0) -> owner's wallet; B (internal) -> owner's internal vault.
+        assertEq(token0.balanceOf(owner), 1e18, "only the vault-0 input reached the owner's wallet");
+        assertTrue(
+            iRaindex.vaultBalance2(owner, address(token0), internalVaultId).eq(LibDecimalFloat.packLossless(1, 0)),
+            "the internal input was credited to the internal vault, not the wallet"
+        );
+        // The vault-0 slot read for the wallet must not double-count the internal credit.
+        assertEq(token0.balanceOf(bob), 0, "taker funded both units");
+        assertEq(token1.balanceOf(bob), 2e18, "taker received both outputs");
+        // Orderbook holds the pool (50) plus the internally-credited unit (1).
+        assertEq(token0.balanceOf(address(iRaindex)), 51e18, "orderbook holds pool + internal credit only");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled token0 untouched"
+        );
+    }
 }
