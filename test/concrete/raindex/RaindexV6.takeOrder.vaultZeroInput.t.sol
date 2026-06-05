@@ -487,4 +487,50 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         vm.prank(address(taker));
         iRaindex.takeOrders4(config);
     }
+
+    /// `clear3` where BOTH orders take their input via vault 0, so the orderbook
+    /// must accrue and flush two distinct vault-0 slots. Alice's token0 input and
+    /// Bob's token1 input are each pushed to their wallet, funded entirely by the
+    /// counterparty's output (Bob's deposited token0 funds Alice; Alice's
+    /// deposited token1 funds Bob). The clear pulls both outputs before pushing
+    /// either input, so no ambient balance is needed and a third party's pooled
+    /// token0 is untouched.
+    function testClearBothVaultZeroInputsDoesNotTouchPool() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        // Each owner deposits the token they will give as output.
+        _deposit(alice, token1, OUTPUT_VAULT_ID, 1);
+        _deposit(bob, token0, OUTPUT_VAULT_ID, 1);
+
+        OrderV4 memory aliceOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, alice, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory bobOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, bob, "_ _: 1 1;:;", address(token1), bytes32(0), address(token0), OUTPUT_VAULT_ID
+        );
+
+        assertEq(token0.balanceOf(address(iRaindex)), 51e18, "pool (50) + bob's deposited output (1)");
+
+        iRaindex.clear3(
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        );
+
+        // Both vault-0 inputs reached the respective wallets, funded by the
+        // counterparty's output.
+        assertEq(token0.balanceOf(alice), 1e18, "alice received her token0 vault-0 input");
+        assertEq(token1.balanceOf(bob), 1e18, "bob received his token1 vault-0 input");
+        // Pool untouched; orderbook drained of exactly the two cleared units.
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "carol's pooled token0 untouched");
+        assertEq(token1.balanceOf(address(iRaindex)), 0, "alice's deposited token1 went to bob");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled vault balance untouched"
+        );
+        assertTrue(
+            iRaindex.vaultBalance2(alice, address(token1), OUTPUT_VAULT_ID).isZero(), "alice's output vault drawn"
+        );
+        assertTrue(iRaindex.vaultBalance2(bob, address(token0), OUTPUT_VAULT_ID).isZero(), "bob's output vault drawn");
+    }
 }
