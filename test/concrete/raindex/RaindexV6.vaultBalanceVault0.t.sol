@@ -4,7 +4,11 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
 
 /// @title RaindexV6VaultBalanceVault0Test
 /// @notice Vault ID 0 has no internal balance; its effective balance is the
@@ -53,5 +57,78 @@ contract RaindexV6VaultBalanceVault0Test is RaindexV6ExternalMockTest {
         Float effective = iRaindex.vaultBalance2(owner, address(iToken0), bytes32(0));
         // The smaller of the two (balance) is returned, not the approval.
         assertTrue(effective.eq(LibDecimalFloat.fromFixedDecimalLosslessPacked(balance18, 18)), "balance limits");
+    }
+
+    /// Deposits to a non-zero vault to seed the TOFU store with the token's
+    /// decimals (18). The deposit makes `pullTokens` persist the decimals via the
+    /// mutating TOFU read so subsequent read-only reads have a stored value to
+    /// compare against.
+    function _seedTofuDecimals(address depositor) internal {
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.transferFrom.selector, depositor, address(iRaindex), 1),
+            abi.encode(true)
+        );
+        vm.prank(depositor);
+        iRaindex.deposit4(address(iToken0), bytes32(uint256(1)), LibDecimalFloat.packLossless(1, -18), new TaskV2[](0));
+    }
+
+    /// A vault-0 balance read MUST revert `TokenDecimalsReadFailure` when the
+    /// token's decimals have become inconsistent with the previously stored TOFU
+    /// value. Without the guard, the stale stored decimals would be used to scale
+    /// the balance and approval, silently misreporting the effective balance.
+    function testVaultBalanceVault0TofuInconsistentReverts(address depositor) external {
+        _seedTofuDecimals(depositor);
+
+        // The token now reports a DIFFERENT number of decimals than was stored.
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(6)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, address(iToken0), TOFUOutcome.Inconsistent
+            )
+        );
+        iRaindex.vaultBalance2(depositor, address(iToken0), bytes32(0));
+    }
+
+    /// A vault-0 balance read MUST revert `TokenDecimalsReadFailure` when the
+    /// token can no longer be read for decimals at all (read failure) after a
+    /// value was previously stored.
+    function testVaultBalanceVault0TofuReadFailureReverts(address depositor) external {
+        _seedTofuDecimals(depositor);
+
+        // The token now reverts on `decimals()` (REVERTING_MOCK_BYTECODE under
+        // the cleared mock), producing a ReadFailure outcome.
+        vm.clearMockedCalls();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, address(iToken0), TOFUOutcome.ReadFailure
+            )
+        );
+        iRaindex.vaultBalance2(depositor, address(iToken0), bytes32(0));
+    }
+
+    /// Positive control: when the token's decimals remain CONSISTENT with the
+    /// stored TOFU value, a vault-0 read does NOT revert and returns the
+    /// effective balance (min of balance and approval).
+    function testVaultBalanceVault0TofuConsistentOk(address depositor, uint256 balance18, uint256 approval18) external {
+        _seedTofuDecimals(depositor);
+
+        balance18 = bound(balance18, 1, uint256(int256(type(int224).max)));
+        approval18 = bound(approval18, 0, balance18 - 1);
+
+        // decimals() still returns 18 (consistent with the stored value).
+        vm.mockCall(
+            address(iToken0), abi.encodeWithSelector(IERC20.balanceOf.selector, depositor), abi.encode(balance18)
+        );
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.allowance.selector, depositor, address(iRaindex)),
+            abi.encode(approval18)
+        );
+
+        Float effective = iRaindex.vaultBalance2(depositor, address(iToken0), bytes32(0));
+        assertTrue(effective.eq(LibDecimalFloat.fromFixedDecimalLosslessPacked(approval18, 18)), "consistent ok");
     }
 }

@@ -113,6 +113,36 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
         (orderHash);
     }
 
+    /// The `MetaV1_2` event emitted by a successful add MUST carry the EXACT
+    /// data: sender = order owner, subject = order hash, meta = the config meta.
+    /// `addOrderWithChecks` only checks that some `MetaV1_2` is emitted (its
+    /// `expectEmit(false,false,true,false)` does not pin the non-indexed
+    /// subject/meta data), so this asserts all three fields are correct.
+    /// forge-config: default.fuzz.runs = 100
+    function testAddOrderMetaV1EventExactData(address owner, OrderConfigV4 memory config) public {
+        config.evaluable.bytecode = hex"02000000040000000000000000";
+        vm.assume(config.validInputs.length > 0);
+        vm.assume(config.validOutputs.length > 0);
+        vm.assume(config.meta.length > 0);
+
+        // Make the meta self-describe as a rain meta document so it passes the
+        // `checkMetaUnhashedV1` guard.
+        config.meta = abi.encodePacked(META_MAGIC_NUMBER_V1, config.meta);
+
+        (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
+        (order);
+
+        // Full-data check on every field of the event, pinned to the raindex
+        // emitter.
+        vm.expectEmit(true, true, true, true, address(iRaindex));
+        emit MetaV1_2(owner, orderHash, config.meta);
+
+        vm.prank(owner);
+        assertTrue(iRaindex.addOrder4(config, new TaskV2[](0)));
+
+        assertTrue(iRaindex.orderExists(orderHash));
+    }
+
     /// Alice and Bob can add orders with the same config. The resulting orders
     /// MUST be different.
     /// forge-config: default.fuzz.runs = 100
