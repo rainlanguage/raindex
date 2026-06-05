@@ -575,4 +575,41 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "carol's 6-decimal pool vault untouched"
         );
     }
+
+    /// A vault-0 OUTPUT's spendable balance is capped by the owner's ALLOWANCE,
+    /// not just their wallet balance: the orderbook can only pull what's approved.
+    /// The owner holds 10 token0 but approves only 3; an order offering up to 5
+    /// must fill exactly 3 (the allowance), debiting the wallet by 3. If the
+    /// vault-0 balance ignored the allowance it would try to pull 5 against a 3
+    /// approval and revert.
+    function testVaultZeroOutputCappedByAllowanceNotBalance() external {
+        bytes32 inputVaultId = bytes32(uint256(0x02));
+        // Owner holds 10 token0 in their wallet but approves only 3.
+        token0.mint(owner, 10e18);
+        vm.prank(owner);
+        token0.approve(address(iRaindex), 3e18);
+
+        // Order: output token0 @ vault 0 (wallet), input token1 @ a normal vault.
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 5 1;:;", address(token1), inputVaultId, address(token0), bytes32(0)
+        );
+
+        // Taker supplies token1 (the order's input), receives token0 (the output).
+        token1.mint(bob, 5e18);
+        vm.prank(bob);
+        token1.approve(address(iRaindex), 5e18);
+
+        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        vm.prank(bob);
+        iRaindex.takeOrders4(config);
+
+        // Filled exactly the approved 3, not the offered 5.
+        assertEq(token0.balanceOf(bob), 3e18, "taker received exactly the approved 3 token0");
+        assertEq(token0.balanceOf(owner), 7e18, "owner's wallet debited only the approved 3");
+        assertEq(token1.balanceOf(bob), 2e18, "taker paid 3 token1 for the 3 filled (had 5)");
+        assertTrue(
+            iRaindex.vaultBalance2(owner, address(token1), inputVaultId).eq(LibDecimalFloat.packLossless(3, 0)),
+            "owner's token1 input vault credited the 3 filled"
+        );
+    }
 }
