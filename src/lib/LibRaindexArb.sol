@@ -60,10 +60,11 @@ library LibRaindexArb {
             if (gasBalance > 0) {
                 Address.sendValue(payable(msg.sender), gasBalance);
             }
-            // gasBalance can't overflow int256 because there isn't enough gas
-            // in existence for that to happen on every production chain.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            col[2] = Float.unwrap(LibDecimalFloat.packLossless(int256(gasBalance), -18));
+            // Native gas is 18 decimals; lossy-packed like the input/output
+            // columns, so an extreme balance saturates precision rather than
+            // overflowing the Float coefficient.
+            (Float gasFloat,) = LibDecimalFloat.fromFixedDecimalLossyPacked(gasBalance, 18);
+            col[2] = Float.unwrap(gasFloat);
         }
 
         context[0] = col;
