@@ -408,4 +408,41 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "carol's pooled token0 untouched"
         );
     }
+
+    /// An untaken (zero-amount) order moves NO tokens at the real-token level: it
+    /// runs no recordVaultInput/Output and no handleIO, so it neither charges the
+    /// taker, credits the owner, nor touches any vault. Batch [untaken A, taken
+    /// B]: only B's single unit flows; A contributes nothing. The overlay-removal
+    /// adversarial suite asserts the state (kvs) no-op under mocked transfers;
+    /// this pins the token-movement no-op with real ERC20s.
+    function testUntakenOrderContributesNoTokenMovement() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory untaken = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 0 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory taken = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        // Taker is funded for two units; only one must be spent.
+        token0.mint(bob, 2e18);
+        vm.prank(bob);
+        token0.approve(address(iRaindex), 2e18);
+
+        (Float totalTakerInput,) = _take(untaken, taken);
+
+        assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(1, 0)), "only the taken order filled");
+        assertEq(token0.balanceOf(bob), 1e18, "taker charged for the taken order only");
+        assertEq(token1.balanceOf(bob), 1e18, "taker received the taken order's output only");
+        assertEq(token0.balanceOf(owner), 1e18, "owner received only the taken order's vault-0 input");
+        assertEq(token0.balanceOf(address(iRaindex)), 50e18, "untaken order moved nothing; pool intact");
+        assertTrue(
+            iRaindex.vaultBalance2(owner, address(token1), OUTPUT_VAULT_ID).eq(LibDecimalFloat.packLossless(9, 0)),
+            "only the taken order drew from the output vault"
+        );
+    }
 }
