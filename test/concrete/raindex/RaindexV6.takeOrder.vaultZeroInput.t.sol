@@ -612,4 +612,44 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             "owner's token1 input vault credited the 3 filled"
         );
     }
+
+    /// A clear3 bounty with bountyVaultId == 0 is pushed straight to the clearer's
+    /// wallet (increaseVaultBalance's vault-0 branch), not an internal vault. With
+    /// a spread — alice outputs 1 token1 wanting 1 token0, bob outputs up to 2
+    /// token0 wanting 0.5 token1 — the match gives bob a bounty of
+    /// bobOutput(2) - aliceInput(1) = 1 token0. The clearer (this contract) sets
+    /// bobBountyVaultId = 0, so that 1 token0 lands in its wallet, funded by the
+    /// surplus the orderbook already holds; a third party's pooled token0 is
+    /// untouched.
+    function testClearVaultZeroBountyPushedToClearerWallet() external {
+        address carol = address(uint160(uint256(keccak256("carol.rain.test"))));
+        bytes32 poolVaultId = bytes32(uint256(0x99));
+        bytes32 inVaultId = bytes32(uint256(0x02));
+        _deposit(carol, token0, poolVaultId, 50);
+
+        // alice funds her token1 output; bob funds his token0 output (needs >= 2).
+        _deposit(alice, token1, OUTPUT_VAULT_ID, 10);
+        _deposit(bob, token0, OUTPUT_VAULT_ID, 10);
+
+        OrderV4 memory aliceOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, alice, "_ _: 1 1;:;", address(token0), inVaultId, address(token1), OUTPUT_VAULT_ID
+        );
+        OrderV4 memory bobOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, bob, "_ _: 2 0.5;:;", address(token1), inVaultId, address(token0), OUTPUT_VAULT_ID
+        );
+
+        assertEq(token0.balanceOf(address(this)), 0, "clearer starts with no token0");
+
+        // 6th ClearConfig arg (bobBountyVaultId) = 0 -> bob's bounty -> clearer wallet.
+        iRaindex.clear3(
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        );
+
+        assertEq(token0.balanceOf(address(this)), 1e18, "clearer received the 1 token0 bounty in their wallet");
+        assertEq(token0.balanceOf(address(iRaindex)), 59e18, "orderbook token0 = pool(50) + bob(10) - bounty(1)");
+        assertTrue(
+            iRaindex.vaultBalance2(carol, address(token0), poolVaultId).eq(LibDecimalFloat.packLossless(50, 0)),
+            "carol's pooled token0 untouched"
+        );
+    }
 }
