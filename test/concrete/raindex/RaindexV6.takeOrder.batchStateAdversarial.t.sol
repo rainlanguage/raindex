@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Vm} from "forge-std-1.16.1/src/Test.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
@@ -73,19 +74,23 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         assertTrue(take(list).eq(LibDecimalFloat.packLossless(1, 0)), "B must see A's calculate write");
     }
 
-    /// A skipped order (outputMax == 0 -> OrderZeroAmount) still runs its
-    /// calculate `set`, and that write must be threaded to later same-owner
-    /// orders. A writes key 0 but offers 0 (skipped); B then sees key 0 set and
-    /// also skips -> total 0. Pre-fix (or if skipped orders weren't recorded):
-    /// B fills -> total 1.
-    function testSkippedOrderWritesAreThreaded() external {
+    /// An UNTAKEN order causes no state change, so its calculate `set` is not
+    /// visible to later same-owner orders — it neither threads via an overlay
+    /// nor commits to the store, because an untaken order runs no handleIO. A
+    /// writes key 0 but offers 0 (untaken -> OrderZeroAmount); B reads key 0,
+    /// sees it unset, and fills -> total 1. (The old overlay threaded A's write
+    /// so B skipped -> total 0.)
+    function testUntakenOrderWriteNotVisibleToLaterSameOwnerOrder() external {
         mockTransfers();
         address o = owner("bob.owner");
         fund(o);
         OrderV4[] memory list = new OrderV4[](2);
         list[0] = addOrder(o, ":set(0 1),_ _:0 1;:;");
         list[1] = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");
-        assertTrue(take(list).isZero(), "skipped order's calculate write must be threaded");
+        assertTrue(
+            take(list).eq(LibDecimalFloat.packLossless(1, 0)),
+            "untaken order's write must not be visible to a later same-owner order"
+        );
     }
 
     /// Per-owner scoping: owner B writes key 0; owner A (who never wrote key 0)
@@ -151,11 +156,10 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
     }
 
     /// A dead order (never added -> OrderNotFound) interleaved in the batch is
-    /// not evaluated, so it must not advance the per-owner accumulator: a later
-    /// same-owner order still sees the earlier order's write. [A writes, DEAD,
-    /// B reads] -> B skips -> total 1. Catches an accumulator that indexes by
-    /// loop position instead of evaluated count.
-    function testDeadOrderInterleavedDoesNotCorruptAccumulator() external {
+    /// not evaluated and commits nothing, so it does not disturb same-owner
+    /// threading through the store: [A fills+writes, DEAD, B reads] -> B sees A's
+    /// committed write and skips -> total 1.
+    function testDeadOrderInterleavedDoesNotBreakSameOwnerThreading() external {
         mockTransfers();
         address o = owner("frank");
         fund(o);
@@ -176,12 +180,12 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         assertTrue(take(list).eq(LibDecimalFloat.packLossless(1, 0)), "dead order must not break same-owner threading");
     }
 
-    /// The recording happens before the skip checks, so an order skipped for
-    /// OrderExceedsMaxRatio (distinct from the zero-amount skip) also threads its
-    /// calculate write. A (ratio 1000 > maximumIORatio 1) is ratio-skipped but
-    /// writes key 0; B then sees it and skips -> total 0. Without threading the
-    /// ratio-skipped write, B fills -> total 1.
-    function testRatioSkippedOrderWritesAreThreaded() external {
+    /// Same no-state-change rule for an order untaken via OrderExceedsMaxRatio
+    /// (distinct from the zero-amount path). A (ratio 1000 > maximumIORatio 1)
+    /// writes key 0 but is untaken; B reads key 0, sees it unset, and fills ->
+    /// total 1. (The old overlay recorded before the skip check, so B saw A's
+    /// write and skipped -> total 0.)
+    function testUntakenRatioOrderWriteNotVisibleToLaterSameOwnerOrder() external {
         mockTransfers();
         address o = owner("grace");
         fund(o);
@@ -202,6 +206,122 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         });
         vm.prank(iBob);
         (Float total,) = iRaindex.takeOrders4(config);
-        assertTrue(total.isZero(), "ratio-skipped order's calculate write must thread");
+        assertTrue(total.eq(LibDecimalFloat.packLossless(1, 0)), "ratio-untaken order's write must not be visible to B");
+    }
+
+    /// The strongest no-state-change check: an untaken order's write is not
+    /// persisted even when a LATER same-owner order in the same batch fills (and
+    /// runs handleIO). A is zero-amount-untaken and writes key 0; B (same owner)
+    /// fills and writes key 1. B's handleIO must commit only B's OWN writes,
+    /// never A's. In a later tx a reader of key 0 fills (A's write gone) while a
+    /// reader of key 1 skips (B's write kept) -> total exactly 1.
+    ///
+    /// Under the old overlay A's write was seeded into B's calculate, the
+    /// interpreter echoed it back into B's output kvs, and B's handleIO committed
+    /// A's key 0 too -> the key-0 reader would also skip -> total 0.
+    function testUntakenWriteNotPersistedByLaterFilledSibling() external {
+        mockTransfers();
+        address o = owner("judy");
+        fund(o);
+        OrderV4 memory a = addOrder(o, ":set(0 1),_ _:0 1;:;");
+        OrderV4 memory b = addOrder(o, ":set(1 9),_ _:1 1;:;");
+        OrderV4[] memory batch = new OrderV4[](2);
+        batch[0] = a;
+        batch[1] = b;
+        // tx1: A untaken, B fills; B's handleIO must commit only B's own key 1.
+        assertTrue(take(batch).eq(LibDecimalFloat.packLossless(1, 0)), "tx1: only B fills");
+        // tx2: key-0 reader fills (A's write never persisted), key-1 reader skips
+        // (B's write persisted) -> total 1.
+        OrderV4 memory readKey0 = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");
+        OrderV4 memory readKey1 = addOrder(o, "used:get(1),_ _:if(used 0 1) 1;:;");
+        OrderV4[] memory readers = new OrderV4[](2);
+        readers[0] = readKey0;
+        readers[1] = readKey1;
+        assertTrue(
+            take(readers).eq(LibDecimalFloat.packLossless(1, 0)),
+            "tx2: key-0 reader fills (A gone), key-1 reader skips (B kept)"
+        );
+    }
+
+    /// Same persistence check for an order untaken via OrderExceedsMaxRatio: a
+    /// ratio-untaken A (ratio 1000 > maximumIORatio 1) writing key 0, followed by
+    /// a filling same-owner B writing key 1, must not leak key 0 into the store
+    /// via B's handleIO. In a later tx the key-0 reader fills and the key-1
+    /// reader skips -> total 1.
+    function testUntakenRatioWriteNotPersistedByLaterFilledSibling() external {
+        mockTransfers();
+        address o = owner("mallory");
+        fund(o);
+        OrderV4 memory a = addOrder(o, ":set(0 1),_ _:1 1000;:;");
+        OrderV4 memory b = addOrder(o, ":set(1 9),_ _:1 1;:;");
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        orders[0] =
+            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        orders[1] =
+            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+            orders: orders,
+            minimumIO: LibDecimalFloat.packLossless(0, 0),
+            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
+            maximumIORatio: LibDecimalFloat.packLossless(1, 0),
+            IOIsInput: true,
+            data: ""
+        });
+        // tx1: A ratio-untaken, B fills; B's handleIO must commit only key 1.
+        vm.prank(iBob);
+        (Float total1,) = iRaindex.takeOrders4(config);
+        assertTrue(total1.eq(LibDecimalFloat.packLossless(1, 0)), "tx1: only B fills");
+        // tx2: key-0 reader fills (A gone), key-1 reader skips (B kept) -> 1.
+        OrderV4 memory readKey0 = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");
+        OrderV4 memory readKey1 = addOrder(o, "used:get(1),_ _:if(used 0 1) 1;:;");
+        OrderV4[] memory readers = new OrderV4[](2);
+        readers[0] = readKey0;
+        readers[1] = readKey1;
+        assertTrue(
+            take(readers).eq(LibDecimalFloat.packLossless(1, 0)),
+            "tx2: ratio-untaken key-0 reader fills (A gone), key-1 reader skips (B kept)"
+        );
+    }
+
+    /// recordVaultInput / recordVaultOutput populate the per-order balance-DIFF
+    /// cells that handle-IO reads as the amounts traded this fill: the input diff
+    /// is context<3 4>() and the output diff is context<4 4>() (column 3/4, row
+    /// CONTEXT_VAULT_IO_BALANCE_DIFF). A 1:1 fill of 1 must report diff 1 on both
+    /// legs. The order's handle-IO ensures exactly that, so it fills only if both
+    /// diffs are written correctly; a wrong/zero diff makes handle-IO revert.
+    function testVaultBalanceDiffsWrittenToHandleIOContext() external {
+        mockTransfers();
+        address o = owner("nate");
+        fund(o);
+        OrderV4[] memory list = new OrderV4[](1);
+        list[0] =
+            addOrder(o, "_ _:1 1;:ensure(every(equal-to(context<3 4>() 1) equal-to(context<4 4>() 1)) \"diffs\");");
+        assertTrue(
+            take(list).eq(LibDecimalFloat.packLossless(1, 0)),
+            "order fills only if both balance-diffs (input + output) reach handle-IO context"
+        );
+    }
+
+    /// M01 collapsed two near-duplicate ContextV2 emissions into a single
+    /// fully-populated emit per filled order. ContextV2 is the orderbook's
+    /// contract-context notification consumed off-chain (the subgraph), so it
+    /// must be emitted exactly once per fill — never dropped, never doubled.
+    function testContextV2EmittedOncePerFilledOrder() external {
+        mockTransfers();
+        address o = owner("olive");
+        fund(o);
+        OrderV4[] memory list = new OrderV4[](1);
+        list[0] = addOrder(o, "_ _:1 1;:;");
+        vm.recordLogs();
+        take(list);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 sig = keccak256("ContextV2(address,bytes32[][])");
+        uint256 count;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == sig) {
+                count++;
+            }
+        }
+        assertEq(count, 1, "exactly one ContextV2 emitted per filled order");
     }
 }
