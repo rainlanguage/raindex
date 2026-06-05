@@ -6,7 +6,9 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
+import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
+    IRaindexV6,
     OrderV4,
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
@@ -444,5 +446,45 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             iRaindex.vaultBalance2(owner, address(token1), OUTPUT_VAULT_ID).eq(LibDecimalFloat.packLossless(9, 0)),
             "only the taken order drew from the output vault"
         );
+    }
+
+    /// The flash-swap reentrancy window: takeOrders4 pushes the order outputs to
+    /// the taker and invokes its `onTakeOrders2` callback BEFORE it pulls the
+    /// taker's payment and BEFORE it flushes the vault-0 input slots. So during
+    /// the callback the vault-0 slot is accrued but not yet settled — the most
+    /// dangerous moment to re-enter. A malicious taker that re-enters takeOrders4
+    /// from its callback must be stopped by the nonReentrant guard, so it can
+    /// never act on the mid-flight slot. (The existing arb reentrancy test uses a
+    /// mock orderbook; this exercises the real RaindexV6 guard with a live vault-0
+    /// slot.)
+    function testTakeOrdersReentrancyViaCallbackBlocked() external {
+        _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm, owner, "_ _: 1 1;:;", address(token0), bytes32(0), address(token1), OUTPUT_VAULT_ID
+        );
+
+        Reenteroor taker = new Reenteroor();
+
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        orders[0] = TakeOrderConfigV4({
+            order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        });
+        // Non-empty data makes takeOrders4 invoke the onTakeOrders2 callback.
+        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+            orders: orders,
+            minimumIO: LibDecimalFloat.packLossless(0, 0),
+            maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
+            maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
+            IOIsInput: true,
+            data: hex"01"
+        });
+
+        // The taker's callback re-enters takeOrders4 (its config is irrelevant:
+        // the nonReentrant guard reverts at function entry).
+        taker.reenterWith(abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, config));
+
+        vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
+        vm.prank(address(taker));
+        iRaindex.takeOrders4(config);
     }
 }
