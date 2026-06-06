@@ -36,8 +36,8 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     //   col 4 vault outputs   (5 rows) -> 12..16
     //   col 5 signers         (1 row)  -> 17
     //   col 6 signed context  (1 row)  -> 18
-    //   col 7 deposit         (5 rows) -> 19..23
-    //   col 8 withdraw        (6 rows) -> 24..29
+    //   col 7 deposit         (6 rows) -> 19..24
+    //   col 8 withdraw        (7 rows) -> 25..31
     uint256 internal constant SLOT_BASE_SENDER = 0;
 
     // Calling-context column (col 1) slots. Deposit/withdraw row words route to
@@ -53,20 +53,22 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     uint256 internal constant SLOT_DEPOSIT_VAULT_ID = 21;
     uint256 internal constant SLOT_DEPOSIT_VAULT_BEFORE = 22;
     uint256 internal constant SLOT_DEPOSIT_VAULT_AFTER = 23;
+    uint256 internal constant SLOT_DEPOSIT_TOKEN_DECIMALS = 24;
 
-    uint256 internal constant SLOT_WITHDRAW_WITHDRAWER = 24;
-    uint256 internal constant SLOT_WITHDRAW_TOKEN = 25;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_ID = 26;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_BEFORE = 27;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_AFTER = 28;
-    uint256 internal constant SLOT_WITHDRAW_TARGET_AMOUNT = 29;
+    uint256 internal constant SLOT_WITHDRAW_WITHDRAWER = 25;
+    uint256 internal constant SLOT_WITHDRAW_TOKEN = 26;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_ID = 27;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_BEFORE = 28;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_AFTER = 29;
+    uint256 internal constant SLOT_WITHDRAW_TARGET_AMOUNT = 30;
+    uint256 internal constant SLOT_WITHDRAW_TOKEN_DECIMALS = 31;
 
     /// @dev Read the big-endian 16-bit function pointer at flat `slot` from the
     /// freshly built word-parser table.
     function pointerAt(uint256 slot) internal view returns (uint16) {
         bytes memory table = subParser.buildSubParserWordParsers();
-        // 30 slots, 2 bytes each.
-        assertEq(table.length, 60, "word parser table must hold 30 16-bit pointers");
+        // 32 slots, 2 bytes each.
+        assertEq(table.length, 64, "word parser table must hold 32 16-bit pointers");
         uint256 byteIndex = slot * 2;
         return (uint16(uint8(table[byteIndex])) << 8) | uint16(uint8(table[byteIndex + 1]));
     }
@@ -174,7 +176,7 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     }
 
     /// Pins the DEPOSIT column to flat offset +1 of the signed-context start
-    /// column (i.e. column 7, slots 19..23). The deposit row words route into
+    /// column (i.e. column 7, slots 19..24). The deposit row words route into
     /// CONTEXT_CALLING_CONTEXT_COLUMN rows 0/1/2, the SAME (col,row) as
     /// order-hash/order-owner/order-counterparty, so solc deduplicates them to a
     /// shared 16-bit pointer. Asserting that the deposit token/vault-id/before
@@ -213,14 +215,14 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     }
 
     /// Pins the WITHDRAW column to flat offset +2 of the signed-context start
-    /// column (i.e. column 8, slots 24..29). Like deposits, the withdraw row
-    /// words 0/1/2 alias the calling-context order words, but the withdraw column
-    /// has a SIXTH slot — withdraw-target-amount — routing to
-    /// CONTEXT_CALLING_CONTEXT_COLUMN row 4, a row reached by NO order word and NO
-    /// deposit word, so its pointer is unique to this slot. A mutation that swaps
-    /// the deposit and withdraw column offsets places the withdraw column at +1
-    /// (5-slot deposit array follows), so slot 29 no longer holds the unique
-    /// row-4 target pointer and the asserted aliases land on the wrong rows.
+    /// column (i.e. column 8, slots 25..31). Like deposits, the withdraw row
+    /// words 0/1/2 alias the calling-context order words. withdraw-target-amount
+    /// routes to CONTEXT_CALLING_CONTEXT_COLUMN row 4 — a row reached by no order
+    /// word and, among the deposit/withdraw rows, shared only with
+    /// deposit-token-decimals — so it is distinct from every deposit row 0..3. A
+    /// mutation that swaps the deposit and withdraw column offsets places the
+    /// withdraw column at +1 (the 6-slot deposit array follows), so the asserted
+    /// aliases land on the wrong rows.
     function testWithdrawColumnAtOffsetPlusTwo() external view {
         assertEq(
             pointerAt(SLOT_WITHDRAW_TOKEN),
@@ -237,8 +239,8 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
             pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
             "withdraw-vault-before (col 8 row 2) aliases calling-context order-counterparty (row 2)"
         );
-        // withdraw-target-amount routes to calling-context row 4, a row no order
-        // word and no deposit slot reaches, so its pointer is unique to slot 29.
+        // withdraw-target-amount routes to calling-context row 4, distinct from
+        // every order word and from deposit rows 0..3.
         uint16 target = pointerAt(SLOT_WITHDRAW_TARGET_AMOUNT);
         assertTrue(target != pointerAt(SLOT_CALLING_ORDER_HASH), "withdraw-target != order-hash (row 0)");
         assertTrue(target != pointerAt(SLOT_CALLING_ORDER_OWNER), "withdraw-target != order-owner (row 1)");
@@ -249,5 +251,37 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
         assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_ID), "withdraw-target != any deposit row pointer (vault-id)");
         assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_BEFORE), "withdraw-target != deposit before");
         assertTrue(target != pointerAt(SLOT_DEPOSIT_VAULT_AFTER), "withdraw-target != deposit after");
+    }
+
+    /// deposit-token-decimals routes to CONTEXT_CALLING_CONTEXT_COLUMN row 4 —
+    /// the SAME row as withdraw-target-amount — so solc deduplicates them into one
+    /// function and they share a 16-bit pointer; both are distinct from deposit
+    /// rows 0..3. withdraw-token-decimals routes to row 5, reached by no other
+    /// word, so its pointer is unique among the deposit/withdraw slots.
+    function testTokenDecimalsWiring() external view {
+        assertEq(
+            pointerAt(SLOT_DEPOSIT_TOKEN_DECIMALS),
+            pointerAt(SLOT_WITHDRAW_TARGET_AMOUNT),
+            "deposit-token-decimals and withdraw-target-amount both route to calling-context row 4"
+        );
+        assertTrue(
+            pointerAt(SLOT_DEPOSIT_TOKEN_DECIMALS) != pointerAt(SLOT_DEPOSIT_TOKEN),
+            "deposit-token-decimals (row 4) != deposit-token (row 0)"
+        );
+        assertTrue(
+            pointerAt(SLOT_DEPOSIT_TOKEN_DECIMALS) != pointerAt(SLOT_DEPOSIT_VAULT_AFTER),
+            "deposit-token-decimals (row 4) != deposit-vault-after (row 3)"
+        );
+
+        uint16 withdrawDecimals = pointerAt(SLOT_WITHDRAW_TOKEN_DECIMALS);
+        assertTrue(
+            withdrawDecimals != pointerAt(SLOT_WITHDRAW_TARGET_AMOUNT),
+            "withdraw-token-decimals (row 5) != withdraw-target-amount (row 4)"
+        );
+        assertTrue(
+            withdrawDecimals != pointerAt(SLOT_DEPOSIT_TOKEN_DECIMALS),
+            "withdraw-token-decimals (row 5) != deposit-token-decimals (row 4)"
+        );
+        assertTrue(withdrawDecimals != pointerAt(SLOT_BASE_SENDER), "withdraw-token-decimals != sender");
     }
 }
