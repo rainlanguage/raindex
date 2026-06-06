@@ -27,6 +27,11 @@ error BadLender(address badLender);
 /// Thrown when the flash loan fails somehow.
 error FlashLoanFailed();
 
+/// Thrown when `arb4` is called with `IOIsInput == false`. The flash-loan amount
+/// is the order output the taker receives, which `minimumIO` expresses only when
+/// it is the taker input (`IOIsInput == true`).
+error ArbRequiresInputIO();
+
 /// @title RaindexV6FlashBorrower
 /// @notice Abstract contract that liq-source specialized contracts can inherit
 /// to provide flash loan based arbitrage against external liquidity sources to
@@ -136,6 +141,12 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         // Mimic what Raindex would do anyway if called with zero orders.
         if (takeOrders.orders.length == 0) {
             revert IRaindexV6.NoOrders();
+        }
+        // The flash-loan amount below reads `minimumIO` as the order output the
+        // taker receives, which only matches when `minimumIO` is the taker
+        // input (`IOIsInput == true`).
+        if (!takeOrders.IOIsInput) {
+            revert ArbRequiresInputIO();
         }
 
         // Encode everything that will be used by the flash loan callback.
