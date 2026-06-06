@@ -64,8 +64,19 @@ abstract contract RaindexV6ArbOrderTaker is
     }
 
     /// @inheritdoc IRaindexV6OrderTaker
-    /// @dev Empty no-op. The contract holds no value between operations and the
-    /// caller chooses which raindex to interact with, so there is nothing to
-    /// protect via `msg.sender` validation here.
+    /// @dev Empty no-op, and intentionally permissionless: the contract holds no
+    /// value between operations and the caller chooses which raindex to interact
+    /// with, so there is nothing to protect via `msg.sender` validation.
+    ///
+    /// The permissionless entry is also the recovery path for value that reaches
+    /// the contract by accident. Unsolicited transfers cannot be prevented: ERC20
+    /// transfers have no recipient hook to revert in, and the arb legitimately
+    /// receives ERC20 and ETH mid-operation. Because anyone may call the
+    /// take-orders entrypoints, a stray balance is swept out by the next call
+    /// rather than stranded; gating this hook to an active orderbook callback
+    /// would instead brick such balances permanently. Concrete implementations
+    /// that move value here (e.g. the generic-pool variant's unlimited
+    /// approve-and-call with whole-ETH-balance forward) are safe only under this
+    /// no-value-between-operations invariant.
     function onTakeOrders2(address, address, Float, Float, bytes calldata) public virtual override {}
 }
