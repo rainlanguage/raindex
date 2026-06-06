@@ -324,4 +324,23 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         }
         assertEq(count, 1, "exactly one ContextV2 emitted per filled order");
     }
+
+    /// handleIO commits an order's calculate-phase `kvs` to the store BEFORE
+    /// running that order's handle-IO eval, so handle-IO sees its own calculate
+    /// `:set` within the same evaluation (the contract intent: "handle IO to see
+    /// a consistent view on sets from calculate IO"). An order whose calculate
+    /// sets key 0 to 5 and whose handle-IO requires get(0) == 5 fills only if
+    /// that ordering holds; deferring the commit to after the handle-IO eval
+    /// would make handle-IO read an unset 0 and revert.
+    function testHandleIOSeesSameOrderCalculateSet() external {
+        mockTransfers();
+        address o = owner("frank");
+        fund(o);
+        OrderV4[] memory list = new OrderV4[](1);
+        list[0] = addOrder(o, ":set(0 5),_ _:1 1;:ensure(equal-to(get(0) 5) \"hio sees calc\");");
+        assertTrue(
+            take(list).eq(LibDecimalFloat.packLossless(1, 0)),
+            "order fills only if handle-IO sees its own calculate set"
+        );
+    }
 }
