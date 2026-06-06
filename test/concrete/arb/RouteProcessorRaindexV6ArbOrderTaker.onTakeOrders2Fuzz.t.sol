@@ -10,6 +10,8 @@ import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 
 /// @title RouteProcessorRaindexV6ArbOrderTakerOnTakeOrders2FuzzTest
 /// @notice Audit A07-3 (#2534): `onTakeOrders2` had only concrete coverage
@@ -39,6 +41,13 @@ contract RouteProcessorRaindexV6ArbOrderTakerOnTakeOrders2FuzzTest is Test {
         int256 inputExponent;
         int256 outputCoefficient;
         int256 outputExponent;
+    }
+
+    /// `onTakeOrders2` resolves token decimals via the deployed TOFU contract,
+    /// so it must exist before the callback runs.
+    function setUp() public {
+        LibRainDeploy.etchZoltuFactory(vm);
+        LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
     }
 
     /// Mirror the contract's conversions in a separate frame: the input side is
