@@ -599,6 +599,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         pushTokens(msg.sender, io.outputToken, totalTakerInput);
 
+        // Integrator note on the state observed inside `onTakeOrders2`: the
+        // orders are fully recorded and handled and the taker has received
+        // `io.outputToken`, but their `io.inputToken` payment has not been pulled
+        // yet and the vault-0 input settlements below have not run. For the
+        // duration of the callback the contract's actual token balance is below
+        // its internal vault accounting: `vaultBalance2` already reflects the
+        // post-trade balances, and `maxFlashLoan` returns a correspondingly
+        // reduced amount until settlement completes. Re-entering raindex from the
+        // callback is blocked by `nonReentrant`.
         if (config.data.length > 0) {
             IRaindexV6OrderTaker(msg.sender)
                 .onTakeOrders2(io.outputToken, io.inputToken, totalTakerInput, totalTakerOutput, config.data);
