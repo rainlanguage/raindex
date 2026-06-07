@@ -41,29 +41,29 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     //   col 4 vault outputs   (5 rows) -> 12..16
     //   col 5 signers         (1 row)  -> 17
     //   col 6 signed context  (1 row)  -> 18
-    //   col 7 deposit         (5 rows) -> 19..23
-    //   col 8 withdraw        (6 rows) -> 24..29
-    uint256 internal constant TABLE_SLOTS = 30;
+    //   col 7 deposit         (6 rows) -> 19..24
+    //   col 8 withdraw        (7 rows) -> 25..31
+    uint256 internal constant TABLE_SLOTS = 32;
     uint256 internal constant SLOT_SIGNERS = 17;
     uint256 internal constant SLOT_SIGNED_CONTEXT = 18;
 
     /// @dev Read the big-endian 16-bit function pointer at flat `slot` from the
     /// freshly built operand-handler table, asserting the table is the expected
-    /// 60 bytes (30 16-bit slots).
+    /// 64 bytes (32 16-bit slots).
     function pointerAt(uint256 slot) internal view returns (uint16) {
         bytes memory table = subParser.buildOperandHandlerFunctionPointers();
-        assertEq(table.length, TABLE_SLOTS * 2, "operand handler table must hold 30 16-bit pointers");
+        assertEq(table.length, TABLE_SLOTS * 2, "operand handler table must hold 32 16-bit pointers");
         uint256 byteIndex = slot * 2;
         return (uint16(uint8(table[byteIndex])) << 8) | uint16(uint8(table[byteIndex + 1]));
     }
 
-    /// The operand-handler table holds exactly 30 slots (60 bytes), matching the
+    /// The operand-handler table holds exactly 32 slots (64 bytes), matching the
     /// extended context column/row layout. A mutation to the outer matrix length
     /// (`new ...[][](CONTEXT_COLUMNS_EXTENDED)`) or to the deposit/withdraw column
     /// offset (which displaces or drops a whole column) changes this length and
     /// is caught by the guard inside `pointerAt`. Reading slot 0 exercises it.
     function testOperandHandlerTableLength() external view {
-        // pointerAt asserts table.length == 60; any wrong length reverts here.
+        // pointerAt asserts table.length == 64; any wrong length reverts here.
         pointerAt(0);
     }
 
@@ -101,7 +101,7 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         );
     }
 
-    /// Every deposit (slots 19..23) and withdraw (slots 24..29) operand-handler
+    /// Every deposit (slots 19..24) and withdraw (slots 25..31) operand-handler
     /// slot is the shared `handleOperandDisallowed` pointer: deposit/withdraw
     /// words are plain context words whose operand is disallowed. This, combined
     /// with the two distinct-handler tests above and the length guard, pins that
@@ -109,11 +109,11 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     /// of the signed-context start column: a mutation swapping those offsets, or
     /// dropping a column, either changes the table length (caught by the guard)
     /// or relocates the two distinct signers/signed-context handlers into the
-    /// deposit/withdraw range (caught because slots 19..29 would no longer all
+    /// deposit/withdraw range (caught because slots 19..31 would no longer all
     /// equal the disallowed pointer).
     function testDepositWithdrawOperandHandlersAllDisallowed() external view {
         uint16 disallowed = pointerAt(0);
-        for (uint256 slot = 19; slot <= 29; slot++) {
+        for (uint256 slot = 19; slot <= 31; slot++) {
             assertEq(pointerAt(slot), disallowed, "deposit/withdraw operand slot uses handleOperandDisallowed");
         }
         // And neither distinct handler leaks into the deposit/withdraw range:

@@ -1114,6 +1114,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
     /// @dev Pulls `amount` of `token` from `account` via `safeTransferFrom`.
     /// Returns the fixed-decimal amount transferred and the token decimals.
+    ///
+    /// A lossy float->fixed-decimal conversion is rounded UP here so the contract
+    /// never pulls in less than the vault accounting credits. `pushTokens` rounds
+    /// DOWN for the same protocol-favoring reason. Together this keeps the
+    /// orderbook solvent — its real token balance is always >= the sum of the
+    /// vault balances — but each lossy conversion leaves a sub-token-unit residue
+    /// in the contract that is not attributed to any vault and has no recovery
+    /// path. Such dust is under one base unit per conversion and can never cause
+    /// insolvency.
     function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
         (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
         if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
@@ -1138,6 +1147,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
     /// @dev Pushes `amountFloat` of `token` to `account` via `safeTransfer`.
     /// Returns the fixed-decimal amount transferred and the token decimals.
+    ///
+    /// A lossy float->fixed-decimal conversion is truncated (rounded DOWN) here
+    /// so the contract never sends more than the vault accounting debits. See
+    /// `pullTokens` for the full rounding policy and its solvency / residual-dust
+    /// tradeoff.
     function pushTokens(address account, address token, Float amountFloat) internal returns (uint256, uint8) {
         (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
         if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
