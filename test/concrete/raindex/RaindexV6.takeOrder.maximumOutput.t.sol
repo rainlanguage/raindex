@@ -568,9 +568,9 @@ contract RaindexV6TakeOrderMaximumOutputTest is RaindexV6ExternalRealTest {
         Float ownerDepositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(ownerDepositAmount18, 18);
         Float maximumTakerOutput = LibDecimalFloat.fromFixedDecimalLosslessPacked(maximumTakerOutput18, 18);
 
-        // Need per-order input vault mocks because pushTokens is called
-        // per-order with per-order amounts.
-        TestVault[] memory testVaults = new TestVault[](3);
+        // Same-owner vault-0 input credits are netted into a single push, so one
+        // input vault mock covers both orders' input.
+        TestVault[] memory testVaults = new TestVault[](2);
         Float expectedTakerInput;
         {
             Float maximumTakerInput = maximumTakerOutput.div(orderIO);
@@ -598,19 +598,14 @@ contract RaindexV6TakeOrderMaximumOutputTest is RaindexV6ExternalRealTest {
                 deposit: ownerDepositAmount,
                 expect: ownerDepositAmount.sub(expectedTakerInput)
             });
+            // Both orders share the owner and input token, so their vault-0 input
+            // credits accrue together and settle as one netted push.
             testVaults[1] = TestVault({
                 owner: owner,
                 token: address(iToken0),
                 vaultId: bytes32(0),
                 deposit: Float.wrap(0),
-                expect: order0Take.mul(orderIO)
-            });
-            testVaults[2] = TestVault({
-                owner: owner,
-                token: address(iToken0),
-                vaultId: bytes32(0),
-                deposit: Float.wrap(0),
-                expect: order1Take.mul(orderIO)
+                expect: order0Take.mul(orderIO).add(order1Take.mul(orderIO))
             });
         }
 

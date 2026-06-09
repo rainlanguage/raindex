@@ -40,7 +40,11 @@ jobs:
           gc-max-store-size-linux: 8G
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: rust-${{ github.workflow }}
+          # Restore this branch's own cache if it has one, else fall back to the
+          # cache the prod run saves on main (shared prefix-key). save-if keeps
+          # this branch's cache warm across re-runs.
+          prefix-key: rust-vercel-docs
+          save-if: true
       - name: Cache npm
         uses: actions/cache@v4
         with:
