@@ -228,8 +228,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
                 revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
             }
-            Float ownerTokenBalance =
-                LibDecimalFloat.fromFixedDecimalLosslessPacked(IERC20(token).balanceOf(owner), decimals);
+            //slither-disable-next-line unused-return
+            (Float ownerTokenBalance,) =
+                LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).balanceOf(owner), decimals);
             //slither-disable-next-line unused-return
             (Float ownerTokenApproval,) =
                 LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).allowance(owner, address(this)), decimals);
