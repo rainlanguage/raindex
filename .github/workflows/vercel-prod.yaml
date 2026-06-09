@@ -6,6 +6,18 @@ on:
   push:
     branches:
       - main
+    # Only redeploy prod when something webapp-relevant changed (see
+    # vercel-preview.yaml for the rationale) — a sol-only main merge shouldn't
+    # rebuild + redeploy the webapp.
+    paths:
+      - 'packages/**'
+      - 'crates/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'script/vercel-build.sh'
+      - '.github/workflows/vercel-prod.yaml'
 jobs:
   Deploy-Preview:
     permissions:

@@ -19,6 +19,20 @@ on:
   push:
     branches-ignore:
       - main
+    # Only build/deploy a preview when something webapp-relevant changed. The
+    # webapp build pulls the wasm bindings (crates/**, incl. committed abis),
+    # the JS workspaces (packages/**), deps, the nix toolchain, and the build
+    # script — sol-only / CI / docs / audit pushes can't change it, so skip the
+    # ~30-min build for them. (Not a required check, so skipping is safe.)
+    paths:
+      - 'packages/**'
+      - 'crates/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'script/vercel-build.sh'
+      - '.github/workflows/vercel-preview.yaml'
 concurrency:
   group: ${{ format('{0}-vercel-preview', github.ref) }}
   cancel-in-progress: true
