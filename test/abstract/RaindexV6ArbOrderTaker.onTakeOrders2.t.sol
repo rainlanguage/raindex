@@ -21,6 +21,7 @@ import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IIn
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
@@ -36,7 +37,12 @@ contract RaindexV6ArbOrderTakerOnTakeOrders2Test is Test {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(100e18);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        RealisticOrderTakerMockRaindex mockRaindex = new RealisticOrderTakerMockRaindex(100e18);
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockExchange exchange = new MockExchange();
 
         outputToken.mint(address(raindex), 100e18);

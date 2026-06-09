@@ -10,8 +10,14 @@ import {IRaindexV6ArbOrderTaker, TaskV2} from "raindex-interface-0.1.1/src/inter
 import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
+import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+
+/// Thrown when `arb5` is called with a `raindex` that is not the trusted
+/// deterministic deployment. `arb5` grants `raindex` an unlimited token approval
+/// and calls it, so an untrusted address could drain the contract's balance.
+error BadRaindex(address badRaindex);
 
 /// @title RaindexV6ArbOrderTaker
 /// @notice Arb contract that takes orders directly from a `Raindex` without
@@ -45,6 +51,11 @@ abstract contract RaindexV6ArbOrderTaker is
         if (takeOrders.orders.length == 0) {
             revert IRaindexV6.NoOrders();
         }
+        // The arb grants `raindex` an unlimited token approval and calls it, so
+        // it MUST be the trusted deployment rather than a caller-supplied address.
+        if (address(raindex) != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS) {
+            revert BadRaindex(address(raindex));
+        }
 
         address ordersInputToken = takeOrders.orders[0].order.validInputs[takeOrders.orders[0].inputIOIndex].token;
         address ordersOutputToken = takeOrders.orders[0].order.validOutputs[takeOrders.orders[0].outputIOIndex].token;
@@ -65,8 +76,8 @@ abstract contract RaindexV6ArbOrderTaker is
 
     /// @inheritdoc IRaindexV6OrderTaker
     /// @dev Empty no-op, and intentionally permissionless: the contract holds no
-    /// value between operations and the caller chooses which raindex to interact
-    /// with, so there is nothing to protect via `msg.sender` validation.
+    /// value between operations, so there is nothing to protect via `msg.sender`
+    /// validation.
     ///
     /// The permissionless entry is also the recovery path for value that reaches
     /// the contract by accident. Unsolicited transfers cannot be prevented: ERC20
