@@ -42,7 +42,9 @@ jobs:
           gc-max-store-size-linux: 1G
       - uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: rust-${{ github.workflow }}
+          # Stable shared-key (same in vercel-preview.yaml) so preview + prod
+          # share one warm wasm/cargo cache instead of a separate per-workflow one.
+          shared-key: vercel-webapp
       - name: Cache npm
         uses: actions/cache@v4
         with:
