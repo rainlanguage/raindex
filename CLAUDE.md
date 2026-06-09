@@ -5,8 +5,9 @@ file.
 
 The full cause-and-effect chain for a contract change: edit source → **deploy**
 the new bytecode to its new CREATE2 address → that source change **publishes** a
-new soldeer version → which needs its deploy constants pinned → **merge**. All of
-it is routine and pre-authorized; don't stop to ask about address/codehash churn.
+new soldeer version → which needs its deploy constants pinned → **merge**. All
+of it is routine and pre-authorized; don't stop to ask about address/codehash
+churn.
 
 ## Merging a PR
 
@@ -15,21 +16,23 @@ it is routine and pre-authorized; don't stop to ask about address/codehash churn
   `test-js-bindings`, `wasm-artifacts`, `wasm-browser-test`, `wasm-test`. NOT
   required: `rainix-sol / test`, `rainix-sol / static`, `copy-artifacts`,
   `Deploy-Preview-Push`. The ~30-min vercel preview does **not** gate a merge —
-  don't wait on it. But still understand *every* red before merging; never
+  don't wait on it. But still understand _every_ red before merging; never
   `--admin` over an unexplained failure (verify each is the expected one).
-- A merge-gate hook requires a `Reviewed <9-char-current-head-sha>: <substantive
-  review>` PR comment **before** merging, bound to the **current** head. Re-post
-  it after any branch update or new commit (the SHA changes).
+- A merge-gate hook requires a
+  `Reviewed <9-char-current-head-sha>: <substantive
+  review>` PR comment
+  **before** merging, bound to the **current** head. Re-post it after any branch
+  update or new commit (the SHA changes).
 - raindex is `REVIEW_REQUIRED` and the author can't self-approve →
-  `gh pr merge <n> --merge --admin` (needs explicit owner authorization
-  per-PR). rainix merges with plain `gh pr merge <n> --merge`.
+  `gh pr merge <n> --merge --admin` (needs explicit owner authorization per-PR).
+  rainix merges with plain `gh pr merge <n> --merge`.
 - Merge with the default merge commit (it preserves PR history). Re-trigger CI
   with a fresh empty commit + push. Move a branch with
   `git checkout -f -B <branch> <ref>`. Commit with
-  `git -c commit.gpgsign=false commit --no-verify`. (Squash/rebase merges,
-  CLI workflow re-runs, and history rewrites are blocked by hooks — these are
-  the allowed equivalents; don't spell the blocked forms out, in docs or
-  commands, or you'll trip those same hooks.)
+  `git -c commit.gpgsign=false commit --no-verify`. (Squash/rebase merges, CLI
+  workflow re-runs, and history rewrites are blocked by hooks — these are the
+  allowed equivalents; don't spell the blocked forms out, in docs or commands,
+  or you'll trip those same hooks.)
 
 ## Deploying a contract (the bytecode cascade)
 
@@ -74,16 +77,17 @@ address + codehash. Do the whole cascade without asking:
   `script/check-published-deploy-constants.sh`, which queries the live registry)
   reds **main and every PR** on any published tag missing them. Values come from
   the current `src/generated/*.pointers.sol`; contracts unchanged since the
-  prior version reuse its values. No new deploy is needed if `testProdDeploy*` is
-  already green (the contracts were deployed by their own PRs).
+  prior version reuse its values. No new deploy is needed if `testProdDeploy*`
+  is already green (the contracts were deployed by their own PRs).
 - The content gate **strips** the pinned `*_<ver>` constant blocks before
   hashing — so pinning a version's constants is not itself a content change
   (otherwise pinning would publish the next version, which would need its own
   constants pinned: an endless bump → pin → bump loop). Only real bytecode
   changes publish.
-- **To avoid a red-main follow-up**, pre-pin the *next* version's constants in
-  the same contract-change PR. `next = patch(max(foundry.toml version,
-  registry-latest)) + 1`. The pre-pinned constants are harmless before the
-  publish (the test only checks *published* tags) and satisfy it the instant the
-  version lands — so the fix, the redeploy, and the constant pin ship as one PR
-  with no red main.
+- **To avoid a red-main follow-up**, pre-pin the _next_ version's constants in
+  the same contract-change PR.
+  `next = patch(max(foundry.toml version,
+  registry-latest)) + 1`. The
+  pre-pinned constants are harmless before the publish (the test only checks
+  _published_ tags) and satisfy it the instant the version lands — so the fix,
+  the redeploy, and the constant pin ship as one PR with no red main.
