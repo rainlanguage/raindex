@@ -81,4 +81,29 @@ mod tests {
         assert!(stmt.sql.contains("raindex_address IN"));
         assert_eq!(stmt.params.len(), 1);
     }
+
+    #[test]
+    fn selects_columns_aliased_to_camel_case() {
+        let stmt =
+            build_fetch_all_tokens_stmt(&FetchAllTokensArgs::default()).expect("should build");
+        assert!(stmt.sql.contains("AS chainId"));
+        assert!(stmt.sql.contains("AS raindexAddress"));
+        assert!(stmt.sql.contains("AS tokenAddress"));
+    }
+
+    #[test]
+    fn deserializes_camel_case_db_row() {
+        let json = r#"{
+            "chainId": 42161,
+            "raindexAddress": "0x0000000000000000000000000000000000000001",
+            "tokenAddress": "0x0000000000000000000000000000000000000002",
+            "name": "Token",
+            "symbol": "TKN",
+            "decimals": 18
+        }"#;
+        let token: LocalDbToken = serde_json::from_str(json).expect("should deserialize");
+        assert_eq!(token.chain_id, 42161);
+        assert_eq!(token.name, "Token");
+        assert_eq!(token.decimals, 18);
+    }
 }
