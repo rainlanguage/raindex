@@ -103,7 +103,38 @@ mod tests {
         }"#;
         let token: LocalDbToken = serde_json::from_str(json).expect("should deserialize");
         assert_eq!(token.chain_id, 42161);
+        assert_eq!(
+            token.raindex_address,
+            "0x0000000000000000000000000000000000000001"
+                .parse::<Address>()
+                .unwrap()
+        );
+        assert_eq!(
+            token.token_address,
+            "0x0000000000000000000000000000000000000002"
+                .parse::<Address>()
+                .unwrap()
+        );
         assert_eq!(token.name, "Token");
+        assert_eq!(token.symbol, "TKN");
         assert_eq!(token.decimals, 18);
+    }
+
+    #[test]
+    fn rejects_snake_case_db_row() {
+        let json = r#"{
+            "chain_id": 42161,
+            "raindex_address": "0x0000000000000000000000000000000000000001",
+            "token_address": "0x0000000000000000000000000000000000000002",
+            "name": "Token",
+            "symbol": "TKN",
+            "decimals": 18
+        }"#;
+        let err = serde_json::from_str::<LocalDbToken>(json)
+            .expect_err("snake_case keys must not deserialize");
+        assert!(
+            err.to_string().contains("missing field `chainId`"),
+            "unexpected error: {err}"
+        );
     }
 }
