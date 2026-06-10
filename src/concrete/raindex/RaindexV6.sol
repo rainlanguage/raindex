@@ -52,6 +52,7 @@ import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
     CONTEXT_CALCULATIONS_COLUMN,
+    CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_VAULT_IO_BALANCE_DIFF,
     CONTEXT_VAULT_INPUTS_COLUMN,
     CONTEXT_VAULT_IO_TOKEN,
@@ -443,6 +444,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             revert NoOrders();
         }
 
+        // Guard the max IO before dereferencing any order IO index so a zero max
+        // reverts with this explicit error rather than a bounds panic when an IO
+        // index is also out of range.
+        if (!config.maximumIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
+            revert ZeroMaximumIO();
+        }
+
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
         TakeOrdersIO memory io = TakeOrdersIO({
@@ -473,10 +481,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bool ordersTaken;
 
         {
-            if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
-                revert ZeroMaximumIO();
-            }
-
             uint256 i = 0;
             while (i < config.orders.length && io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 takeOrderConfig = config.orders[i];
@@ -711,6 +715,17 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         ClearStateChangeV2 memory clearStateChange =
             calculateClearStateChange(aliceOrderIOCalculation, bobOrderIOCalculation);
 
+        // A negative bounty means there is a spread between the orders. This is a
+        // critical error because it means the DEX could be exploited if allowed.
+        // Checked before any vault settlement so a spread always reverts with this
+        // explicit error.
+        if (
+            clearStateChange.aliceOutput.sub(clearStateChange.bobInput).lt(LibDecimalFloat.FLOAT_ZERO)
+                || clearStateChange.bobOutput.sub(clearStateChange.aliceInput).lt(LibDecimalFloat.FLOAT_ZERO)
+        ) {
+            revert NegativeBounty();
+        }
+
         // Pull both orders' outputs into the orderbook before pushing either
         // order's input out. Alice's input token is Bob's output token and vice
         // versa, so both pulls must precede both pushes for the orderbook to hold
@@ -725,13 +740,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         {
             Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
             Float bobBounty = clearStateChange.bobOutput.sub(clearStateChange.aliceInput);
-
-            // A negative bounty means there is a spread between the orders.
-            // This is a critical error because it means the DEX could be
-            // exploited if allowed.
-            if (aliceBounty.lt(LibDecimalFloat.FLOAT_ZERO) || bobBounty.lt(LibDecimalFloat.FLOAT_ZERO)) {
-                revert NegativeBounty();
-            }
 
             increaseVaultBalance(
                 msg.sender,
@@ -790,6 +798,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
                     order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
                 );
+
+                // The calculations column holds the calculated max output and IO
+                // ratio, which only become known after the calculate eval below.
+                // Seed it with a zero-filled array of the right length so the
+                // `calculated-max-output` and `calculated-io-ratio` words read 0
+                // during calculate (per their NatSpec) instead of reverting on an
+                // out-of-bounds read. The real values overwrite this column after
+                // eval, before handle IO runs.
+                callingContext[CONTEXT_CALCULATIONS_COLUMN - 1] = new bytes32[](CONTEXT_CALCULATIONS_ROWS);
 
                 {
                     (TOFUOutcome inputOutcome, uint8 inputDecimals) =

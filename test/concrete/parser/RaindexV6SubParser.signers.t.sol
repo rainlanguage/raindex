@@ -72,4 +72,21 @@ contract RaindexV6SubParserSignersTest is OpTest {
 
         checkUnhappyParse2(rainlang, abi.encodeWithSelector(StackAllocationMismatch.selector, 2, 1));
     }
+
+    /// The signer operand selects the row by its low byte only, so an operand
+    /// whose low byte is zero resolves to signer-0 regardless of its high bytes.
+    /// `256` (`0x100`) has a zero low byte and therefore reads signer-0.
+    function testSubParserContextSignerRowLowByte() external view {
+        address subParserAddress = LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
+
+        StackItem[] memory expectedStack = new StackItem[](1);
+        expectedStack[0] = StackItem.wrap(keccak256(bytes("signer-0")));
+
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<256>();"));
+
+        checkHappy(
+            rainlang, LibRaindexSubParserContextFixture.hashedNamesContext(), expectedStack, "signer-256-low-byte"
+        );
+    }
 }
