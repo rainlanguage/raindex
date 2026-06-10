@@ -212,6 +212,20 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     mapping(address owner => mapping(address token => mapping(bytes32 vaultId => Float balance))) internal
         sVaultBalances;
 
+    /// @dev Per `(user, token)` ledger of the sub-base-unit remainder that the
+    /// orderbook holds on behalf of `user` but has not yet moved, because a
+    /// lossy float->fixed-decimal conversion in `pullTokens`/`pushTokens` cannot
+    /// transfer a fraction of a base unit. The credit is always non-negative and
+    /// strictly less than one base unit: whenever it reaches a whole base unit it
+    /// is realized into the next token move for that `(user, token)`. It is
+    /// denominated in token units (a `Float`) so it is independent of the token's
+    /// decimals. Every credit is backed by real tokens the orderbook already
+    /// holds (a pull rounds the transfer up, a push rounds it down), so realizing
+    /// it only ever releases provable excess and never dips into a vault balance.
+    // Solhint and slither disagree on this. Slither wins.
+    //solhint-disable-next-line private-vars-leading-underscore
+    mapping(address user => mapping(address token => Float credit)) internal sDustCredit;
+
     /// @inheritdoc IRaindexV6
     function vaultBalance2(address owner, address token, bytes32 vaultId) external view override returns (Float) {
         return _vaultBalance(owner, token, vaultId);
@@ -1133,6 +1147,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
+    /// @dev Reads `token`'s decimals via TOFU, reverting if the read is not
+    /// consistent with what was seen before. Shared by `pullTokens`/`pushTokens`.
+    function _tokenDecimals(address token) internal returns (uint8) {
+        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
+        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
+            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
+        }
+        return decimals;
+    }
+
     /// @dev Pulls `amount` of `token` from `account` via `safeTransferFrom`.
     /// Returns the fixed-decimal amount transferred and the token decimals.
     ///
@@ -1140,29 +1164,46 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// never pulls in less than the vault accounting credits. `pushTokens` rounds
     /// DOWN for the same protocol-favoring reason. Together this keeps the
     /// orderbook solvent — its real token balance is always >= the sum of the
-    /// vault balances — but each lossy conversion leaves a sub-token-unit residue
-    /// in the contract that is not attributed to any vault and has no recovery
-    /// path. Such dust is under one base unit per conversion and can never cause
-    /// insolvency.
+    /// vault balances. The sub-base-unit residue each lossy conversion would
+    /// otherwise strand is instead booked into `sDustCredit[account][token]` and
+    /// realized into the next move for the same `(account, token)`: the pull is
+    /// reduced by any whole base unit of standing credit, and the fresh over-pull
+    /// is added to it. The credit is always backed by tokens the orderbook holds
+    /// for `account`, so this is exactly conservative and never insolvent.
     function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
-        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
-        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-        }
+        uint8 decimals = _tokenDecimals(token);
         if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePull();
         }
 
-        (uint256 amount18, bool lossless) = LibDecimalFloat.toFixedDecimalLossy(amount, decimals);
-        // Round truncation up when pulling.
-        if (!lossless) {
-            // This needs to be checked math as an overflow would cause tokens
-            // to silently not be pulled (wraps to 0).
-            ++amount18;
-        }
-        if (amount18 > 0) {
+        // The orderbook already holds the standing credit (token units) for
+        // `account` from prior over-pulls / under-pushes, so it only needs to
+        // pull in the part of `amount` that the credit does not already cover.
+        Float effective = amount.sub(sDustCredit[account][token]);
+
+        uint256 amount18;
+        // A non-positive `effective` means the credit already covers the whole
+        // pull, so no tokens move; `toFixedDecimalLossy` also rejects negatives.
+        if (effective.gt(LibDecimalFloat.FLOAT_ZERO)) {
+            bool lossless;
+            (amount18, lossless) = LibDecimalFloat.toFixedDecimalLossy(effective, decimals);
+            // Round truncation up when pulling.
+            if (!lossless) {
+                // This needs to be checked math as an overflow would cause tokens
+                // to silently not be pulled (wraps to 0).
+                ++amount18;
+            }
             IERC20(token).safeTransferFrom(account, address(this), amount18);
         }
+
+        // The new credit is the transferred amount minus what `effective`
+        // required: the over-pull when tokens moved (rounded up, so non-negative
+        // and under one base unit), or the leftover credit when none did. It is
+        // backed by tokens the orderbook holds for `account`.
+        //slither-disable-next-line unused-return
+        (Float pulled,) = LibDecimalFloat.fromFixedDecimalLossyPacked(amount18, decimals);
+        sDustCredit[account][token] = pulled.sub(effective);
+
         return (amount18, decimals);
     }
 
@@ -1171,20 +1212,31 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     ///
     /// A lossy float->fixed-decimal conversion is truncated (rounded DOWN) here
     /// so the contract never sends more than the vault accounting debits. See
-    /// `pullTokens` for the full rounding policy and its solvency / residual-dust
-    /// tradeoff.
+    /// `pullTokens` for the full rounding policy. The sub-base-unit residue each
+    /// lossy conversion would otherwise strand is booked into
+    /// `sDustCredit[account][token]` and realized into the next move for the same
+    /// `(account, token)`: the push is increased by any whole base unit of
+    /// standing credit, and the fresh under-push is added to it.
     function pushTokens(address account, address token, Float amountFloat) internal returns (uint256, uint8) {
-        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
-        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-        }
+        uint8 decimals = _tokenDecimals(token);
 
         if (amountFloat.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePush();
         }
 
+        // The orderbook also owes `account` the standing credit from prior
+        // under-pushes, so the total it may send is `amountFloat + credit`.
+        Float effective = amountFloat.add(sDustCredit[account][token]);
+
         //slither-disable-next-line unused-return
-        (uint256 amount,) = LibDecimalFloat.toFixedDecimalLossy(amountFloat, decimals);
+        (uint256 amount,) = LibDecimalFloat.toFixedDecimalLossy(effective, decimals);
+        // The shortfall truncated away is the new credit. It is non-negative
+        // because the transfer was rounded down, and under one base unit because
+        // truncation drops less than one base unit.
+        //slither-disable-next-line unused-return
+        (Float pushed,) = LibDecimalFloat.fromFixedDecimalLossyPacked(amount, decimals);
+        sDustCredit[account][token] = effective.sub(pushed);
+
         if (amount > 0) {
             IERC20(token).safeTransfer(account, amount);
         }
