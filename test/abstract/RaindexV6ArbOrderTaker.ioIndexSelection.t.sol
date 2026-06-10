@@ -21,6 +21,7 @@ import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interfac
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
@@ -56,8 +57,12 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
         MockToken decoyInput = new MockToken("DecoyIn", "DIN", 18);
         MockToken decoyOutput = new MockToken("DecoyOut", "DOUT", 18);
 
-        // Raindex sends 100e18 output and pulls 80e18 input.
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(80e18);
+        // Raindex sends 100e18 output and pulls 80e18 input. arb5 only trusts the
+        // canonical raindex deployment, so etch the mock's runtime code
+        // (immutables included) at that address.
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(new RealisticOrderTakerMockRaindex(80e18)).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockExchange exchange = new MockExchange();
 
         outputToken.mint(address(raindex), 100e18);
@@ -118,5 +123,91 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
         assertEq(decoyInput.allowance(address(arb), address(raindex)), 0, "decoy input never approved to raindex");
         assertEq(decoyInput.balanceOf(address(arb)), 0, "no decoy input held");
         assertEq(decoyOutput.balanceOf(address(this)), 0, "no decoy output swept");
+    }
+
+    /// arb5 reads the input token from `validInputs[inputIOIndex]` and the output
+    /// token from `validOutputs[outputIOIndex]` using the side-SPECIFIC index.
+    /// The sibling test sets both indices to 1, so reading the input via
+    /// `outputIOIndex` (or the output via `inputIOIndex`) selects the same slot
+    /// and is indistinguishable. Here the indices are DISTINCT (inputIOIndex 1,
+    /// outputIOIndex 0) with the real input at validInputs[1] and the real output
+    /// at validOutputs[0]; the opposite slot on each side holds a decoy. Reading
+    /// the input via outputIOIndex picks decoyInput (raindex pull reverts on the
+    /// missing allowance/balance); reading the output via inputIOIndex picks
+    /// decoyOutput (finalize sweeps the zero-balance decoy and strands the real
+    /// output leftover in the arb).
+    function testArb5SelectsTokensByDistinctIoIndices() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
+
+        MockToken inputToken = new MockToken("Input", "IN", 18);
+        MockToken outputToken = new MockToken("Output", "OUT", 18);
+        // Decoy input sits at validInputs[0]; decoy output at validOutputs[1].
+        MockToken decoyInput = new MockToken("DecoyIn", "DIN", 18);
+        MockToken decoyOutput = new MockToken("DecoyOut", "DOUT", 18);
+
+        // Raindex sends 100e18 output and pulls 80e18 input.
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(new RealisticOrderTakerMockRaindex(80e18)).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
+        MockExchange exchange = new MockExchange();
+
+        outputToken.mint(address(raindex), 100e18);
+        // Exchange fills an 80e18 swap, leaving a 20e18 real-output leftover.
+        inputToken.mint(address(exchange), 80e18);
+
+        GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
+
+        // Real input at index 1, real output at index 0: the two sides use
+        // DIFFERENT indices.
+        IOV2[] memory validInputs = new IOV2[](2);
+        validInputs[0] = IOV2(address(decoyInput), bytes32(0));
+        validInputs[1] = IOV2(address(inputToken), bytes32(0));
+        IOV2[] memory validOutputs = new IOV2[](2);
+        validOutputs[0] = IOV2(address(outputToken), bytes32(0));
+        validOutputs[1] = IOV2(address(decoyOutput), bytes32(0));
+
+        OrderV4 memory order = OrderV4({
+            owner: address(0x1234),
+            evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
+            validInputs: validInputs,
+            validOutputs: validOutputs,
+            nonce: bytes32(0)
+        });
+
+        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        // inputIOIndex 1 (real input at validInputs[1]); outputIOIndex 0 (real
+        // output at validOutputs[0]).
+        orders[0] = TakeOrderConfigV4(order, 1, 0, new SignedContextV1[](0));
+
+        bytes memory exchangeData =
+            abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), 80e18));
+
+        arb.arb5(
+            IRaindexV6(address(raindex)),
+            TakeOrdersConfigV5({
+                minimumIO: LibDecimalFloat.packLossless(0, 0),
+                maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
+                maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
+                IOIsInput: true,
+                orders: orders,
+                data: abi.encode(address(exchange), address(exchange), exchangeData)
+            }),
+            noopTask()
+        );
+
+        // The cycle ran on the side-specific tokens: input via inputIOIndex 1,
+        // output via outputIOIndex 0.
+        assertEq(inputToken.balanceOf(address(raindex)), 80e18, "raindex pulled real input (inputIOIndex)");
+        assertEq(outputToken.balanceOf(address(exchange)), 80e18, "exchange swapped real output (outputIOIndex)");
+        assertEq(outputToken.balanceOf(address(this)), 20e18, "real output leftover swept to sender");
+        assertEq(inputToken.balanceOf(address(this)), 0, "no real input leftover");
+        assertEq(outputToken.balanceOf(address(arb)), 0, "arb empty of real output");
+
+        // The decoys (the OPPOSITE index on each side) were never touched.
+        assertEq(decoyInput.allowance(address(arb), address(raindex)), 0, "decoy input never approved to raindex");
+        assertEq(decoyInput.balanceOf(address(arb)), 0, "no decoy input held");
+        assertEq(decoyOutput.balanceOf(address(this)), 0, "no decoy output swept");
+        assertEq(decoyOutput.balanceOf(address(arb)), 0, "no decoy output held");
     }
 }
