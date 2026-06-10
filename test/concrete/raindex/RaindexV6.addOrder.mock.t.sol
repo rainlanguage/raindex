@@ -14,17 +14,17 @@ import {
 /// @title RaindexV6AddOrderMockTest
 /// @notice Tests the addOrder function of the RaindexV6 contract.
 contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
-    /// Adding an order without calculations does not revert.
-    /// This is a runtime error.
+    /// Adding an order without calculations is unevaluable so it reverts.
     /// forge-config: default.fuzz.runs = 100
-    function testAddOrderWithoutCalculationsDeploys(address owner, OrderConfigV4 memory config) public {
+    function testAddOrderWithoutCalculationsReverts(address owner, OrderConfigV4 memory config) public {
         vm.prank(owner);
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         config.evaluable.bytecode = "";
+        vm.expectRevert(abi.encodeWithSelector(OrderNoSources.selector));
         iRaindex.addOrder4(config, new TaskV2[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
-        assertTrue(iRaindex.orderExists(orderHash));
+        assertTrue(!iRaindex.orderExists(orderHash));
     }
 
     /// Adding an order without inputs reverts.

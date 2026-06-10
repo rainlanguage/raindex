@@ -11,24 +11,30 @@ import {UnsupportedCalculateOutputs} from "../../../src/concrete/raindex/Raindex
 /// @title RaindexV6AddOrderTest
 /// @notice A test harness for testing the RaindexV6 addOrder function.
 contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
-    /// No sources deploys as we let this be a runtime check.
+    /// An order with no sources is unevaluable so it reverts at add time.
     /// forge-config: default.fuzz.runs = 100
-    function testAddOrderRealNoSourcesDeploys(address owner, OrderConfigV4 memory config) public {
+    function testAddOrderRealNoSourcesReverts(address owner, OrderConfigV4 memory config) public {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         config.evaluable.bytecode = hex"";
         vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(OrderNoSources.selector));
         iRaindex.addOrder4(config, new TaskV2[](0));
+        (, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
+        assertTrue(!iRaindex.orderExists(orderHash));
     }
 
-    /// No handle IO reverts.
-    /// This is a runtime check.
+    /// An order with no handle IO entrypoint is unevaluable so it reverts at add
+    /// time.
     /// forge-config: default.fuzz.runs = 100
-    function testAddOrderRealNoHandleIODeploys(address owner, OrderConfigV4 memory config) public {
+    function testAddOrderRealNoHandleIOReverts(address owner, OrderConfigV4 memory config) public {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         bytes memory bytecode = iParserV2.parse2(":;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(OrderNoHandleIO.selector));
         iRaindex.addOrder4(config, new TaskV2[](0));
+        (, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
+        assertTrue(!iRaindex.orderExists(orderHash));
     }
 
     /// A stack of 0 for calculate order deploys.

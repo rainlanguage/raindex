@@ -333,6 +333,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         nonReentrant
         returns (bool)
     {
+        // An order that lacks the calculate and handle IO entrypoints is
+        // unevaluable so it MUST NOT be added.
+        uint256 sourceCount = LibBytecode.sourceCount(orderConfig.evaluable.bytecode);
+        if (sourceCount <= SourceIndexV2.unwrap(CALCULATE_ORDER_ENTRYPOINT)) {
+            revert OrderNoSources();
+        }
+        if (sourceCount <= SourceIndexV2.unwrap(HANDLE_IO_ENTRYPOINT)) {
+            revert OrderNoHandleIO();
+        }
+
         if (orderConfig.validInputs.length == 0) {
             revert OrderNoInputs();
         }
