@@ -687,15 +687,46 @@ _ _: 1 1;
     #[test]
     fn test_parse_invalid_registry_content() {
         let result = RaindexRegistry::parse_registry_content("");
-        assert!(result.is_err());
+        match result.unwrap_err() {
+            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                assert_eq!(msg, "Registry file is empty");
+            }
+            other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
+        }
 
         let result = RaindexRegistry::parse_registry_content("invalid first line");
-        assert!(result.is_err());
+        match result.unwrap_err() {
+            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                assert_eq!(msg, "First line should be a settings URL without a key");
+            }
+            other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
+        }
 
         let result = RaindexRegistry::parse_registry_content(
             "https://example.com/settings.yaml\ninvalid-entry",
         );
-        assert!(result.is_err());
+        match result.unwrap_err() {
+            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                assert_eq!(
+                    msg,
+                    "Invalid order entry format: 'invalid-entry'. Expected: 'key url'"
+                );
+            }
+            other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
+        }
+
+        let result = RaindexRegistry::parse_registry_content(
+            "https://example.com/settings.yaml\nkey url extra",
+        );
+        match result.unwrap_err() {
+            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                assert_eq!(
+                    msg,
+                    "Invalid order entry format: 'key url extra'. Expected: 'key url'"
+                );
+            }
+            other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
+        }
     }
 
     #[test]
@@ -900,6 +931,37 @@ _ _: 1 1;
         let not_found_error = RaindexRegistryError::OrderKeyNotFound("test-order".to_string());
         let readable = not_found_error.to_readable_msg();
         assert!(readable.contains("order key 'test-order' was not found"));
+
+        let settings_fetch_error =
+            RaindexRegistryError::SettingsFetchError("https://settings.example".to_string());
+        let readable = settings_fetch_error.to_readable_msg();
+        assert!(readable.contains("Unable to fetch the settings file"));
+        assert!(readable.contains("https://settings.example"));
+
+        let order_fetch_error =
+            RaindexRegistryError::OrderFetchError("https://order.example".to_string());
+        let readable = order_fetch_error.to_readable_msg();
+        assert!(readable.contains("Unable to fetch the order file"));
+        assert!(readable.contains("https://order.example"));
+
+        let invalid_format_error =
+            RaindexRegistryError::InvalidRegistryFormat("bad entry".to_string());
+        let readable = invalid_format_error.to_readable_msg();
+        assert_eq!(readable, "Invalid registry format: bad entry");
+
+        let http_error = RaindexRegistryError::HttpError("HTTP 500".to_string());
+        let readable = http_error.to_readable_msg();
+        assert_eq!(readable, "Network error: HTTP 500");
+
+        let data_uri_error =
+            RaindexRegistryError::DataUriError("invalid base64 payload".to_string());
+        let readable = data_uri_error.to_readable_msg();
+        assert_eq!(readable, "Invalid data URI: invalid base64 payload");
+
+        let url_parse_error = RaindexRegistryError::from(Url::parse("not a url").unwrap_err());
+        let readable = url_parse_error.to_readable_msg();
+        assert!(readable.contains("Invalid URL format"));
+        assert!(readable.contains("Please ensure the URL is properly formatted"));
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -1028,7 +1090,12 @@ _ _: 1 1;
 
             let result =
                 RaindexRegistry::validate(format!("{}/invalid-registry.txt", server.url(""))).await;
-            assert!(result.is_err());
+            match result.unwrap_err() {
+                RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                    assert_eq!(msg, "First line should be a settings URL without a key");
+                }
+                other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
+            }
         }
 
         #[tokio::test]
@@ -1101,6 +1168,37 @@ _ _: 1 1;
                     assert!(msg.contains("payload must be base64 encoded"));
                 }
                 _ => panic!("Expected DataUriError"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_rejects_data_uri_without_separator() {
+            let url = Url::parse("data:text/plain").unwrap();
+            let result = RaindexRegistry::fetch_url_content(&url).await;
+
+            match result.unwrap_err() {
+                RaindexRegistryError::DataUriError(msg) => {
+                    assert_eq!(msg, "missing metadata/payload separator");
+                }
+                other => panic!("Expected DataUriError, got {other:?}"),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_fetch_url_content_rejects_data_uri_with_non_utf8_payload() {
+            // 0xff 0xfe is valid base64 but not valid UTF-8 once decoded.
+            let url = Url::parse(&format!(
+                "data:text/plain;base64,{}",
+                BASE64_STANDARD.encode([0xff, 0xfe])
+            ))
+            .unwrap();
+            let result = RaindexRegistry::fetch_url_content(&url).await;
+
+            match result.unwrap_err() {
+                RaindexRegistryError::DataUriError(msg) => {
+                    assert_eq!(msg, "decoded payload is not valid UTF-8");
+                }
+                other => panic!("Expected DataUriError, got {other:?}"),
             }
         }
 
