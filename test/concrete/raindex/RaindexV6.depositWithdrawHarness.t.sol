@@ -187,6 +187,75 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         );
     }
 
+    /// A deposit whose Float amount is FINER than the token's base unit is a lossy
+    /// float->fixed conversion, and `pullTokens` rounds the truncated amount UP by
+    /// one base unit so the contract never pulls in less than the vault accounting
+    /// credits (the solvency-favoring rounding). 1.5 base units at 6 decimals
+    /// (`packLossless(15, -7)`) pulls 2 base units, not 1: exactly 2 real tokens
+    /// move into the harness and the `DepositV2` event reports the rounded-up 2. A
+    /// mutation dropping the `++amount18` round-up (truncating down) would pull and
+    /// report only 1, leaving the vault credit under-collateralised.
+    function testDepositLossyPullRoundsUp() external {
+        sToken = new MockToken("USDC", "USDC", 6);
+        address alice = makeAddr("alice");
+        sToken.mint(alice, 10);
+        vm.prank(alice);
+        sToken.approve(address(harness), 10);
+
+        // 1.5 base units at 6 decimals: lossy, rounds UP to 2 base units pulled.
+        Float amount = LibDecimalFloat.packLossless(15, -7);
+
+        vm.expectEmit(false, false, false, true);
+        emit DepositV2(alice, address(sToken), VAULT, 2);
+        vm.prank(alice);
+        harness.deposit4(address(sToken), VAULT, amount, new TaskV2[](0));
+
+        // Exactly 2 base units moved (rounded UP from the 1.5 base-unit target),
+        // never the truncated 1.
+        assertEq(sToken.balanceOf(address(harness)), 2, "harness pulled rounded-up 2 base units");
+        assertEq(sToken.balanceOf(alice), 8, "alice debited exactly 2 base units");
+        // The vault is credited the full (un-rounded) Float amount.
+        assertTrue(harness.vaultBalance2(alice, address(sToken), VAULT).eq(amount), "vault credited the deposit Float");
+    }
+
+    /// A withdraw whose Float target is FINER than the token's base unit is a lossy
+    /// float->fixed conversion, and `pushTokens` TRUNCATES (rounds DOWN) so the
+    /// contract never sends more than the vault accounting debits. With an internal
+    /// balance larger than the target, a target of 1.5 base units at 6 decimals
+    /// (`packLossless(15, -7)`) pushes 1 base unit, not 2: exactly 1 real token
+    /// moves out and the `WithdrawV2` event reports the truncated-down 1 onchain
+    /// amount against the (un-truncated) `withdrawAmount` Float. A mutation adding a
+    /// round-up to the push would over-send 2 and break solvency.
+    function testWithdrawLossyPushRoundsDown() external {
+        sToken = new MockToken("USDC", "USDC", 6);
+        address alice = makeAddr("alice");
+        // Seed a whole-token internal balance so the target is uncapped.
+        sToken.mint(alice, 1_000_000); // 1 whole token at 6 decimals.
+        vm.prank(alice);
+        sToken.approve(address(harness), 1_000_000);
+        Float seed = LibDecimalFloat.packLossless(1, 0);
+        vm.prank(alice);
+        harness.deposit4(address(sToken), VAULT, seed, new TaskV2[](0));
+
+        // 1.5 base units at 6 decimals: lossy, truncates DOWN to 1 base unit pushed.
+        Float target = LibDecimalFloat.packLossless(15, -7);
+
+        // withdrawAmount == target (target < balance), onchain amount truncates to 1.
+        vm.expectEmit(false, false, false, true);
+        emit WithdrawV2(alice, address(sToken), VAULT, target, target, 1);
+        vm.prank(alice);
+        harness.withdraw4(address(sToken), VAULT, target, new TaskV2[](0));
+
+        // Exactly 1 base unit returned (truncated DOWN from 1.5), never the
+        // rounded-up 2. Alice held 0 after the seed deposit, so now holds 1.
+        assertEq(sToken.balanceOf(alice), 1, "alice received truncated-down 1 base unit");
+        assertEq(sToken.balanceOf(address(harness)), 1_000_000 - 1, "harness sent exactly 1 base unit");
+        // The vault is debited the full (un-truncated) Float target.
+        assertTrue(
+            harness.vaultBalance2(alice, address(sToken), VAULT).eq(seed.sub(target)), "vault debited the target Float"
+        );
+    }
+
     /// Withdrawing from an empty vault is a noop: `withdrawAmount` caps to zero, no
     /// tokens move, the vault stays at zero, and the event reports a zero
     /// withdrawAmount/onchain amount against the requested target. Pins the cap at
