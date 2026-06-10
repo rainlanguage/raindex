@@ -15,25 +15,26 @@ import {
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderBatchStateBypassTest
-/// @notice Audit Protofire H01 (#2617): `takeOrders4` evaluates every order's
-/// calculate entrypoint with an empty `stateOverlay` and only persists the
-/// calculate-phase `kvs` later in `handleIO`, after the whole order loop. With
-/// no per-batch uniqueness, a taker can repeat the same order in one call and
-/// each calculate evaluation sees the same stale store state — so a stateful
-/// per-order cap enforced in the calculate phase is bypassed within a batch.
+/// @notice Audit Protofire H01 (#2617): a stateful per-order cap enforced in an
+/// order's calculate phase holds WITHIN a single `takeOrders4` batch, not only
+/// across transactions. Every order's calculate entrypoint evaluates with an
+/// empty `stateOverlay`, and `handleIO` runs per order inside the loop,
+/// committing that order's calculate-phase `kvs` to the store before the next
+/// order calculates, so a later evaluation of the same order sees the earlier
+/// one's writes.
 ///
-/// This test demonstrates the bypass with a "fill once" order: the calculate
-/// phase reads a store flag, marks it via `set`, and offers output only while
-/// the flag is unset. Across separate transactions the cap holds, but repeating
-/// the order three times in a single `takeOrders4` fills three times.
+/// This suite verifies the cap with a "fill once" order: the calculate phase
+/// reads a store flag, marks it via `set`, and offers output only while the flag
+/// is unset. Repeating the order three times in a single `takeOrders4` fills
+/// exactly once.
 contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
 
     /// A "fill once" order: outputMax is 1 only while store key 0 is unset; the
-    /// calculate phase reads the flag (before setting it) and `set`s it. Because
-    /// the calculate `kvs` are deferred to handleIO, repeated evaluations in the
-    /// same batch all read the unset flag.
-    function testH01RepeatedOrderBypassesCalculatePhaseCap() external {
+    /// calculate phase reads the flag (before setting it) and `set`s it. The
+    /// per-order `handleIO` commits that `set` before the next order calculates,
+    /// so the second and third repeats read the flag as already set.
+    function testH01RepeatedOrderCalculatePhaseCapHolds() external {
         address owner = address(uint160(uint256(keccak256("owner.rain.test"))));
         address bob = address(uint160(uint256(keccak256("bob.rain.test"))));
 
@@ -81,22 +82,20 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         vm.prank(bob);
         (Float totalTakerInput,) = iRaindex.takeOrders4(config);
 
-        // The order's calculate-phase cap intends to fill at most once (total
-        // output 1). H01: the repeated order bypasses it and fills three times.
-        // This assertion is the intended behaviour and currently FAILS (yields
-        // 3) — it should pass once calculate-phase writes are threaded forward
-        // via `stateOverlay`.
+        // The calculate-phase cap fills at most once (total output 1): the first
+        // repeat sets the flag, per-order handleIO commits it before the next
+        // order calculates, and the second and third repeats read it as set and
+        // offer 0.
         assertTrue(
             totalTakerInput.eq(LibDecimalFloat.packLossless(1, 0)),
             "stateful calculate-phase cap must hold within a single takeOrders4 batch"
         );
     }
 
-    /// The intra-batch state threading is scoped per owner namespace. Two orders
-    /// with DIFFERENT owners, both using store key 0 as a "fill once" flag, must
-    /// each fill independently: owner B's calculate read of key 0 must not see
-    /// owner A's calculate write. If the overlay leaked across owners, owner B
-    /// would be skipped and the total would be 1 instead of 2.
+    /// Intra-batch state threading is scoped per owner namespace: two orders with
+    /// DIFFERENT owners, both using store key 0 as a "fill once" flag, each fill
+    /// independently. Owner B's calculate read of key 0 does not see owner A's
+    /// calculate write, so the total is 2.
     function testH01CrossOwnerStateIsolation() external {
         address ownerA = address(uint160(uint256(keccak256("ownerA.rain.test"))));
         address ownerB = address(uint160(uint256(keccak256("ownerB.rain.test"))));

@@ -1960,22 +1960,6 @@
     },
     {
       "type": "error",
-      "name": "CoefficientOverflow",
-      "inputs": [
-        {
-          "name": "signedCoefficient",
-          "type": "int256",
-          "internalType": "int256"
-        },
-        {
-          "name": "exponent",
-          "type": "int256",
-          "internalType": "int256"
-        }
-      ]
-    },
-    {
-      "type": "error",
       "name": "DivisionByZero",
       "inputs": [
         {
@@ -2078,22 +2062,6 @@
           "name": "i",
           "type": "uint256",
           "internalType": "uint256"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "LossyConversionToFloat",
-      "inputs": [
-        {
-          "name": "signedCoefficient",
-          "type": "int256",
-          "internalType": "int256"
-        },
-        {
-          "name": "exponent",
-          "type": "int256",
-          "internalType": "int256"
         }
       ]
     },

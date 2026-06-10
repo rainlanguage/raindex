@@ -355,7 +355,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
 
         string memory usingWordsFrom = string.concat("using-words-from ", address(iSubParser).toHexString(), "\n");
 
-        bytes[] memory evals = new bytes[](7);
+        bytes[] memory evals = new bytes[](8);
         evals[0] = bytes(
             string.concat(
                 usingWordsFrom,
@@ -408,6 +408,14 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
                 ":ensure(equal-to(withdraw-target-amount() ",
                 targetAmount.toDecimalString(false),
                 ") \"target amount\");"
+            )
+        );
+        evals[7] = bytes(
+            string.concat(
+                usingWordsFrom,
+                ":ensure(equal-to(withdraw-token-decimals() ",
+                uint256(6).toHexString(),
+                ") \"withdraw token decimals\");"
             )
         );
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(6));
