@@ -2,6 +2,15 @@ use crate::local_db::query::SqlStatement;
 
 pub const CREATE_TABLES_SQL: &str = include_str!("query.sql");
 
+/// Stable `PRAGMA application_id` stamped into the SQLite file header of every
+/// raindex local-db. The value is the big-endian ASCII of "RIDX"
+/// (0x52 'R', 0x49 'I', 0x44 'D', 0x58 'X'), giving a fixed, human-recognisable
+/// magic that identifies the file as a raindex local-db rather than some other
+/// SQLite file. It is a 32-bit header label and never changes across schema
+/// versions. SQLite exposes `application_id`/`user_version` as signed 32-bit
+/// integers, so the constant is typed `i32`.
+pub const RAINDEX_APPLICATION_ID: i32 = 0x5249_4458;
+
 pub const REQUIRED_TABLES: &[&str] = &[
     "db_metadata",
     "target_watermarks",
@@ -155,7 +164,36 @@ fn normalize_ident(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
     use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn pragmas_match_schema_version() {
+        // The application_id PRAGMA literal must equal the documented magic.
+        let expected_app_id = format!("PRAGMA application_id = 0x{:08X};", RAINDEX_APPLICATION_ID);
+        assert!(
+            CREATE_TABLES_SQL.contains(&expected_app_id),
+            "create_tables SQL must stamp application_id with the raindex magic ({expected_app_id})"
+        );
+
+        // The user_version PRAGMA literal must stay in lockstep with the
+        // Rust-side DB_SCHEMA_VERSION constant. A schema bump that forgets to
+        // update the SQL header trips this assertion.
+        let expected_user_version = format!("PRAGMA user_version = {DB_SCHEMA_VERSION};");
+        assert!(
+            CREATE_TABLES_SQL.contains(&expected_user_version),
+            "create_tables SQL must stamp user_version = {DB_SCHEMA_VERSION} to match DB_SCHEMA_VERSION"
+        );
+    }
+
+    #[test]
+    fn raindex_application_id_is_ridx_ascii() {
+        assert_eq!(
+            RAINDEX_APPLICATION_ID.to_be_bytes(),
+            *b"RIDX",
+            "application id must be the big-endian ASCII of \"RIDX\""
+        );
+    }
 
     #[test]
     fn required_tables_match_sql_create_statements() {
