@@ -467,6 +467,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             }
         }
 
+        // True once any order in the batch is taken (a strictly positive fill).
+        // Gates the `onTakeOrders2` callback so it only fires when the taker
+        // received a non-zero input.
+        bool ordersTaken;
+
         {
             if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert ZeroMaximumIO();
@@ -510,11 +515,24 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     // no way of knowing if a specific order becomes too expensive
                     // between submitting to mempool and execution, but other orders may
                     // be valid so we want to take advantage of those if possible.
+                    //
+                    // An order is taken only when its calculation yields a
+                    // strictly positive output at a strictly positive ratio
+                    // within the taker's limit. Every other result is a no-op
+                    // skip: a non-positive output is nothing to take, and a
+                    // non-positive ratio yields a non-positive output (a zero
+                    // ratio also has no inverse for the market-sell branch). The
+                    // explicit `taken` flag is the order's outcome for the batch.
+                    bool taken;
                     if (orderIOCalculation.IORatio.gt(config.maximumIORatio)) {
                         emit OrderExceedsMaxRatio(msg.sender, order.owner, orderHash);
-                    } else if (orderIOCalculation.outputMax.isZero()) {
+                    } else if (
+                        !orderIOCalculation.outputMax.gt(LibDecimalFloat.FLOAT_ZERO)
+                            || !orderIOCalculation.IORatio.gt(LibDecimalFloat.FLOAT_ZERO)
+                    ) {
                         emit OrderZeroAmount(msg.sender, order.owner, orderHash);
                     } else {
+                        taken = true;
                         Float takerInput;
                         Float takerOutput;
                         if (config.IOIsInput) {
@@ -572,6 +590,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         // push itself is still deferred to after the taker pull.
                         handleIO(orderIOCalculation);
                     }
+
+                    ordersTaken = ordersTaken || taken;
                 }
 
                 unchecked {
@@ -609,7 +629,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         // post-trade balances, and `maxFlashLoan` returns a correspondingly
         // reduced amount until settlement completes. Re-entering raindex from the
         // callback is blocked by `nonReentrant`.
-        if (config.data.length > 0) {
+        if (config.data.length > 0 && ordersTaken) {
             IRaindexV6OrderTaker(msg.sender)
                 .onTakeOrders2(io.outputToken, io.inputToken, totalTakerInput, totalTakerOutput, config.data);
         }
