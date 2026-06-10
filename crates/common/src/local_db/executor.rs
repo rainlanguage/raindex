@@ -274,6 +274,27 @@ mod tests {
     }
 
     #[test]
+    fn negative_application_id_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // A foreign file whose application_id has the top bit set reads back as
+        // a negative i32. It is neither zero (unstamped) nor the raindex magic,
+        // so it must be rejected as NotARaindexDb rather than waved through.
+        let foreign = i32::MIN;
+        conn.pragma_update(None, "application_id", foreign)
+            .expect("override application_id");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::NotARaindexDb { expected, found }) => {
+                assert_eq!(expected, RAINDEX_APPLICATION_ID);
+                assert_eq!(found, foreign);
+            }
+            other => panic!("expected NotARaindexDb, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn wrong_user_version_is_detected() {
         let conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(create_tables_stmt().sql())
@@ -288,6 +309,27 @@ mod tests {
             Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
                 assert_eq!(expected, DB_SCHEMA_VERSION as i32);
                 assert_eq!(found, bumped);
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stale_user_version_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Keep the raindex application_id but roll user_version back to an older
+        // schema number. A stale (lower) version must be rejected just like a
+        // future (higher) one.
+        let stale = DB_SCHEMA_VERSION as i32 - 1;
+        conn.pragma_update(None, "user_version", stale)
+            .expect("override user_version");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
+                assert_eq!(expected, DB_SCHEMA_VERSION as i32);
+                assert_eq!(found, stale);
             }
             other => panic!("expected SchemaVersionMismatch, got {other:?}"),
         }
