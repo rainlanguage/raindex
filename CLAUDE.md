@@ -58,7 +58,16 @@ address + codehash. Do the whole cascade without asking:
    - A deploy run shows `completed/failure` but the **on-chain deploy
      succeeded** if the log contains `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` —
      only the etherscan `--verify` step failed (cosmetic).
-3. **Re-check** — `testProdDeploy*` ("X not deployed") fork-tests stay red until
+3. **Refresh start-block bookkeeping (only if RaindexV6 moved)** — a redeploy of
+   the orderbook changes `RAINDEX_DEPLOYED_ADDRESS`, so the subgraph indexing
+   bookkeeping (`RAINDEX_START_BLOCK_*` constants, `subgraph/networks.json`,
+   `subgraph/subgraph.yaml`) goes stale and reds `testIsStartBlock*` /
+   `testNetworksJson*` / `testSubgraphYamlAddress`. Run
+   `script/build-start-blocks.sh` (binary-searches each chain's new deploy block
+   over an archive RPC and rewrites all three). Needs per-chain archive RPCs via
+   the foundry `rpc_endpoints` env vars (it falls back to public endpoints). Arb
+   redeploys that don't move RaindexV6 (e.g. a LibRaindexArb change) skip this.
+4. **Re-check** — `testProdDeploy*` ("X not deployed") fork-tests stay red until
    the new addresses have code on-chain. After deploying, re-trigger PR CI with
    an empty commit.
 
