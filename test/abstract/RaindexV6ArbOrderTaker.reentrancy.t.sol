@@ -19,6 +19,7 @@ import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IIn
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {ReentrantMockRaindex} from "test/util/concrete/ReentrantMockRaindex.sol";
@@ -32,7 +33,13 @@ contract RaindexV6ArbOrderTakerReentrancyTest is Test {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        ReentrantMockRaindex raindex = new ReentrantMockRaindex();
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // code at that address. The mock re-enters from its own address, so the
+        // re-entrant arb5 call also targets the trusted raindex and reaches the
+        // reentrancy guard rather than the trust guard.
+        ReentrantMockRaindex mockRaindex = new ReentrantMockRaindex();
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        ReentrantMockRaindex raindex = ReentrantMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         outputToken.mint(address(raindex), 100e18);
 
         GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();

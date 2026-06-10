@@ -6,6 +6,18 @@ on:
   push:
     branches:
       - main
+    # Only redeploy prod when something webapp-relevant changed (see
+    # vercel-preview.yaml for the rationale) — a sol-only main merge shouldn't
+    # rebuild + redeploy the webapp.
+    paths:
+      - 'packages/**'
+      - 'crates/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'script/vercel-build.sh'
+      - '.github/workflows/vercel-prod.yaml'
 jobs:
   Deploy-Preview:
     permissions:
@@ -40,18 +52,18 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-      - run: |
-          nix develop .#wasm-shell -c bash -c '
-            set -euxo pipefail
-            npm install --no-check
-            npm run build -w @rainlanguage/raindex
-            npm run build -w @rainlanguage/ui-components
-            npm run build -w @rainlanguage/webapp
-          '
-        env:
-          PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-      - run: nix develop .#webapp-shell -c npm run build
-        working-directory: packages/webapp
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Stable shared-key (same in vercel-preview.yaml) so preview + prod
+          # share one warm wasm/cargo cache instead of a separate per-workflow one.
+          shared-key: vercel-webapp
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: ./script/vercel-build.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
       # check for npm package blacklists pkgs across all packages

@@ -1,5 +1,21 @@
 [
   {
+    "timestamp": "2026-06-06T10:05:38Z",
+    "commit": "08d547fab698cb97e6bab734886aab2d90f13d0d",
+    "publishedTag": "sol-v0.1.0",
+    "commitsAheadOfTag": 101,
+    "scope": "whole repo (Solidity: RaindexV6 core, arb, subparser, libs)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 643,
+      "candidatesSurfaced": 89,
+      "confirmed": 36,
+      "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
+      "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
+    }
+  },
+  {
     "timestamp": "2026-06-10T00:00:00Z",
     "commit": "137ba34959715379bc1bbc7ea304b2b83104c485",
     "publishedTag": "sol-v0.1.0",

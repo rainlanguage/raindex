@@ -8,6 +8,8 @@
 .cargo
 .coderabbit.yaml
 .devcontainer.json
+.env
+.env.example
 .envrc
 .gas-snapshot
 .git

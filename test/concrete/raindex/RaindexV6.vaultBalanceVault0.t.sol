@@ -59,6 +59,29 @@ contract RaindexV6VaultBalanceVault0Test is RaindexV6ExternalMockTest {
         assertTrue(effective.eq(LibDecimalFloat.fromFixedDecimalLosslessPacked(balance18, 18)), "balance limits");
     }
 
+    /// A wallet balance above the Float coefficient range (int224.max, ~1.35e67)
+    /// must still return the approval when the approval is the binding `min`. The
+    /// balance is lossy-packed (saturates the low digit) like the approval, so a
+    /// balance over int224.max does not revert the vault-0 read on the min path.
+    function testVaultBalanceVault0OverflowBalanceReturnsApproval(address owner, uint256 approval18) external {
+        // Wallet balance just over int224.max (lossless packing would overflow);
+        // approval is the small binding min.
+        uint256 balance18 = uint256(int256(type(int224).max)) + 1;
+        approval18 = bound(approval18, 0, 1e30);
+
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.balanceOf.selector, owner), abi.encode(balance18));
+        vm.mockCall(
+            address(iToken0),
+            abi.encodeWithSelector(IERC20.allowance.selector, owner, address(iRaindex)),
+            abi.encode(approval18)
+        );
+
+        // The smaller of the two (approval) is returned; the extreme balance
+        // saturates instead of reverting CoefficientOverflow.
+        Float effective = iRaindex.vaultBalance2(owner, address(iToken0), bytes32(0));
+        assertTrue(effective.eq(LibDecimalFloat.fromFixedDecimalLosslessPacked(approval18, 18)), "approval limits");
+    }
+
     /// Deposits to a non-zero vault to seed the TOFU store with the token's
     /// decimals (18). The deposit makes `pullTokens` persist the decimals via the
     /// mutating TOFU read so subsequent read-only reads have a stored value to
