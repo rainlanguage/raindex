@@ -44,6 +44,7 @@ uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN = 0;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID = 1;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE = 2;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER = 3;
+uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS = 4;
 
 /// @dev Context rows for the withdraw calling context column. Available to the
 /// withdraw post-action entrypoint.
@@ -52,6 +53,7 @@ uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID = 1;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE = 2;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER = 3;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT = 4;
+uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS = 5;
 
 /// @dev Calculations column contains the DECIMAL RESCALED calculations but
 /// otherwise provided as-is according to calculate order entrypoint

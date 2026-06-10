@@ -40,7 +40,12 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
         MockToken outputToken = new MockToken("USDT", "USDT", 6);
 
         // Raindex will send 100 USDT (100e6) to the taker, then pull 100 USDC.
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(100e6);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        RealisticOrderTakerMockRaindex mockRaindex = new RealisticOrderTakerMockRaindex(100e6);
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockRouteProcessor mockRp = new MockRouteProcessor();
         vm.etch(LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS, address(mockRp).code);
         address routeProcessor = LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS;

@@ -37,7 +37,10 @@ library LibGenericPoolExchange {
 
         // Approve-call-revoke: the caller controls spender and pool, which is
         // safe because the contract holds no tokens or ETH between arb
-        // operations — there is nothing for a malicious caller to extract.
+        // operations — there is nothing for a malicious caller to extract. Value
+        // sent here by accident is recoverable through this permissionless path
+        // rather than stranded; see `onTakeOrders2` on the base contract for why
+        // unsolicited transfers cannot be rejected and gating would brick them.
         IERC20(token).forceApprove(spender, type(uint256).max);
         //slither-disable-next-line unused-return
         pool.functionCallWithValue(encodedFunctionCall, address(this).balance);
