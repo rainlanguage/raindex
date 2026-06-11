@@ -38,7 +38,9 @@ contract RaindexV6DustCreditSolvencyAttackTest is Test {
     function _deployHarness() internal {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
-        harness = RaindexV6DustCreditSolvencyAttackHarness(payable(address(uint160(uint256(keccak256("dust.credit.solvency.attack"))))));
+        harness = RaindexV6DustCreditSolvencyAttackHarness(
+            payable(address(uint160(uint256(keccak256("dust.credit.solvency.attack")))))
+        );
         vm.etch(address(harness), type(RaindexV6DustCreditSolvencyAttackHarness).runtimeCode);
     }
 
@@ -214,8 +216,7 @@ contract RaindexV6DustCreditSolvencyAttackTest is Test {
         // recording a debt it never withheld -> a credit backed by nothing.
         // `sent` can exceed int224; pack it lossily and use >= so any inflation
         // of `credit` beyond the real (possibly under-counted) shortfall trips.
-        (Float sentTokenUnits,) =
-            LibDecimalFloat.fromFixedDecimalLossyPacked(sent, decimals);
+        (Float sentTokenUnits,) = LibDecimalFloat.fromFixedDecimalLossyPacked(sent, decimals);
         Float trueWithheld = requested.sub(sentTokenUnits);
         // credit must be <= trueWithheld (never inflated above what was withheld).
         assertTrue(!credit.gt(trueWithheld), "credit <= true withheld dust (not inflated)");

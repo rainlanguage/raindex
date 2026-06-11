@@ -144,9 +144,8 @@ contract RaindexV6DustCreditConservationAttackTest is Test {
         // Total requested across both moves = seed + big.
         Float totalRequested = seed.add(big);
         // realDelta total = first move (1 base unit = 1e-36) + this move.
-        Float realDeltaTotal = LibDecimalFloat.fromFixedDecimalLosslessPacked(1, decimals).add(
-            LibDecimalFloat.fromFixedDecimalLosslessPacked(realMoved, decimals)
-        );
+        Float realDeltaTotal = LibDecimalFloat.fromFixedDecimalLosslessPacked(1, decimals)
+            .add(LibDecimalFloat.fromFixedDecimalLosslessPacked(realMoved, decimals));
         Float creditNew = harness.exposedDustCredit(owner, address(token));
         assertTrue(realDeltaTotal.eq(totalRequested.add(creditNew)), "conservation high-decimals");
     }
@@ -161,7 +160,8 @@ contract RaindexV6DustCreditConservationAttackTest is Test {
         Float seed = LibDecimalFloat.packLossless(5, -37);
         harness.exposedPush(owner, address(token), seed);
         assertTrue(
-            harness.exposedDustCredit(owner, address(token)).eq(LibDecimalFloat.packLossless(5, -37)), "push seed credit"
+            harness.exposedDustCredit(owner, address(token)).eq(LibDecimalFloat.packLossless(5, -37)),
+            "push seed credit"
         );
 
         // Large push.
@@ -251,7 +251,9 @@ contract RaindexV6DustCreditConservationAttackTest is Test {
         Float conserved = totalRequested.add(creditAfter);
         // At Float precision they ARE equal: the stated invariant survives even as
         // the credit is physically stranded.
-        assertTrue(realDeltaTotal.eq(conserved), "Float-precision conservation still holds; stranding is sub-resolution");
+        assertTrue(
+            realDeltaTotal.eq(conserved), "Float-precision conservation still holds; stranding is sub-resolution"
+        );
     }
 
     /// ATTACK 8: broaden the PR fuzz beyond its 6-decimal / 25.5-base-unit cap.

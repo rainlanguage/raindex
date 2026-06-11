@@ -28,7 +28,8 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
     function checkReentrancyRW(uint256 expectedReads, uint256 expectedWrites) internal view {
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
         // 3 reads for reentrancy guard.
-        // 2 reads for deposit.
+        // 2 reads for the vault balance Float.
+        // 2 reads for the sDustCredit Float that pushTokens loads.
         assertEq(reads.length, expectedReads, "reads length");
         // ReentrancyGuard.REENTRANCY_GUARD_STORAGE
         bytes32 reentrancyGuardStorage = 0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00;
@@ -36,7 +37,8 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
         assertEq(reads[1], reentrancyGuardStorage, "reads[1]");
         assertEq(reads[reads.length - 1], reentrancyGuardStorage, "reads[reads.length - 1]");
         // 2 writes for reentrancy guard.
-        // 1 write for deposit.
+        // 1 write for the vault balance.
+        // 1 write for the sDustCredit slot that pushTokens stores back.
         assertEq(writes.length, expectedWrites, "writes length");
         assertEq(writes[0], reentrancyGuardStorage, "writes[0]");
         assertEq(writes[writes.length - 1], reentrancyGuardStorage, "writes[writes.length - 1]");
@@ -117,7 +119,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
         }
         iRaindex.withdraw4(address(iToken0), vaultId, targetAmount, actions);
         if (err.length == 0) {
-            checkReentrancyRW(6, 3);
+            checkReentrancyRW(8, 4);
             (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
             assertEq(reads.length, expectedReads);
             assertEq(writes.length, expectedWrites);
