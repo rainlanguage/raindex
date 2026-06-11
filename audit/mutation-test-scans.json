@@ -14,5 +14,27 @@
       "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
       "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
     }
+  },
+  {
+    "timestamp": "2026-06-11T07:00:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "RaindexV6.clear3 + calculateClearStateChange + calculateClearStateAlice (bounty, NegativeBounty guard, record ordering, bounty crediting, ClearZeroAmount, AfterClearV2, ClearV3, same-owner/token/self-trade guards, dead-order)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 18,
+      "mutationsApplied": 23,
+      "killed": 22,
+      "equivalent": 1,
+      "confirmed": 0,
+      "testsAdded": 23,
+      "newFiles": [
+        "test/concrete/raindex/RaindexV6.clear.calculateStateChange.t.sol",
+        "test/concrete/raindex/RaindexV6.clear.freshDriver.t.sol"
+      ],
+      "note": "Existing clear suites etch committed bytecode and are blind to src mutations; added fresh-compiled harnesses (type(RaindexV6...).runtimeCode) that see them. No source bugs: code matches IRaindexV6 NatSpec."
+    }
   }
 ]
