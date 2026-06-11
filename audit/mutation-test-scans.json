@@ -11,8 +11,22 @@
       "behaviours": 643,
       "candidatesSurfaced": 89,
       "confirmed": 36,
-      "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
-      "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
+      "filed": [
+        "#2665",
+        "#2666",
+        "#2667",
+        "#2668",
+        "#2669",
+        "#2670",
+        "#2671"
+      ],
+      "reconfirmed": [
+        "#2623",
+        "#2624",
+        "#2648",
+        "#2651",
+        "#2652"
+      ]
     }
   },
   {
@@ -29,6 +43,25 @@
       "confirmed": 0,
       "newTests": 13,
       "note": "External deposit/withdraw/vaultBalance mock suites etch committed pointer bytecode, so source mutations were invisible to them; added fresh-compiled-harness tests that kill min-cap, zero-guard, credit-overwrite and all three (read-only/pull/push) TOFU-outcome mutations. No bugs surfaced."
+    }
+  },
+  {
+    "timestamp": "2026-06-11T00:00:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "RaindexV6.takeOrders4 take/skip loop + helpers (recordVaultOutput/Input, pushVaultZeroInput, handleIO, checkTokenSelfTrade)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 39,
+      "mutationsRun": 50,
+      "survivingMutantsFound": 7,
+      "survivingMutantsKilled": 7,
+      "equivalentMutants": 2,
+      "testsAdded": 33,
+      "bugsFound": 0,
+      "note": "Whole existing takeOrder suite (LibEtchRaindex) is blind to src mutations; added RaindexV6FreshTakeOrderTest base (re-etches type(RaindexV6).runtimeCode) so mutations are observed. No code-vs-intent divergence surfaced."
     }
   }
 ]
