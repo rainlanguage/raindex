@@ -314,8 +314,7 @@ library LibRaindexDeploy {
 
     /// The deployed address of the `GenericPoolRaindexV6ArbOrderTaker` contract at
     /// the published `0.1.7` tag.
-    address constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_7 =
-        0x22a1Cf904E5a57D14c5af4108Aa6873a9Cdd350b;
+    address constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_7 = 0x22a1Cf904E5a57D14c5af4108Aa6873a9Cdd350b;
 
     /// The runtime code hash of the `GenericPoolRaindexV6ArbOrderTaker` contract at
     /// the published `0.1.7` tag.
@@ -470,8 +469,7 @@ library LibRaindexDeploy {
 
     /// The deployed address of the `GenericPoolRaindexV6FlashBorrower` contract at
     /// the published `0.1.7` tag.
-    address constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS_0_1_7 =
-        0x721c1752132320C60F218926446C0016Fa1F86c3;
+    address constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS_0_1_7 = 0x721c1752132320C60F218926446C0016Fa1F86c3;
 
     /// The runtime code hash of the `GenericPoolRaindexV6FlashBorrower` contract at
     /// the published `0.1.7` tag.
