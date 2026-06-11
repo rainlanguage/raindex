@@ -11,8 +11,38 @@
       "behaviours": 643,
       "candidatesSurfaced": 89,
       "confirmed": 36,
-      "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
-      "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
+      "filed": [
+        "#2665",
+        "#2666",
+        "#2667",
+        "#2668",
+        "#2669",
+        "#2670",
+        "#2671"
+      ],
+      "reconfirmed": [
+        "#2623",
+        "#2624",
+        "#2648",
+        "#2651",
+        "#2652"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-10T14:02:49Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.0",
+    "commitsAheadOfTag": 182,
+    "scope": "RaindexV6 TOFU token-decimals layer + vault accounting (deposit4/withdraw4/vaultBalance2/_vaultBalance/increaseVaultBalance/decreaseVaultBalance/pullTokens/pushTokens)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 13,
+      "candidatesSurfaced": 0,
+      "confirmed": 0,
+      "newTests": 13,
+      "note": "External deposit/withdraw/vaultBalance mock suites etch committed pointer bytecode, so source mutations were invisible to them; added fresh-compiled-harness tests that kill min-cap, zero-guard, credit-overwrite and all three (read-only/pull/push) TOFU-outcome mutations. No bugs surfaced."
     }
   },
   {
