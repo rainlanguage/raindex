@@ -725,6 +725,7 @@ mod test_helpers {
             order_hash: order_hash.clone(),
             owner,
             block_timestamp: 1_700_000_010,
+            block_timestamp_removed: None,
             block_number: 123_456,
             raindex_address,
             order_bytes: order_bytes.clone(),

@@ -43,6 +43,7 @@ pub struct LocalDbOrder {
     pub order_hash: B256,
     pub owner: Address,
     pub block_timestamp: u64,
+    pub block_timestamp_removed: Option<u64>,
     pub block_number: u64,
     pub raindex_address: Address,
     pub order_bytes: Bytes,
