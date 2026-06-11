@@ -11,8 +11,97 @@
       "behaviours": 643,
       "candidatesSurfaced": 89,
       "confirmed": 36,
-      "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
-      "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
+      "filed": [
+        "#2665",
+        "#2666",
+        "#2667",
+        "#2668",
+        "#2669",
+        "#2670",
+        "#2671"
+      ],
+      "reconfirmed": [
+        "#2623",
+        "#2624",
+        "#2648",
+        "#2651",
+        "#2652"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-06-10T14:02:49Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.0",
+    "commitsAheadOfTag": 182,
+    "scope": "RaindexV6 TOFU token-decimals layer + vault accounting (deposit4/withdraw4/vaultBalance2/_vaultBalance/increaseVaultBalance/decreaseVaultBalance/pullTokens/pushTokens)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 13,
+      "candidatesSurfaced": 0,
+      "confirmed": 0,
+      "newTests": 13,
+      "note": "External deposit/withdraw/vaultBalance mock suites etch committed pointer bytecode, so source mutations were invisible to them; added fresh-compiled-harness tests that kill min-cap, zero-guard, credit-overwrite and all three (read-only/pull/push) TOFU-outcome mutations. No bugs surfaced."
+    }
+  },
+  {
+    "timestamp": "2026-06-11T00:00:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "RaindexV6.takeOrders4 take/skip loop + helpers (recordVaultOutput/Input, pushVaultZeroInput, handleIO, checkTokenSelfTrade)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 39,
+      "mutationsRun": 50,
+      "survivingMutantsFound": 7,
+      "survivingMutantsKilled": 7,
+      "equivalentMutants": 2,
+      "testsAdded": 33,
+      "bugsFound": 0,
+      "note": "Whole existing takeOrder suite (LibEtchRaindex) is blind to src mutations; added RaindexV6FreshTakeOrderTest base (re-etches type(RaindexV6).runtimeCode) so mutations are observed. No code-vs-intent divergence surfaced."
+    }
+  },
+  {
+    "timestamp": "2026-06-11T07:00:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "RaindexV6.clear3 + calculateClearStateChange + calculateClearStateAlice (bounty, NegativeBounty guard, record ordering, bounty crediting, ClearZeroAmount, AfterClearV2, ClearV3, same-owner/token/self-trade guards, dead-order)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 18,
+      "mutationsApplied": 23,
+      "killed": 22,
+      "equivalent": 1,
+      "confirmed": 0,
+      "testsAdded": 23,
+      "newFiles": [
+        "test/concrete/raindex/RaindexV6.clear.calculateStateChange.t.sol",
+        "test/concrete/raindex/RaindexV6.clear.freshDriver.t.sol"
+      ],
+      "note": "Existing clear suites etch committed bytecode and are blind to src mutations; added fresh-compiled harnesses (type(RaindexV6...).runtimeCode) that see them. No source bugs: code matches IRaindexV6 NatSpec."
+    }
+  },
+  {
+    "timestamp": "2026-06-10T20:35:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "RaindexV6 addOrder4 / removeOrder3 + post-action entasks (doPost) logic",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 17,
+      "mutationsApplied": 17,
+      "mutationsKilled": 17,
+      "mutationsSurvived": 0,
+      "testsAdded": 28,
+      "candidatesSurfaced": 1,
+      "note": "All in-scope tests etch committed src/generated pointers bytecode and are blind to src edits; added a fresh-compiled harness (type(RaindexV6).runtimeCode) so mutations are observable. Surfaced removeOrder3 redundant-remove event-vs-NatSpec divergence for triage."
     }
   },
   {
