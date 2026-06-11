@@ -1169,7 +1169,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// realized into the next move for the same `(account, token)`: the pull is
     /// reduced by any whole base unit of standing credit, and the fresh over-pull
     /// is added to it. The credit is always backed by tokens the orderbook holds
-    /// for `account`, so this is exactly conservative and never insolvent.
+    /// for `account`, so this is exactly conservative and never insolvent. Near
+    /// the Float coefficient ceiling, where the credit subtraction and conversion
+    /// can truncate the pull below the requested base units, the pull is clamped
+    /// up to the full requested amount so solvency still holds.
     function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
         uint8 decimals = _tokenDecimals(token);
         if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
@@ -1179,9 +1182,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         // The orderbook already holds the standing credit (token units) for
         // `account` from prior over-pulls / under-pushes, so it only needs to
         // pull in the part of `amount` that the credit does not already cover.
-        Float effective = amount.sub(sDustCredit[account][token]);
+        Float credit = sDustCredit[account][token];
+        Float effective = amount.sub(credit);
 
         uint256 amount18;
+        bool clamped;
         // A non-positive `effective` means the credit already covers the whole
         // pull, so no tokens move; `toFixedDecimalLossy` also rejects negatives.
         if (effective.gt(LibDecimalFloat.FLOAT_ZERO)) {
@@ -1193,16 +1198,38 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 // to silently not be pulled (wraps to 0).
                 ++amount18;
             }
+
+            // Near the Float coefficient ceiling the `amount.sub(credit)` above
+            // can drop the sub-unit credit AND `toFixedDecimalLossy` can report a
+            // spuriously-lossless conversion that truncates `effective` DOWN by
+            // more than one base unit, so the round-up never fires and the pull
+            // falls short of the vault obligation it books. `obligation` is the
+            // full requested `amount` in base units (what a zero-credit pull would
+            // take); the standing credit can only ever reduce the pull by under one
+            // base unit, so when the rounded `amount18` lands two or more base units
+            // below `obligation` the credit was dropped. Clamp up to `obligation`
+            // so the orderbook is never short; the credit is then carried forward
+            // below rather than re-derived from the unreliable `effective`.
+            //slither-disable-next-line unused-return
+            (uint256 obligation,) = LibDecimalFloat.toFixedDecimalLossy(amount, decimals);
+            if (amount18 + 1 < obligation) {
+                amount18 = obligation;
+                clamped = true;
+            }
+
             IERC20(token).safeTransferFrom(account, address(this), amount18);
         }
 
         // The new credit is the transferred amount minus what `effective`
         // required: the over-pull when tokens moved (rounded up, so non-negative
         // and under one base unit), or the leftover credit when none did. It is
-        // backed by tokens the orderbook holds for `account`.
+        // backed by tokens the orderbook holds for `account`. A clamped pull moved
+        // exactly `amount` in base units (the standing credit was sub-resolution
+        // beside it and could not reduce the pull), so the standing credit carries
+        // forward unchanged.
         //slither-disable-next-line unused-return
         (Float pulled,) = LibDecimalFloat.fromFixedDecimalLossyPacked(amount18, decimals);
-        sDustCredit[account][token] = pulled.sub(effective);
+        sDustCredit[account][token] = clamped ? credit : pulled.sub(effective);
 
         return (amount18, decimals);
     }

@@ -56,7 +56,9 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
     function setUp() external {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
-        harness = RaindexV6DustCreditPrecisionAttackHarness(payable(address(uint160(uint256(keccak256("dust.credit.precision.attack"))))));
+        harness = RaindexV6DustCreditPrecisionAttackHarness(
+            payable(address(uint160(uint256(keccak256("dust.credit.precision.attack")))))
+        );
         vm.etch(address(harness), type(RaindexV6DustCreditPrecisionAttackHarness).runtimeCode);
     }
 
@@ -97,8 +99,7 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
 
             // Total physically pulled, expressed in token units (Float), built
             // from the two uint256 returns so the test never overflows int256.
-            Float movedTotal =
-                _floatFromBaseUnits(moved1).add(_floatFromBaseUnits(moved2));
+            Float movedTotal = _floatFromBaseUnits(moved1).add(_floatFromBaseUnits(moved2));
 
             Float netRequested = r1.add(r2);
             Float credit = harness.exposedDustCredit(owner, address(token));
@@ -122,14 +123,13 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
         }
     }
 
-    /// REALISM PROBE (18 decimals): find the minimum WHOLE-TOKEN count at which
-    /// the PR under-holds vs the vault obligation, for an 18-decimal token (the
-    /// common case). Reports the threshold in whole tokens.
+    /// REALISM REGRESSION GUARD (18 decimals): the clamp keeps the orderbook
+    /// solvent for the common 18-decimal token at every whole-token magnitude
+    /// whose base unit count fits the funded supply (exp <= 58 keeps 10^(exp+18)
+    /// <= 2e76). Assert intake >= obligation + standing credit at each.
     function testFindMinInsolventExponent18dp() external {
-        for (int256 exp = 0; exp <= 59; exp++) {
+        for (int256 exp = 0; exp <= 58; exp++) {
             PrecisionAttackMutableDecimalsToken token = new PrecisionAttackMutableDecimalsToken(18);
-            // fund generously but keep below int range issues; base units = 10^(exp+18)
-            // need that to fit uint256 (< 1.15e77) => exp <= 59 keeps 10^77.
             token.mint(owner, 2 * 10 ** 76);
             token.mint(address(harness), 2 * 10 ** 76);
             vm.prank(owner);
@@ -147,19 +147,15 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
             Float credit = harness.exposedDustCredit(owner, address(token));
             (uint256 creditBase,) = LibDecimalFloat.toFixedDecimalLossy(credit, 18);
 
-            if (takenIn < obligation + creditBase) {
-                emit log_named_int("18dp FIRST INSOLVENT: whole tokens = 10^exp, exp", exp);
-                emit log_named_uint("shortfall (base units)", (obligation + creditBase) - takenIn);
-                return;
-            }
+            assertGe(takenIn, obligation + creditBase, "18dp solvent at every whole-token magnitude");
         }
-        emit log("18dp: no insolvent exponent up to 10^59 whole tokens");
     }
 
     /// A/B vs MAIN: replicate main's pullTokens intake (round-up, no credit) for
     /// the same two-pull sequence and compare to the PR harness intake and to the
-    /// vault obligation. Confirms the PR (credit ledger) is what flips the sign of
-    /// the solvency slack at 10^62 token units.
+    /// vault obligation at 10^62 token units, the magnitude where the unclamped
+    /// credit ledger used to under-hold. The precision-loss clamp restores parity:
+    /// the PR intake is solvent against the obligation just like main.
     function testABMainVsPRAtExp62() external {
         int256 exp = 62;
 
@@ -173,7 +169,8 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
         (uint256 prCreditBase,) = LibDecimalFloat.toFixedDecimalLossy(prCredit, 6);
 
         // --- main intake replicated inline (round-up per pull, no credit) ---
-        uint256 mainTakenIn = _mainPull(LibDecimalFloat.packLossless(15, -7)) + _mainPull(LibDecimalFloat.packLossless(1, exp));
+        uint256 mainTakenIn =
+            _mainPull(LibDecimalFloat.packLossless(15, -7)) + _mainPull(LibDecimalFloat.packLossless(1, exp));
 
         // --- vault obligation (Float vault balance -> base units, round down) ---
         Float vaultBalance = LibDecimalFloat.packLossless(15, -7).add(LibDecimalFloat.packLossless(1, exp));
@@ -186,10 +183,9 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
 
         // MAIN is solvent: intake >= obligation.
         assertGe(mainTakenIn, obligation, "MAIN: intake >= obligation (solvent)");
-        // PR is insolvent: intake + creditLiability < obligation.
-        // (credit liability is itself a liability, so even adding it back the PR
-        // holds less than it owes.)
-        assertLt(prTakenIn + prCreditBase, obligation, "PR: intake+credit < obligation (insolvent)");
+        // PR is solvent too: the clamp pulls in at least the vault obligation plus
+        // the standing credit liability it now also owes the user.
+        assertGe(prTakenIn, obligation + prCreditBase, "PR: intake >= obligation + credit (solvent)");
     }
 
     /// main's pullTokens intake: toFixedDecimalLossy rounded UP on lossy.
@@ -201,13 +197,13 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
         }
     }
 
-    /// MINIMUM-MAGNITUDE PROBE: find the smallest pull exponent at which the
-    /// seeded-credit path takes in FEWER base units than the vault obligation it
-    /// books (i.e. the credit machinery flips a harmless over-hold into an
-    /// untracked under-hold). Also reports the equivalent main-branch intake to
-    /// confirm the PR is the cause.
+    /// MINIMUM-MAGNITUDE REGRESSION GUARD: the precision-loss clamp keeps the
+    /// orderbook solvent at every pull magnitude, so no exponent flips a harmless
+    /// over-hold into an untracked under-hold. Scan every magnitude whose base
+    /// unit count fits the funded supply (exp <= 70 keeps 10^(exp+6) <= 2e76) and
+    /// assert intake >= obligation + standing credit at each.
     function testFindMinInsolventExponent() external {
-        for (int256 exp = 0; exp <= 71; exp++) {
+        for (int256 exp = 0; exp <= 70; exp++) {
             MockToken token = _newToken(6);
             uint256 heldBefore = token.balanceOf(address(harness));
 
@@ -221,16 +217,8 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
             Float credit = harness.exposedDustCredit(owner, address(token));
             (uint256 creditBase,) = LibDecimalFloat.toFixedDecimalLossy(credit, 6);
 
-            if (takenIn < obligation + creditBase) {
-                emit log_named_int("FIRST INSOLVENT exponent (token units 10^exp)", exp);
-                emit log_named_uint("takenIn", takenIn);
-                emit log_named_uint("obligation+credit", obligation + creditBase);
-                emit log_named_uint("shortfall", (obligation + creditBase) - takenIn);
-                // Stop at the first insolvent exponent.
-                return;
-            }
+            assertGe(takenIn, obligation + creditBase, "solvent at every pull magnitude");
         }
-        emit log("no insolvent exponent found up to 10^71 token units");
     }
 
     /// SOLVENCY END-TO-END: compare, for an identical (seed 1.5 base units) +
@@ -400,8 +388,7 @@ contract RaindexV6DustCreditPrecisionAttackTest is Test {
 
             // Conservation for pushes: tokens physically sent + retained credit
             // == requested. i.e. movedTotal + credit == netRequested.
-            Float movedTotal =
-                _floatFromBaseUnits(moved1).add(_floatFromBaseUnits(moved2));
+            Float movedTotal = _floatFromBaseUnits(moved1).add(_floatFromBaseUnits(moved2));
             Float netRequested = r1.add(r2);
             Float credit = harness.exposedDustCredit(owner, address(token));
             Float expected = netRequested.sub(credit);
