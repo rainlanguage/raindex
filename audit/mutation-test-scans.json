@@ -14,5 +14,23 @@
       "filed": ["#2665", "#2666", "#2667", "#2668", "#2669", "#2670", "#2671"],
       "reconfirmed": ["#2623", "#2624", "#2648", "#2651", "#2652"]
     }
+  },
+  {
+    "timestamp": "2026-06-11T00:00:00Z",
+    "commit": "44590fcffc7ba9629f567cef6361b5d041e5f9a6",
+    "publishedTag": "sol-v0.1.6",
+    "commitsAheadOfTag": 0,
+    "scope": "LibRaindexSubParser context word handlers (column/row routing + operand masks)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 32,
+      "candidatesSurfaced": 0,
+      "confirmed": 0,
+      "survivingMutantsKilled": 3,
+      "testsAdded": 4,
+      "filed": [],
+      "note": "Every handler (column,row) is consistent with the production RaindexV6 context grid; no code-vs-intent bug. Filled coverage gaps: withdraw-token-decimals absolute (column,row) and the signed-context row mask & 0xFF."
+    }
   }
 ]
