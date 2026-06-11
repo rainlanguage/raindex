@@ -121,5 +121,20 @@
       "filed": [],
       "note": "Every handler (column,row) is consistent with the production RaindexV6 context grid; no code-vs-intent bug. Filled coverage gaps: withdraw-token-decimals absolute (column,row) and the signed-context row mask & 0xFF."
     }
+  },
+  {
+    "timestamp": "2026-06-10T00:00:00Z",
+    "commit": "137ba34959715379bc1bbc7ea304b2b83104c485",
+    "publishedTag": "sol-v0.1.0",
+    "commitsAheadOfTag": 69,
+    "scope": "ARB order-taker and flash-borrower contracts (RaindexV6ArbOrderTaker, RaindexV6FlashBorrower, GenericPool/RouteProcessor concretes, LibRaindexArb, LibGenericPoolExchange)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.24.0",
+    "summary": {
+      "behaviours": 50,
+      "candidates": 2,
+      "confirmed": 2,
+      "filed": []
+    }
   }
 ]
