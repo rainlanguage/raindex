@@ -1,8 +1,10 @@
 use super::functions;
+use super::query::create_tables::RAINDEX_APPLICATION_ID;
 use super::query::{
     FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch, SqlValue,
 };
 use async_trait::async_trait;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use rusqlite::{types::ValueRef, Connection};
 use serde_json::{json, Map, Value};
 use std::convert::TryFrom;
@@ -61,7 +63,51 @@ fn open_connection(db_path: &Path) -> Result<Connection, LocalDbQueryError> {
     functions::register_all(&conn).map_err(|e| {
         LocalDbQueryError::database(format!("Failed to register sqlite functions: {e}"))
     })?;
+    verify_schema_guard(&conn)?;
     Ok(conn)
+}
+
+/// Structural schema-version guard read from the SQLite file header on every
+/// connection open. `application_id` labels the file as a raindex local-db and
+/// `user_version` carries the schema version; both are stamped by
+/// `create_tables` (see `query.sql`) and survive table corruption.
+///
+/// A brand-new file reports `application_id == 0` before any tables are
+/// created, so it is allowed through unverified to let bootstrap create and
+/// stamp the schema. Once stamped, a foreign file (wrong `application_id`) or a
+/// stale-version file (wrong `user_version`) is rejected up front rather than
+/// surfacing later as an opaque `no such column` error.
+fn verify_schema_guard(conn: &Connection) -> Result<(), LocalDbQueryError> {
+    let app_id: i32 = conn
+        .query_row("PRAGMA application_id", [], |row| row.get(0))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to read application_id: {e}")))?;
+
+    // An unstamped, freshly-created database header reads zero. Defer to
+    // bootstrap, which creates the tables and stamps the header.
+    if app_id == 0 {
+        return Ok(());
+    }
+
+    if app_id != RAINDEX_APPLICATION_ID {
+        return Err(LocalDbQueryError::NotARaindexDb {
+            expected: RAINDEX_APPLICATION_ID,
+            found: app_id,
+        });
+    }
+
+    let user_version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to read user_version: {e}")))?;
+
+    let expected = DB_SCHEMA_VERSION as i32;
+    if user_version != expected {
+        return Err(LocalDbQueryError::SchemaVersionMismatch {
+            expected,
+            found: user_version,
+        });
+    }
+
+    Ok(())
 }
 
 fn join_err(err: tokio::task::JoinError) -> LocalDbQueryError {
@@ -188,7 +234,213 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_db::query::create_tables::create_tables_stmt;
     use tempfile::TempDir;
+
+    #[test]
+    fn empty_db_passes_schema_guard() {
+        // A brand-new connection has application_id == 0 and must be allowed
+        // through so bootstrap can create and stamp the schema.
+        let conn = Connection::open_in_memory().unwrap();
+        verify_schema_guard(&conn).expect("unstamped db should pass the guard");
+    }
+
+    #[test]
+    fn stamped_db_passes_schema_guard() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        verify_schema_guard(&conn).expect("correctly stamped db should pass the guard");
+    }
+
+    #[test]
+    fn wrong_application_id_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Re-stamp the header with a foreign application_id (a SQLite file that
+        // is not a raindex local-db) while leaving user_version valid.
+        let foreign = RAINDEX_APPLICATION_ID + 1;
+        conn.pragma_update(None, "application_id", foreign)
+            .expect("override application_id");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::NotARaindexDb { expected, found }) => {
+                assert_eq!(expected, RAINDEX_APPLICATION_ID);
+                assert_eq!(found, foreign);
+            }
+            other => panic!("expected NotARaindexDb, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn negative_application_id_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // A foreign file whose application_id has the top bit set reads back as
+        // a negative i32. It is neither zero (unstamped) nor the raindex magic,
+        // so it must be rejected as NotARaindexDb rather than waved through.
+        let foreign = i32::MIN;
+        conn.pragma_update(None, "application_id", foreign)
+            .expect("override application_id");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::NotARaindexDb { expected, found }) => {
+                assert_eq!(expected, RAINDEX_APPLICATION_ID);
+                assert_eq!(found, foreign);
+            }
+            other => panic!("expected NotARaindexDb, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wrong_user_version_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Keep the raindex application_id but advance user_version to a stale /
+        // future schema number.
+        let bumped = DB_SCHEMA_VERSION as i32 + 1;
+        conn.pragma_update(None, "user_version", bumped)
+            .expect("override user_version");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
+                assert_eq!(expected, DB_SCHEMA_VERSION as i32);
+                assert_eq!(found, bumped);
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stale_user_version_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Keep the raindex application_id but roll user_version back to an older
+        // schema number. A stale (lower) version must be rejected just like a
+        // future (higher) one.
+        let stale = DB_SCHEMA_VERSION as i32 - 1;
+        conn.pragma_update(None, "user_version", stale)
+            .expect("override user_version");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
+                assert_eq!(expected, DB_SCHEMA_VERSION as i32);
+                assert_eq!(found, stale);
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn open_rejects_foreign_application_id_db() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("foreign.db");
+
+        // Build a stamped raindex db, then corrupt only the application_id label
+        // in the file header so a fresh open must reject it.
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.pragma_update(None, "application_id", RAINDEX_APPLICATION_ID + 7)
+                .unwrap();
+        }
+
+        let exec = RusqliteExecutor::new(&db_path);
+        let err = exec
+            .query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect_err("open of a foreign db must fail");
+        assert!(
+            matches!(err, LocalDbQueryError::NotARaindexDb { .. }),
+            "expected NotARaindexDb, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_rejects_stale_user_version_db() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("stale.db");
+
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.pragma_update(None, "user_version", DB_SCHEMA_VERSION as i32 + 1)
+                .unwrap();
+        }
+
+        let exec = RusqliteExecutor::new(&db_path);
+        let err = exec
+            .query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect_err("open of a stale-version db must fail");
+        assert!(
+            matches!(err, LocalDbQueryError::SchemaVersionMismatch { .. }),
+            "expected SchemaVersionMismatch, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_tables_stamps_header_and_open_succeeds() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("stamped.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+        // First open hits an empty file (application_id == 0) and stamps it.
+        exec.query_text(&create_tables_stmt()).await.unwrap();
+
+        // A subsequent open must read back the stamped header and succeed.
+        #[derive(serde::Deserialize)]
+        struct VersionRow {
+            user_version: i64,
+        }
+        let rows: Vec<VersionRow> = exec
+            .query_json(&SqlStatement::new("PRAGMA user_version;"))
+            .await
+            .unwrap();
+        assert_eq!(rows[0].user_version, DB_SCHEMA_VERSION as i64);
+
+        let conn = Connection::open(&db_path).unwrap();
+        let app_id: i32 = conn
+            .query_row("PRAGMA application_id", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app_id, RAINDEX_APPLICATION_ID);
+    }
+
+    #[tokio::test]
+    async fn data_only_dump_apply_preserves_header() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("dump.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+        exec.query_text(&create_tables_stmt()).await.unwrap();
+
+        // Apply a data-only insert batch (the shape produced by export_data_only).
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new(
+            "INSERT INTO db_metadata (id, db_schema_version) VALUES (1, 5);",
+        ));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap();
+
+        // The header guard must still pass after applying data rows.
+        exec.query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect("open after dump apply should still pass the guard");
+
+        let conn = Connection::open(&db_path).unwrap();
+        let app_id: i32 = conn
+            .query_row("PRAGMA application_id", [], |row| row.get(0))
+            .unwrap();
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app_id, RAINDEX_APPLICATION_ID);
+        assert_eq!(user_version, DB_SCHEMA_VERSION as i32);
+    }
 
     #[tokio::test]
     async fn execute_batch_runs_all_statements() {
