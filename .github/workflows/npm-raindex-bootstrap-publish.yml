@@ -1,0 +1,53 @@
+name: Bootstrap raindex NPM Publish
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  publish:
+    if: ${{ github.head_ref == 'fix-raindex-npm-release-pr-trigger' || github.ref_name == 'fix-raindex-npm-release-pr-trigger' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          swap-storage: false
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: true
+
+      - uses: DeterminateSystems/flakehub-cache-action@main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify npm token auth
+        run: npm whoami
+
+      - name: Install dependencies
+        run: ./prep-base.sh
+
+      - name: Build raindex package
+        run: nix develop -c npm run build -w @rainlanguage/raindex
+
+      - name: Publish raindex package
+        run: |
+          RAINDEX_VERSION=$(jq -r '.version' ./packages/raindex/package.json)
+          if npm view "@rainlanguage/raindex@${RAINDEX_VERSION}" version >/dev/null 2>&1; then
+            echo "@rainlanguage/raindex@${RAINDEX_VERSION} is already published"
+            exit 0
+          fi
+          npm publish -w @rainlanguage/raindex --access public --tag bootstrap --verbose
