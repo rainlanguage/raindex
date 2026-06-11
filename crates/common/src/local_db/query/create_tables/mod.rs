@@ -3,13 +3,16 @@ use crate::local_db::query::SqlStatement;
 pub const CREATE_TABLES_SQL: &str = include_str!("query.sql");
 
 /// Stable `PRAGMA application_id` stamped into the SQLite file header of every
-/// raindex local-db. The value is the big-endian ASCII of "RIDX"
-/// (0x52 'R', 0x49 'I', 0x44 'D', 0x58 'X'), giving a fixed, human-recognisable
-/// magic that identifies the file as a raindex local-db rather than some other
-/// SQLite file. It is a 32-bit header label and never changes across schema
-/// versions. SQLite exposes `application_id`/`user_version` as signed 32-bit
-/// integers, so the constant is typed `i32`.
-pub const RAINDEX_APPLICATION_ID: i32 = 0x5249_4458;
+/// raindex local-db. The value is a fixed, uniform 32-bit identifier: the
+/// high-bit-cleared first 4 bytes of
+/// `sha256("raindex.local_db.application_id.v1")`. It is used only by
+/// `verify_schema_guard` to recognise a file as a raindex local-db rather than
+/// some other SQLite file. A uniform value is chosen instead of a
+/// printable-ASCII magic so it is unlikely to collide with another
+/// application's `application_id`. SQLite exposes
+/// `application_id`/`user_version` as signed 32-bit integers, so the constant is
+/// typed `i32`.
+pub const RAINDEX_APPLICATION_ID: i32 = 0x73DC_DCFD;
 
 pub const REQUIRED_TABLES: &[&str] = &[
     "db_metadata",
@@ -187,11 +190,18 @@ mod tests {
     }
 
     #[test]
-    fn raindex_application_id_is_ridx_ascii() {
+    fn raindex_application_id_matches_sha256_derivation() {
+        // The application_id is the high-bit-cleared first 4 bytes of
+        // sha256("raindex.local_db.application_id.v1"). Recompute it here so a
+        // typo in the constant is caught.
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(b"raindex.local_db.application_id.v1");
+        let first4 = u32::from_be_bytes(digest[..4].try_into().unwrap());
+        let expected = (first4 & 0x7FFF_FFFF) as i32;
         assert_eq!(
-            RAINDEX_APPLICATION_ID.to_be_bytes(),
-            *b"RIDX",
-            "application id must be the big-endian ASCII of \"RIDX\""
+            RAINDEX_APPLICATION_ID, expected,
+            "application id must be the high-bit-cleared first 4 bytes of \
+             sha256(\"raindex.local_db.application_id.v1\")"
         );
     }
 

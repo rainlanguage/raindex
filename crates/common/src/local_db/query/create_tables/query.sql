@@ -1,12 +1,13 @@
 BEGIN TRANSACTION;
 
 -- Structural schema-version guard stamped into the SQLite file header.
--- `application_id` labels the file as a raindex local-db (0x52494458 == "RIDX");
--- `user_version` carries the schema version. Both live in the header, so they
--- survive table corruption and are readable without touching `db_metadata`.
--- Keep `user_version` in lockstep with `DB_SCHEMA_VERSION`; the
--- `pragmas_match_schema_version` test enforces this.
-PRAGMA application_id = 0x52494458;
+-- `application_id` labels the file as a raindex local-db (0x73DCDCFD, a uniform
+-- identifier matching `RAINDEX_APPLICATION_ID`); `user_version` carries the
+-- schema version. Both live in the header, so they survive table corruption and
+-- are readable without touching `db_metadata`. Keep `user_version` in lockstep
+-- with `DB_SCHEMA_VERSION`; the `pragmas_match_schema_version` test enforces
+-- this.
+PRAGMA application_id = 0x73DCDCFD;
 PRAGMA user_version = 5;
 
 -- Global DB metadata (singleton)
