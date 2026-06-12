@@ -28,7 +28,9 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
     /// forge-config: default.fuzz.runs = 100
     function testAddOrderRealNoHandleIOReverts(address owner, OrderConfigV4 memory config) public {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
-        bytes memory bytecode = iParserV2.parse2(":;");
+        // A single calculate source with no handle IO source: one source, so it
+        // passes the no-sources check but trips the no-handle-IO check.
+        bytes memory bytecode = iParserV2.parse2("_ _:1 1;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(OrderNoHandleIO.selector));

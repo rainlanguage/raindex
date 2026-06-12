@@ -92,11 +92,25 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
         bobConfig.evaluable.interpreter = iInterpreter;
         bobConfig.evaluable.store = iStore;
 
+        // addOrder4 requires a valid serialized parser output with >= 2 sources.
+        // The fuzzed bytecode is replaced with the canonical 2-source serialized
+        // blob (the same `_ _:1e18 1e18;:;` output LibTestAddOrder.conformConfig
+        // installs). The two orders are differentiated by owner, token layout and
+        // nonce instead (see checkClear), and by their distinct mock interpreters
+        // at clear time, so they remain distinct orders.
+        aliceConfig.evaluable.bytecode = LibTestAddOrder.VALID_ORDER_BYTECODE;
+        bobConfig.evaluable.bytecode = LibTestAddOrder.VALID_ORDER_BYTECODE;
+
         aliceConfig.validInputs[0].token = address(iToken0);
         aliceConfig.validOutputs[0].token = address(iToken1);
 
         bobConfig.validInputs[0].token = address(iToken1);
         bobConfig.validOutputs[0].token = address(iToken0);
+
+        // Give the two orders distinct nonces so they are distinct orders even
+        // though they now share the canonical bytecode.
+        aliceConfig.nonce = bytes32(uint256(0xA11CE));
+        bobConfig.nonce = bytes32(uint256(0xB0B));
 
         aliceConfig.meta = "";
         bobConfig.meta = "";
@@ -131,7 +145,13 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
         vm.assume(clear.bobBountyVaultId != bytes32(0));
 
         conformBasicConfig(clear.aliceConfig, clear.bobConfig);
-        vm.assume(keccak256(clear.aliceConfig.evaluable.bytecode) != keccak256(clear.bobConfig.evaluable.bytecode));
+        // Alice and bob now share the canonical order bytecode, so they are
+        // differentiated as distinct orders by owner, token layout and nonce
+        // instead. Assert the order hashes actually differ to keep enforcing
+        // that clear operates on two distinct orders.
+        (, bytes32 aliceOrderHash) = LibTestAddOrder.expectedOrder(clear.alice, clear.aliceConfig);
+        (, bytes32 bobOrderHash) = LibTestAddOrder.expectedOrder(clear.bob, clear.bobConfig);
+        assertTrue(aliceOrderHash != bobOrderHash, "alice and bob must be distinct orders");
 
         _depositInternal(
             clear.alice,

@@ -11,6 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensio
 
 import {LibContext} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.1.5/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,
@@ -335,7 +336,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     {
         // An order that lacks the calculate and handle IO entrypoints is
         // unevaluable so it MUST NOT be added.
-        uint256 sourceCount = LibBytecode.sourceCount(orderConfig.evaluable.bytecode);
+        uint256 sourceCount =
+            LibBytecode.sourceCount(LibInterpreterStateDataContract.bytecodeOf(orderConfig.evaluable.bytecode));
         if (sourceCount <= SourceIndexV2.unwrap(CALCULATE_ORDER_ENTRYPOINT)) {
             revert OrderNoSources();
         }
