@@ -2205,6 +2205,103 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       assert.equal(res.error.msg, "Existing allowance");
     });
 
+    it("should generate all calldatas with approval when allowance is insufficient", async () => {
+      await mockServer
+        .forPost("/sg1")
+        .once()
+        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
+      // Allowance is 100, and user wants 600, so approval calldata is included.
+      await mockServer.forPost("/rpc1").thenReply(
+        200,
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result:
+            "0x0000000000000000000000000000000000000000000000056BC75E2D63100000",
+        }),
+      );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const vault = extractWasmEncodedData(
+        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
+      );
+
+      const res = extractWasmEncodedData(
+        await vault.getCalldatas(Float.parse("600").value as Float),
+      );
+      assert.ok(res.approval?.startsWith("0x"));
+      assert.equal(
+        res.approval,
+        extractWasmEncodedData(
+          await vault.getApprovalCalldata(Float.parse("600").value as Float),
+        ),
+      );
+      assert.equal(
+        res.deposit,
+        extractWasmEncodedData(
+          await vault.getDepositCalldata(Float.parse("600").value as Float),
+        ),
+      );
+      assert.equal(
+        res.withdraw,
+        extractWasmEncodedData(
+          await vault.getWithdrawCalldata(Float.parse("600").value as Float),
+        ),
+      );
+    });
+
+    it("should omit approval calldata when allowance is sufficient", async () => {
+      await mockServer
+        .forPost("/sg1")
+        .once()
+        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
+      // Allowance is 100, and user wants 90, so no approval calldata is needed.
+      await mockServer.forPost("/rpc1").thenReply(
+        200,
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result:
+            "0x0000000000000000000000000000000000000000000000056BC75E2D63100000",
+        }),
+      );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const vault = extractWasmEncodedData(
+        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
+      );
+
+      const res = extractWasmEncodedData(
+        await vault.getCalldatas(Float.parse("90").value as Float),
+      );
+      assert.equal(res.approval, undefined);
+      assert.ok(res.deposit.startsWith("0x"));
+      assert.ok(res.withdraw.startsWith("0x"));
+    });
+
+    it("should reject getCalldatas for zero amount", async () => {
+      await mockServer
+        .forPost("/sg1")
+        .once()
+        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const vault = extractWasmEncodedData(
+        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
+      );
+
+      const res = await vault.getCalldatas(Float.parse("0").value as Float);
+      if (!res.error) assert.fail("expected to reject, but resolved");
+      assert.equal(res.error.msg, "Zero amount");
+      assert.equal(res.error.readableMsg, "Amount cannot be zero");
+    });
+
     it("should get all vault tokens", async function () {
       const tokens1 = [
         {
