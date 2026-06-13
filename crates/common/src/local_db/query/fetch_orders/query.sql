@@ -3,6 +3,10 @@ SELECT
   COALESCE(la.order_hash, l.order_hash) AS orderHash,
   l.order_owner AS owner,
   fa.block_timestamp AS blockTimestamp,
+  CASE
+    WHEN l.event_type = 'RemoveOrderV3' THEN l.block_timestamp
+    ELSE NULL
+  END AS blockTimestampRemoved,
   fa.block_number AS blockNumber,
   l.raindex_address AS raindexAddress,
   la.order_bytes AS orderBytes,
@@ -260,6 +264,7 @@ GROUP BY
   COALESCE(la.order_hash, l.order_hash),
   l.order_owner,
   fa.block_timestamp,
+  l.block_timestamp,
   fa.block_number,
   l.raindex_address,
   l.order_nonce,

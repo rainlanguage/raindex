@@ -2,6 +2,18 @@ use crate::local_db::query::SqlStatement;
 
 pub const CREATE_TABLES_SQL: &str = include_str!("query.sql");
 
+/// Stable `PRAGMA application_id` stamped into the SQLite file header of every
+/// raindex local-db. The value is a fixed, uniform 32-bit identifier: the
+/// high-bit-cleared first 4 bytes of
+/// `sha256("raindex.local_db.application_id.v1")`. It is used only by
+/// `verify_schema_guard` to recognise a file as a raindex local-db rather than
+/// some other SQLite file. A uniform value is chosen instead of a
+/// printable-ASCII magic so it is unlikely to collide with another
+/// application's `application_id`. SQLite exposes
+/// `application_id`/`user_version` as signed 32-bit integers, so the constant is
+/// typed `i32`.
+pub const RAINDEX_APPLICATION_ID: i32 = 0x73DC_DCFD;
+
 pub const REQUIRED_TABLES: &[&str] = &[
     "db_metadata",
     "target_watermarks",
@@ -155,7 +167,43 @@ fn normalize_ident(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
     use std::collections::{HashMap, HashSet};
+
+    #[test]
+    fn pragmas_match_schema_version() {
+        // The application_id PRAGMA literal must equal the documented magic.
+        let expected_app_id = format!("PRAGMA application_id = 0x{:08X};", RAINDEX_APPLICATION_ID);
+        assert!(
+            CREATE_TABLES_SQL.contains(&expected_app_id),
+            "create_tables SQL must stamp application_id with the raindex magic ({expected_app_id})"
+        );
+
+        // The user_version PRAGMA literal must stay in lockstep with the
+        // Rust-side DB_SCHEMA_VERSION constant. A schema bump that forgets to
+        // update the SQL header trips this assertion.
+        let expected_user_version = format!("PRAGMA user_version = {DB_SCHEMA_VERSION};");
+        assert!(
+            CREATE_TABLES_SQL.contains(&expected_user_version),
+            "create_tables SQL must stamp user_version = {DB_SCHEMA_VERSION} to match DB_SCHEMA_VERSION"
+        );
+    }
+
+    #[test]
+    fn raindex_application_id_matches_sha256_derivation() {
+        // The application_id is the high-bit-cleared first 4 bytes of
+        // sha256("raindex.local_db.application_id.v1"). Recompute it here so a
+        // typo in the constant is caught.
+        use sha2::{Digest, Sha256};
+        let digest = Sha256::digest(b"raindex.local_db.application_id.v1");
+        let first4 = u32::from_be_bytes(digest[..4].try_into().unwrap());
+        let expected = (first4 & 0x7FFF_FFFF) as i32;
+        assert_eq!(
+            RAINDEX_APPLICATION_ID, expected,
+            "application id must be the high-bit-cleared first 4 bytes of \
+             sha256(\"raindex.local_db.application_id.v1\")"
+        );
+    }
 
     #[test]
     fn required_tables_match_sql_create_statements() {
