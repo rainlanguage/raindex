@@ -2,14 +2,14 @@ use crate::raindex_order_builder::RaindexOrderBuilder;
 use crate::yaml::{RaindexYaml, RaindexYamlError};
 use raindex_app_settings::order_builder::NameAndDescriptionCfg;
 use raindex_common::registry::{
-    RaindexRegistry as RaindexRegistryInner, RaindexRegistryError as RaindexRegistryCoreError,
+    DotrainRegistry as DotrainRegistryInner, DotrainRegistryError as DotrainRegistryCoreError,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use thiserror::Error;
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
 
-/// WASM wrapper around [`raindex_common::registry::RaindexRegistry`].
+/// WASM wrapper around [`raindex_common::registry::DotrainRegistry`].
 ///
 /// The registry system manages dotrain order configurations with layered content merging.
 /// The platform-agnostic business logic (fetching, parsing, validation, metadata extraction)
@@ -46,7 +46,7 @@ use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[wasm_bindgen]
 pub struct DotrainRegistry {
-    inner: RaindexRegistryInner,
+    inner: DotrainRegistryInner,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
@@ -63,13 +63,13 @@ impl_wasm_traits!(OrderUrls);
 #[derive(Error, Debug)]
 pub enum DotrainRegistryError {
     #[error(transparent)]
-    RegistryError(Box<RaindexRegistryCoreError>),
+    RegistryError(Box<DotrainRegistryCoreError>),
     #[error(transparent)]
     RaindexYamlError(#[from] RaindexYamlError),
 }
 
-impl From<RaindexRegistryCoreError> for DotrainRegistryError {
-    fn from(err: RaindexRegistryCoreError) -> Self {
+impl From<DotrainRegistryCoreError> for DotrainRegistryError {
+    fn from(err: DotrainRegistryCoreError) -> Self {
         Self::RegistryError(Box::new(err))
     }
 }
@@ -149,7 +149,7 @@ impl DotrainRegistry {
         )]
         registry_url: String,
     ) -> Result<DotrainRegistry, DotrainRegistryError> {
-        let inner = RaindexRegistryInner::new(registry_url).await?;
+        let inner = DotrainRegistryInner::new(registry_url).await?;
         Ok(DotrainRegistry { inner })
     }
 
@@ -169,7 +169,7 @@ impl DotrainRegistry {
         )]
         registry_url: String,
     ) -> Result<(), DotrainRegistryError> {
-        RaindexRegistryInner::validate(registry_url).await?;
+        DotrainRegistryInner::validate(registry_url).await?;
         Ok(())
     }
 
@@ -434,7 +434,7 @@ impl DotrainRegistry {
             status_callback,
         )
         .await
-        .map_err(RaindexRegistryCoreError::from)?;
+        .map_err(DotrainRegistryCoreError::from)?;
         Ok(client)
     }
 }

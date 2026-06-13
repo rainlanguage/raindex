@@ -10,7 +10,7 @@ use url::Url;
 
 /// A registry system for managing dotrain order configurations with layered content merging.
 ///
-/// The `RaindexRegistry` provides a centralized way to fetch, parse, and manage dotrain order
+/// The `DotrainRegistry` provides a centralized way to fetch, parse, and manage dotrain order
 /// strategies from remote sources. It supports a layered architecture where shared settings
 /// are merged with individual order configurations.
 ///
@@ -45,7 +45,7 @@ use url::Url;
 /// 3. **List Deployments** → Get deployment options for selected order
 /// 4. **Create Builder** → Instantiate RaindexOrderBuilder with merged content
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct RaindexRegistry {
+pub struct DotrainRegistry {
     /// The URL of the registry file containing the list of orders and settings.
     ///
     /// This is the original URL passed to the constructor and serves as the entry point
@@ -97,15 +97,15 @@ pub struct RaindexRegistry {
     orders: HashMap<String, String>,
 }
 
-/// Order metadata grouped by validity, as produced by [`RaindexRegistry::get_all_order_details`].
+/// Order metadata grouped by validity, as produced by [`DotrainRegistry::get_all_order_details`].
 #[derive(Debug)]
 pub struct OrderDetailsResult {
     pub valid: BTreeMap<String, NameAndDescriptionCfg>,
-    pub invalid: BTreeMap<String, RaindexRegistryError>,
+    pub invalid: BTreeMap<String, DotrainRegistryError>,
 }
 
 #[derive(Error, Debug)]
-pub enum RaindexRegistryError {
+pub enum DotrainRegistryError {
     #[error("Failed to fetch registry from URL: {0}")]
     RegistryFetchError(String),
     #[error("Failed to parse registry content")]
@@ -130,55 +130,55 @@ pub enum RaindexRegistryError {
     RaindexClientError(#[from] RaindexClientError),
 }
 
-impl RaindexRegistryError {
+impl DotrainRegistryError {
     pub fn to_readable_msg(&self) -> String {
         match self {
-            RaindexRegistryError::RegistryFetchError(url) => {
+            DotrainRegistryError::RegistryFetchError(url) => {
                 format!("Unable to fetch the registry file from {}. Please check your internet connection and ensure the URL is accessible.", url)
             }
-            RaindexRegistryError::RegistryParseError => {
+            DotrainRegistryError::RegistryParseError => {
                 "The registry file format is invalid. Please ensure it follows the expected format with settings URL on the first line and order entries on subsequent lines.".to_string()
             }
-            RaindexRegistryError::SettingsFetchError(url) => {
+            DotrainRegistryError::SettingsFetchError(url) => {
                 format!("Unable to fetch the settings file from {}. Please check your internet connection and ensure the URL is accessible.", url)
             }
-            RaindexRegistryError::OrderFetchError(url) => {
+            DotrainRegistryError::OrderFetchError(url) => {
                 format!("Unable to fetch the order file from {}. Please check your internet connection and ensure the URL is accessible.", url)
             }
-            RaindexRegistryError::OrderKeyNotFound(key) => {
+            DotrainRegistryError::OrderKeyNotFound(key) => {
                 format!("The order key '{}' was not found in the registry. Please check the available order keys.", key)
             }
-            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+            DotrainRegistryError::InvalidRegistryFormat(msg) => {
                 format!("Invalid registry format: {}", msg)
             }
-            RaindexRegistryError::HttpError(msg) => {
+            DotrainRegistryError::HttpError(msg) => {
                 format!("Network error: {}", msg)
             }
-            RaindexRegistryError::DataUriError(msg) => {
+            DotrainRegistryError::DataUriError(msg) => {
                 format!("Invalid data URI: {}", msg)
             }
-            RaindexRegistryError::UrlParseError(err) => {
+            DotrainRegistryError::UrlParseError(err) => {
                 format!("Invalid URL format: {}. Please ensure the URL is properly formatted.", err)
             }
-            RaindexRegistryError::BuilderError(err) => err.to_readable_msg(),
-            RaindexRegistryError::RaindexClientError(err) => err.to_readable_msg(),
+            DotrainRegistryError::BuilderError(err) => err.to_readable_msg(),
+            DotrainRegistryError::RaindexClientError(err) => err.to_readable_msg(),
         }
     }
 }
 
-impl RaindexRegistry {
-    /// Creates a new RaindexRegistry instance by fetching and parsing the registry file.
+impl DotrainRegistry {
+    /// Creates a new DotrainRegistry instance by fetching and parsing the registry file.
     ///
     /// The registry file should contain a settings YAML URL on the first line (without a key),
     /// followed by order entries in the format "key url".
-    pub async fn new(registry_url: String) -> Result<RaindexRegistry, RaindexRegistryError> {
+    pub async fn new(registry_url: String) -> Result<DotrainRegistry, DotrainRegistryError> {
         let registry_url = Url::parse(&registry_url)?;
         let (registry_content, settings_url, order_urls) =
             Self::fetch_and_parse_registry(&registry_url).await?;
         let settings = Self::fetch_settings(&settings_url).await?;
         let orders = Self::fetch_orders(&order_urls).await?;
 
-        Ok(RaindexRegistry {
+        Ok(DotrainRegistry {
             registry_url,
             registry: registry_content,
             settings_url,
@@ -192,7 +192,7 @@ impl RaindexRegistry {
     ///
     /// Useful for lightweight format checks (e.g., user-input registry URLs) before
     /// performing a full registry load.
-    pub async fn validate(registry_url: String) -> Result<(), RaindexRegistryError> {
+    pub async fn validate(registry_url: String) -> Result<(), DotrainRegistryError> {
         let registry_url = Url::parse(&registry_url)?;
         // Only fetch and parse the registry file to verify format/URLs.
         let _ = Self::fetch_and_parse_registry(&registry_url).await?;
@@ -249,7 +249,7 @@ impl RaindexRegistry {
                     valid.insert(order_key.clone(), details);
                 }
                 Err(err) => {
-                    invalid.insert(order_key.clone(), RaindexRegistryError::from(err));
+                    invalid.insert(order_key.clone(), DotrainRegistryError::from(err));
                 }
             }
         }
@@ -269,11 +269,11 @@ impl RaindexRegistry {
     pub fn get_deployment_details(
         &self,
         order_key: String,
-    ) -> Result<BTreeMap<String, NameAndDescriptionCfg>, RaindexRegistryError> {
+    ) -> Result<BTreeMap<String, NameAndDescriptionCfg>, DotrainRegistryError> {
         let dotrain = self
             .orders
             .get(&order_key)
-            .ok_or(RaindexRegistryError::OrderKeyNotFound(order_key.clone()))?;
+            .ok_or(DotrainRegistryError::OrderKeyNotFound(order_key.clone()))?;
         let settings = self.settings_sources();
         let deployment_details =
             RaindexOrderBuilder::get_deployment_details(dotrain.clone(), settings.clone())?;
@@ -290,11 +290,11 @@ impl RaindexRegistry {
         order_key: String,
         deployment_key: String,
         serialized_state: Option<String>,
-    ) -> Result<RaindexOrderBuilder, RaindexRegistryError> {
+    ) -> Result<RaindexOrderBuilder, DotrainRegistryError> {
         let dotrain = self
             .orders
             .get(&order_key)
-            .ok_or(RaindexRegistryError::OrderKeyNotFound(order_key.clone()))?;
+            .ok_or(DotrainRegistryError::OrderKeyNotFound(order_key.clone()))?;
         let settings = self.settings_sources();
 
         let result = match serialized_state {
@@ -327,7 +327,7 @@ impl RaindexRegistry {
             }
         };
 
-        let builder = result.map_err(RaindexRegistryError::BuilderError)?;
+        let builder = result.map_err(DotrainRegistryError::BuilderError)?;
         Ok(builder)
     }
 
@@ -342,7 +342,7 @@ impl RaindexRegistry {
 
     async fn fetch_and_parse_registry(
         registry_url: &Url,
-    ) -> Result<(String, Url, HashMap<String, Url>), RaindexRegistryError> {
+    ) -> Result<(String, Url, HashMap<String, Url>), DotrainRegistryError> {
         let registry_content = Self::fetch_url_content(registry_url).await?;
         let (settings_url, order_urls) = Self::parse_registry_content(&registry_content)?;
         Ok((registry_content, settings_url, order_urls))
@@ -350,7 +350,7 @@ impl RaindexRegistry {
 
     fn parse_registry_content(
         content: &str,
-    ) -> Result<(Url, HashMap<String, Url>), RaindexRegistryError> {
+    ) -> Result<(Url, HashMap<String, Url>), DotrainRegistryError> {
         let lines: Vec<&str> = content
             .lines()
             .map(|line| line.trim())
@@ -358,14 +358,14 @@ impl RaindexRegistry {
             .collect();
 
         if lines.is_empty() {
-            return Err(RaindexRegistryError::InvalidRegistryFormat(
+            return Err(DotrainRegistryError::InvalidRegistryFormat(
                 "Registry file is empty".to_string(),
             ));
         }
 
         let first_line = lines[0];
         if first_line.contains(' ') {
-            return Err(RaindexRegistryError::InvalidRegistryFormat(
+            return Err(DotrainRegistryError::InvalidRegistryFormat(
                 "First line should be a settings URL without a key".to_string(),
             ));
         }
@@ -376,7 +376,7 @@ impl RaindexRegistry {
         for line in &lines[1..] {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() != 2 {
-                return Err(RaindexRegistryError::InvalidRegistryFormat(format!(
+                return Err(DotrainRegistryError::InvalidRegistryFormat(format!(
                     "Invalid order entry format: '{}'. Expected: 'key url'",
                     line
                 )));
@@ -391,17 +391,17 @@ impl RaindexRegistry {
         Ok((settings_url, order_urls))
     }
 
-    async fn fetch_url_content(url: &Url) -> Result<String, RaindexRegistryError> {
+    async fn fetch_url_content(url: &Url) -> Result<String, DotrainRegistryError> {
         if url.scheme() == "data" {
             return Self::decode_data_uri_content(url);
         }
 
         let response = reqwest::get(url.as_str())
             .await
-            .map_err(|e| RaindexRegistryError::HttpError(e.to_string()))?;
+            .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(RaindexRegistryError::HttpError(format!(
+            return Err(DotrainRegistryError::HttpError(format!(
                 "HTTP {}",
                 response.status()
             )));
@@ -410,42 +410,42 @@ impl RaindexRegistry {
         response
             .text()
             .await
-            .map_err(|e| RaindexRegistryError::HttpError(e.to_string()))
+            .map_err(|e| DotrainRegistryError::HttpError(e.to_string()))
     }
 
-    fn decode_data_uri_content(url: &Url) -> Result<String, RaindexRegistryError> {
+    fn decode_data_uri_content(url: &Url) -> Result<String, DotrainRegistryError> {
         let data_uri = url
             .as_str()
             .strip_prefix("data:")
-            .ok_or_else(|| RaindexRegistryError::DataUriError("missing data scheme".to_string()))?;
+            .ok_or_else(|| DotrainRegistryError::DataUriError("missing data scheme".to_string()))?;
         let (metadata, payload) = data_uri.split_once(',').ok_or_else(|| {
-            RaindexRegistryError::DataUriError("missing metadata/payload separator".to_string())
+            DotrainRegistryError::DataUriError("missing metadata/payload separator".to_string())
         })?;
         let is_base64 = metadata
             .split(';')
             .any(|part| part.eq_ignore_ascii_case("base64"));
 
         if !is_base64 {
-            return Err(RaindexRegistryError::DataUriError(
+            return Err(DotrainRegistryError::DataUriError(
                 "payload must be base64 encoded".to_string(),
             ));
         }
 
         let bytes = BASE64_STANDARD.decode(payload).map_err(|_| {
-            RaindexRegistryError::DataUriError("invalid base64 payload".to_string())
+            DotrainRegistryError::DataUriError("invalid base64 payload".to_string())
         })?;
         String::from_utf8(bytes).map_err(|_| {
-            RaindexRegistryError::DataUriError("decoded payload is not valid UTF-8".to_string())
+            DotrainRegistryError::DataUriError("decoded payload is not valid UTF-8".to_string())
         })
     }
 
-    async fn fetch_settings(settings_url: &Url) -> Result<String, RaindexRegistryError> {
+    async fn fetch_settings(settings_url: &Url) -> Result<String, DotrainRegistryError> {
         Self::fetch_url_content(settings_url).await
     }
 
     async fn fetch_orders(
         order_urls: &HashMap<String, Url>,
-    ) -> Result<HashMap<String, String>, RaindexRegistryError> {
+    ) -> Result<HashMap<String, String>, DotrainRegistryError> {
         use futures::future::join_all;
 
         let mut futures = Vec::new();
@@ -455,7 +455,7 @@ impl RaindexRegistry {
             let url_clone = url.clone();
             futures.push(async move {
                 let content = Self::fetch_url_content(&url_clone).await?;
-                Ok::<(String, String), RaindexRegistryError>((key_clone, content))
+                Ok::<(String, String), DotrainRegistryError>((key_clone, content))
             });
         }
 
@@ -472,12 +472,12 @@ impl RaindexRegistry {
 }
 
 #[cfg(not(target_family = "wasm"))]
-impl RaindexRegistry {
+impl DotrainRegistry {
     /// Creates a RaindexClient instance from the registry's shared settings.
     pub async fn get_raindex_client(
         &self,
         db_path: Option<std::path::PathBuf>,
-    ) -> Result<crate::raindex_client::RaindexClient, RaindexRegistryError> {
+    ) -> Result<crate::raindex_client::RaindexClient, DotrainRegistryError> {
         let client =
             crate::raindex_client::RaindexClient::new(vec![self.settings.clone()], None, db_path)
                 .await?;
@@ -667,7 +667,7 @@ _ _: 1 1;
     #[test]
     fn test_parse_registry_content() {
         let (settings_url, order_urls) =
-            RaindexRegistry::parse_registry_content(MOCK_REGISTRY_CONTENT).unwrap();
+            DotrainRegistry::parse_registry_content(MOCK_REGISTRY_CONTENT).unwrap();
 
         assert_eq!(
             settings_url.to_string(),
@@ -686,27 +686,27 @@ _ _: 1 1;
 
     #[test]
     fn test_parse_invalid_registry_content() {
-        let result = RaindexRegistry::parse_registry_content("");
+        let result = DotrainRegistry::parse_registry_content("");
         match result.unwrap_err() {
-            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+            DotrainRegistryError::InvalidRegistryFormat(msg) => {
                 assert_eq!(msg, "Registry file is empty");
             }
             other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
         }
 
-        let result = RaindexRegistry::parse_registry_content("invalid first line");
+        let result = DotrainRegistry::parse_registry_content("invalid first line");
         match result.unwrap_err() {
-            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+            DotrainRegistryError::InvalidRegistryFormat(msg) => {
                 assert_eq!(msg, "First line should be a settings URL without a key");
             }
             other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
         }
 
-        let result = RaindexRegistry::parse_registry_content(
+        let result = DotrainRegistry::parse_registry_content(
             "https://example.com/settings.yaml\ninvalid-entry",
         );
         match result.unwrap_err() {
-            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+            DotrainRegistryError::InvalidRegistryFormat(msg) => {
                 assert_eq!(
                     msg,
                     "Invalid order entry format: 'invalid-entry'. Expected: 'key url'"
@@ -715,11 +715,11 @@ _ _: 1 1;
             other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
         }
 
-        let result = RaindexRegistry::parse_registry_content(
+        let result = DotrainRegistry::parse_registry_content(
             "https://example.com/settings.yaml\nkey url extra",
         );
         match result.unwrap_err() {
-            RaindexRegistryError::InvalidRegistryFormat(msg) => {
+            DotrainRegistryError::InvalidRegistryFormat(msg) => {
                 assert_eq!(
                     msg,
                     "Invalid order entry format: 'key url extra'. Expected: 'key url'"
@@ -731,7 +731,7 @@ _ _: 1 1;
 
     #[test]
     fn test_get_order_keys() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/test").unwrap(),
             registry: "".to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -759,7 +759,7 @@ _ _: 1 1;
 
     #[test]
     fn test_get_all_order_details() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/test").unwrap(),
             registry: "".to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -797,7 +797,7 @@ _ _: 1 1;
 
     #[test]
     fn test_get_all_order_details_with_invalid_order() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/test").unwrap(),
             registry: "".to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -831,7 +831,7 @@ _ _: 1 1;
 
     #[test]
     fn test_get_deployment_details() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/test").unwrap(),
             registry: "".to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -866,7 +866,7 @@ _ _: 1 1;
 
     #[test]
     fn test_get_deployment_details_order_not_found() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/test").unwrap(),
             registry: "".to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -879,7 +879,7 @@ _ _: 1 1;
         assert!(result.is_err());
 
         match result.err().unwrap() {
-            RaindexRegistryError::OrderKeyNotFound(key) => {
+            DotrainRegistryError::OrderKeyNotFound(key) => {
                 assert_eq!(key, "non-existent");
             }
             _ => panic!("Expected OrderKeyNotFound error"),
@@ -888,7 +888,7 @@ _ _: 1 1;
 
     #[test]
     fn test_getter_methods() {
-        let registry = RaindexRegistry {
+        let registry = DotrainRegistry {
             registry_url: Url::parse("https://example.com/registry.txt").unwrap(),
             registry: MOCK_REGISTRY_CONTENT.to_string(),
             settings_url: Url::parse("https://example.com/settings.yaml").unwrap(),
@@ -919,46 +919,46 @@ _ _: 1 1;
     #[test]
     fn test_error_readable_messages() {
         let registry_error =
-            RaindexRegistryError::RegistryFetchError("https://example.com".to_string());
+            DotrainRegistryError::RegistryFetchError("https://example.com".to_string());
         let readable = registry_error.to_readable_msg();
         assert!(readable.contains("Unable to fetch the registry file"));
         assert!(readable.contains("https://example.com"));
 
-        let parse_error = RaindexRegistryError::RegistryParseError;
+        let parse_error = DotrainRegistryError::RegistryParseError;
         let readable = parse_error.to_readable_msg();
         assert!(readable.contains("registry file format is invalid"));
 
-        let not_found_error = RaindexRegistryError::OrderKeyNotFound("test-order".to_string());
+        let not_found_error = DotrainRegistryError::OrderKeyNotFound("test-order".to_string());
         let readable = not_found_error.to_readable_msg();
         assert!(readable.contains("order key 'test-order' was not found"));
 
         let settings_fetch_error =
-            RaindexRegistryError::SettingsFetchError("https://settings.example".to_string());
+            DotrainRegistryError::SettingsFetchError("https://settings.example".to_string());
         let readable = settings_fetch_error.to_readable_msg();
         assert!(readable.contains("Unable to fetch the settings file"));
         assert!(readable.contains("https://settings.example"));
 
         let order_fetch_error =
-            RaindexRegistryError::OrderFetchError("https://order.example".to_string());
+            DotrainRegistryError::OrderFetchError("https://order.example".to_string());
         let readable = order_fetch_error.to_readable_msg();
         assert!(readable.contains("Unable to fetch the order file"));
         assert!(readable.contains("https://order.example"));
 
         let invalid_format_error =
-            RaindexRegistryError::InvalidRegistryFormat("bad entry".to_string());
+            DotrainRegistryError::InvalidRegistryFormat("bad entry".to_string());
         let readable = invalid_format_error.to_readable_msg();
         assert_eq!(readable, "Invalid registry format: bad entry");
 
-        let http_error = RaindexRegistryError::HttpError("HTTP 500".to_string());
+        let http_error = DotrainRegistryError::HttpError("HTTP 500".to_string());
         let readable = http_error.to_readable_msg();
         assert_eq!(readable, "Network error: HTTP 500");
 
         let data_uri_error =
-            RaindexRegistryError::DataUriError("invalid base64 payload".to_string());
+            DotrainRegistryError::DataUriError("invalid base64 payload".to_string());
         let readable = data_uri_error.to_readable_msg();
         assert_eq!(readable, "Invalid data URI: invalid base64 payload");
 
-        let url_parse_error = RaindexRegistryError::from(Url::parse("not a url").unwrap_err());
+        let url_parse_error = DotrainRegistryError::from(Url::parse("not a url").unwrap_err());
         let readable = url_parse_error.to_readable_msg();
         assert!(readable.contains("Invalid URL format"));
         assert!(readable.contains("Please ensure the URL is properly formatted"));
@@ -1000,7 +1000,7 @@ _ _: 1 1;
                 then.status(200).body(get_second_dotrain_content());
             });
 
-            let registry = RaindexRegistry::new(format!("{}/registry.txt", server.url("")))
+            let registry = DotrainRegistry::new(format!("{}/registry.txt", server.url("")))
                 .await
                 .unwrap();
 
@@ -1046,7 +1046,7 @@ _ _: 1 1;
 
             let registry_url = Url::parse(&format!("{}/registry.txt", server.url(""))).unwrap();
             let (registry_content, settings_url, order_urls) =
-                RaindexRegistry::fetch_and_parse_registry(&registry_url)
+                DotrainRegistry::fetch_and_parse_registry(&registry_url)
                     .await
                     .unwrap();
 
@@ -1075,7 +1075,7 @@ _ _: 1 1;
             });
 
             let result =
-                RaindexRegistry::validate(format!("{}/registry.txt", server.url(""))).await;
+                DotrainRegistry::validate(format!("{}/registry.txt", server.url(""))).await;
             assert!(result.is_ok());
         }
 
@@ -1089,9 +1089,9 @@ _ _: 1 1;
             });
 
             let result =
-                RaindexRegistry::validate(format!("{}/invalid-registry.txt", server.url(""))).await;
+                DotrainRegistry::validate(format!("{}/invalid-registry.txt", server.url(""))).await;
             match result.unwrap_err() {
-                RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                DotrainRegistryError::InvalidRegistryFormat(msg) => {
                     assert_eq!(msg, "First line should be a settings URL without a key");
                 }
                 other => panic!("Expected InvalidRegistryFormat, got {other:?}"),
@@ -1108,7 +1108,7 @@ _ _: 1 1;
             });
 
             let url = Url::parse(&format!("{}/test.txt", server.url(""))).unwrap();
-            let content = RaindexRegistry::fetch_url_content(&url).await.unwrap();
+            let content = DotrainRegistry::fetch_url_content(&url).await.unwrap();
 
             assert_eq!(content, "test content");
         }
@@ -1123,11 +1123,11 @@ _ _: 1 1;
             });
 
             let url = Url::parse(&format!("{}/error.txt", server.url(""))).unwrap();
-            let result = RaindexRegistry::fetch_url_content(&url).await;
+            let result = DotrainRegistry::fetch_url_content(&url).await;
 
             assert!(result.is_err());
             match result.err().unwrap() {
-                RaindexRegistryError::HttpError(msg) => {
+                DotrainRegistryError::HttpError(msg) => {
                     assert!(msg.contains("HTTP 500"));
                 }
                 _ => panic!("Expected HttpError"),
@@ -1137,7 +1137,7 @@ _ _: 1 1;
         #[tokio::test]
         async fn test_fetch_url_content_base64_data_uri() {
             let url = Url::parse(&base64_data_uri("text/plain", "test content")).unwrap();
-            let content = RaindexRegistry::fetch_url_content(&url).await.unwrap();
+            let content = DotrainRegistry::fetch_url_content(&url).await.unwrap();
 
             assert_eq!(content, "test content");
         }
@@ -1145,11 +1145,11 @@ _ _: 1 1;
         #[tokio::test]
         async fn test_fetch_url_content_malformed_data_uri() {
             let url = Url::parse("data:text/plain;base64,not-valid-base64").unwrap();
-            let result = RaindexRegistry::fetch_url_content(&url).await;
+            let result = DotrainRegistry::fetch_url_content(&url).await;
 
             assert!(result.is_err());
             match result.err().unwrap() {
-                RaindexRegistryError::DataUriError(msg) => {
+                DotrainRegistryError::DataUriError(msg) => {
                     assert!(msg.contains("invalid base64 payload"));
                     assert!(!msg.contains("not-valid-base64"));
                 }
@@ -1160,11 +1160,11 @@ _ _: 1 1;
         #[tokio::test]
         async fn test_fetch_url_content_rejects_non_base64_data_uri() {
             let url = Url::parse("data:text/plain,test%20content").unwrap();
-            let result = RaindexRegistry::fetch_url_content(&url).await;
+            let result = DotrainRegistry::fetch_url_content(&url).await;
 
             assert!(result.is_err());
             match result.err().unwrap() {
-                RaindexRegistryError::DataUriError(msg) => {
+                DotrainRegistryError::DataUriError(msg) => {
                     assert!(msg.contains("payload must be base64 encoded"));
                 }
                 _ => panic!("Expected DataUriError"),
@@ -1174,10 +1174,10 @@ _ _: 1 1;
         #[tokio::test]
         async fn test_fetch_url_content_rejects_data_uri_without_separator() {
             let url = Url::parse("data:text/plain").unwrap();
-            let result = RaindexRegistry::fetch_url_content(&url).await;
+            let result = DotrainRegistry::fetch_url_content(&url).await;
 
             match result.unwrap_err() {
-                RaindexRegistryError::DataUriError(msg) => {
+                DotrainRegistryError::DataUriError(msg) => {
                     assert_eq!(msg, "missing metadata/payload separator");
                 }
                 other => panic!("Expected DataUriError, got {other:?}"),
@@ -1192,10 +1192,10 @@ _ _: 1 1;
                 BASE64_STANDARD.encode([0xff, 0xfe])
             ))
             .unwrap();
-            let result = RaindexRegistry::fetch_url_content(&url).await;
+            let result = DotrainRegistry::fetch_url_content(&url).await;
 
             match result.unwrap_err() {
-                RaindexRegistryError::DataUriError(msg) => {
+                DotrainRegistryError::DataUriError(msg) => {
                     assert_eq!(msg, "decoded payload is not valid UTF-8");
                 }
                 other => panic!("Expected DataUriError, got {other:?}"),
@@ -1212,7 +1212,7 @@ _ _: 1 1;
             });
 
             let url = Url::parse(&format!("{}/settings.yaml", server.url(""))).unwrap();
-            let settings = RaindexRegistry::fetch_settings(&url).await.unwrap();
+            let settings = DotrainRegistry::fetch_settings(&url).await.unwrap();
 
             assert_eq!(settings, "test settings content");
         }
@@ -1244,7 +1244,7 @@ _ _: 1 1;
             .into_iter()
             .collect();
 
-            let orders = RaindexRegistry::fetch_orders(&order_urls).await.unwrap();
+            let orders = DotrainRegistry::fetch_orders(&order_urls).await.unwrap();
 
             assert_eq!(orders.len(), 2);
             assert_eq!(orders.get("order1").unwrap(), &get_first_dotrain_content());
@@ -1274,7 +1274,7 @@ _ _: 1 1;
             );
             let registry_uri = base64_data_uri("text/plain", &test_registry_content);
 
-            let registry = RaindexRegistry::new(registry_uri).await.unwrap();
+            let registry = DotrainRegistry::new(registry_uri).await.unwrap();
 
             assert_eq!(registry.registry(), test_registry_content);
             assert_eq!(registry.settings(), mock_settings_content());
@@ -1296,7 +1296,7 @@ _ _: 1 1;
             .into_iter()
             .collect();
 
-            let orders = RaindexRegistry::fetch_orders(&order_urls).await.unwrap();
+            let orders = DotrainRegistry::fetch_orders(&order_urls).await.unwrap();
 
             assert_eq!(orders.len(), 1);
             assert_eq!(orders.get("order1").unwrap(), &get_first_dotrain_content());
@@ -1313,7 +1313,7 @@ _ _: 1 1;
             });
 
             let result =
-                RaindexRegistry::new(format!("{}/invalid-registry.txt", server.url(""))).await;
+                DotrainRegistry::new(format!("{}/invalid-registry.txt", server.url(""))).await;
             assert!(result.is_err());
         }
 
@@ -1327,11 +1327,11 @@ _ _: 1 1;
             });
 
             let result =
-                RaindexRegistry::new(format!("{}/empty-registry.txt", server.url(""))).await;
+                DotrainRegistry::new(format!("{}/empty-registry.txt", server.url(""))).await;
             assert!(result.is_err());
 
             match result.err().unwrap() {
-                RaindexRegistryError::InvalidRegistryFormat(msg) => {
+                DotrainRegistryError::InvalidRegistryFormat(msg) => {
                     assert!(msg.contains("Registry file is empty"));
                 }
                 _ => panic!("Expected InvalidRegistryFormat error for empty registry"),
@@ -1355,7 +1355,7 @@ _ _: 1 1;
             });
 
             let registry =
-                RaindexRegistry::new(format!("{}/settings-only-registry.txt", server.url("")))
+                DotrainRegistry::new(format!("{}/settings-only-registry.txt", server.url("")))
                     .await
                     .unwrap();
 
@@ -1402,7 +1402,7 @@ _ _: 1 1;
                 then.status(200).body(get_second_dotrain_content());
             });
 
-            let registry = RaindexRegistry::new(format!("{}/registry.txt", server.url("")))
+            let registry = DotrainRegistry::new(format!("{}/registry.txt", server.url("")))
                 .await
                 .unwrap();
 
@@ -1468,7 +1468,7 @@ _ _: 1 1;
                 .await;
             assert!(result.is_err());
             match result.err().unwrap() {
-                RaindexRegistryError::OrderKeyNotFound(key) => {
+                DotrainRegistryError::OrderKeyNotFound(key) => {
                     assert_eq!(key, "non-existent-order");
                 }
                 _ => panic!("Expected OrderKeyNotFound error"),
@@ -1579,7 +1579,7 @@ _ _: 0 0;
                 then.status(200).body(MOCK_DOTRAIN_SIMPLE);
             });
 
-            let registry = RaindexRegistry::new(format!("{}/registry.txt", server.url("")))
+            let registry = DotrainRegistry::new(format!("{}/registry.txt", server.url("")))
                 .await
                 .unwrap();
 
