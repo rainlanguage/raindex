@@ -8,7 +8,7 @@ import {RaindexV6ArbConfig} from "../../src/abstract/RaindexV6ArbCommon.sol";
 import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
 
 /// The constructor branch on `bytecode.length != 0` MUST trip at the exact
 /// boundary of one byte: empty bytecode leaves `iTaskHash` at zero (branch not
