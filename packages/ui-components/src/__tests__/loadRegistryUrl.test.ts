@@ -1,14 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
 import { loadRegistryUrl } from "../lib/services/loadRegistryUrl";
 import { RegistryManager } from "../lib/providers/registry/RegistryManager";
 import { initialRegistry } from "../__fixtures__/RegistryManager";
 import { DotrainRegistry } from "@rainlanguage/raindex";
 
-// Mock dependencies
+// Mock dependencies. validate/new are spied so we can assert loadRegistryUrl
+// performs NO registry fetch of its own (the page reload + +layout.ts owns
+// fetching/validation). A regression that re-introduces a fetch here would
+// double the HTTP requests to GitHub (issue #2046).
 vi.mock("@rainlanguage/raindex", () => ({
   DotrainRegistry: {
     validate: vi.fn(),
+    new: vi.fn(),
   },
 }));
 
@@ -39,49 +42,76 @@ describe("loadRegistryUrl", () => {
     ).rejects.toThrow("Registry manager is required");
   });
 
-  it("should successfully load registry URL and reload the page", async () => {
+  it("should set the registry and reload the page", async () => {
     const testUrl = "https://example.com/registry";
     const mockRegistryManager = initialRegistry as RegistryManager;
 
-    (DotrainRegistry.validate as Mock).mockResolvedValueOnce({ value: {} });
     await loadRegistryUrl(testUrl, mockRegistryManager);
-    expect(DotrainRegistry.validate).toHaveBeenCalledWith(testUrl);
+
     expect(mockRegistryManager.setRegistry).toHaveBeenCalledWith(testUrl);
     expect(window.location.reload).toHaveBeenCalled();
   });
 
-  it("should throw an error if fetching registry fails", async () => {
+  it("should NOT fetch/validate the registry itself (avoid double-fetch from GitHub)", async () => {
     const testUrl = "https://example.com/registry";
-    const errorMessage = "Fetch failed";
+    const mockRegistryManager = initialRegistry as RegistryManager;
+
+    await loadRegistryUrl(testUrl, mockRegistryManager);
+
+    // The whole point of issue #2046: loadRegistryUrl must not refetch the
+    // registry/settings, because the post-reload +layout.ts already does so via
+    // DotrainRegistry.new. Calling validate (or new) here would re-download the
+    // same files from GitHub and trigger rate limiting.
+    expect(DotrainRegistry.validate).not.toHaveBeenCalled();
+    expect(DotrainRegistry.new).not.toHaveBeenCalled();
+  });
+
+  it("should reload only after persisting the registry (ordering)", async () => {
+    const testUrl = "https://example.com/registry";
+    const calls: string[] = [];
     const mockRegistryManager = {
-      setRegistry: vi.fn(),
+      setRegistry: vi.fn(() => {
+        calls.push("setRegistry");
+      }),
+    } as unknown as RegistryManager;
+    (window.location.reload as ReturnType<typeof vi.fn>).mockImplementation(
+      () => {
+        calls.push("reload");
+      },
+    );
+
+    await loadRegistryUrl(testUrl, mockRegistryManager);
+
+    expect(calls).toEqual(["setRegistry", "reload"]);
+  });
+
+  it("should rethrow as an Error when setRegistry throws an Error", async () => {
+    const testUrl = "https://example.com/registry";
+    const mockRegistryManager = {
+      setRegistry: vi.fn(() => {
+        throw new Error("Failed to save to localStorage");
+      }),
     } as unknown as RegistryManager;
 
-    (DotrainRegistry.validate as Mock).mockRejectedValueOnce(
-      new Error(errorMessage),
-    );
-
     await expect(loadRegistryUrl(testUrl, mockRegistryManager)).rejects.toThrow(
-      errorMessage,
+      "Failed to save to localStorage",
     );
 
-    expect(mockRegistryManager.setRegistry).not.toHaveBeenCalled();
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 
-  it("should handle non-Error exception during registry fetch", async () => {
+  it("should map a non-Error throw to a default message", async () => {
     const testUrl = "https://example.com/registry";
     const mockRegistryManager = {
-      setRegistry: vi.fn(),
+      setRegistry: vi.fn(() => {
+        throw "String error";
+      }),
     } as unknown as RegistryManager;
-
-    (DotrainRegistry.validate as Mock).mockRejectedValueOnce("String error");
 
     await expect(loadRegistryUrl(testUrl, mockRegistryManager)).rejects.toThrow(
       "Failed to update registry URL",
     );
 
-    expect(mockRegistryManager.setRegistry).not.toHaveBeenCalled();
     expect(window.location.reload).not.toHaveBeenCalled();
   });
 });
