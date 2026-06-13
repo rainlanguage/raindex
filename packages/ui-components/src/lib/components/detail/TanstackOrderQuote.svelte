@@ -142,6 +142,13 @@
 								<Tooltip triggeredBy={`#max-output-${index}`}>
 									{item.data.formattedMaxOutput}
 								</Tooltip>
+								{#if item.data.formattedMaxOutputAsPercentOfVault}
+									<span
+										data-testid={`max-output-percent-${index}`}
+										class="block max-w-[150px] truncate text-xs text-gray-400"
+										>{item.data.formattedMaxOutputAsPercentOfVault}% of vault</span
+									>
+								{/if}
 							</TableBodyCell>
 							<TableBodyCell>
 								<span id={`ratio-${index}`} class="block max-w-[200px] truncate"
@@ -159,6 +166,13 @@
 								<Tooltip triggeredBy={`#max-input-${index}`}>
 									{item.data.formattedMaxInput}
 								</Tooltip>
+								{#if item.data.formattedMaxInputAsPercentOfVault}
+									<span
+										data-testid={`max-input-percent-${index}`}
+										class="block max-w-[150px] truncate text-xs text-gray-400"
+										>{item.data.formattedMaxInputAsPercentOfVault}% of vault</span
+									>
+								{/if}
 							</TableBodyCell>
 							<TableBodyCell>
 								{#if handleQuoteDebugModal}

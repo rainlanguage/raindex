@@ -484,6 +484,8 @@ mod tests {
             formatted_ratio: "0".to_string(),
             inverse_ratio: zero,
             formatted_inverse_ratio: "0".to_string(),
+            formatted_max_output_as_percent_of_vault: None,
+            formatted_max_input_as_percent_of_vault: None,
         }
     }
 

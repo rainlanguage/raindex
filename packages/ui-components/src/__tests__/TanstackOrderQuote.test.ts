@@ -374,4 +374,80 @@ describe("TanstackOrderQuote component", () => {
       expect(maxInputSpan).toHaveTextContent("10.175432109876543210");
     });
   });
+
+  it("shows max output/input as a percentage of the vault balance", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            formattedMaxOutputAsPercentOfVault: "25",
+            formattedMaxInputAsPercentOfVault: "40",
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      const outputPercent = screen.getByTestId("max-output-percent-0");
+      expect(outputPercent).toHaveTextContent("25% of vault");
+
+      const inputPercent = screen.getByTestId("max-input-percent-0");
+      expect(inputPercent).toHaveTextContent("40% of vault");
+    });
+  });
+
+  it("omits the vault-percentage when it is not provided", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            // no percentage fields (e.g. vault balance unknown / zero)
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("bodyRow")).toHaveTextContent("ETH/USDT");
+    });
+    expect(screen.queryByTestId("max-output-percent-0")).toBeNull();
+    expect(screen.queryByTestId("max-input-percent-0")).toBeNull();
+    expect(screen.queryByText(/% of vault/)).toBeNull();
+  });
 });

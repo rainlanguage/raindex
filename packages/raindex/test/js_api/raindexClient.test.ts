@@ -1010,6 +1010,65 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       ]);
     });
 
+    it("should express order quote amounts as a percentage of vault balance when the vaults match", async () => {
+      // order1's decoded on-chain validInputs[0]/validOutputs[0] both reference
+      // vaultId 0x12, but its subgraph vaults carry different vaultIds, so the
+      // "should get order quote" test above sees no match and the percentage
+      // fields are absent. Here we point the subgraph vaults at the on-chain
+      // vaultId so the percentages are populated from the already-fetched
+      // balances.
+      const onchainVaultId = "0x12";
+      const matchingOrder = JSON.parse(JSON.stringify(order1)) as SgOrder;
+      matchingOrder.outputs[0].vaultId = onchainVaultId;
+      matchingOrder.inputs[0].vaultId = onchainVaultId;
+
+      await mockServer
+        .forPost("/sg1")
+        .thenReply(200, JSON.stringify({ data: { orders: [matchingOrder] } }));
+      await mockServer.forPost("/rpc1").once().thenSendJsonRpcResult("0x01");
+      await mockServer
+        .forPost("/rpc1")
+        .thenSendJsonRpcResult(
+          "0x0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000060" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000002",
+        );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const order = extractWasmEncodedData(
+        await raindexClient.getOrderByHash(
+          1,
+          CHAIN_ID_1_RAINDEX_ADDRESS,
+          BYTES32_0123,
+        ),
+      );
+
+      const result = extractWasmEncodedData(await order.getQuotes());
+      assert.equal(result.length, 1);
+      // The matching vaults make both percentages present (non-empty strings),
+      // unlike the mismatched-vault case where they are omitted entirely.
+      assert.equal(
+        typeof result[0].data?.formattedMaxOutputAsPercentOfVault,
+        "string",
+      );
+      assert.equal(
+        typeof result[0].data?.formattedMaxInputAsPercentOfVault,
+        "string",
+      );
+      assert.ok(
+        (result[0].data?.formattedMaxOutputAsPercentOfVault?.length ?? 0) > 0,
+      );
+      assert.ok(
+        (result[0].data?.formattedMaxInputAsPercentOfVault?.length ?? 0) > 0,
+      );
+    });
+
     it("should get order quotes batch", async () => {
       await mockServer
         .forPost("/sg1")
