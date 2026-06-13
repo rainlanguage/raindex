@@ -50,9 +50,7 @@ metaboards:
   flare: https://example.com/metaboards/flare/gn
   base: https://example.com/metaboards/base/gn
   sepolia: https://example.com/metaboards/sepolia/gn
-  polygon: https://example.com/metaboards/polygon/gn
   arbitrum: https://example.com/metaboards/arbitrum/gn
-  matchain: https://example.com/metaboards/matchain/gn
   bsc: https://example.com/metaboards/bsc/gn
   linea: https://example.com/metaboards/linea/gn
   ethereum: https://example.com/metaboards/ethereum/gn
