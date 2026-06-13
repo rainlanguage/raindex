@@ -9,6 +9,7 @@ use dotrain::Rebind;
 use dotrain::{
     error::{ComposeError, ErrorCode},
     types::ast::Problem,
+    RainDocument,
 };
 use dotrain_lsp::{
     lsp_types::{CompletionItem, Hover, Position, TextDocumentItem},
@@ -16,6 +17,64 @@ use dotrain_lsp::{
 };
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+#[cfg(not(target_family = "wasm"))]
+use std::collections::HashSet;
+
+/// Collects the union of every binding key that is set under any scenario in the
+/// dotrain front matter (recursing through nested scenarios).
+///
+/// dotrain parses only the body after the front matter splitter, so an elided
+/// binding that is actually provided by a front matter scenario is still flagged
+/// as an unresolved elided binding. This set lets [`DotrainAddOrderLsp::problems`]
+/// suppress those false positives while leaving genuinely unset elided bindings
+/// reported.
+#[cfg(not(target_family = "wasm"))]
+fn frontmatter_scenario_binding_keys(text: &str) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    let Some(front_matter) = RainDocument::get_front_matter(text) else {
+        return keys;
+    };
+    let Ok(value) = serde_yaml::from_str::<serde_yaml::Value>(front_matter) else {
+        return keys;
+    };
+    if let Some(scenarios) = value.get("scenarios") {
+        collect_binding_keys(scenarios, &mut keys);
+    }
+    keys
+}
+
+/// Recursively walks a scenarios YAML subtree collecting the keys of every
+/// `bindings` mapping it encounters.
+#[cfg(not(target_family = "wasm"))]
+fn collect_binding_keys(value: &serde_yaml::Value, keys: &mut HashSet<String>) {
+    let serde_yaml::Value::Mapping(mapping) = value else {
+        return;
+    };
+    for (key, child) in mapping {
+        if key.as_str() == Some("bindings") {
+            if let serde_yaml::Value::Mapping(bindings) = child {
+                for binding_key in bindings.keys() {
+                    if let Some(binding_key) = binding_key.as_str() {
+                        keys.insert(binding_key.to_string());
+                    }
+                }
+            }
+        } else {
+            collect_binding_keys(child, keys);
+        }
+    }
+}
+
+/// Extracts the binding name from an [`ErrorCode::ElidedBinding`] problem message.
+///
+/// The message is formatted as `elided binding '<name>': <description>`, so the
+/// name is the text between the first pair of single quotes.
+#[cfg(not(target_family = "wasm"))]
+fn elided_binding_name(msg: &str) -> Option<&str> {
+    let rest = msg.strip_prefix("elided binding '")?;
+    let end = rest.find('\'')?;
+    Some(&rest[..end])
+}
 
 /// static lang services instance
 /// meta store instance can be taken from this for shared access to a unfied meta store across
@@ -64,11 +123,19 @@ impl DotrainAddOrderLsp {
         block_number: Option<u64>,
         rainlang_address: Option<Address>,
     ) -> Vec<Problem> {
+        let provided_binding_keys = frontmatter_scenario_binding_keys(&self.text_document.text);
+        let is_elided_but_provided = |problem: &Problem| {
+            problem.code == ErrorCode::ElidedBinding
+                && elided_binding_name(&problem.msg)
+                    .is_some_and(|name| provided_binding_keys.contains(name))
+        };
+
         let rain_document =
             LANG_SERVICES.new_rain_document(&self.text_document, self.rebinds.clone());
         let mut bindings_problems = rain_document
             .bindings_problems()
             .iter()
+            .filter(|v| !is_elided_but_provided(v))
             .map(|&v| v.clone())
             .collect::<Vec<_>>();
         let top_problems = rain_document.problems();
@@ -89,7 +156,9 @@ impl DotrainAddOrderLsp {
                     }
                     ComposeError::Problems(problems) => {
                         for p in problems {
-                            if bindings_problems.iter().all(|v| p != *v) {
+                            if !is_elided_but_provided(&p)
+                                && bindings_problems.iter().all(|v| p != *v)
+                            {
                                 bindings_problems.push(p)
                             }
                         }
@@ -248,22 +317,146 @@ _ _: 0 0;
             .problems(&vec!["https://some-rpc-url.com".to_string()], None, None)
             .await;
 
+        // `fixed-io-output-token` is an elided binding (`#fixed-io-output-token !...`)
+        // that IS set in the `flare` scenario front matter bindings, so its elided
+        // binding error must be suppressed. `fixed-io` is elided AND never set in the
+        // front matter, so its elided binding error must still be reported.
         let expected_msgs = [
             "invalid reference to binding: raindex-subparser, only literal bindings can be referenced",
             "invalid expression line",
             "invalid expression line",
             "invalid word pattern: ABC",
-            "elided binding 'fixed-io-output-token': The output token that the fixed io is for. If this doesn't match the runtime output then the fixed-io will be inverted.",
             "elided binding 'fixed-io': The io ratio for the limit order.",
             "undefined word: test",
             "unexpected token",
         ];
         let actual_msgs: Vec<String> = problems.iter().map(|p| p.msg.clone()).collect();
 
-        assert_eq!(problems.len(), 8);
+        assert_eq!(
+            actual_msgs, expected_msgs,
+            "elided-but-provided binding 'fixed-io-output-token' should be suppressed, \
+             unset elided binding 'fixed-io' should remain"
+        );
 
-        for (actual, expected) in actual_msgs.iter().zip(expected_msgs.iter()) {
-            assert_eq!(actual, expected);
-        }
+        // The suppressed binding must be gone entirely, not merely reordered.
+        assert!(
+            !actual_msgs
+                .iter()
+                .any(|m| m.contains("fixed-io-output-token")),
+            "elided binding error for front-matter-provided 'fixed-io-output-token' leaked through"
+        );
+    }
+
+    #[test]
+    fn test_frontmatter_scenario_binding_keys_unions_nested_scenarios() {
+        let text = r#"
+scenarios:
+  parent:
+    bindings:
+      top-level-binding: 1
+    scenarios:
+      child:
+        bindings:
+          nested-binding: 2
+          another-nested: ${order.outputs.0.token.address}
+---
+#top-level-binding !desc
+:;
+"#;
+        let keys = frontmatter_scenario_binding_keys(text);
+        assert_eq!(
+            keys,
+            HashSet::from([
+                "top-level-binding".to_string(),
+                "nested-binding".to_string(),
+                "another-nested".to_string(),
+            ]),
+            "binding keys from every (including nested) scenario must be collected"
+        );
+    }
+
+    #[test]
+    fn test_frontmatter_scenario_binding_keys_ignores_non_binding_keys() {
+        // Keys that are not under a `bindings` map (scenario names, network keys,
+        // runs, etc.) must NOT be treated as provided bindings, otherwise unrelated
+        // elided bindings would be silently suppressed.
+        let text = r#"
+scenarios:
+  flare:
+    raindex: flare
+    runs: 1
+    bindings:
+      only-real-binding: 0xabc
+---
+#flare !this is a scenario name, not a binding
+#runs !this is a reserved key, not a binding
+#only-real-binding !desc
+:;
+"#;
+        let keys = frontmatter_scenario_binding_keys(text);
+        assert_eq!(keys, HashSet::from(["only-real-binding".to_string()]));
+    }
+
+    #[test]
+    fn test_elided_binding_name_extraction() {
+        assert_eq!(
+            elided_binding_name("elided binding 'fixed-io': The io ratio for the limit order."),
+            Some("fixed-io")
+        );
+        // A binding name may itself contain hyphens and the description may contain
+        // single quotes; only the first quoted segment is the name.
+        assert_eq!(
+            elided_binding_name(
+                "elided binding 'fixed-io-output-token': don't match this 'quote'."
+            ),
+            Some("fixed-io-output-token")
+        );
+        assert_eq!(elided_binding_name("undefined word: test"), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_elided_binding_set_in_frontmatter_is_not_reported() {
+        let local_evm = LocalEvm::new().await;
+
+        // `bound` is elided in the body but provided by the `flare` scenario, so it
+        // must compose cleanly with zero problems. `unbound` would be a counter-case
+        // (it is exercised by test_problems / the assertion below).
+        let dotrain = format!(
+            r#"
+version: {spec_version}
+
+networks:
+  flare:
+    rpcs:
+      - https://rpc.ankr.com/flare
+    chain-id: 14
+
+scenarios:
+  flare:
+    runs: 1
+    bindings:
+      bound: 0x1234567890abcdef
+---
+#bound !The output token the fixed io is for.
+#calculate-io
+_ _: 0 bound;
+#handle-io
+:;
+#handle-add-order
+:;
+"#,
+            spec_version = SpecVersion::current()
+        );
+
+        let lsp = DotrainAddOrderLsp::new(get_text_document(&dotrain), HashMap::new());
+        let problems = lsp
+            .problems(&vec![local_evm.url()], None, Some(local_evm.rainlang))
+            .await;
+
+        assert_eq!(
+            problems.iter().map(|p| p.msg.clone()).collect::<Vec<_>>(),
+            Vec::<String>::new(),
+            "elided binding 'bound' is set in the front matter scenario, so no problems expected"
+        );
     }
 }
