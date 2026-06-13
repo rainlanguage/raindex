@@ -24,6 +24,7 @@
 	} from '@rainlanguage/raindex';
 	import type { Hex } from 'viem';
 	import { handleRemoveOrder } from '$lib/services/handleRemoveOrder';
+	import { handleRemoveOrderAndWithdrawAll } from '$lib/services/handleRemoveOrderAndWithdrawAll';
 	import { handleVaultWithdraw } from '$lib/services/handleVaultWithdraw';
 	import { handleVaultDeposit } from '$lib/services/handleVaultDeposit';
 	import { handleVaultsWithdrawAll } from '$lib/services/handleVaultsWithdrawAll';
@@ -42,6 +43,21 @@
 		await handleRemoveOrder({
 			raindexClient,
 			order,
+			handleTransactionConfirmationModal,
+			errToast,
+			manager
+		});
+	}
+
+	async function onRemoveAndWithdrawAll(
+		raindexClient: RaindexClient,
+		order: RaindexOrder,
+		vaultsList: RaindexVaultsList
+	) {
+		await handleRemoveOrderAndWithdrawAll({
+			raindexClient,
+			order,
+			vaultsList,
 			handleTransactionConfirmationModal,
 			errToast,
 			manager
@@ -107,6 +123,7 @@
 	{lightweightChartsTheme}
 	{codeMirrorTheme}
 	{onRemove}
+	{onRemoveAndWithdrawAll}
 	{onDeposit}
 	{onWithdraw}
 	{onWithdrawAll}
