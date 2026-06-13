@@ -81,9 +81,9 @@ networks:
     chain-id: 14
     currency: "FLR"
 subgraphs:
-  flare: "https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-flare/2024-12-13-9dc7/gn"
+  flare: "https://example.com/subgraphs/flare/gn"
 metaboards:
-  flare: "https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn"
+  flare: "https://example.com/metaboards/flare/gn"
 raindexes:
   flare:
     address: {raindex}
