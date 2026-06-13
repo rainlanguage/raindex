@@ -2,13 +2,19 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {GenericPoolRaindexV6ArbOrderTakerTest} from "test/util/abstract/GenericPoolRaindexV6ArbOrderTakerTest.sol";
+import {ArbTest} from "test/util/abstract/ArbTest.sol";
+import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 
-/// @dev Tests fallback behavior on the order taker arb contract.
-contract RaindexV6ArbOrderTakerFallbackTest is GenericPoolRaindexV6ArbOrderTakerTest {
+/// @dev Tests fallback behavior on the flash borrower arb contract.
+contract RaindexV6FlashBorrowerFallbackTest is ArbTest {
+    function buildArb() internal override returns (address payable) {
+        return payable(address(new GenericPoolRaindexV6FlashBorrower()));
+    }
+
+    constructor() ArbTest() {}
+
     /// The fallback MUST accept calldata that does not match any selector.
     function testFallbackAcceptsCalldata() external {
-        // 0xdeadbeef does not match any function selector on the arb contracts.
         (bool success,) = iArb.call(hex"deadbeef");
         assertTrue(success, "fallback should accept non-matching calldata");
     }

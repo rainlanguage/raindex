@@ -44,56 +44,8 @@ import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
-
-/// @dev A fixed-stack interpreter: `eval4` returns the configured stack and no
-/// KVs. Used to drive `calculateOrderIO`'s read-back of (IORatio, outputMax)
-/// from stack[0]/stack[1] and the MIN_OUTPUTS guard independent of any real
-/// expression. Standalone (not etched) so the harness's order can point at it.
-contract FixedStackInterpreter {
-    bytes32[] internal sStack;
-
-    function setStack(bytes32[] memory stack) external {
-        sStack = stack;
-    }
-
-    function eval4(EvalV4 calldata) external view returns (StackItem[] memory, bytes32[] memory) {
-        bytes32[] memory stack = sStack;
-        StackItem[] memory items = new StackItem[](stack.length);
-        for (uint256 i = 0; i < stack.length; i++) {
-            items[i] = StackItem.wrap(stack[i]);
-        }
-        return (items, new bytes32[](0));
-    }
-}
-
-/// @dev Exposes RaindexV6's internal `calculateOrderIO` and seeds the TOFU
-/// decimals store so a fresh-compiled RaindexV6 (etched runtime code) can be
-/// mutation-tested for the calculate-context construction, the output-max vault
-/// cap, the calculations pre-fill, the MIN_OUTPUTS guard, the (IORatio,
-/// outputMax) read-back, and the per-token TOFU decimals checks.
-contract RaindexV6CalculateOrderIOHarness is RaindexV6 {
-    function exposedCalculateOrderIO(
-        OrderV4 memory order,
-        uint256 inputIOIndex,
-        uint256 outputIOIndex,
-        address counterparty,
-        SignedContextV1[] memory signedContext
-    ) external view returns (OrderIOCalculationV4 memory) {
-        return calculateOrderIO(order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0));
-    }
-
-    /// Persist the token's decimals into the TOFU store via the mutating read,
-    /// so a later `decimalsForTokenReadOnly` can detect inconsistency.
-    function seedTofu(address token) external returns (TOFUOutcome, uint8) {
-        return LibTOFUTokenDecimals.decimalsForToken(token);
-    }
-
-    /// Credit a non-zero vault balance so the output-max vault cap has a finite
-    /// balance to clamp against.
-    function exposedIncrease(address owner, address token, bytes32 vaultId, Float amount) external {
-        increaseVaultBalance(owner, token, vaultId, amount);
-    }
-}
+import {FixedStackInterpreter} from "test/util/concrete/FixedStackInterpreter.sol";
+import {RaindexV6CalculateOrderIOHarness} from "test/util/concrete/RaindexV6CalculateOrderIOHarness.sol";
 
 /// @title RaindexV6CalculateOrderIOHarnessTest
 /// @notice Mutation-hardening for `calculateOrderIO` against a FRESH-COMPILED
