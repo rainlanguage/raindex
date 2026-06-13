@@ -22,6 +22,7 @@ import {
   Float,
   type WasmEncodedResult,
 } from "@rainlanguage/raindex";
+import { retry, DEFAULT_MAX_RETRIES } from "$lib/utils/retry";
 
 /**
  * Function type for adding toast notifications to the UI.
@@ -34,9 +35,71 @@ import {
 export type AddToastFunction = (toast: Omit<ToastProps, "id">) => void;
 
 /**
+ * Determines whether an SDK result represents a transaction-indexing timeout.
+ * Timeouts are transient (the subgraph just hasn't indexed the tx yet), so they
+ * are retried rather than surfaced as a hard failure on the first occurrence.
+ */
+function isTimeoutResult(result: WasmEncodedResult<unknown>): boolean {
+  return (result.error?.readableMsg?.toLowerCase() ?? "").includes("timeout");
+}
+
+/**
+ * Sentinel thrown to make {@link retry} re-invoke the SDK call on a transient
+ * timeout result. Only timeouts trigger a retry; everything else short-circuits.
+ */
+class TimeoutRetrySignal extends Error {}
+
+/**
+ * Calls the SDK and, when the result is a transient indexing timeout, retries
+ * up to {@link DEFAULT_MAX_RETRIES} total attempts (with the backoff from
+ * {@link retry}) before giving up and returning the last timeout result.
+ *
+ * Only timeouts are retried. A successful result, a non-timeout hard error
+ * result, and a rejection thrown by `call` itself are all surfaced after a
+ * single attempt (the rejection is re-thrown to the caller's existing catch).
+ */
+async function callWithTimeoutRetry<T>(
+  call: () => Promise<WasmEncodedResult<T>>,
+): Promise<WasmEncodedResult<T>> {
+  // `retry` re-invokes `fn` on ANY throw, so a real rejection from `call` is
+  // captured here and replayed after the loop rather than thrown inside it —
+  // that keeps non-timeout failures from being retried. Only a deliberate
+  // TimeoutRetrySignal drives a retry.
+  let lastTimeoutResult: WasmEncodedResult<T> | undefined;
+  let callRejection: { error: unknown } | undefined;
+  const result = await retry(async () => {
+    let r: WasmEncodedResult<T>;
+    try {
+      r = await call();
+    } catch (error) {
+      callRejection = { error };
+      return undefined;
+    }
+    if (isTimeoutResult(r)) {
+      lastTimeoutResult = r;
+      throw new TimeoutRetrySignal();
+    }
+    return r;
+  }, DEFAULT_MAX_RETRIES).catch((e) => {
+    // Retries exhausted on repeated timeouts: surface the last timeout result so
+    // the caller renders SUBGRAPH_TIMEOUT_ERROR. Anything else is unexpected.
+    if (e instanceof TimeoutRetrySignal && lastTimeoutResult) {
+      return lastTimeoutResult;
+    }
+    throw e;
+  });
+
+  if (callRejection) throw callRejection.error;
+  return result as WasmEncodedResult<T>;
+}
+
+/**
  * Creates an indexing function that wraps SDK-based polling logic.
  * The SDK handles local-DB-first polling followed by subgraph fallback internally,
  * so we only need to call it once.
+ *
+ * Transient transaction-indexing timeouts are retried up to
+ * {@link DEFAULT_MAX_RETRIES} times before the transaction is marked as failed.
  *
  * @param options Configuration for SDK-based indexing
  * @param options.call Function that calls the SDK method (e.g. getAddOrdersForTransaction)
@@ -53,7 +116,7 @@ export function createSdkIndexingFn<T>(options: {
     ctx.updateState({ status: TransactionStatusMessage.PENDING_SUBGRAPH });
 
     try {
-      const result = await options.call();
+      const result = await callWithTimeoutRetry(options.call);
 
       if (result.error) {
         const errorMsg = result.error.readableMsg?.toLowerCase() ?? "";

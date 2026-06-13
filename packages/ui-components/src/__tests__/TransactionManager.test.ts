@@ -265,41 +265,52 @@ describe("TransactionManager", () => {
     });
 
     it("should handle SDK timeout error in awaitIndexingFn", async () => {
-      const mockTransaction = { execute: vi.fn() };
-      vi.mocked(TransactionStore).mockImplementation(
-        () => mockTransaction as unknown as TransactionStore,
-      );
+      vi.useFakeTimers();
+      try {
+        const mockTransaction = { execute: vi.fn() };
+        vi.mocked(TransactionStore).mockImplementation(
+          () => mockTransaction as unknown as TransactionStore,
+        );
 
-      await manager.createRemoveOrderTransaction(removeOrderMockArgs);
+        await manager.createRemoveOrderTransaction(removeOrderMockArgs);
 
-      const callArgs = vi.mocked(TransactionStore).mock.calls[0][0];
+        const callArgs = vi.mocked(TransactionStore).mock.calls[0][0];
 
-      const mockContext: IndexingContext = {
-        updateState: vi.fn(),
-        onSuccess: vi.fn(),
-        onError: vi.fn(),
-        links: [],
-      };
+        const mockContext: IndexingContext = {
+          updateState: vi.fn(),
+          onSuccess: vi.fn(),
+          onError: vi.fn(),
+          links: [],
+        };
 
-      // Mock a timeout error from the SDK
-      vi.mocked(
-        mockRaindexClient.getRemoveOrdersForTransaction,
-      ).mockResolvedValueOnce({
-        error: {
-          readableMsg:
-            "Timeout waiting for the subgraph to index transaction 0x123 after 10 attempts.",
-        },
-      } as unknown as WasmEncodedResult<RaindexOrder[]>);
+        // Mock a persistent timeout error from the SDK: it keeps timing out
+        // across every retry, so indexing ultimately fails with a timeout.
+        vi.mocked(
+          mockRaindexClient.getRemoveOrdersForTransaction,
+        ).mockResolvedValue({
+          error: {
+            readableMsg:
+              "Timeout waiting for the subgraph to index transaction 0x123 after 10 attempts.",
+          },
+        } as unknown as WasmEncodedResult<RaindexOrder[]>);
 
-      await callArgs.awaitIndexingFn!(mockContext);
+        const pending = callArgs.awaitIndexingFn!(mockContext);
+        await vi.runAllTimersAsync();
+        await pending;
 
-      // Verify error handling
-      expect(mockContext.updateState).toHaveBeenCalledWith({
-        status: TransactionStatusMessage.ERROR,
-        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
-      });
-      expect(mockContext.onError).toHaveBeenCalled();
-      expect(mockContext.onSuccess).not.toHaveBeenCalled();
+        // Retries until exhausted, then surfaces the timeout error.
+        expect(
+          mockRaindexClient.getRemoveOrdersForTransaction,
+        ).toHaveBeenCalledTimes(3);
+        expect(mockContext.updateState).toHaveBeenCalledWith({
+          status: TransactionStatusMessage.ERROR,
+          errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+        });
+        expect(mockContext.onError).toHaveBeenCalled();
+        expect(mockContext.onSuccess).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -876,40 +887,49 @@ describe("TransactionManager", () => {
     });
 
     it("should handle SDK timeout error in awaitIndexingFn", async () => {
-      const mockTransaction = { execute: vi.fn() };
-      vi.mocked(TransactionStore).mockImplementation(
-        () => mockTransaction as unknown as TransactionStore,
-      );
+      vi.useFakeTimers();
+      try {
+        const mockTransaction = { execute: vi.fn() };
+        vi.mocked(TransactionStore).mockImplementation(
+          () => mockTransaction as unknown as TransactionStore,
+        );
 
-      await manager.createDepositTransaction(mockArgs);
+        await manager.createDepositTransaction(mockArgs);
 
-      const callArgs = vi.mocked(TransactionStore).mock.calls[0][0];
+        const callArgs = vi.mocked(TransactionStore).mock.calls[0][0];
 
-      const mockContext: IndexingContext = {
-        updateState: vi.fn(),
-        onSuccess: vi.fn(),
-        onError: vi.fn(),
-        links: [],
-      };
+        const mockContext: IndexingContext = {
+          updateState: vi.fn(),
+          onSuccess: vi.fn(),
+          onError: vi.fn(),
+          links: [],
+        };
 
-      // Mock a timeout error from the SDK
-      vi.mocked(mockRaindexClient.getTransaction).mockResolvedValueOnce({
-        error: {
-          readableMsg:
-            "Timeout waiting for transaction 0x123 to be indexed after 10 attempts.",
-        },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+        // Mock a persistent timeout error from the SDK: it keeps timing out
+        // across every retry, so indexing ultimately fails with a timeout.
+        vi.mocked(mockRaindexClient.getTransaction).mockResolvedValue({
+          error: {
+            readableMsg:
+              "Timeout waiting for transaction 0x123 to be indexed after 10 attempts.",
+          },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
 
-      await callArgs.awaitIndexingFn!(mockContext);
+        const pending = callArgs.awaitIndexingFn!(mockContext);
+        await vi.runAllTimersAsync();
+        await pending;
 
-      // Verify error handling
-      expect(mockContext.updateState).toHaveBeenCalledWith({
-        status: TransactionStatusMessage.ERROR,
-        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
-      });
-      expect(mockContext.onError).toHaveBeenCalled();
-      expect(mockContext.onSuccess).not.toHaveBeenCalled();
+        // Retries until exhausted, then surfaces the timeout error.
+        expect(mockRaindexClient.getTransaction).toHaveBeenCalledTimes(3);
+        expect(mockContext.updateState).toHaveBeenCalledWith({
+          status: TransactionStatusMessage.ERROR,
+          errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+        });
+        expect(mockContext.onError).toHaveBeenCalled();
+        expect(mockContext.onSuccess).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 
@@ -1276,6 +1296,21 @@ describe("createSdkIndexingFn", () => {
     expect(linksUpdateCalls).toHaveLength(0);
   });
 
+  // These persistent-timeout cases exercise the retry backoff, so they drive
+  // the indexing fn under fake timers to avoid real-time waits.
+  const runIndexingWithTimers = async (
+    indexingFn: (ctx: IndexingContext) => Promise<void>,
+  ) => {
+    vi.useFakeTimers();
+    try {
+      const pending = indexingFn(mockContext);
+      await vi.runAllTimersAsync();
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  };
+
   it('should set SUBGRAPH_TIMEOUT_ERROR and call onError when error contains "timeout"', async () => {
     const mockCall = vi.fn().mockResolvedValue({
       error: { readableMsg: "Request timeout exceeded" },
@@ -1285,7 +1320,7 @@ describe("createSdkIndexingFn", () => {
       isSuccess: () => true,
     });
 
-    await indexingFn(mockContext);
+    await runIndexingWithTimers(indexingFn);
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.ERROR,
@@ -1304,7 +1339,7 @@ describe("createSdkIndexingFn", () => {
       isSuccess: () => true,
     });
 
-    await indexingFn(mockContext);
+    await runIndexingWithTimers(indexingFn);
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.ERROR,
@@ -1324,7 +1359,7 @@ describe("createSdkIndexingFn", () => {
       isSuccess: () => true,
     });
 
-    await indexingFn(mockContext);
+    await runIndexingWithTimers(indexingFn);
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.ERROR,
@@ -1443,5 +1478,110 @@ describe("createSdkIndexingFn", () => {
       ],
     });
     expect(mockOnSuccess).toHaveBeenCalled();
+  });
+
+  describe("timeout retry behavior", () => {
+    const timeoutResult = {
+      error: { readableMsg: "Request timeout exceeded" },
+    } as WasmEncodedResult<unknown>;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // Drives an async fn that interleaves awaited SDK calls with the
+    // fake-timer backoff sleeps from retry(), flushing both the
+    // microtask queue and the pending timers until the fn settles.
+    const runAllTimers = async (promise: Promise<unknown>) => {
+      await vi.runAllTimersAsync();
+      return promise;
+    };
+
+    it("should retry the SDK call up to DEFAULT_MAX_RETRIES times on repeated timeout before failing", async () => {
+      const mockCall = vi.fn().mockResolvedValue(timeoutResult);
+      const indexingFn = createSdkIndexingFn({
+        call: mockCall,
+        isSuccess: () => true,
+      });
+
+      await runAllTimers(indexingFn(mockContext));
+
+      // Buggy (no-retry) code calls exactly once; retry calls 3 times total.
+      expect(mockCall).toHaveBeenCalledTimes(3);
+      expect(mockUpdateState).toHaveBeenCalledWith({
+        status: TransactionStatusMessage.ERROR,
+        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+      });
+      expect(mockOnError).toHaveBeenCalledTimes(1);
+      expect(mockOnSuccess).not.toHaveBeenCalled();
+    });
+
+    it("should recover and succeed when a retry after a timeout returns valid data", async () => {
+      const mockCall = vi
+        .fn()
+        .mockResolvedValueOnce(timeoutResult)
+        .mockResolvedValueOnce({ value: ["order1"] });
+      const indexingFn = createSdkIndexingFn({
+        call: mockCall,
+        isSuccess: (value: string[]) => value.length > 0,
+      });
+
+      await runAllTimers(indexingFn(mockContext));
+
+      // Buggy code marks ERROR on the first timeout; retry recovers on attempt 2.
+      expect(mockCall).toHaveBeenCalledTimes(2);
+      expect(mockUpdateState).toHaveBeenCalledWith({
+        status: TransactionStatusMessage.SUCCESS,
+      });
+      expect(mockOnSuccess).toHaveBeenCalledTimes(1);
+      expect(mockOnError).not.toHaveBeenCalled();
+      expect(mockUpdateState).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+        }),
+      );
+    });
+
+    it("should NOT retry on a non-timeout hard error", async () => {
+      const mockCall = vi.fn().mockResolvedValue({
+        error: { readableMsg: "Network connection failed" },
+      } as WasmEncodedResult<unknown>);
+      const indexingFn = createSdkIndexingFn({
+        call: mockCall,
+        isSuccess: () => true,
+      });
+
+      await runAllTimers(indexingFn(mockContext));
+
+      // Hard errors are not transient: fail fast, exactly one call.
+      expect(mockCall).toHaveBeenCalledTimes(1);
+      expect(mockUpdateState).toHaveBeenCalledWith({
+        status: TransactionStatusMessage.ERROR,
+        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_FAILED,
+      });
+      expect(mockOnError).toHaveBeenCalledTimes(1);
+    });
+
+    it("should NOT retry when the SDK call throws synchronously-rejecting (non-timeout) exception", async () => {
+      const mockCall = vi.fn().mockRejectedValue(new Error("boom"));
+      const indexingFn = createSdkIndexingFn({
+        call: mockCall,
+        isSuccess: () => true,
+      });
+
+      await runAllTimers(indexingFn(mockContext));
+
+      // A thrown non-timeout error is not a transient timeout: one call only.
+      expect(mockCall).toHaveBeenCalledTimes(1);
+      expect(mockUpdateState).toHaveBeenCalledWith({
+        status: TransactionStatusMessage.ERROR,
+        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_FAILED,
+      });
+      expect(mockOnError).toHaveBeenCalledTimes(1);
+    });
   });
 });
