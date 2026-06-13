@@ -109,6 +109,7 @@ export { getExplorerLink } from "./services/getExplorerLink";
 export { invalidateTanstackQueries } from "./queries/queryClient";
 export { getToastsContext } from "./providers/toasts/context";
 export { getNetworkName } from "./utils/getNetworkName";
+export { stripTrailingWhitespace } from "./utils/stripTrailingWhitespace";
 
 // Constants
 export {
