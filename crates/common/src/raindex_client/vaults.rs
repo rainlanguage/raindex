@@ -9,6 +9,7 @@ use crate::raindex_client::local_db::vaults::LocalDbVaults;
 use crate::raindex_client::QuerySource;
 use crate::types::VaultBalanceChangeKind;
 use crate::{
+    allowance::read_allowance,
     deposit::DepositArgs,
     erc20::ERC20,
     raindex_client::{
@@ -470,21 +471,13 @@ impl RaindexVault {
         })
     }
 
-    async fn read_allowance(
-        &self,
-        transaction_args: TransactionArgs,
-    ) -> Result<U256, RaindexError> {
-        // `DepositArgs::read_allowance` only reads `token`; the other fields are
-        // unused by the allowance query.
-        let deposit_args = DepositArgs {
-            token: self.token.address,
-            vault_id: B256::from(self.vault_id),
-            amount: Float::parse("0".to_string())?,
-            decimals: self.token.decimals,
-        };
-        Ok(deposit_args
-            .read_allowance(self.owner, transaction_args)
-            .await?)
+    /// Reads the current ERC20 allowance the raindex contract holds for this
+    /// vault's owner and token. It needs only the vault's token, owner, raindex
+    /// spender and RPCs - no deposit context (amount, vault id, decimals).
+    async fn read_allowance(&self) -> Result<U256, RaindexError> {
+        let rpcs = self.raindex_client.get_rpc_urls_for_chain(self.chain_id)?;
+        let rpcs = rpcs.iter().map(|rpc| rpc.to_string()).collect::<Vec<_>>();
+        Ok(read_allowance(&rpcs, self.token.address, self.owner, self.raindex).await?)
     }
 
     async fn get_deposit_and_transaction_args(
@@ -531,9 +524,7 @@ impl RaindexVault {
     ) -> Result<Bytes, RaindexError> {
         self.validate_amount(amount)?;
 
-        let transaction_args = self.get_transaction_args()?;
-
-        let allowance = self.read_allowance(transaction_args.clone()).await?;
+        let allowance = self.read_allowance().await?;
         let allowance_float = Float::from_fixed_decimal(allowance, self.token.decimals)?;
 
         if allowance_float.gte(*amount)? {
@@ -541,7 +532,7 @@ impl RaindexVault {
         }
 
         let calldata = approveCall {
-            spender: transaction_args.raindex_address,
+            spender: self.raindex,
             amount: amount.to_fixed_decimal(self.token.decimals)?,
         }
         .abi_encode();
@@ -570,8 +561,7 @@ impl RaindexVault {
         return_description = "Current allowance amount in token's smallest unit (e.g., \"1000000000000000000\" for 1 token with 18 decimals)"
     )]
     pub async fn get_allowance(&self) -> Result<RaindexVaultAllowance, RaindexError> {
-        let transaction_args = self.get_transaction_args()?;
-        let allowance = self.read_allowance(transaction_args).await?;
+        let allowance = self.read_allowance().await?;
         Ok(RaindexVaultAllowance(allowance))
     }
 
