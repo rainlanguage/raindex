@@ -111,6 +111,16 @@ describe('Sidebar', () => {
 			expect(sidebar.hidden).toBe(false);
 		});
 	});
+	it('renders the scrub toggle next to the dark mode button', () => {
+		mockWindowSize(1025);
+		const mockColorTheme = writable('light');
+		const mockPage = {
+			url: { pathname: '/' }
+		};
+		render(Sidebar, { colorTheme: mockColorTheme, page: mockPage });
+
+		expect(screen.getByTestId('scrub-toggle')).toBeInTheDocument();
+	});
 	it('hides sidebar when close button is clicked', async () => {
 		mockWindowSize(500);
 		const mockColorTheme = writable('light');
