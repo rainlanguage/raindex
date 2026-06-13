@@ -453,8 +453,6 @@ pub enum RaindexError {
     ZeroAmount,
     #[error("Negative amount")]
     NegativeAmount,
-    #[error("Existing allowance")]
-    ExistingAllowance,
     #[error(transparent)]
     WritableTransactionExecuteError(#[from] WritableTransactionExecuteError),
     #[error(transparent)]
@@ -628,9 +626,6 @@ impl RaindexError {
             RaindexError::NegativeAmount => "Amount cannot be negative".to_string(),
             RaindexError::WritableTransactionExecuteError(err) => {
                 format!("Failed to execute transaction: {}", err)
-            }
-            RaindexError::ExistingAllowance => {
-                "There is already an allowance for this vault".to_string()
             }
             RaindexError::DepositArgsError(err) => {
                 format!("Failed to create deposit arguments: {}", err)
