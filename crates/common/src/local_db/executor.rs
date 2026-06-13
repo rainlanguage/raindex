@@ -941,4 +941,63 @@ mod tests {
             "a successful query after a failure re-seeds the pool"
         );
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_pool_access_does_not_deadlock() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("concurrent-pool.db");
+
+        let exec = std::sync::Arc::new(RusqliteExecutor::new(&db_path));
+
+        // Seed a small table so the concurrent readers have real rows to return.
+        exec.query_text(&SqlStatement::new(
+            "CREATE TABLE nums (n INTEGER); INSERT INTO nums (n) VALUES (1), (2), (3), (4), (5);",
+        ))
+        .await
+        .unwrap();
+
+        #[derive(serde::Deserialize)]
+        struct SumRow {
+            total: i64,
+        }
+
+        // Fire a large number of concurrent operations through the real executor
+        // API. Each one races to check a connection out of the shared pool, run
+        // its query, and release it back, so the pool mutex is hammered under
+        // heavy contention. A regression that held the lock across the query (or
+        // otherwise deadlocked checkout/release) would hang here and trip the
+        // timeout below rather than completing.
+        let mut handles = Vec::new();
+        for i in 0..200 {
+            let exec = exec.clone();
+            handles.push(tokio::spawn(async move {
+                // Interleave a few writes among the many reads so checkout/release
+                // is exercised from both query_json and execute_batch paths.
+                if i % 25 == 0 {
+                    let mut batch = SqlStatementBatch::new();
+                    batch.add(SqlStatement::new("INSERT INTO nums (n) VALUES (0);"));
+                    let batch = batch.ensure_transaction();
+                    exec.execute_batch(&batch).await.unwrap();
+                }
+                let rows: Vec<SumRow> = exec
+                    .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+                    .await
+                    .unwrap();
+                // The seeded rows sum to 15; the interleaved zero-inserts never
+                // change that, so every read must observe at least the seed total.
+                assert!(rows[0].total >= 15, "unexpected sum {}", rows[0].total);
+            }));
+        }
+
+        // A deadlock or lock-held-across-query regression manifests as a hang, so
+        // bound the whole fan-out and assert it finishes well inside the budget.
+        let joined = futures::future::join_all(handles);
+        let results = tokio::time::timeout(std::time::Duration::from_secs(30), joined)
+            .await
+            .expect("concurrent pool access must not deadlock (timed out)");
+
+        for result in results {
+            result.expect("a concurrent operation panicked");
+        }
+    }
 }
