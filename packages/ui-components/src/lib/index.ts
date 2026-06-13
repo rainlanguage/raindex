@@ -106,6 +106,12 @@ export {
 } from "./services/time";
 export { bigintStringToHex, HEX_INPUT_REGEX } from "./utils/hex";
 export { getExplorerLink } from "./services/getExplorerLink";
+export {
+  validateAmount,
+  countDecimalPlaces,
+  MAX_DECIMALS,
+} from "./services/validateAmount";
+export type { AmountDecimalsValidation } from "./services/validateAmount";
 export { invalidateTanstackQueries } from "./queries/queryClient";
 export { getToastsContext } from "./providers/toasts/context";
 export { getNetworkName } from "./utils/getNetworkName";

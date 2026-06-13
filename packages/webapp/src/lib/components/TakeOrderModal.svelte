@@ -4,7 +4,8 @@
 		InputTokenAmount,
 		WalletConnect,
 		Refresh,
-		DEFAULT_REFRESH_INTERVAL
+		DEFAULT_REFRESH_INTERVAL,
+		validateAmount
 	} from '@rainlanguage/ui-components';
 	import { onDestroy } from 'svelte';
 	import { appKitModal, connected, signerAddress } from '$lib/stores/wagmi';
@@ -190,6 +191,8 @@
 		updateEstimate();
 	}
 
+	$: priceCapDecimalsError = validateAmount(priceCap).errorMessage;
+
 	$: effectivePriceCap = (() => {
 		if (priceCap && priceCap.trim() !== '') {
 			const parsed = Float.parse(priceCap);
@@ -220,7 +223,12 @@
 	})();
 
 	$: canSubmit =
-		isAmountValid && !exceedsMax && selectedQuote && effectivePriceCap && $signerAddress;
+		isAmountValid &&
+		!exceedsMax &&
+		!priceCapDecimalsError &&
+		selectedQuote &&
+		effectivePriceCap &&
+		$signerAddress;
 
 	async function handleSubmit() {
 		if (!selectedQuote || !effectivePriceCap) return;
@@ -395,6 +403,11 @@
 						bind:value={priceCap}
 						data-testid="price-cap-input"
 					/>
+					{#if priceCapDecimalsError}
+						<p class="mt-1 text-sm text-red-500" data-testid="price-cap-error">
+							{priceCapDecimalsError}
+						</p>
+					{/if}
 				</div>
 
 				{#if isAmountValid && estimateResult}

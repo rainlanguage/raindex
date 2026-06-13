@@ -196,6 +196,48 @@ describe('TakeOrderModal', () => {
 		});
 	});
 
+	it('rejects a price cap with more than 18 decimals and keeps submit disabled', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 19 decimal places (the value from issue #2109).
+		await fireEvent.input(priceCapInput, { target: { value: '0.0015116073271035947' } });
+
+		await waitFor(() => {
+			expect(screen.getByTestId('price-cap-error')).toHaveTextContent(
+				'Too many decimal places. A maximum of 18 decimal places is allowed.'
+			);
+		});
+		expect(screen.getByTestId('submit-button')).toBeDisabled();
+	});
+
+	it('accepts a price cap with exactly 18 decimals and enables submit', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 18 decimal places (the value that works in issue #2109).
+		await fireEvent.input(priceCapInput, { target: { value: '0.001511607327103594' } });
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('price-cap-error')).not.toBeInTheDocument();
+			expect(screen.getByTestId('submit-button')).not.toBeDisabled();
+		});
+	});
+
 	it('shows submit button when connected and amount is valid', async () => {
 		render(TakeOrderModal, defaultProps);
 
