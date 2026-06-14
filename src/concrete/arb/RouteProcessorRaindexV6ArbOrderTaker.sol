@@ -42,6 +42,15 @@ contract RouteProcessorRaindexV6ArbOrderTaker is RaindexV6ArbOrderTaker {
         if (!lossless) {
             outputTokenAmount++;
         }
+        // `processRoute` is `payable`, but this arb calls it with no value:
+        // native-ETH input legs are unsupported here, the swap is funded purely
+        // by the ERC20 `inputToken` approval above. This deliberately diverges
+        // from `LibGenericPoolExchange.exchange`, which forwards
+        // `address(this).balance` to the caller-chosen pool. Any ETH held by
+        // this contract is not routed into the swap; it is swept to `msg.sender`
+        // by `finalizeArb`'s native-gas sweep, matching the recovery behaviour
+        // documented at `receive()`/`fallback()` below and on the base
+        // `RaindexV6ArbOrderTaker`.
         //slither-disable-next-line unused-return
         IRouteProcessor(routeProcessor)
             .processRoute(inputToken, inputTokenAmount, outputToken, outputTokenAmount, address(this), route);
