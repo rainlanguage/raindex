@@ -42,6 +42,7 @@ import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/sr
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
+import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -145,7 +146,10 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
     }
 
     /// Build a single-input single-output order pointing at the fixed-stack
-    /// interpreter.
+    /// interpreter. The evaluable carries the canonical two-source bytecode
+    /// (calculate + handle IO) so `addOrder4`'s source-count guard accepts it;
+    /// `calculateOrderIO`/`quote2` drive the fixed-stack interpreter regardless
+    /// of the bytecode, so the sources only matter to the add path.
     function _order() internal view returns (OrderV4 memory order) {
         IOV2[] memory inputs = new IOV2[](1);
         inputs[0] = IOV2(inputToken, INPUT_VAULT_ID);
@@ -153,7 +157,11 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         outputs[0] = IOV2(outputToken, OUTPUT_VAULT_ID);
         order = OrderV4({
             owner: owner,
-            evaluable: EvaluableV4({interpreter: IInterpreterV4(address(interpreter)), store: store, bytecode: hex""}),
+            evaluable: EvaluableV4({
+                interpreter: IInterpreterV4(address(interpreter)),
+                store: store,
+                bytecode: LibTestAddOrder.VALID_ORDER_BYTECODE
+            }),
             validInputs: inputs,
             validOutputs: outputs,
             nonce: bytes32(uint256(0xDEAD))
@@ -581,7 +589,11 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         outputs[0] = IOV2(outputToken, OUTPUT_VAULT_ID);
         OrderV4 memory order = OrderV4({
             owner: owner,
-            evaluable: EvaluableV4({interpreter: IInterpreterV4(address(interpreter)), store: store, bytecode: hex""}),
+            evaluable: EvaluableV4({
+                interpreter: IInterpreterV4(address(interpreter)),
+                store: store,
+                bytecode: LibTestAddOrder.VALID_ORDER_BYTECODE
+            }),
             validInputs: inputs,
             validOutputs: outputs,
             nonce: bytes32(uint256(0xBEEF))
