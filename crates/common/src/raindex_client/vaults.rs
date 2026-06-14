@@ -392,74 +392,6 @@ impl RaindexVault {
         Ok(())
     }
 
-    /// Generates transaction calldata for depositing tokens into a vault
-    ///
-    /// Creates the contract calldata needed to deposit a specified amount of tokens
-    /// into a vault.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await vault.getDepositCalldata(vault, "10.5");
-    /// if (result.error) {
-    ///   console.error("Cannot generate deposit:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const calldata = result.value;
-    /// // Do something with the calldata
-    /// ```
-    #[wasm_export(
-        js_name = "getDepositCalldata",
-        return_description = "Encoded transaction calldata as hex string",
-        unchecked_return_type = "Hex"
-    )]
-    pub async fn get_deposit_calldata(
-        &self,
-        #[wasm_export(param_description = "Amount to deposit in Float value")] amount: &Float,
-    ) -> Result<Bytes, RaindexError> {
-        self.validate_amount(amount)?;
-        let (deposit_args, _) = self.get_deposit_and_transaction_args(amount).await?;
-        let call = deposit4Call::try_from(deposit_args)?;
-        Ok(Bytes::copy_from_slice(&call.abi_encode()))
-    }
-
-    /// Generates transaction calldata for withdrawing tokens from a vault
-    ///
-    /// Creates the contract calldata needed to withdraw a specified amount of tokens
-    /// from a vault.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await vault.getWithdrawCalldata("55.2");
-    /// if (result.error) {
-    ///   console.error("Cannot generate withdrawal:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const calldata = result.value;
-    /// // Do something with the calldata
-    /// ```
-    #[wasm_export(
-        js_name = "getWithdrawCalldata",
-        return_description = "Encoded transaction calldata as hex string",
-        unchecked_return_type = "Hex"
-    )]
-    pub async fn get_withdraw_calldata(
-        &self,
-        #[wasm_export(param_description = "Amount to withdraw in Float value")] amount: &Float,
-    ) -> Result<Bytes, RaindexError> {
-        self.validate_amount(amount)?;
-        Ok(Bytes::copy_from_slice(
-            &WithdrawArgs {
-                token: self.token.address,
-                vault_id: B256::from(self.vault_id),
-                target_amount: *amount,
-            }
-            .get_withdraw_calldata()
-            .await?,
-        ))
-    }
-
     async fn get_deposit_and_transaction_args(
         &self,
         amount: &Float,
@@ -482,44 +414,23 @@ impl RaindexVault {
         Ok((deposit_args, transaction_args))
     }
 
-    /// Generates ERC20 approval calldata for vault deposits
+    /// Builds the ERC20 approval calldata for `amount`, returning `None` when the raindex
+    /// contract already has a sufficient allowance and therefore no approval is needed.
     ///
-    /// Creates the contract calldata needed to approve the raindex contract to spend
-    /// tokens for a vault deposit, but only if additional approval is needed.
-    ///
-    /// ## Examples
-    ///
-    /// ```javascript
-    /// const result = await vault.getApprovalCalldata("20.75");
-    /// if (result.error) {
-    ///   console.error("Approval error:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const calldata = result.value;
-    /// // Do something with the calldata
-    /// ```
-    #[wasm_export(
-        js_name = "getApprovalCalldata",
-        return_description = "Encoded approval calldata as hex string",
-        unchecked_return_type = "Hex"
-    )]
-    pub async fn get_approval_calldata(
+    /// Used by [`RaindexVault::get_calldatas`] so the on-chain allowance is only read once.
+    async fn build_approval_calldata(
         &self,
-        #[wasm_export(param_description = "Amount requiring approval in Float value")]
+        deposit_args: &DepositArgs,
+        transaction_args: &TransactionArgs,
         amount: &Float,
-    ) -> Result<Bytes, RaindexError> {
-        self.validate_amount(amount)?;
-
-        let (deposit_args, transaction_args) =
-            self.get_deposit_and_transaction_args(amount).await?;
-
+    ) -> Result<Option<Bytes>, RaindexError> {
         let allowance = deposit_args
             .read_allowance(self.owner, transaction_args.clone())
             .await?;
         let allowance_float = Float::from_fixed_decimal(allowance, self.token.decimals)?;
 
         if allowance_float.gte(*amount)? {
-            return Err(RaindexError::ExistingAllowance);
+            return Ok(None);
         }
 
         let calldata = approveCall {
@@ -528,7 +439,57 @@ impl RaindexVault {
         }
         .abi_encode();
 
-        Ok(Bytes::copy_from_slice(&calldata))
+        Ok(Some(Bytes::copy_from_slice(&calldata)))
+    }
+
+    /// Generates every transaction calldata associated with a vault in a single call
+    ///
+    /// Produces the approval (when needed), deposit and withdraw calldata for the vault
+    /// in one method so callers don't have to invoke them separately. The on-chain
+    /// allowance is read only once.
+    ///
+    /// The returned `approval` is `undefined` when the raindex contract already has a
+    /// sufficient allowance to spend the requested amount, in which case no approval
+    /// transaction is needed.
+    ///
+    /// ## Examples
+    ///
+    /// ```javascript
+    /// const result = await vault.getCalldatas("10.5");
+    /// if (result.error) {
+    ///   console.error("Cannot generate calldatas:", result.error.readableMsg);
+    ///   return;
+    /// }
+    /// const { approval, deposit, withdraw } = result.value;
+    /// // `approval` is undefined when no approval is needed
+    /// ```
+    #[wasm_export(
+        js_name = "getCalldatas",
+        return_description = "Approval (when needed), deposit and withdraw calldata for the amount",
+        unchecked_return_type = "RaindexVaultCalldatas"
+    )]
+    pub async fn get_calldatas(
+        &self,
+        #[wasm_export(param_description = "Amount in Float value")] amount: &Float,
+    ) -> Result<RaindexVaultCalldatas, RaindexError> {
+        self.validate_amount(amount)?;
+
+        let (deposit_args, transaction_args) =
+            self.get_deposit_and_transaction_args(amount).await?;
+
+        let approval = self
+            .build_approval_calldata(&deposit_args, &transaction_args, amount)
+            .await?;
+
+        let deposit = Bytes::copy_from_slice(&deposit4Call::try_from(deposit_args)?.abi_encode());
+
+        let withdraw = self.build_withdraw_calldata(amount).await?;
+
+        Ok(RaindexVaultCalldatas {
+            approval,
+            deposit,
+            withdraw,
+        })
     }
 
     /// Gets the current ERC20 allowance for a vault
@@ -600,6 +561,24 @@ impl RaindexVault {
         let rpcs = self.raindex_client.get_rpc_urls_for_chain(self.chain_id)?;
         let erc20 = ERC20::new(rpcs, self.token.address);
         Ok(erc20.get_account_balance(owner).await?)
+    }
+
+    /// Builds the withdraw calldata for `amount`.
+    ///
+    /// Used by [`RaindexVault::get_calldatas`] and by
+    /// [`RaindexVaultsList::get_withdraw_calldata`] to build the per-vault withdraw
+    /// calldata that is multicalled together.
+    pub async fn build_withdraw_calldata(&self, amount: &Float) -> Result<Bytes, RaindexError> {
+        self.validate_amount(amount)?;
+        Ok(Bytes::copy_from_slice(
+            &WithdrawArgs {
+                token: self.token.address,
+                vault_id: B256::from(self.vault_id),
+                target_amount: *amount,
+            }
+            .get_withdraw_calldata()
+            .await?,
+        ))
     }
 }
 
@@ -829,6 +808,26 @@ pub(crate) struct LocalTradeBalanceInfo {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 pub struct RaindexVaultAllowance(#[tsify(type = "string")] U256);
 impl_wasm_traits!(RaindexVaultAllowance);
+
+/// Bundle of every transaction calldata associated with a vault for a given amount.
+///
+/// Returned by [`RaindexVault::get_calldatas`] so callers can generate the deposit,
+/// withdraw and (when required) approval calldata for a vault in a single call instead
+/// of invoking the three separate calldata functions individually.
+///
+/// `approval` is `None` when the raindex contract already has a sufficient allowance to
+/// spend the requested amount, in which case no approval transaction is needed.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
+#[serde(rename_all = "camelCase")]
+pub struct RaindexVaultCalldatas {
+    #[tsify(optional, type = "Hex")]
+    pub approval: Option<Bytes>,
+    #[tsify(type = "Hex")]
+    pub deposit: Bytes,
+    #[tsify(type = "Hex")]
+    pub withdraw: Bytes,
+}
+impl_wasm_traits!(RaindexVaultCalldatas);
 
 impl RaindexVaultBalanceChange {
     pub fn try_from_sg_balance_change(
@@ -2157,11 +2156,9 @@ mod tests {
         use super::*;
         use crate::raindex_client::tests::get_test_yaml;
         use crate::raindex_client::tests::CHAIN_ID_1_RAINDEX_ADDRESS;
-        use alloy::hex::encode_prefixed;
         use alloy::primitives::{address, b256};
         use alloy::sol_types::SolCall;
         use httpmock::MockServer;
-        use raindex_bindings::IERC20Metadata::decimalsCall;
         use raindex_bindings::{
             IRaindexV6::{deposit4Call, withdraw4Call},
             IERC20::approveCall,
@@ -2979,143 +2976,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_get_vault_deposit_calldata() {
-            let server = MockServer::start_async().await;
-            server.mock(|when, then| {
-                when.path("/sg1");
-                then.status(200).json_body_obj(&json!({
-                    "data": {
-                        "vault": get_vault1_json()
-                    }
-                }));
-            });
-
-            server.mock(|when, then| {
-                when.path("/rpc1");
-                then.status(200).json_body(json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": encode_prefixed(decimalsCall::abi_encode_returns(&18))
-                }));
-            });
-
-            let raindex_client = RaindexClient::new(
-                vec![get_test_yaml(
-                    &server.url("/sg1"),
-                    &server.url("/sg2"),
-                    &server.url("/rpc1"),
-                    // not used
-                    &server.url("/rpc2"),
-                )],
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-            let vault = raindex_client
-                .get_vault(
-                    &RaindexIdentifier::new(
-                        1,
-                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
-                    ),
-                    Bytes::from_str("0x0123").unwrap(),
-                )
-                .await
-                .unwrap();
-            let result = vault
-                .get_deposit_calldata(&Float::parse("500".to_string()).unwrap())
-                .await
-                .unwrap();
-            assert_eq!(
-                result,
-                Bytes::copy_from_slice(
-                    &deposit4Call {
-                        token: Address::from_str("0x1d80c49bbbcd1c0911346656b529df9e5c2f783d")
-                            .unwrap(),
-                        vaultId: B256::from(U256::from_str("0x0123").unwrap()),
-                        depositAmount: Float::parse("500".to_string()).unwrap().get_inner(),
-                        tasks: vec![],
-                    }
-                    .abi_encode()
-                )
-            );
-
-            let err = vault
-                .get_deposit_calldata(&Float::parse("0".to_string()).unwrap())
-                .await
-                .unwrap_err();
-            assert_eq!(err.to_string(), RaindexError::ZeroAmount.to_string());
-        }
-
-        #[tokio::test]
-        async fn test_get_vault_withdraw_calldata() {
-            let server = MockServer::start_async().await;
-            server.mock(|when, then| {
-                when.path("/sg1");
-                then.status(200).json_body_obj(&json!({
-                    "data": {
-                        "vault": get_vault1_json()
-                    }
-                }));
-            });
-
-            server.mock(|when, then| {
-                when.path("/rpc1");
-                then.status(200).json_body(json!({
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "result": encode_prefixed(decimalsCall::abi_encode_returns(&18))
-                }));
-            });
-
-            let raindex_client = RaindexClient::new(
-                vec![get_test_yaml(
-                    &server.url("/sg1"),
-                    &server.url("/sg2"),
-                    &server.url("/rpc1"),
-                    // not used
-                    &server.url("/rpc2"),
-                )],
-                None,
-                None,
-            )
-            .await
-            .unwrap();
-            let vault = raindex_client
-                .get_vault(
-                    &RaindexIdentifier::new(
-                        1,
-                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
-                    ),
-                    Bytes::from_str("0x0123").unwrap(),
-                )
-                .await
-                .unwrap();
-            let amount: Float = Float::parse("0.0000000000000005".to_string()).unwrap();
-            let result = vault.get_withdraw_calldata(&amount).await.unwrap();
-            assert_eq!(
-                result,
-                Bytes::copy_from_slice(
-                    &withdraw4Call {
-                        token: Address::from_str("0x1d80c49bbbcd1c0911346656b529df9e5c2f783d")
-                            .unwrap(),
-                        vaultId: B256::from(U256::from_str("0x0123").unwrap()),
-                        targetAmount: amount.get_inner(),
-                        tasks: vec![],
-                    }
-                    .abi_encode()
-                )
-            );
-
-            let err = vault
-                .get_withdraw_calldata(&Float::parse("0".to_string()).unwrap())
-                .await
-                .unwrap_err();
-            assert_eq!(err.to_string(), RaindexError::ZeroAmount.to_string());
-        }
-
-        #[tokio::test]
-        async fn test_get_vault_approval_calldata() {
+        async fn test_get_vault_calldatas() {
             let rpc_server = MockServer::start_async().await;
             rpc_server.mock(|when, then| {
                 when.path("/rpc1");
@@ -3158,38 +3019,90 @@ mod tests {
                 )
                 .await
                 .unwrap();
-            let result = vault
-                .get_approval_calldata(&Float::parse("600".to_string()).unwrap())
-                .await
-                .unwrap();
+
+            let token = Address::from_str("0x1d80c49bbbcd1c0911346656b529df9e5c2f783d").unwrap();
+            let vault_id = B256::from(U256::from_str("0x0123").unwrap());
+
+            // The on-chain allowance is 100 tokens, so an amount of 600 needs approval.
+            let amount = Float::parse("600".to_string()).unwrap();
+            let result = vault.get_calldatas(&amount).await.unwrap();
             assert_eq!(
-                result,
-                Bytes::copy_from_slice(
+                result.approval,
+                Some(Bytes::copy_from_slice(
                     &approveCall {
                         spender: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                         amount: U256::from(600000000000000000000u128),
                     }
                     .abi_encode(),
+                ))
+            );
+            assert_eq!(
+                result.deposit,
+                Bytes::copy_from_slice(
+                    &deposit4Call {
+                        token,
+                        vaultId: vault_id,
+                        depositAmount: amount.get_inner(),
+                        tasks: vec![],
+                    }
+                    .abi_encode()
+                )
+            );
+            assert_eq!(
+                result.withdraw,
+                Bytes::copy_from_slice(
+                    &withdraw4Call {
+                        token,
+                        vaultId: vault_id,
+                        targetAmount: amount.get_inner(),
+                        tasks: vec![],
+                    }
+                    .abi_encode()
                 )
             );
 
+            // An amount of 90 is already covered by the 100 token allowance, so no approval
+            // calldata is produced (`approval` is `None` rather than an error).
+            let amount = Float::parse("90".to_string()).unwrap();
+            let result = vault.get_calldatas(&amount).await.unwrap();
+            assert_eq!(result.approval, None);
+            assert_eq!(
+                result.deposit,
+                Bytes::copy_from_slice(
+                    &deposit4Call {
+                        token,
+                        vaultId: vault_id,
+                        depositAmount: amount.get_inner(),
+                        tasks: vec![],
+                    }
+                    .abi_encode()
+                )
+            );
+            assert_eq!(
+                result.withdraw,
+                Bytes::copy_from_slice(
+                    &withdraw4Call {
+                        token,
+                        vaultId: vault_id,
+                        targetAmount: amount.get_inner(),
+                        tasks: vec![],
+                    }
+                    .abi_encode()
+                )
+            );
+
+            // Zero and negative amounts are rejected.
             let err = vault
-                .get_approval_calldata(&Float::parse("0".to_string()).unwrap())
+                .get_calldatas(&Float::parse("0".to_string()).unwrap())
                 .await
                 .unwrap_err();
             assert_eq!(err.to_string(), RaindexError::ZeroAmount.to_string());
 
             let err = vault
-                .get_approval_calldata(&Float::parse("90".to_string()).unwrap())
+                .get_calldatas(&Float::parse("-1".to_string()).unwrap())
                 .await
                 .unwrap_err();
-            assert_eq!(err.to_string(), RaindexError::ExistingAllowance.to_string());
-
-            let err = vault
-                .get_approval_calldata(&Float::parse("100".to_string()).unwrap())
-                .await
-                .unwrap_err();
-            assert_eq!(err.to_string(), RaindexError::ExistingAllowance.to_string());
+            assert_eq!(err.to_string(), RaindexError::NegativeAmount.to_string());
         }
 
         #[tokio::test]

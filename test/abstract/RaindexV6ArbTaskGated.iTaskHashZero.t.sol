@@ -8,7 +8,7 @@ import {RaindexV6ArbConfig} from "../../src/abstract/RaindexV6ArbCommon.sol";
 import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
 
 /// When constructed with empty bytecode the task hash MUST be zero.
 contract RaindexV6ArbTaskGatedITaskHashZeroTest is Test {

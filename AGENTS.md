@@ -31,6 +31,33 @@
   Components `PascalCase.svelte`; files otherwise kebab/snake as appropriate.
 - Solidity: `forge fmt`; compiler `solc 0.8.25` (see `foundry.toml`).
 
+### Rust functional style
+
+The Rust crates lean on a functional, expression-oriented style. Match it.
+
+- **Chain `Result`/`Option` instead of unwrapping.** Propagate with `?`, and let
+  `From`/`thiserror` conversions adapt error types across boundaries (e.g.
+  `crates/common/src/retry.rs` maps `RetryError<E>` back into the domain error
+  via `From`; `csv.rs` uses `#[from]` so `?` converts). Convert `Option` to a
+  typed error at the edge with `.ok_or(..)`/`.ok_or_else(..)` rather than
+  `unwrap()`/`expect()`, and transform with `.map`/`.and_then`/`.map_err` rather
+  than `match` on `Ok`/`Some` when a combinator reads cleaner. Reserve
+  `unwrap()`/`expect()` for tests and for invariants you can prove infallible.
+- **Prefer immutable bindings and expression results.** Default to `let`; reach
+  for `let mut` only when a loop genuinely accumulates (see the wasm fallback in
+  `retry.rs`). Use `if let`/`let ... else` for early returns and `match` as an
+  expression that yields a value instead of mutating a placeholder.
+- **Use iterator adapters over manual loops.** Build collections with
+  `.iter()`/`.into_iter()` plus `map`/`filter`/`filter_map`/`find`, and collect
+  fallible pipelines straight into a `Result` with
+  `.collect::<Result<Vec<_>, _>>()?` (as in
+  `crates/common/src/raindex_client/orders.rs`) rather than pushing inside a
+  `for` loop with intermediate `mut` state.
+- **Use a builder for complex construction.** When a type has many optional or
+  staged fields, expose a builder with chained setters and a fallible
+  `build()`/constructor rather than a wide positional `new`, following
+  `RaindexOrderBuilder` (`crates/common/src/raindex_order_builder/`).
+
 ## Testing Guidelines
 
 - Rust: `cargo test`; integration tests live in `crates/integration_tests`.

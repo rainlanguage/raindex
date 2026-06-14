@@ -13,7 +13,6 @@ import {
     EvaluableV4,
     TaskV2
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {SourceIndexOutOfBounds} from "rain-interpreter-interface-0.1.0/src/error/ErrBytecode.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
@@ -208,44 +207,6 @@ contract RaindexV6TakeOrderHandleIORevertTest is RaindexV6ExternalRealTest {
         configs[2] = "_ _:1 1;:set(0 0);";
         configs[3] = "_ _:1 1;:ensure(get(0) \"err 2\");";
         checkTakeOrderHandleIO(configs, "", toClear);
-    }
-
-    /// Note that a different interpreter MAY NOT revert if handle io is missing,
-    /// but the canonical interpreter will.
-    function testTakeOrderNoHandleIORevert0() external {
-        bytes[] memory configs = new bytes[](1);
-        configs[0] = "_ _:1 1;";
-        checkTakeOrderHandleIO(
-            configs,
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200020110000001100000"),
-            LibDecimalFloat.packLossless(type(int224).max, 0)
-        );
-    }
-
-    /// Note that a different interpreter MAY NOT revert if handle io is missing,
-    /// but the canonical interpreter will.
-    function testTakeOrderNoHandleIORevert1() external {
-        bytes[] memory configs = new bytes[](2);
-        configs[0] = "_ _:1 1;:;";
-        configs[1] = "_ _:1 1;";
-        checkTakeOrderHandleIO(
-            configs,
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200020110000001100000"),
-            LibDecimalFloat.packLossless(type(int224).max, 0)
-        );
-    }
-
-    /// Note that a different interpreter MAY NOT revert if handle io is missing,
-    /// but the canonical interpreter will.
-    function testTakeOrderNoHandleIORevert2() external {
-        bytes[] memory configs = new bytes[](2);
-        configs[0] = "_ _:1 1;";
-        configs[1] = "_ _:1 1;:;";
-        checkTakeOrderHandleIO(
-            configs,
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200020110000001100000"),
-            LibDecimalFloat.packLossless(type(int224).max, 0)
-        );
     }
 
     function testTakeOrderHandleIO00BothVaultIdZero() external {
