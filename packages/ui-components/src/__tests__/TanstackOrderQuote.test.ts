@@ -375,7 +375,7 @@ describe("TanstackOrderQuote component", () => {
     });
   });
 
-  it("shows max output/input as a percentage of the vault balance", async () => {
+  it("shows max output as a percentage of the output vault balance under the amount", async () => {
     (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
       value: [
         {
@@ -388,7 +388,6 @@ describe("TanstackOrderQuote component", () => {
             formattedInverseRatio: "0.5",
             formattedMaxInput: "3",
             formattedMaxOutputAsPercentOfVault: "25",
-            formattedMaxInputAsPercentOfVault: "40",
           },
           error: undefined,
         },
@@ -408,13 +407,20 @@ describe("TanstackOrderQuote component", () => {
     await waitFor(() => {
       const outputPercent = screen.getByTestId("max-output-percent-0");
       expect(outputPercent).toHaveTextContent("25% of vault");
-
-      const inputPercent = screen.getByTestId("max-input-percent-0");
-      expect(inputPercent).toHaveTextContent("40% of vault");
     });
+
+    // It renders inside the same cell as the Maximum Output amount, so the
+    // drawdown percentage sits directly beneath the amount the user reads.
+    const outputPercent = screen.getByTestId("max-output-percent-0");
+    const outputCell = screen.getByText("1.5").closest("td");
+    expect(outputCell).not.toBeNull();
+    expect(outputCell).toContainElement(outputPercent);
+
+    // The input side is output-only by design: there is no input percentage.
+    expect(screen.queryByTestId("max-input-percent-0")).toBeNull();
   });
 
-  it("omits the vault-percentage when it is not provided", async () => {
+  it("omits the output vault-percentage when it is not provided", async () => {
     (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
       value: [
         {
@@ -426,7 +432,7 @@ describe("TanstackOrderQuote component", () => {
             formattedRatio: "2",
             formattedInverseRatio: "0.5",
             formattedMaxInput: "3",
-            // no percentage fields (e.g. vault balance unknown / zero)
+            // no percentage field (e.g. output vault balance unknown / zero)
           },
           error: undefined,
         },
@@ -447,7 +453,6 @@ describe("TanstackOrderQuote component", () => {
       expect(screen.getByTestId("bodyRow")).toHaveTextContent("ETH/USDT");
     });
     expect(screen.queryByTestId("max-output-percent-0")).toBeNull();
-    expect(screen.queryByTestId("max-input-percent-0")).toBeNull();
     expect(screen.queryByText(/% of vault/)).toBeNull();
   });
 });

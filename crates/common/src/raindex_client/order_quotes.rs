@@ -75,14 +75,6 @@ pub struct RaindexOrderQuoteValue {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[tsify(optional)]
     pub formatted_max_output_as_percent_of_vault: Option<String>,
-    /// `maxInput` expressed as a percentage of the current balance of the
-    /// input vault this pair buys into, formatted like the other amounts
-    /// (e.g. `"40"` for 40%). `None` (omitted) when the input vault cannot be
-    /// matched or its balance is zero. Populated after the quote is fetched,
-    /// from already-fetched vault balances.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[tsify(optional)]
-    pub formatted_max_input_as_percent_of_vault: Option<String>,
 }
 impl_wasm_traits!(RaindexOrderQuoteValue);
 
@@ -142,7 +134,6 @@ impl RaindexOrderQuoteValue {
             inverse_ratio,
             formatted_inverse_ratio,
             formatted_max_output_as_percent_of_vault: None,
-            formatted_max_input_as_percent_of_vault: None,
         })
     }
 }
@@ -191,14 +182,15 @@ impl RaindexOrder {
 }
 
 impl RaindexOrder {
-    /// Fills in the per-pair vault-relative percentages on a quote's
-    /// `data`, so the UI can show each trade's max input/output amount as a
-    /// percentage of the vault it draws from (helping spot trades that are
-    /// large relative to the vault). Uses already-fetched subgraph vault
-    /// balances; never issues a network call. A successful quote with no
-    /// matching vault (or a zero balance) simply leaves the percentage
-    /// `None`. `order_v4` must be this order's decoded bytes, whose
-    /// `validInputs`/`validOutputs` the pair indices address.
+    /// Fills in the per-pair vault-relative percentage on a quote's `data`,
+    /// so the UI can show each trade's max output amount as a percentage of
+    /// the output vault it sells from. This is the drawdown signal: how much
+    /// of the vault a single trade depletes (the input side measures inflow,
+    /// not drawdown, so it is deliberately not computed). Uses already-fetched
+    /// subgraph vault balances; never issues a network call. A successful
+    /// quote with no matching vault (or a zero balance) simply leaves the
+    /// percentage `None`. `order_v4` must be this order's decoded bytes, whose
+    /// `validOutputs` the pair output index addresses.
     fn enrich_quote_with_vault_percentages(
         &self,
         quote: &mut RaindexOrderQuote,
@@ -216,15 +208,6 @@ impl RaindexOrder {
         if let Some(balance) = output_balance {
             data.formatted_max_output_as_percent_of_vault =
                 format_amount_as_percent_of_balance(data.max_output, balance)?;
-        }
-
-        let input_balance = order_v4
-            .validInputs
-            .get(quote.pair.input_index as usize)
-            .and_then(|io| vault_balance_for_io(io, self.input_vaults()));
-        if let Some(balance) = input_balance {
-            data.formatted_max_input_as_percent_of_vault =
-                format_amount_as_percent_of_balance(data.max_input, balance)?;
         }
 
         Ok(())
@@ -720,12 +703,11 @@ mod tests {
             assert!(data.inverse_ratio.eq(F0_5).unwrap());
             assert_eq!(data.formatted_inverse_ratio, "0.5");
             // The subgraph vaults in `get_order1_json` carry a different
-            // vaultId than the order bytes' validInputs/validOutputs, so no
-            // vault matches and the vault-relative percentages stay `None`.
-            // This guards against blind index-based matching producing a
-            // bogus percentage from a mismatched vault.
+            // vaultId than the order bytes' validOutputs, so no vault matches
+            // and the vault-relative percentage stays `None`. This guards
+            // against blind index-based matching producing a bogus percentage
+            // from a mismatched vault.
             assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
-            assert_eq!(data.formatted_max_input_as_percent_of_vault, None);
             assert!(res.success);
             assert_eq!(res.error, None);
             assert_eq!(res.pair.pair_name, "WFLR/sFLR");
@@ -813,15 +795,11 @@ mod tests {
             // The amounts themselves are unchanged: maxOutput = 1, maxInput = 2.
             assert_eq!(data.formatted_max_output, "1");
             assert_eq!(data.formatted_max_input, "2");
-            // maxOutput 1 / output vault balance 4 * 100 = 25%.
+            // maxOutput 1 / output vault balance 4 * 100 = 25%. Only the output
+            // side is computed (drawdown signal); there is no input percentage.
             assert_eq!(
                 data.formatted_max_output_as_percent_of_vault,
                 Some("25".to_string())
-            );
-            // maxInput 2 / input vault balance 5 * 100 = 40%.
-            assert_eq!(
-                data.formatted_max_input_as_percent_of_vault,
-                Some("40".to_string())
             );
         }
 
@@ -830,8 +808,9 @@ mod tests {
             let server = MockServer::start_async().await;
             let mut order_json = get_order_matching_vaults_json();
             // Zero the output vault balance: dividing by it is undefined, so the
-            // output percentage must be `None` while the input percentage (5)
-            // is still computed.
+            // output percentage must be `None` even though the output vault
+            // matches by (token, vaultId). This isolates the divide-by-zero
+            // branch from the no-match branch (which the sibling test covers).
             order_json["outputs"][0]["balance"] = json!(Float::parse("0".to_string()).unwrap());
             server.mock(|when, then| {
                 when.path("/sg");
@@ -885,11 +864,10 @@ mod tests {
                 .unwrap();
             let res = order.get_quotes(None, None).await.unwrap();
             let data = res[0].data.as_ref().unwrap();
+            // The output amount is still reported; only the percentage is
+            // suppressed because the vault balance is zero.
+            assert_eq!(data.formatted_max_output, "1");
             assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
-            assert_eq!(
-                data.formatted_max_input_as_percent_of_vault,
-                Some("40".to_string())
-            );
         }
 
         #[traced_test]

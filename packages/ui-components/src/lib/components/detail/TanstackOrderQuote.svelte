@@ -166,13 +166,6 @@
 								<Tooltip triggeredBy={`#max-input-${index}`}>
 									{item.data.formattedMaxInput}
 								</Tooltip>
-								{#if item.data.formattedMaxInputAsPercentOfVault}
-									<span
-										data-testid={`max-input-percent-${index}`}
-										class="block max-w-[150px] truncate text-xs text-gray-400"
-										>{item.data.formattedMaxInputAsPercentOfVault}% of vault</span
-									>
-								{/if}
 							</TableBodyCell>
 							<TableBodyCell>
 								{#if handleQuoteDebugModal}

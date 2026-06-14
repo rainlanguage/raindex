@@ -1010,17 +1010,15 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       ]);
     });
 
-    it("should express order quote amounts as a percentage of vault balance when the vaults match", async () => {
-      // order1's decoded on-chain validInputs[0]/validOutputs[0] both reference
-      // vaultId 0x12, but its subgraph vaults carry different vaultIds, so the
-      // "should get order quote" test above sees no match and the percentage
-      // fields are absent. Here we point the subgraph vaults at the on-chain
-      // vaultId so the percentages are populated from the already-fetched
-      // balances.
+    it("should express the order quote max output as a percentage of its output vault balance when the vault matches", async () => {
+      // order1's decoded on-chain validOutputs[0] references vaultId 0x12, but
+      // its subgraph output vault carries a different vaultId, so the "should
+      // get order quote" test above sees no match and the percentage field is
+      // absent. Here we point the subgraph output vault at the on-chain vaultId
+      // so the percentage is populated from the already-fetched balance.
       const onchainVaultId = "0x12";
       const matchingOrder = JSON.parse(JSON.stringify(order1)) as SgOrder;
       matchingOrder.outputs[0].vaultId = onchainVaultId;
-      matchingOrder.inputs[0].vaultId = onchainVaultId;
 
       await mockServer
         .forPost("/sg1")
@@ -1051,21 +1049,17 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
 
       const result = extractWasmEncodedData(await order.getQuotes());
       assert.equal(result.length, 1);
-      // The matching vaults make both percentages present (non-empty strings),
-      // unlike the mismatched-vault case where they are omitted entirely.
+      // maxOutput 1 / output vault balance 10 * 100 = 10%. Asserting the exact
+      // value (not just a non-empty string) proves the computed percentage
+      // survives the wasm/serde boundary and reaches JS under the camelCase key
+      // the UI reads.
+      assert.equal(result[0].data?.formattedMaxOutput, "1");
+      assert.equal(result[0].data?.formattedMaxOutputAsPercentOfVault, "10");
+      // The input side is deliberately not computed (drawdown is an output-side
+      // concept), so the field never exists on the wasm boundary.
       assert.equal(
-        typeof result[0].data?.formattedMaxOutputAsPercentOfVault,
-        "string",
-      );
-      assert.equal(
-        typeof result[0].data?.formattedMaxInputAsPercentOfVault,
-        "string",
-      );
-      assert.ok(
-        (result[0].data?.formattedMaxOutputAsPercentOfVault?.length ?? 0) > 0,
-      );
-      assert.ok(
-        (result[0].data?.formattedMaxInputAsPercentOfVault?.length ?? 0) > 0,
+        "formattedMaxInputAsPercentOfVault" in (result[0].data ?? {}),
+        false,
       );
     });
 

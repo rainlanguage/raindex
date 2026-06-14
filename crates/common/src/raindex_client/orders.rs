@@ -462,12 +462,6 @@ impl RaindexOrder {
     }
 }
 impl RaindexOrder {
-    /// The order's input vaults, in the same order as the subgraph returned
-    /// them. Unlike [`Self::inputs_list`] this is not filtered by vault type,
-    /// so vaults that act as both input and output are still included.
-    pub(crate) fn input_vaults(&self) -> &[RaindexVault] {
-        &self.inputs
-    }
     /// The order's output vaults, in the same order as the subgraph returned
     /// them. Unlike [`Self::outputs_list`] this is not filtered by vault type,
     /// so vaults that act as both input and output are still included.
@@ -3979,7 +3973,6 @@ mod tests {
                 inverse_ratio,
                 formatted_inverse_ratio: "0.5".to_string(),
                 formatted_max_output_as_percent_of_vault: None,
-                formatted_max_input_as_percent_of_vault: None,
             }
         }
 
