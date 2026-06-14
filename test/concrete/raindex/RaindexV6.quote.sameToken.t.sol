@@ -22,6 +22,11 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
     function testQuoteSameToken(QuoteV2 memory quoteConfig) external {
         vm.assume(quoteConfig.order.validInputs.length > 0);
         vm.assume(quoteConfig.order.validOutputs.length > 0);
+        // addOrder4 requires a valid serialized parser output with >= 2 sources,
+        // so replace the fuzzed bytecode with the canonical valid order bytecode.
+        // The self-trade check happens at quote time (TokenSelfTrade below), not
+        // add time, so the order still adds successfully.
+        quoteConfig.order.evaluable.bytecode = LibTestAddOrder.VALID_ORDER_BYTECODE;
         quoteConfig.order.validInputs[0].token = quoteConfig.order.validOutputs[0].token;
         quoteConfig.inputIOIndex = 0;
         quoteConfig.outputIOIndex = 0;
