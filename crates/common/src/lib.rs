@@ -1,4 +1,5 @@
 pub mod add_order;
+pub mod allowance;
 pub mod csv;
 pub mod deposit;
 pub mod dotrain_add_order_lsp;

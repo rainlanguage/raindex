@@ -456,6 +456,8 @@ pub enum RaindexError {
     #[error(transparent)]
     WritableTransactionExecuteError(#[from] WritableTransactionExecuteError),
     #[error(transparent)]
+    TransactionArgsError(#[from] crate::transaction::TransactionArgsError),
+    #[error(transparent)]
     DepositArgsError(#[from] DepositError),
     #[error("Raindex not found for address: {0} on chain ID: {1}")]
     RaindexNotFound(String, u32),
@@ -626,6 +628,9 @@ impl RaindexError {
             RaindexError::NegativeAmount => "Amount cannot be negative".to_string(),
             RaindexError::WritableTransactionExecuteError(err) => {
                 format!("Failed to execute transaction: {}", err)
+            }
+            RaindexError::TransactionArgsError(err) => {
+                format!("Invalid transaction arguments: {}", err)
             }
             RaindexError::DepositArgsError(err) => {
                 format!("Failed to create deposit arguments: {}", err)
