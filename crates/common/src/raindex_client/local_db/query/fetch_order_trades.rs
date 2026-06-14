@@ -1,5 +1,5 @@
 use crate::local_db::query::fetch_order_trades::{
-    build_fetch_order_trades_batch_stmt, LocalDbOrderTrade,
+    build_fetch_order_trades_batch_stmt, LocalDbOrderTrade, OrderHashFilter,
 };
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
 use crate::local_db::RaindexIdentifier;
@@ -40,12 +40,16 @@ pub async fn fetch_order_trades_batch<E: LocalDbQueryExecutor + ?Sized>(
     start_timestamp: Option<u64>,
     end_timestamp: Option<u64>,
 ) -> Result<Vec<LocalDbOrderTrade>, LocalDbQueryError> {
+    // Performance optimization, not a correctness guard: `These(&[])` already
+    // builds a valid match-NONE query that returns zero rows, so this is the
+    // same result the DB would give — we just skip the round-trip when we
+    // already know the answer is empty.
     if order_hashes.is_empty() {
         return Ok(Vec::new());
     }
     let stmt = build_fetch_order_trades_batch_stmt(
         raindex_id,
-        order_hashes,
+        OrderHashFilter::These(order_hashes),
         start_timestamp,
         end_timestamp,
     )?;
@@ -151,7 +155,7 @@ mod wasm_tests {
 
         let expected_stmt = build_fetch_order_trades_batch_stmt(
             &RaindexIdentifier::new(chain_id, raindex),
-            &[order_hash],
+            OrderHashFilter::These(&[order_hash]),
             start,
             end,
         )
@@ -192,7 +196,7 @@ mod wasm_tests {
 
         let expected_stmt = build_fetch_order_trades_batch_stmt(
             &RaindexIdentifier::new(chain_id, raindex),
-            &[hash_a, hash_b],
+            OrderHashFilter::These(&[hash_a, hash_b]),
             start,
             end,
         )
