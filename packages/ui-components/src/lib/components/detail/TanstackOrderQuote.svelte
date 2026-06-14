@@ -100,16 +100,24 @@
 			<Refresh
 				data-testid="refresh-button"
 				class="h-8 w-5 cursor-pointer text-gray-400 dark:text-gray-400"
+				title="Refresh quotes"
+				ariaLabel="Refresh quotes"
 				on:click={refreshQuotes}
 				spin={$orderQuoteQuery.isLoading || $orderQuoteQuery.isFetching}
 			/>
 			<PauseSolid
+				data-testid="pause-refresh-button"
+				title="Pause auto-refresh"
+				ariaLabel="Pause auto-refresh"
 				class={`ml-2 h-8 w-3 cursor-pointer text-gray-400 dark:text-gray-400 ${!enabled ? 'hidden' : ''}`}
 				on:click={() => {
 					enabled = false;
 				}}
 			/>
 			<PlaySolid
+				data-testid="resume-refresh-button"
+				title="Resume auto-refresh"
+				ariaLabel="Resume auto-refresh"
 				on:click={() => {
 					enabled = true;
 					blockNumber = undefined;
@@ -163,6 +171,9 @@
 							<TableBodyCell>
 								{#if handleQuoteDebugModal}
 									<button
+										data-testid="debug-quote-button"
+										title="Debug quote"
+										aria-label="Debug quote"
 										on:click={() =>
 											handleQuoteDebugModal(
 												orderModalArg,
@@ -191,6 +202,7 @@
 									<button
 										type="button"
 										class="mt-0.5 rounded border border-transparent p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+										title="Copy quote error"
 										aria-label="Copy quote error"
 										on:click={() => copyQuoteError(item.error)}
 									>
@@ -207,6 +219,9 @@
 							<TableBodyCell>
 								{#if handleQuoteDebugModal}
 									<button
+										data-testid="debug-quote-error-button"
+										title="Debug quote"
+										aria-label="Debug quote"
 										on:click={() =>
 											handleQuoteDebugModal(
 												order,
