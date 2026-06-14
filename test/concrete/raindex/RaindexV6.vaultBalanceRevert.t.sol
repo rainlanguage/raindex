@@ -4,7 +4,6 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {
-    RaindexV6,
     NegativeVaultBalance,
     NegativeVaultBalanceChange,
     NegativePull,
@@ -15,31 +14,7 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-
-/// @dev Exposes RaindexV6's internal vault-balance / token helpers for testing.
-contract RaindexV6VaultBalanceHarness is RaindexV6 {
-    function exposedIncrease(address owner, address token, bytes32 vaultId, Float amount)
-        external
-        returns (Float, Float)
-    {
-        return increaseVaultBalance(owner, token, vaultId, amount);
-    }
-
-    function exposedDecrease(address owner, address token, bytes32 vaultId, Float amount)
-        external
-        returns (Float, Float)
-    {
-        return decreaseVaultBalance(owner, token, vaultId, amount);
-    }
-
-    function exposedPull(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pullTokens(account, token, amount);
-    }
-
-    function exposedPush(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pushTokens(account, token, amount);
-    }
-}
+import {RaindexV6VaultBalanceHarness} from "test/util/concrete/RaindexV6VaultBalanceHarness.sol";
 
 /// @title RaindexV6VaultBalanceRevertTest
 /// @notice Audit A08-5 / A08-6 (#2535): the vault-balance helpers reject a
