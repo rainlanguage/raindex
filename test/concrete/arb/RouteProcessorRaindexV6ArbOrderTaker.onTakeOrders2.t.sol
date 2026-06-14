@@ -37,7 +37,12 @@ contract RouteProcessorRaindexV6ArbOrderTakerOnTakeOrders2Test is Test {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(100e18);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        RealisticOrderTakerMockRaindex mockRaindex = new RealisticOrderTakerMockRaindex(100e18);
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockRouteProcessor mockRp = new MockRouteProcessor();
         vm.etch(LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS, address(mockRp).code);
         address routeProcessor = LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS;

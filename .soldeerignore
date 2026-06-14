@@ -8,6 +8,8 @@
 .cargo
 .coderabbit.yaml
 .devcontainer.json
+.env
+.env.example
 .envrc
 .gas-snapshot
 .git
@@ -36,7 +38,6 @@ slither.config.json
 /deployments
 /flake.lock
 /flake.nix
-/foundry.lock
 /foundry.toml
 /lib
 /meta

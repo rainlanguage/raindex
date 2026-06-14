@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 
 import {AuthoringMetaV2, OperandV2} from "rain-interpreter-interface-0.1.0/src/interface/ISubParserV4.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
-import {LibSubParse} from "rainlang-0.1.2/src/lib/parse/LibSubParse.sol";
+import {LibSubParse} from "rainlang-0.1.5/src/lib/parse/LibSubParse.sol";
 import {
     CONTEXT_BASE_COLUMN,
     CONTEXT_BASE_ROW_SENDER,
@@ -45,7 +45,9 @@ import {
     CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID,
     CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE,
     CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER,
-    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT,
+    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS
 } from "./LibRaindex.sol";
 
 uint256 constant SUB_PARSER_WORD_PARSERS_LENGTH = 2;
@@ -74,6 +76,7 @@ bytes constant WORD_DEPOSIT_TOKEN = "deposit-token";
 bytes constant WORD_DEPOSIT_VAULT_ID = "deposit-vault-id";
 bytes constant WORD_DEPOSIT_VAULT_BEFORE = "deposit-vault-before";
 bytes constant WORD_DEPOSIT_VAULT_AFTER = "deposit-vault-after";
+bytes constant WORD_DEPOSIT_TOKEN_DECIMALS = "deposit-token-decimals";
 
 bytes constant WORD_WITHDRAWER = "withdrawer";
 bytes constant WORD_WITHDRAW_TOKEN = "withdraw-token";
@@ -81,13 +84,15 @@ bytes constant WORD_WITHDRAW_VAULT_ID = "withdraw-vault-id";
 bytes constant WORD_WITHDRAW_VAULT_BEFORE = "withdraw-vault-before";
 bytes constant WORD_WITHDRAW_VAULT_AFTER = "withdraw-vault-after";
 bytes constant WORD_WITHDRAW_TARGET_AMOUNT = "withdraw-target-amount";
+bytes constant WORD_WITHDRAW_TOKEN_DECIMALS = "withdraw-token-decimals";
 
 uint256 constant DEPOSIT_WORD_DEPOSITOR = 0;
 uint256 constant DEPOSIT_WORD_TOKEN = 1;
 uint256 constant DEPOSIT_WORD_VAULT_ID = 2;
 uint256 constant DEPOSIT_WORD_VAULT_BEFORE = 3;
 uint256 constant DEPOSIT_WORD_VAULT_AFTER = 4;
-uint256 constant DEPOSIT_WORDS_LENGTH = 5;
+uint256 constant DEPOSIT_WORD_TOKEN_DECIMALS = 5;
+uint256 constant DEPOSIT_WORDS_LENGTH = 6;
 
 uint256 constant WITHDRAW_WORD_WITHDRAWER = 0;
 uint256 constant WITHDRAW_WORD_TOKEN = 1;
@@ -95,7 +100,8 @@ uint256 constant WITHDRAW_WORD_VAULT_ID = 2;
 uint256 constant WITHDRAW_WORD_VAULT_BEFORE = 3;
 uint256 constant WITHDRAW_WORD_VAULT_AFTER = 4;
 uint256 constant WITHDRAW_WORD_TARGET_AMOUNT = 5;
-uint256 constant WITHDRAW_WORDS_LENGTH = 6;
+uint256 constant WITHDRAW_WORD_TOKEN_DECIMALS = 6;
+uint256 constant WITHDRAW_WORDS_LENGTH = 7;
 
 /// @title LibRaindexSubParser
 /// @notice Sub-parser word dispatch and authoring metadata for Raindex
@@ -328,6 +334,18 @@ library LibRaindexSubParser {
             );
     }
 
+    /// @dev Maps the "deposit-token-decimals" word to the calling context column.
+    function subParserDepositTokenDecimals(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(
+            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS
+        );
+    }
+
     /// @dev Maps the "withdraw-token" word to the calling context column.
     function subParserWithdrawToken(uint256, uint256, OperandV2)
         internal
@@ -384,6 +402,18 @@ library LibRaindexSubParser {
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(
             CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT
+        );
+    }
+
+    /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
+    function subParserWithdrawTokenDecimals(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(
+            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS
         );
     }
 
@@ -579,6 +609,11 @@ library LibRaindexSubParser {
         // 32 bytes, so this conversion is safe.
         // forge-lint: disable-next-line(unsafe-typecast)
         AuthoringMetaV2(bytes32(WORD_DEPOSIT_VAULT_AFTER), "The balance of the vault after deposit.");
+        depositMeta[DEPOSIT_WORD_TOKEN_DECIMALS] =
+        // constant WORD_DEPOSIT_TOKEN_DECIMALS defined above is less than
+        // 32 bytes, so this conversion is safe.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        AuthoringMetaV2(bytes32(WORD_DEPOSIT_TOKEN_DECIMALS), "The decimals of the token that is being deposited.");
 
         meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = depositMeta;
 
@@ -617,6 +652,11 @@ library LibRaindexSubParser {
             bytes32(WORD_WITHDRAW_TARGET_AMOUNT),
             "The target amount of the token that the withdrawer is trying to withdraw. This is the amount that the withdrawer is trying to withdraw, but it MAY NOT be the amount that the withdrawer actually receives."
         );
+        withdrawMeta[WITHDRAW_WORD_TOKEN_DECIMALS] =
+        // constant WORD_WITHDRAW_TOKEN_DECIMALS defined above is less than
+        // 32 bytes, so this conversion is safe.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        AuthoringMetaV2(bytes32(WORD_WITHDRAW_TOKEN_DECIMALS), "The decimals of the token that is being withdrawn.");
 
         meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = withdrawMeta;
 

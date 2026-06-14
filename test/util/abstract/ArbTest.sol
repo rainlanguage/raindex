@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
-import {ERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/ERC20.sol";
+import {Token} from "test/util/concrete/Token.sol";
 import {Refundoor} from "test/util/concrete/Refundoor.sol";
 import {
     FlashLendingMockRaindex,
@@ -17,14 +17,6 @@ import {
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
-
-contract Token is ERC20 {
-    constructor() ERC20("Token", "TKN") {}
-
-    function mint(address receiver, uint256 amount) external {
-        _mint(receiver, amount);
-    }
-}
 
 abstract contract ArbTest is Test {
     Token immutable iTakerInput;

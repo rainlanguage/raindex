@@ -199,7 +199,7 @@ contract RaindexV6DepositEnactTest is RaindexV6ExternalRealTest {
 
         string memory usingWordsFrom = string.concat("using-words-from ", address(iSubParser).toHexString(), "\n");
 
-        bytes[] memory evals = new bytes[](6);
+        bytes[] memory evals = new bytes[](7);
         evals[0] = bytes(
             string.concat(
                 usingWordsFrom,
@@ -243,6 +243,14 @@ contract RaindexV6DepositEnactTest is RaindexV6ExternalRealTest {
                 ":ensure(equal-to(deposit-vault-after() ",
                 preDepositAmount.add(depositAmount).toDecimalString(false),
                 ") \"vault balance after\");"
+            )
+        );
+        evals[6] = bytes(
+            string.concat(
+                usingWordsFrom,
+                ":ensure(equal-to(deposit-token-decimals() ",
+                uint256(6).toHexString(),
+                ") \"deposit token decimals\");"
             )
         );
 

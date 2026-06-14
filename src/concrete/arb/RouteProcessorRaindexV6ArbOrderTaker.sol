@@ -8,7 +8,7 @@ import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC
 
 import {RaindexV6ArbOrderTaker, Float} from "../../abstract/RaindexV6ArbOrderTaker.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../lib/deploy/LibRaindexDeploy.sol";
 
 /// @title RouteProcessorRaindexV6ArbOrderTaker
@@ -35,9 +35,10 @@ contract RouteProcessorRaindexV6ArbOrderTaker is RaindexV6ArbOrderTaker {
         // only needs an approximate amount to execute the swap.
         //slither-disable-next-line unused-return
         (uint256 inputTokenAmount,) =
-            LibDecimalFloat.toFixedDecimalLossy(inputAmountSent, IERC20Metadata(inputToken).decimals());
-        (uint256 outputTokenAmount, bool lossless) =
-            LibDecimalFloat.toFixedDecimalLossy(totalOutputAmount, IERC20Metadata(outputToken).decimals());
+            LibDecimalFloat.toFixedDecimalLossy(inputAmountSent, LibTOFUTokenDecimals.safeDecimalsForToken(inputToken));
+        (uint256 outputTokenAmount, bool lossless) = LibDecimalFloat.toFixedDecimalLossy(
+            totalOutputAmount, LibTOFUTokenDecimals.safeDecimalsForToken(outputToken)
+        );
         if (!lossless) {
             outputTokenAmount++;
         }

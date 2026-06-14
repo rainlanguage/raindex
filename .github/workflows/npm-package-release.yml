@@ -181,7 +181,17 @@ jobs:
       - name: Set Version
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/raindex
+          # npm version prerelease reifies the workspace, which resolves
+          # @rainlanguage/raindex against the registry. The first time the
+          # package is published it doesn't exist there yet, so that resolution
+          # 404s and the bump fails (E404). When npm view reports no published
+          # version, publish the version already committed in package.json as
+          # the initial release instead of bumping it.
+          if npm view @rainlanguage/raindex@latest version &>/dev/null; then
+            npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/raindex
+          else
+            echo "@rainlanguage/raindex not yet on npm; publishing committed version as initial release"
+          fi
           RAINDEX_NEW_VERSION=$(jq -r '.version' ./packages/raindex/package.json)
           echo "RAINDEX_NEW_VERSION=$RAINDEX_NEW_VERSION" >> $GITHUB_ENV
           jq --arg v "$RAINDEX_NEW_VERSION" '.dependencies."@rainlanguage/raindex" = $v' ./packages/ui-components/package.json > tmp.json && mv tmp.json ./packages/ui-components/package.json

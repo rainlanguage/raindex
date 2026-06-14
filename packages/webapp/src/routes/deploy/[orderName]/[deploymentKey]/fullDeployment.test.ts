@@ -397,313 +397,368 @@ describe('Full Deployment Tests', () => {
 		{ timeout: 60000, retry: DEFAULT_MAX_RETRIES }
 	);
 
-	// TODO: Issue #2037
-	// it(
-	// 	'Auction order',
-	// 	async () => {
-	// 		mockPageStore.mockSetSubscribeValue({
-	// 			data: {
-	// 				dotrain: auctionOrder,
-	// 				deployment: {
-	// 					key: 'base'
-	// 				},
-	// 				orderDetail: {
-	// 					name: 'Auction'
-	// 				}
-	// 			}
-	// 		});
+	it(
+		'Auction order',
+		async () => {
+			const auctionDeploymentDetails = registry.getDeploymentDetails('auction-dca');
+			if (auctionDeploymentDetails.error) {
+				throw new Error('Failed to get deployment details');
+			}
+			const deployment = auctionDeploymentDetails.value.get('base') as NameAndDescriptionCfg;
+			const auctionOrderDetail = registry
+				.getAllOrderDetails()
+				.value?.valid.get('auction-dca') as NameAndDescriptionCfg;
 
-	// 		const screen = render(Page);
+			mockPageStore.mockSetSubscribeValue({
+				data: {
+					orderName: 'auction-dca',
+					deployment: { key: 'base', ...deployment },
+					registry,
+					orderDetail: auctionOrderDetail
+				}
+			});
 
-	// 		// Wait for the builder provider to be in the document
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
+			const screen = render(Page);
 
-	// 		// Check that the token dropdowns are present
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getAllByRole('button', { name: /chevron down solid/i }).length).toBe(2);
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
-	// 		const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
+			// Wait for the builder provider to be in the document
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
 
-	// 		await userEvent.click(tokenSelectionButtons[0]);
-	// 		await userEvent.click(screen.getByText('Cortex'));
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getByTestId('select-token-success-output')).toBeInTheDocument();
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
-	// 		await new Promise((resolve) => setTimeout(resolve, 2000));
+			// Check that the token dropdowns are present. The auction-dca order
+			// has a single output token ("output") and a single input token
+			// ("input"), in that select-token order.
+			await waitFor(
+				() => {
+					expect(screen.getAllByRole('button', { name: /chevron down solid/i }).length).toBe(2);
+				},
+				{ timeout: 30000 }
+			);
+			const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
 
-	// 		await userEvent.click(tokenSelectionButtons[1]);
-	// 		await userEvent.click(screen.getByText('NANI'));
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getByTestId('select-token-success-input')).toBeInTheDocument();
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
-	// 		await new Promise((resolve) => setTimeout(resolve, 2000));
+			await userEvent.click(tokenSelectionButtons[0]);
+			await userEvent.click(screen.getByText('Cortex'));
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('select-token-success-output')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-	// 		const timePerAmountEpochInput = screen.getByTestId(
-	// 			'binding-time-per-amount-epoch-input'
-	// 		) as HTMLInputElement;
-	// 		await userEvent.clear(timePerAmountEpochInput);
-	// 		await userEvent.type(timePerAmountEpochInput, '60');
+			await userEvent.click(tokenSelectionButtons[1]);
+			await userEvent.click(screen.getByText('NANI'));
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('select-token-success-input')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			// Allow async WASM operations (getTokenInfo, getAccountBalance) to
+			// settle so their &self borrows are released before setFieldValue
+			// takes &mut self.
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-	// 		const amountPerEpochInput = screen.getByTestId(
-	// 			'binding-amount-per-epoch-input'
-	// 		) as HTMLInputElement;
-	// 		await userEvent.clear(amountPerEpochInput);
-	// 		await userEvent.type(amountPerEpochInput, '10');
+			let timePerAmountEpochInput!: HTMLInputElement;
+			await waitFor(
+				() => {
+					timePerAmountEpochInput = screen.getByTestId(
+						'binding-time-per-amount-epoch-input'
+					) as HTMLInputElement;
+					expect(timePerAmountEpochInput).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			await userEvent.clear(timePerAmountEpochInput);
+			await userEvent.type(timePerAmountEpochInput, '60');
 
-	// 		const maxTradeAmountInput = screen.getByTestId(
-	// 			'binding-max-trade-amount-input'
-	// 		) as HTMLInputElement;
-	// 		await userEvent.clear(maxTradeAmountInput);
-	// 		await userEvent.type(maxTradeAmountInput, '100');
+			const amountPerEpochInput = screen.getByTestId(
+				'binding-amount-per-epoch-input'
+			) as HTMLInputElement;
+			await userEvent.clear(amountPerEpochInput);
+			await userEvent.type(amountPerEpochInput, '10');
 
-	// 		const minTradeAmountInput = screen.getByTestId(
-	// 			'binding-min-trade-amount-input'
-	// 		) as HTMLInputElement;
-	// 		await userEvent.clear(minTradeAmountInput);
-	// 		await userEvent.type(minTradeAmountInput, '1');
+			const maxTradeAmountInput = screen.getByTestId(
+				'binding-max-trade-amount-input'
+			) as HTMLInputElement;
+			await userEvent.clear(maxTradeAmountInput);
+			await userEvent.type(maxTradeAmountInput, '100');
 
-	// 		const baselineInput = screen.getByTestId('binding-baseline-input') as HTMLInputElement;
-	// 		await userEvent.clear(baselineInput);
-	// 		await userEvent.type(baselineInput, '10');
+			const minTradeAmountInput = screen.getByTestId(
+				'binding-min-trade-amount-input'
+			) as HTMLInputElement;
+			await userEvent.clear(minTradeAmountInput);
+			await userEvent.type(minTradeAmountInput, '1');
 
-	// 		const initialIoInput = screen.getByTestId('binding-initial-io-input') as HTMLInputElement;
-	// 		await userEvent.clear(initialIoInput);
-	// 		await userEvent.type(initialIoInput, '10');
+			const baselineInput = screen.getByTestId('binding-baseline-input') as HTMLInputElement;
+			await userEvent.clear(baselineInput);
+			await userEvent.type(baselineInput, '10');
 
-	// 		const showAdvancedOptionsButton = screen.getByText('Show advanced options');
-	// 		await userEvent.click(showAdvancedOptionsButton);
+			const initialIoInput = screen.getByTestId('binding-initial-io-input') as HTMLInputElement;
+			await userEvent.clear(initialIoInput);
+			await userEvent.type(initialIoInput, '10');
 
-	// 		const vaultIdInputs = screen.getAllByTestId('vault-id-input') as HTMLInputElement[];
+			const showAdvancedOptionsButton = screen.getByText('Show advanced options');
+			await userEvent.click(showAdvancedOptionsButton);
 
-	// 		// Set vault id for output
-	// 		await userEvent.clear(vaultIdInputs[0]);
-	// 		await userEvent.type(vaultIdInputs[0], '0x123');
+			const vaultIdInputs = screen.getAllByTestId('vault-id-input') as HTMLInputElement[];
 
-	// 		// Set vault id for input
-	// 		await userEvent.clear(vaultIdInputs[1]);
-	// 		await userEvent.type(vaultIdInputs[1], '0x234');
+			// Set vault id for output
+			await userEvent.clear(vaultIdInputs[0]);
+			await userEvent.type(vaultIdInputs[0], '123');
 
-	// 		// Click the "Deploy Order" button
-	// 		const deployButton = screen.getByText('Deploy Order');
-	// 		await userEvent.click(deployButton);
+			// Set vault id for input
+			await userEvent.clear(vaultIdInputs[1]);
+			await userEvent.type(vaultIdInputs[1], '234');
 
-	// 		await waitFor(
-	// 			async () => {
-	// 				const disclaimerButton = screen.getByText('Deploy');
-	// 				await userEvent.click(disclaimerButton);
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
+			// Click the "Deploy Order" button
+			const deployButton = screen.getByText('Deploy Order');
+			await userEvent.click(deployButton);
 
-	// 		const getDeploymentArgs = async () => {
-	// 			const builder = (await RaindexOrderBuilder.newWithDeployment(auctionOrder, 'base'))
-	// 				.value as RaindexOrderBuilder;
-	// 			await builder.setSelectToken('input', '0x000000000000012def132e61759048be5b5c6033');
-	// 			await builder.setSelectToken('output', '0x00000000000007c8612ba63df8ddefd9e6077c97');
-	// 			builder.setVaultId('output', 'output', '0x123');
-	// 			builder.setVaultId('input', 'input', '0x234');
-	// 			builder.setFieldValue('time-per-amount-epoch', '60');
-	// 			builder.setFieldValue('amount-per-epoch', '10');
-	// 			builder.setFieldValue('max-trade-amount', '100');
-	// 			builder.setFieldValue('min-trade-amount', '1');
-	// 			builder.setFieldValue('baseline', '10');
-	// 			builder.setFieldValue('initial-io', '10');
-	// 			const args = await builder.getDeploymentTransactionArgs(
-	// 				'0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E'
-	// 			);
-	// 			return args.value;
-	// 		};
-	// 		await new Promise((resolve) => setTimeout(resolve, 10000));
-	// 		const args = await getDeploymentArgs().catch((error) => {
-	// 			// eslint-disable-next-line no-console
-	// 			console.log('Auction order error', error);
-	// 			return null;
-	// 		});
+			await waitFor(
+				async () => {
+					const disclaimerButton = screen.getByText('Deploy');
+					await userEvent.click(disclaimerButton);
+				},
+				{ timeout: 5000 }
+			);
 
-	// 		// @ts-expect-error mock is not typed
-	// 		const callArgs = handleTransactionConfirmationModal.mock
-	// 			.calls[0][0] as TransactionConfirmationProps;
+			const getDeploymentArgs = async () => {
+				const builderResult = await registry.getOrderBuilder('auction-dca', 'base');
+				if (builderResult.error) {
+					throw new Error(builderResult.error.readableMsg ?? builderResult.error.msg);
+				}
+				const builder = builderResult.value;
+				await builder.setSelectToken('output', TOKEN1_ADDRESS);
+				await builder.setSelectToken('input', TOKEN2_ADDRESS);
+				builder.setVaultId('output', 'output', '123');
+				builder.setVaultId('input', 'input', '234');
+				builder.setFieldValue('time-per-amount-epoch', '60');
+				builder.setFieldValue('amount-per-epoch', '10');
+				builder.setFieldValue('max-trade-amount', '100');
+				builder.setFieldValue('min-trade-amount', '1');
+				builder.setFieldValue('baseline', '10');
+				builder.setFieldValue('initial-io', '10');
+				const args = await builder.getDeploymentTransactionArgs(ACCOUNT);
+				return args.value;
+			};
+			await new Promise((resolve) => setTimeout(resolve, 10000));
 
-	// 		const { prefixEnd, suffixEnd } = findLockRegion(
-	// 			callArgs.args.calldata,
-	// 			args?.deploymentCalldata || ''
-	// 		);
+			const args = await getDeploymentArgs();
 
-	// 		expect(callArgs.args.calldata.length).toEqual(args?.deploymentCalldata.length);
-	// 		expect(callArgs.args.calldata.slice(0, prefixEnd)).toEqual(
-	// 			args?.deploymentCalldata.slice(0, prefixEnd)
-	// 		);
-	// 		// The middle section of the calldata is different because of secret and nonce
-	// 		expect(callArgs.args.calldata.slice(prefixEnd, suffixEnd)).not.toEqual(
-	// 			args?.deploymentCalldata.slice(prefixEnd, suffixEnd)
-	// 		);
-	// 		expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
-	// 			args?.deploymentCalldata.slice(suffixEnd)
-	// 		);
-	// 		expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
-	// 		expect(callArgs.args.chainId).toEqual(args?.chainId);
-	// 	},
-	// 	{ timeout: 300000 }
-	// );
+			// @ts-expect-error mock is not typed
+			const callArgs = handleTransactionConfirmationModal.mock.calls.at(-1)?.[0] as
+				| TransactionConfirmationProps
+				| undefined;
 
-	// it(
-	// 	'Dynamic spread order',
-	// 	async () => {
-	// 		mockPageStore.mockSetSubscribeValue({
-	// 			data: {
-	// 				dotrain: dynamicSpreadOrder,
-	// 				deployment: {
-	// 					key: 'base'
-	// 				},
-	// 				orderDetail: {
-	// 					name: 'Dynamic spread'
-	// 				}
-	// 			}
-	// 		});
+			expect(callArgs).toBeDefined();
+			if (!callArgs) {
+				return;
+			}
+			expect(callArgs.modalTitle).toEqual('Deploying your order');
 
-	// 		const screen = render(Page);
+			const { prefixEnd, suffixEnd } = findLockRegion(
+				callArgs.args.calldata,
+				args?.deploymentCalldata || ''
+			);
 
-	// 		// Wait for the builder provider to be in the document
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
+			expect(callArgs.args.calldata.length).toEqual(args?.deploymentCalldata.length);
+			expect(callArgs.args.calldata.slice(0, prefixEnd)).toEqual(
+				args?.deploymentCalldata.slice(0, prefixEnd)
+			);
+			// The middle section of the calldata is different because of secret and nonce
+			expect(callArgs.args.calldata.slice(prefixEnd, suffixEnd)).not.toEqual(
+				args?.deploymentCalldata.slice(prefixEnd, suffixEnd)
+			);
+			expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
+				args?.deploymentCalldata.slice(suffixEnd)
+			);
+			expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
+			expect(callArgs.args.chainId).toEqual(args?.chainId);
+		},
+		{ timeout: 60000, retry: DEFAULT_MAX_RETRIES }
+	);
 
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getAllByRole('button', { name: /chevron down solid/i }).length).toBe(2);
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
-	// 		const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
+	it(
+		'Dynamic spread order',
+		async () => {
+			const dynamicSpreadDeploymentDetails = registry.getDeploymentDetails('dynamic-spread');
+			if (dynamicSpreadDeploymentDetails.error) {
+				throw new Error('Failed to get deployment details');
+			}
+			const deployment = dynamicSpreadDeploymentDetails.value.get('base') as NameAndDescriptionCfg;
+			const dynamicSpreadOrderDetail = registry
+				.getAllOrderDetails()
+				.value?.valid.get('dynamic-spread') as NameAndDescriptionCfg;
 
-	// 		await userEvent.click(tokenSelectionButtons[0]);
-	// 		await userEvent.click(screen.getByText('Cortex'));
-	// 		await waitFor(() => {
-	// 			expect(screen.getByTestId('select-token-success-token1')).toBeInTheDocument();
-	// 		});
-	// 		await new Promise((resolve) => setTimeout(resolve, 2000));
+			mockPageStore.mockSetSubscribeValue({
+				data: {
+					orderName: 'dynamic-spread',
+					deployment: { key: 'base', ...deployment },
+					registry,
+					orderDetail: dynamicSpreadOrderDetail
+				}
+			});
 
-	// 		await userEvent.click(tokenSelectionButtons[1]);
-	// 		await userEvent.click(screen.getByText('NANI'));
-	// 		await waitFor(
-	// 			() => {
-	// 				expect(screen.getByTestId('select-token-success-token2')).toBeInTheDocument();
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
-	// 		await new Promise((resolve) => setTimeout(resolve, 2000));
+			const screen = render(Page);
 
-	// 		const amountIsFastExitButton = screen.getByTestId(
-	// 			'binding-amount-is-fast-exit-preset-Yes'
-	// 		) as HTMLElement;
-	// 		await userEvent.click(amountIsFastExitButton);
+			// Wait for the builder provider to be in the document
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('builder-provider')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
 
-	// 		const notAmountIsFastExitButton = screen.getByTestId(
-	// 			'binding-not-amount-is-fast-exit-preset-No'
-	// 		) as HTMLElement;
-	// 		await userEvent.click(notAmountIsFastExitButton);
+			// The dynamic-spread order rotates two tokens ("token1", "token2"),
+			// each used as both an input and an output.
+			await waitFor(
+				() => {
+					expect(screen.getAllByRole('button', { name: /chevron down solid/i }).length).toBe(2);
+				},
+				{ timeout: 30000 }
+			);
+			const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
 
-	// 		const initialIoInput = screen.getByTestId('binding-initial-io-input') as HTMLInputElement;
-	// 		await userEvent.clear(initialIoInput);
-	// 		await userEvent.type(initialIoInput, '100');
+			await userEvent.click(tokenSelectionButtons[0]);
+			await userEvent.click(screen.getByText('Cortex'));
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('select-token-success-token1')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-	// 		const maxAmountInput = screen.getByTestId('binding-max-amount-input') as HTMLInputElement;
-	// 		await userEvent.clear(maxAmountInput);
-	// 		await userEvent.type(maxAmountInput, '1000');
+			await userEvent.click(tokenSelectionButtons[1]);
+			await userEvent.click(screen.getByText('NANI'));
+			await waitFor(
+				() => {
+					expect(screen.getByTestId('select-token-success-token2')).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			// Allow async WASM operations (getTokenInfo, getAccountBalance) to
+			// settle so their &self borrows are released before setFieldValue
+			// takes &mut self.
+			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-	// 		const minAmountInput = screen.getByTestId('binding-min-amount-input') as HTMLInputElement;
-	// 		await userEvent.clear(minAmountInput);
-	// 		await userEvent.type(minAmountInput, '10');
+			let amountIsFastExitButton!: HTMLElement;
+			await waitFor(
+				() => {
+					amountIsFastExitButton = screen.getByTestId('binding-amount-is-fast-exit-preset-Yes');
+					expect(amountIsFastExitButton).toBeInTheDocument();
+				},
+				{ timeout: 30000 }
+			);
+			await userEvent.click(amountIsFastExitButton);
 
-	// 		const showAdvancedOptionsButton = screen.getByText('Show advanced options');
-	// 		await userEvent.click(showAdvancedOptionsButton);
+			const notAmountIsFastExitButton = screen.getByTestId(
+				'binding-not-amount-is-fast-exit-preset-No'
+			) as HTMLElement;
+			await userEvent.click(notAmountIsFastExitButton);
 
-	// 		const vaultIdInputs = screen.getAllByTestId('vault-id-input') as HTMLInputElement[];
+			const initialIoInput = screen.getByTestId('binding-initial-io-input') as HTMLInputElement;
+			await userEvent.clear(initialIoInput);
+			await userEvent.type(initialIoInput, '100');
 
-	// 		// Set vault id for token1
-	// 		await userEvent.clear(vaultIdInputs[0]);
-	// 		await userEvent.type(vaultIdInputs[0], '0x234');
+			const maxAmountInput = screen.getByTestId('binding-max-amount-input') as HTMLInputElement;
+			await userEvent.clear(maxAmountInput);
+			await userEvent.type(maxAmountInput, '1000');
 
-	// 		// Set vault id for token2
-	// 		await userEvent.clear(vaultIdInputs[1]);
-	// 		await userEvent.type(vaultIdInputs[1], '0x123');
+			const minAmountInput = screen.getByTestId('binding-min-amount-input') as HTMLInputElement;
+			await userEvent.clear(minAmountInput);
+			await userEvent.type(minAmountInput, '10');
 
-	// 		// Click the "Deploy Order" button
-	// 		const deployButton = screen.getByText('Deploy Order');
-	// 		await userEvent.click(deployButton);
+			const showAdvancedOptionsButton = screen.getByText('Show advanced options');
+			await userEvent.click(showAdvancedOptionsButton);
 
-	// 		await waitFor(
-	// 			async () => {
-	// 				const disclaimerButton = screen.getByText('Deploy');
-	// 				await userEvent.click(disclaimerButton);
-	// 			},
-	// 			{ timeout: 300000 }
-	// 		);
+			// The order lists both tokens as both inputs and outputs, so there
+			// are four vault id inputs: Output token1, Output token2, Input
+			// token1, Input token2 (in that render order).
+			const vaultIdInputs = screen.getAllByTestId('vault-id-input') as HTMLInputElement[];
 
-	// 		const getDeploymentArgs = async () => {
-	// 			const builder = (await RaindexOrderBuilder.newWithDeployment(dynamicSpreadOrder, 'base'))
-	// 				.value as RaindexOrderBuilder;
-	// 			await builder.setSelectToken('token1', '0x000000000000012def132e61759048be5b5c6033');
-	// 			await builder.setSelectToken('token2', '0x00000000000007c8612ba63df8ddefd9e6077c97');
-	// 			builder.setVaultId('output', 'token2', '0x123');
-	// 			builder.setVaultId('input', 'token1', '0x234');
-	// 			builder.setFieldValue('amount-is-fast-exit', '1');
-	// 			builder.setFieldValue('not-amount-is-fast-exit', '0');
-	// 			builder.setFieldValue('initial-io', '100');
-	// 			builder.setFieldValue('max-amount', '1000');
-	// 			builder.setFieldValue('min-amount', '10');
-	// 			const args = await builder.getDeploymentTransactionArgs(
-	// 				'0x999999cf1046e68e36E1aA2E0E07105eDDD1f08E'
-	// 			);
-	// 			return args.value;
-	// 		};
-	// 		await new Promise((resolve) => setTimeout(resolve, 10000));
-	// 		const args = await getDeploymentArgs().catch((error) => {
-	// 			// eslint-disable-next-line no-console
-	// 			console.log('Dynamic spread order error', error);
-	// 			return null;
-	// 		});
+			await userEvent.clear(vaultIdInputs[0]);
+			await userEvent.type(vaultIdInputs[0], '123');
 
-	// 		// @ts-expect-error mock is not typed
-	// 		const callArgs = handleTransactionConfirmationModal.mock
-	// 			.calls[0][0] as TransactionConfirmationProps;
+			await userEvent.clear(vaultIdInputs[1]);
+			await userEvent.type(vaultIdInputs[1], '234');
 
-	// 		const { prefixEnd, suffixEnd } = findLockRegion(
-	// 			callArgs.args.calldata,
-	// 			args?.deploymentCalldata || ''
-	// 		);
+			await userEvent.clear(vaultIdInputs[2]);
+			await userEvent.type(vaultIdInputs[2], '345');
 
-	// 		expect(callArgs.args.calldata.length).toEqual(args?.deploymentCalldata.length);
-	// 		expect(callArgs.args.calldata.slice(0, prefixEnd)).toEqual(
-	// 			args?.deploymentCalldata.slice(0, prefixEnd)
-	// 		);
-	// 		// The middle section of the calldata is different because of secret and nonce
-	// 		expect(callArgs.args.calldata.slice(prefixEnd, suffixEnd)).not.toEqual(
-	// 			args?.deploymentCalldata.slice(prefixEnd, suffixEnd)
-	// 		);
-	// 		expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
-	// 			args?.deploymentCalldata.slice(suffixEnd)
-	// 		);
-	// 		expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
-	// 		expect(callArgs.args.chainId).toEqual(args?.chainId);
-	// 	},
-	// 	{ timeout: 300000 }
-	// );
+			await userEvent.clear(vaultIdInputs[3]);
+			await userEvent.type(vaultIdInputs[3], '456');
+
+			// Click the "Deploy Order" button
+			const deployButton = screen.getByText('Deploy Order');
+			await userEvent.click(deployButton);
+
+			await waitFor(
+				async () => {
+					const disclaimerButton = screen.getByText('Deploy');
+					await userEvent.click(disclaimerButton);
+				},
+				{ timeout: 5000 }
+			);
+
+			const getDeploymentArgs = async () => {
+				const builderResult = await registry.getOrderBuilder('dynamic-spread', 'base');
+				if (builderResult.error) {
+					throw new Error(builderResult.error.readableMsg ?? builderResult.error.msg);
+				}
+				const builder = builderResult.value;
+				await builder.setSelectToken('token1', TOKEN1_ADDRESS);
+				await builder.setSelectToken('token2', TOKEN2_ADDRESS);
+				builder.setVaultId('output', 'token1', '123');
+				builder.setVaultId('output', 'token2', '234');
+				builder.setVaultId('input', 'token1', '345');
+				builder.setVaultId('input', 'token2', '456');
+				builder.setFieldValue('amount-is-fast-exit', '1');
+				builder.setFieldValue('not-amount-is-fast-exit', '0');
+				builder.setFieldValue('initial-io', '100');
+				builder.setFieldValue('max-amount', '1000');
+				builder.setFieldValue('min-amount', '10');
+				const args = await builder.getDeploymentTransactionArgs(ACCOUNT);
+				return args.value;
+			};
+			await new Promise((resolve) => setTimeout(resolve, 10000));
+
+			const args = await getDeploymentArgs();
+
+			// @ts-expect-error mock is not typed
+			const callArgs = handleTransactionConfirmationModal.mock.calls.at(-1)?.[0] as
+				| TransactionConfirmationProps
+				| undefined;
+
+			expect(callArgs).toBeDefined();
+			if (!callArgs) {
+				return;
+			}
+			expect(callArgs.modalTitle).toEqual('Deploying your order');
+
+			const { prefixEnd, suffixEnd } = findLockRegion(
+				callArgs.args.calldata,
+				args?.deploymentCalldata || ''
+			);
+
+			expect(callArgs.args.calldata.length).toEqual(args?.deploymentCalldata.length);
+			expect(callArgs.args.calldata.slice(0, prefixEnd)).toEqual(
+				args?.deploymentCalldata.slice(0, prefixEnd)
+			);
+			// The middle section of the calldata is different because of secret and nonce
+			expect(callArgs.args.calldata.slice(prefixEnd, suffixEnd)).not.toEqual(
+				args?.deploymentCalldata.slice(prefixEnd, suffixEnd)
+			);
+			expect(callArgs.args.calldata.slice(suffixEnd)).toEqual(
+				args?.deploymentCalldata.slice(suffixEnd)
+			);
+			expect(callArgs.args.toAddress).toEqual(args?.raindexAddress);
+			expect(callArgs.args.chainId).toEqual(args?.chainId);
+		},
+		{ timeout: 60000, retry: DEFAULT_MAX_RETRIES }
+	);
 });

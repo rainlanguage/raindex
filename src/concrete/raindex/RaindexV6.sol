@@ -11,6 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensio
 
 import {LibContext} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.1.5/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,
@@ -48,7 +49,6 @@ import {
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {LibOrder} from "../../lib/LibOrder.sol";
-import {LibTakeOrdersOverlay} from "../../lib/LibTakeOrdersOverlay.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
@@ -225,16 +225,19 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         if (vaultId != bytes32(0)) {
             return sVaultBalances[owner][token][vaultId];
         } else {
-            (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForTokenReadOnly(token);
-            if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-                revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-            }
-            Float ownerTokenBalance =
-                LibDecimalFloat.fromFixedDecimalLosslessPacked(IERC20(token).balanceOf(owner), decimals);
+            uint8 decimals = _safeDecimalsReadOnly(token);
+            //slither-disable-next-line unused-return
+            (Float ownerTokenBalance,) =
+                LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).balanceOf(owner), decimals);
             //slither-disable-next-line unused-return
             (Float ownerTokenApproval,) =
                 LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).allowance(owner, address(this)), decimals);
-            return ownerTokenBalance.min(ownerTokenApproval);
+            // Vault 0's effective balance is the live wallet (capped by allowance)
+            // plus any credit accrued so far in this batch but not yet pushed out
+            // (the vault-0 slot, always zero at rest). The slot is an additive
+            // delta on the wallet, never a replacement, so a later order in the
+            // same batch sees an earlier order's vault-0 credit.
+            return ownerTokenBalance.min(ownerTokenApproval).add(sVaultBalances[owner][token][bytes32(0)]);
         }
     }
 
@@ -254,7 +257,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         nonReentrant
         nonZeroVaultId(msg.sender, token, vaultId)
     {
-        if (!depositAmount.gt(Float.wrap(0))) {
+        if (!depositAmount.gt(LibDecimalFloat.FLOAT_ZERO)) {
             revert ZeroDepositAmount(msg.sender, token, vaultId);
         }
 
@@ -294,7 +297,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         Float beforeBalance;
         Float afterBalance;
         {
-            if (!targetAmount.gt(Float.wrap(0))) {
+            if (!targetAmount.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert ZeroWithdrawTargetAmount(msg.sender, token, vaultId);
             }
             Float currentVaultBalance = _vaultBalance(msg.sender, token, vaultId);
@@ -328,6 +331,17 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         nonReentrant
         returns (bool)
     {
+        // An order that lacks the calculate and handle IO entrypoints is
+        // unevaluable so it MUST NOT be added.
+        uint256 sourceCount =
+            LibBytecode.sourceCount(LibInterpreterStateDataContract.bytecodeOf(orderConfig.evaluable.bytecode));
+        if (sourceCount <= SourceIndexV2.unwrap(CALCULATE_ORDER_ENTRYPOINT)) {
+            revert OrderNoSources();
+        }
+        if (sourceCount <= SourceIndexV2.unwrap(HANDLE_IO_ENTRYPOINT)) {
+            revert OrderNoHandleIO();
+        }
+
         if (orderConfig.validInputs.length == 0) {
             revert OrderNoInputs();
         }
@@ -361,12 +375,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 emit MetaV1_2(order.owner, orderHash, orderConfig.meta);
             }
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
 
         return stateChange;
@@ -387,13 +396,17 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             sOrders[orderHash] = ORDER_DEAD;
             emit RemoveOrderV3(msg.sender, orderHash, order);
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
+    }
+
+    /// @dev Runs the post tasks for an order mutation (`addOrder4` / `removeOrder3`)
+    /// with a context of the order hash and the caller.
+    function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
+        LibRaindex.doPost(
+            LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
+            post
+        );
     }
 
     /// @dev Reverts with `TokenSelfTrade` if the input and output tokens are
@@ -409,7 +422,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32 orderHash = quoteConfig.order.hash();
 
         if (sOrders[orderHash] != ORDER_LIVE) {
-            return (false, Float.wrap(0), Float.wrap(0));
+            return (false, LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         }
 
         checkTokenSelfTrade(quoteConfig.order, quoteConfig.inputIOIndex, quoteConfig.outputIOIndex);
@@ -462,19 +475,18 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             }
         }
 
-        {
-            // Each evaluated order's calculation, indexed by its batch position.
-            // A later same-owner order seeds its calculate eval with the most
-            // recent earlier same-owner order's kvs (see `latestOwnerKvs`) so it
-            // observes earlier same-owner writes within the batch.
-            OrderIOCalculationV4[] memory evaluatedCalculations = new OrderIOCalculationV4[](config.orders.length);
+        // True once any order in the batch is taken (a strictly positive fill).
+        // Gates the `onTakeOrders2` callback so it only fires when the taker
+        // received a non-zero input.
+        bool ordersTaken;
 
-            if (!io.remainingTakerIO.gt(Float.wrap(0))) {
+        {
+            if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert ZeroMaximumIO();
             }
 
             uint256 i = 0;
-            while (i < config.orders.length && io.remainingTakerIO.gt(Float.wrap(0))) {
+            while (i < config.orders.length && io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 takeOrderConfig = config.orders[i];
                 order = takeOrderConfig.order;
                 // Every order needs the same input token.
@@ -492,25 +504,43 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 if (sOrders[orderHash] == ORDER_DEAD) {
                     emit OrderNotFound(msg.sender, order.owner, orderHash);
                 } else {
+                    // No state overlay: calculate reads only committed store
+                    // state. Each taken order commits its calculate and handle-IO
+                    // writes via `handleIO` below, before the next order
+                    // calculates, so a later same-owner order observes earlier
+                    // TAKEN orders' writes through the store. An untaken order
+                    // runs no `handleIO`, so it makes no state change at all.
                     OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
                         order,
                         takeOrderConfig.inputIOIndex,
                         takeOrderConfig.outputIOIndex,
                         msg.sender,
                         takeOrderConfig.signedContext,
-                        LibTakeOrdersOverlay.latestOwnerKvs(evaluatedCalculations, order.owner)
+                        new bytes32[](0)
                     );
-                    evaluatedCalculations[i] = orderIOCalculation;
 
                     // Skip orders that are too expensive rather than revert as we have
                     // no way of knowing if a specific order becomes too expensive
                     // between submitting to mempool and execution, but other orders may
                     // be valid so we want to take advantage of those if possible.
+                    //
+                    // An order is taken only when its calculation yields a
+                    // strictly positive output at a strictly positive ratio
+                    // within the taker's limit. Every other result is a no-op
+                    // skip: a non-positive output is nothing to take, and a
+                    // non-positive ratio yields a non-positive output (a zero
+                    // ratio also has no inverse for the market-sell branch). The
+                    // explicit `taken` flag is the order's outcome for the batch.
+                    bool taken;
                     if (orderIOCalculation.IORatio.gt(config.maximumIORatio)) {
                         emit OrderExceedsMaxRatio(msg.sender, order.owner, orderHash);
-                    } else if (orderIOCalculation.outputMax.isZero()) {
+                    } else if (
+                        !orderIOCalculation.outputMax.gt(LibDecimalFloat.FLOAT_ZERO)
+                            || !orderIOCalculation.IORatio.gt(LibDecimalFloat.FLOAT_ZERO)
+                    ) {
                         emit OrderZeroAmount(msg.sender, order.owner, orderHash);
                     } else {
+                        taken = true;
                         Float takerInput;
                         Float takerOutput;
                         if (config.IOIsInput) {
@@ -541,7 +571,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         totalTakerOutput = totalTakerOutput.add(takerOutput);
                         totalTakerInput = totalTakerInput.add(takerInput);
 
-                        recordVaultIO(takerOutput, takerInput, orderIOCalculation);
+                        // Pull the order's output into the orderbook now; the
+                        // vault-0 input push is settled after the taker's payment
+                        // is pulled below, so the orderbook holds the input token
+                        // before it is pushed to the owner.
+                        recordVaultOutput(takerInput, orderIOCalculation);
+                        recordVaultInput(takerOutput, orderIOCalculation);
                         emit TakeOrderV3(msg.sender, takeOrderConfig, takerInput, takerOutput);
 
                         // Add the pointer to the order IO calculation to the array
@@ -555,7 +590,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                             // Store the pointer to the order IO calculation.
                             mstore(add(orderIOCalculationsToHandle, mul(newLength, 0x20)), orderIOCalculation)
                         }
+
+                        // Run handle IO for this order before the next order
+                        // calculates, committing its calculate and handle-IO store
+                        // writes so a later order's calculate reads them. Handle IO
+                        // sees this order's vault-0 input via the accrued slot; the
+                        // push itself is still deferred to after the taker pull.
+                        handleIO(orderIOCalculation);
                     }
+
+                    ordersTaken = ordersTaken || taken;
                 }
 
                 unchecked {
@@ -584,16 +628,30 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         pushTokens(msg.sender, io.outputToken, totalTakerInput);
 
-        if (config.data.length > 0) {
+        // Integrator note on the state observed inside `onTakeOrders2`: the
+        // orders are fully recorded and handled and the taker has received
+        // `io.outputToken`, but their `io.inputToken` payment has not been pulled
+        // yet and the vault-0 input settlements below have not run. For the
+        // duration of the callback the contract's actual token balance is below
+        // its internal vault accounting: `vaultBalance2` already reflects the
+        // post-trade balances, and `maxFlashLoan` returns a correspondingly
+        // reduced amount until settlement completes. Re-entering raindex from the
+        // callback is blocked by `nonReentrant`.
+        if (config.data.length > 0 && ordersTaken) {
             IRaindexV6OrderTaker(msg.sender)
                 .onTakeOrders2(io.outputToken, io.inputToken, totalTakerInput, totalTakerOutput, config.data);
         }
 
         pullTokens(msg.sender, io.inputToken, totalTakerOutput);
 
+        // The taker's payment has now been pulled in, so the orderbook holds the
+        // input token. Settle the vault-0 input pushes accrued during the loop.
+        // Every order shares `io.inputToken` and the sum of these pushes equals
+        // `totalTakerOutput`, so the orderbook always holds enough. Handle IO
+        // already ran per order in the loop, against the accrued vault-0 balances.
         unchecked {
             for (uint256 i = 0; i < orderIOCalculationsToHandle.length; i++) {
-                handleIO(orderIOCalculationsToHandle[i]);
+                pushVaultZeroInput(orderIOCalculationsToHandle[i]);
             }
         }
     }
@@ -629,12 +687,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // If either order is dead the clear is a no-op other than emitting
             // `OrderNotFound`. Returning rather than erroring makes it easier to
             // bulk clear using `Multicall`.
-            if (sOrders[aliceOrder.hash()] == ORDER_DEAD) {
-                emit OrderNotFound(msg.sender, aliceOrder.owner, aliceOrder.hash());
+            bytes32 aliceOrderHash = aliceOrder.hash();
+            if (sOrders[aliceOrderHash] == ORDER_DEAD) {
+                emit OrderNotFound(msg.sender, aliceOrder.owner, aliceOrderHash);
                 return;
             }
-            if (sOrders[bobOrder.hash()] == ORDER_DEAD) {
-                emit OrderNotFound(msg.sender, bobOrder.owner, bobOrder.hash());
+            bytes32 bobOrderHash = bobOrder.hash();
+            if (sOrders[bobOrderHash] == ORDER_DEAD) {
+                emit OrderNotFound(msg.sender, bobOrder.owner, bobOrderHash);
                 return;
             }
 
@@ -661,8 +721,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         ClearStateChangeV2 memory clearStateChange =
             calculateClearStateChange(aliceOrderIOCalculation, bobOrderIOCalculation);
 
-        recordVaultIO(clearStateChange.aliceInput, clearStateChange.aliceOutput, aliceOrderIOCalculation);
-        recordVaultIO(clearStateChange.bobInput, clearStateChange.bobOutput, bobOrderIOCalculation);
+        // Pull both orders' outputs into the orderbook before pushing either
+        // order's input out. Alice's input token is Bob's output token and vice
+        // versa, so both pulls must precede both pushes for the orderbook to hold
+        // each token before it is pushed.
+        recordVaultOutput(clearStateChange.aliceOutput, aliceOrderIOCalculation);
+        recordVaultOutput(clearStateChange.bobOutput, bobOrderIOCalculation);
+        recordVaultInput(clearStateChange.aliceInput, aliceOrderIOCalculation);
+        recordVaultInput(clearStateChange.bobInput, bobOrderIOCalculation);
+        pushVaultZeroInput(aliceOrderIOCalculation);
+        pushVaultZeroInput(bobOrderIOCalculation);
 
         {
             Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
@@ -671,7 +739,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // A negative bounty means there is a spread between the orders.
             // This is a critical error because it means the DEX could be
             // exploited if allowed.
-            if (aliceBounty.lt(Float.wrap(0)) || bobBounty.lt(Float.wrap(0))) {
+            if (aliceBounty.lt(LibDecimalFloat.FLOAT_ZERO) || bobBounty.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeBounty();
             }
 
@@ -734,13 +802,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 );
 
                 {
-                    (TOFUOutcome inputOutcome, uint8 inputDecimals) =
-                        LibTOFUTokenDecimals.decimalsForTokenReadOnly(order.validInputs[inputIOIndex].token);
-                    if (inputOutcome != TOFUOutcome.Consistent && inputOutcome != TOFUOutcome.Initial) {
-                        revert ITOFUTokenDecimals.TokenDecimalsReadFailure(
-                            order.validInputs[inputIOIndex].token, inputOutcome
-                        );
-                    }
+                    uint8 inputDecimals = _safeDecimalsReadOnly(order.validInputs[inputIOIndex].token);
 
                     Float inputTokenVaultBalance = _vaultBalance(
                         order.owner, order.validInputs[inputIOIndex].token, order.validInputs[inputIOIndex].vaultId
@@ -756,13 +818,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 }
 
                 {
-                    (TOFUOutcome outputOutcome, uint8 outputDecimals) =
-                        LibTOFUTokenDecimals.decimalsForTokenReadOnly(order.validOutputs[outputIOIndex].token);
-                    if (outputOutcome != TOFUOutcome.Consistent && outputOutcome != TOFUOutcome.Initial) {
-                        revert ITOFUTokenDecimals.TokenDecimalsReadFailure(
-                            order.validOutputs[outputIOIndex].token, outputOutcome
-                        );
-                    }
+                    uint8 outputDecimals = _safeDecimalsReadOnly(order.validOutputs[outputIOIndex].token);
 
                     Float outputTokenVaultBalance = _vaultBalance(
                         order.owner, order.validOutputs[outputIOIndex].token, order.validOutputs[outputIOIndex].vaultId
@@ -780,8 +836,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 context = LibContext.build(callingContext, signedContext);
             }
 
-            // The state changes produced here are handled in _recordVaultIO so
-            // that local storage writes happen before writes on the interpreter.
+            // The state changes produced here are handled in recordVaultOutput
+            // and recordVaultInput so that local storage writes happen before
+            // writes on the interpreter.
             StateNamespace namespace = StateNamespace.wrap(uint256(uint160(order.owner)));
             // Slither false positive. External calls within loops are fine if
             // the caller controls which orders are eval'd as they can drop
@@ -843,7 +900,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         internal
         returns (Float, Float)
     {
-        if (amount.lt(Float.wrap(0))) {
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativeVaultBalanceChange(amount);
         }
 
@@ -854,14 +911,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             pushTokens(owner, token, amount);
             // The internal balance of vault 0 is always 0 as every transfer in
             // is effectively a compound matching withdrawal.
-            return (Float.wrap(0), Float.wrap(0));
+            return (LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         } else {
             Float oldBalance = sVaultBalances[owner][token][vaultId];
             Float newBalance = oldBalance.add(amount);
 
             // This should never be possible as amount is positive and floats are
             // effectively impossible to overflow, but we check it anyway to be safe.
-            if (newBalance.lt(Float.wrap(0))) {
+            if (newBalance.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeVaultBalance(newBalance);
             }
             sVaultBalances[owner][token][vaultId] = newBalance;
@@ -876,7 +933,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         internal
         returns (Float, Float)
     {
-        if (amount.lt(Float.wrap(0))) {
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativeVaultBalanceChange(amount);
         }
 
@@ -887,7 +944,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             pullTokens(owner, token, amount);
             // The internal balance of vault 0 is always 0 as every balance
             // decrease is effectively a compound matching deposit.
-            return (Float.wrap(0), Float.wrap(0));
+            return (LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         } else {
             Float oldBalance = sVaultBalances[owner][token][vaultId];
             Float newBalance = oldBalance.sub(amount);
@@ -895,7 +952,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // This can definitely happen, so needs to be guarded against.
             // There's no specific check anywhere else that vault balances don't go
             // negative, so this function should be used everywhere for safety.
-            if (newBalance.lt(Float.wrap(0))) {
+            if (newBalance.lt(LibDecimalFloat.FLOAT_ZERO)) {
                 revert NegativeVaultBalance(newBalance);
             }
             sVaultBalances[owner][token][vaultId] = newBalance;
@@ -904,39 +961,85 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Given an order, final input and output amounts and the IO
-    /// calculation verbatim from `_calculateOrderIO`, update the order owner's
-    /// vault balances accordingly. The input and output balance diffs are
-    /// written into the context matrix before vault balances are adjusted.
-    /// @param input The Float input amount to credit to the order owner's
-    /// input vault.
+    /// @dev Records the OUTPUT (decrease) leg of an order's IO: writes the
+    /// output balance diff into the context matrix and decreases the order
+    /// owner's output vault balance. For `vaultId == 0` this pulls tokens
+    /// directly INTO the orderbook. Always run before the matching
+    /// `recordVaultInput` so the orderbook holds a token before it is pushed.
     /// @param output The Float output amount to debit from the order owner's
     /// output vault.
     /// @param orderIOCalculation The order IO calculation produced by
-    /// `_calculateOrderIO`, containing the order, context matrix and
-    /// namespace.
-    function recordVaultIO(Float input, Float output, OrderIOCalculationV4 memory orderIOCalculation) internal {
-        orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
+    /// `calculateOrderIO`, containing the order, context matrix and namespace.
+    function recordVaultOutput(Float output, OrderIOCalculationV4 memory orderIOCalculation) internal {
         orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(output);
-
-        increaseVaultBalance(
-            orderIOCalculation.order.owner,
-            address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))),
-            orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID],
-            input
-        );
-        // Increase before decreasing so that if vault id == 0 then we push
-        // tokens before pulling them.
         decreaseVaultBalance(
             orderIOCalculation.order.owner,
             address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))),
             orderIOCalculation.context[CONTEXT_VAULT_OUTPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID],
             output
         );
+    }
+
+    /// @dev Records the INPUT (increase) leg of an order's IO: writes the input
+    /// balance diff into the context matrix, credits the order owner's input
+    /// vault balance, and emits the now fully populated context. A `vaultId == 0`
+    /// input has no internal balance and is ultimately a push of tokens out of
+    /// the orderbook; the credit is accrued in the always-zero vault-0 slot as a
+    /// transient in-batch balance so a later order's calculate reads it, and the
+    /// push itself is settled by `pushVaultZeroInput` once the orderbook holds
+    /// the token.
+    /// @param input The Float input amount to credit to the order owner's input
+    /// vault.
+    /// @param orderIOCalculation The order IO calculation produced by
+    /// `calculateOrderIO`, containing the order, context matrix and namespace.
+    function recordVaultInput(Float input, OrderIOCalculationV4 memory orderIOCalculation) internal {
+        orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_BALANCE_DIFF] = Float.unwrap(input);
+        address owner = orderIOCalculation.order.owner;
+        address token =
+            address(uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN])));
+        bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
+        //slither-disable-next-line incorrect-equality
+        if (inputVaultId == bytes32(0)) {
+            // Accrue into the vault-0 slot rather than pushing now. `_vaultBalance`
+            // reads this slot on top of the wallet, so the credit is visible to
+            // later orders in the same batch; `pushVaultZeroInput` settles and
+            // zeroes it after the orderbook holds the token.
+            if (input.lt(LibDecimalFloat.FLOAT_ZERO)) {
+                revert NegativeVaultBalanceChange(input);
+            }
+            sVaultBalances[owner][token][inputVaultId] = sVaultBalances[owner][token][inputVaultId].add(input);
+        } else {
+            increaseVaultBalance(owner, token, inputVaultId, input);
+        }
 
         // Emit the context only once in its fully populated form rather than two
         // nearly identical emissions of a partial and full context.
         emit ContextV2(msg.sender, orderIOCalculation.context);
+    }
+
+    /// @dev Settles the `vaultId == 0` input accrued by `recordVaultInput` by
+    /// pushing it out of the orderbook to the order owner and zeroing the
+    /// transient vault-0 slot. No-op for internal input vaults. Same-owner orders
+    /// share the slot, so the net credit is pushed once (the first flush) and
+    /// later flushes for the same owner/token are no-ops. Must run only after the
+    /// orderbook holds the input token, i.e. after the matching pulls.
+    /// @param orderIOCalculation The order IO calculation whose input leg was
+    /// recorded by `recordVaultInput`.
+    function pushVaultZeroInput(OrderIOCalculationV4 memory orderIOCalculation) internal {
+        bytes32 inputVaultId = orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_VAULT_ID];
+        //slither-disable-next-line incorrect-equality
+        if (inputVaultId == bytes32(0)) {
+            address owner = orderIOCalculation.order.owner;
+            address token = address(
+                uint160(uint256(orderIOCalculation.context[CONTEXT_VAULT_INPUTS_COLUMN][CONTEXT_VAULT_IO_TOKEN]))
+            );
+            Float accrued = sVaultBalances[owner][token][inputVaultId];
+            //slither-disable-next-line incorrect-equality
+            if (!accrued.isZero()) {
+                sVaultBalances[owner][token][inputVaultId] = LibDecimalFloat.FLOAT_ZERO;
+                pushTokens(owner, token, accrued);
+            }
+        }
     }
 
     /// @dev Persists interpreter state writes then evaluates the handle IO
@@ -1028,14 +1131,42 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Pulls `amount` of `token` from `account` via `safeTransferFrom`.
-    /// Returns the fixed-decimal amount transferred and the token decimals.
-    function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
+    /// @dev Reads the token decimals via TOFU (state-writing variant) and reverts
+    /// with `TokenDecimalsReadFailure` if the read outcome is not consistent or
+    /// initial. Returns the decimals.
+    function _safeDecimals(address token) private returns (uint8) {
         (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
         if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
             revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
         }
-        if (amount.lt(Float.wrap(0))) {
+        return decimals;
+    }
+
+    /// @dev Reads the token decimals via TOFU (read-only variant) and reverts with
+    /// `TokenDecimalsReadFailure` if the read outcome is not consistent or initial.
+    /// Returns the decimals.
+    function _safeDecimalsReadOnly(address token) private view returns (uint8) {
+        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForTokenReadOnly(token);
+        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
+            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
+        }
+        return decimals;
+    }
+
+    /// @dev Pulls `amount` of `token` from `account` via `safeTransferFrom`.
+    /// Returns the fixed-decimal amount transferred and the token decimals.
+    ///
+    /// A lossy float->fixed-decimal conversion is rounded UP here so the contract
+    /// never pulls in less than the vault accounting credits. `pushTokens` rounds
+    /// DOWN for the same protocol-favoring reason. Together this keeps the
+    /// orderbook solvent — its real token balance is always >= the sum of the
+    /// vault balances — but each lossy conversion leaves a sub-token-unit residue
+    /// in the contract that is not attributed to any vault and has no recovery
+    /// path. Such dust is under one base unit per conversion and can never cause
+    /// insolvency.
+    function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
+        uint8 decimals = _safeDecimals(token);
+        if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePull();
         }
 
@@ -1054,13 +1185,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
     /// @dev Pushes `amountFloat` of `token` to `account` via `safeTransfer`.
     /// Returns the fixed-decimal amount transferred and the token decimals.
+    ///
+    /// A lossy float->fixed-decimal conversion is truncated (rounded DOWN) here
+    /// so the contract never sends more than the vault accounting debits. See
+    /// `pullTokens` for the full rounding policy and its solvency / residual-dust
+    /// tradeoff.
     function pushTokens(address account, address token, Float amountFloat) internal returns (uint256, uint8) {
-        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
-        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-        }
+        uint8 decimals = _safeDecimals(token);
 
-        if (amountFloat.lt(Float.wrap(0))) {
+        if (amountFloat.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePush();
         }
 

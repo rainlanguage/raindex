@@ -7,7 +7,7 @@ import {
     BaseRainlangSubParser,
     OperandV2,
     IParserToolingV1
-} from "rainlang-0.1.2/src/abstract/BaseRainlangSubParser.sol";
+} from "rainlang-0.1.5/src/abstract/BaseRainlangSubParser.sol";
 import {LibConvert} from "rain-lib-typecast-0.1.0/src/LibConvert.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
 
@@ -19,6 +19,7 @@ import {
     DEPOSIT_WORD_DEPOSITOR,
     DEPOSIT_WORD_VAULT_BEFORE,
     DEPOSIT_WORD_VAULT_AFTER,
+    DEPOSIT_WORD_TOKEN_DECIMALS,
     DEPOSIT_WORDS_LENGTH,
     WITHDRAW_WORD_WITHDRAWER,
     WITHDRAW_WORD_TOKEN,
@@ -26,6 +27,7 @@ import {
     WITHDRAW_WORD_VAULT_BEFORE,
     WITHDRAW_WORD_VAULT_AFTER,
     WITHDRAW_WORD_TARGET_AMOUNT,
+    WITHDRAW_WORD_TOKEN_DECIMALS,
     WITHDRAW_WORDS_LENGTH
 } from "../../lib/LibRaindexSubParser.sol";
 import {
@@ -163,6 +165,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextDepositContextHandlers[DEPOSIT_WORD_VAULT_ID] = LibParseOperand.handleOperandDisallowed;
         contextDepositContextHandlers[DEPOSIT_WORD_VAULT_BEFORE] = LibParseOperand.handleOperandDisallowed;
         contextDepositContextHandlers[DEPOSIT_WORD_VAULT_AFTER] = LibParseOperand.handleOperandDisallowed;
+        contextDepositContextHandlers[DEPOSIT_WORD_TOKEN_DECIMALS] = LibParseOperand.handleOperandDisallowed;
 
         handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = contextDepositContextHandlers;
 
@@ -174,6 +177,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextWithdrawContextHandlers[WITHDRAW_WORD_VAULT_BEFORE] = LibParseOperand.handleOperandDisallowed;
         contextWithdrawContextHandlers[WITHDRAW_WORD_VAULT_AFTER] = LibParseOperand.handleOperandDisallowed;
         contextWithdrawContextHandlers[WITHDRAW_WORD_TARGET_AMOUNT] = LibParseOperand.handleOperandDisallowed;
+        contextWithdrawContextHandlers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibParseOperand.handleOperandDisallowed;
 
         handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = contextWithdrawContextHandlers;
 
@@ -276,6 +280,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         depositParsers[DEPOSIT_WORD_VAULT_ID] = LibRaindexSubParser.subParserDepositVaultId;
         depositParsers[DEPOSIT_WORD_VAULT_BEFORE] = LibRaindexSubParser.subParserDepositVaultBalanceBefore;
         depositParsers[DEPOSIT_WORD_VAULT_AFTER] = LibRaindexSubParser.subParserDepositVaultBalanceAfter;
+        depositParsers[DEPOSIT_WORD_TOKEN_DECIMALS] = LibRaindexSubParser.subParserDepositTokenDecimals;
 
         parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = depositParsers;
 
@@ -293,6 +298,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         withdrawParsers[WITHDRAW_WORD_VAULT_BEFORE] = LibRaindexSubParser.subParserWithdrawVaultBalanceBefore;
         withdrawParsers[WITHDRAW_WORD_VAULT_AFTER] = LibRaindexSubParser.subParserWithdrawVaultBalanceAfter;
         withdrawParsers[WITHDRAW_WORD_TARGET_AMOUNT] = LibRaindexSubParser.subParserWithdrawTargetAmount;
+        withdrawParsers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibRaindexSubParser.subParserWithdrawTokenDecimals;
 
         parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = withdrawParsers;
 

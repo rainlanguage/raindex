@@ -23,7 +23,7 @@ import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
@@ -40,7 +40,12 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
         MockToken outputToken = new MockToken("USDT", "USDT", 6);
 
         // Raindex will send 100 USDT (100e6) to the taker, then pull 100 USDC.
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(100e6);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        RealisticOrderTakerMockRaindex mockRaindex = new RealisticOrderTakerMockRaindex(100e6);
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockRouteProcessor mockRp = new MockRouteProcessor();
         vm.etch(LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS, address(mockRp).code);
         address routeProcessor = LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS;

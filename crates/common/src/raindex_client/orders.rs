@@ -215,6 +215,7 @@ pub struct RaindexOrder {
     raindex: Address,
     active: bool,
     timestamp_added: U256,
+    timestamp_removed: Option<U256>,
     meta: Option<Bytes>,
     parsed_meta: Vec<ParsedMeta>,
     rainlang: Option<String>,
@@ -333,6 +334,7 @@ impl RaindexOrder {
             raindex: order.raindex_address,
             active: order.active,
             timestamp_added: U256::from(order.block_timestamp),
+            timestamp_removed: order.block_timestamp_removed.map(U256::from),
             meta: order.meta.clone(),
             parsed_meta: order
                 .meta
@@ -386,6 +388,15 @@ impl RaindexOrder {
     pub fn timestamp_added(&self) -> Result<BigInt, RaindexError> {
         BigInt::from_str(&self.timestamp_added.to_string())
             .map_err(|e| RaindexError::JsError(e.to_string().into()))
+    }
+    #[wasm_bindgen(getter = timestampRemoved)]
+    pub fn timestamp_removed(&self) -> Result<Option<BigInt>, RaindexError> {
+        self.timestamp_removed
+            .map(|timestamp| {
+                BigInt::from_str(&timestamp.to_string())
+                    .map_err(|e| RaindexError::JsError(e.to_string().into()))
+            })
+            .transpose()
     }
     #[wasm_bindgen(getter, unchecked_return_type = "Hex | undefined")]
     pub fn meta(&self) -> Option<String> {
@@ -475,6 +486,9 @@ impl RaindexOrder {
     }
     pub fn timestamp_added(&self) -> U256 {
         self.timestamp_added
+    }
+    pub fn timestamp_removed(&self) -> Option<U256> {
+        self.timestamp_removed
     }
     pub fn meta(&self) -> Option<Bytes> {
         self.meta.clone()
@@ -1872,6 +1886,7 @@ impl RaindexOrder {
             raindex: Address::from_str(&order.raindex.id.0)?,
             active: order.active,
             timestamp_added: U256::from_str(&order.timestamp_added.0)?,
+            timestamp_removed: latest_remove_timestamp(&order)?,
             meta: order
                 .meta
                 .clone()
@@ -1925,6 +1940,20 @@ impl RaindexOrder {
     }
 }
 
+fn latest_remove_timestamp(order: &SgOrder) -> Result<Option<U256>, RaindexError> {
+    order
+        .remove_events
+        .iter()
+        .map(|event| U256::from_str(&event.transaction.timestamp.0))
+        .try_fold(None::<U256>, |latest, timestamp| {
+            let timestamp = timestamp?;
+            Ok::<Option<U256>, RaindexError>(Some(match latest {
+                Some(latest) => latest.max(timestamp),
+                None => timestamp,
+            }))
+        })
+}
+
 /// Fetch dotrain sources for a batch of orders with bounded concurrency.
 pub(crate) async fn fetch_orders_dotrain_sources(
     orders: Vec<RaindexOrder>,
@@ -1964,7 +1993,8 @@ mod tests {
             ContentEncoding, ContentLanguage, ContentType, KnownMagic, RainMetaDocumentV1Item,
         };
         use raindex_subgraph_client::types::common::{
-            SgAddOrder, SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgRaindex, SgTransaction, SgVault,
+            SgAddOrder, SgBigInt, SgBytes, SgErc20, SgOrderAsIO, SgRaindex, SgRemoveOrder,
+            SgTransaction, SgVault,
         };
         use raindex_subgraph_client::utils::float::*;
         use serde_bytes::ByteBuf;
@@ -2092,6 +2122,53 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn try_from_sg_order_uses_latest_remove_timestamp() {
+            let mut sg_order = get_order1();
+            sg_order.remove_events = vec![
+                SgRemoveOrder {
+                    transaction: SgTransaction {
+                        id: SgBytes(
+                            "0x1111111111111111111111111111111111111111111111111111111111111111"
+                                .to_string(),
+                        ),
+                        from: SgBytes("0x0000000000000000000000000000000000000001".to_string()),
+                        block_number: SgBigInt("100".to_string()),
+                        timestamp: SgBigInt("200".to_string()),
+                    },
+                },
+                SgRemoveOrder {
+                    transaction: SgTransaction {
+                        id: SgBytes(
+                            "0x2222222222222222222222222222222222222222222222222222222222222222"
+                                .to_string(),
+                        ),
+                        from: SgBytes("0x0000000000000000000000000000000000000002".to_string()),
+                        block_number: SgBigInt("101".to_string()),
+                        timestamp: SgBigInt("300".to_string()),
+                    },
+                },
+            ];
+
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    "http://localhost:3000/sg1",
+                    "http://localhost:3000/sg2",
+                    "http://localhost:3000/rpc1",
+                    "http://localhost:3000/rpc2",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let order =
+                RaindexOrder::try_from_sg_order(Arc::new(client), 1, sg_order, None).unwrap();
+
+            assert_eq!(order.timestamp_removed(), Some(U256::from(300)));
+        }
+
+        #[tokio::test]
         async fn from_local_db_order_populates_parsed_meta() {
             let source = sample_dotrain_source();
             let builder_state = sample_order_builder_state(&source);
@@ -2122,6 +2199,7 @@ mod tests {
                 ),
                 owner: address!("0x0000000000000000000000000000000000000001"),
                 block_timestamp: 1,
+                block_timestamp_removed: None,
                 block_number: 1,
                 raindex_address: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                 order_bytes: Bytes::from_str("0x01").unwrap(),
@@ -2144,6 +2222,49 @@ mod tests {
             let parsed_builder_state: OrderBuilderStateV1 =
                 serde_json::from_str(&order.order_builder_state().unwrap()).unwrap();
             assert_eq!(parsed_builder_state, builder_state);
+        }
+
+        #[tokio::test]
+        async fn from_local_db_order_populates_timestamp_removed() {
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    "http://localhost:3000/sg1",
+                    "http://localhost:3000/sg2",
+                    "http://localhost:3000/rpc1",
+                    "http://localhost:3000/rpc2",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let local_order = LocalDbOrder {
+                chain_id: 1,
+                order_hash: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000def"
+                ),
+                owner: address!("0x0000000000000000000000000000000000000001"),
+                block_timestamp: 100,
+                block_timestamp_removed: Some(200),
+                block_number: 1,
+                raindex_address: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                order_bytes: Bytes::from_str("0x01").unwrap(),
+                transaction_hash: b256!(
+                    "0000000000000000000000000000000000000000000000000000000000000002"
+                ),
+                inputs: None,
+                outputs: None,
+                trade_count: 0,
+                active: false,
+                meta: None,
+            };
+
+            let order =
+                RaindexOrder::from_local_db_order(Arc::new(client), local_order, vec![], vec![])
+                    .unwrap();
+
+            assert_eq!(order.timestamp_removed(), Some(U256::from(200)));
         }
 
         #[tokio::test]
@@ -3248,6 +3369,7 @@ mod tests {
                 ),
                 owner: Address::from_str(owner).unwrap(),
                 block_timestamp: 1,
+                block_timestamp_removed: None,
                 block_number: 1,
                 raindex_address: Address::from_str(local_raindex).unwrap(),
                 order_bytes: Bytes::from_str("0x01").unwrap(),
@@ -3397,6 +3519,7 @@ mod tests {
                 ),
                 owner: Address::from_str("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
                 block_timestamp: 1,
+                block_timestamp_removed: None,
                 block_number: 1,
                 raindex_address: Address::from_str("0x0987654321098765432109876543210987654321")
                     .unwrap(),

@@ -751,6 +751,7 @@ mod tests {
                 ),
                 owner,
                 block_timestamp: 1_000,
+                block_timestamp_removed: Some(1_000),
                 block_number: 50,
                 raindex_address,
                 order_bytes: Bytes::from_str("0x01").unwrap(),

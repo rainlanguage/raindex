@@ -1,5 +1,7 @@
 use crate::raindex_order_builder::{RaindexOrderBuilder, RaindexOrderBuilderWasmError};
-use crate::yaml::{RaindexYaml, RaindexYamlError};
+#[cfg(target_family = "wasm")]
+use crate::yaml::RaindexYaml;
+use crate::yaml::RaindexYamlError;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
 use raindex_app_settings::order_builder::NameAndDescriptionCfg;
 use raindex_common::raindex_client::{RaindexClient, RaindexError as RaindexClientError};
@@ -526,7 +528,11 @@ impl DotrainRegistry {
         let builder = result.map_err(DotrainRegistryError::BuilderError)?;
         Ok(builder)
     }
+}
 
+#[cfg(target_family = "wasm")]
+#[wasm_export]
+impl DotrainRegistry {
     /// Creates an RaindexYaml instance from the registry's shared settings.
     ///
     /// This method provides access to the RaindexYaml SDK, allowing you to query tokens,
@@ -552,11 +558,7 @@ impl DotrainRegistry {
         let yaml = RaindexYaml::new(vec![self.settings.clone()], None)?;
         Ok(yaml)
     }
-}
 
-#[cfg(target_family = "wasm")]
-#[wasm_export]
-impl DotrainRegistry {
     /// Creates a RaindexClient instance from the registry's shared settings.
     ///
     /// ## Examples
@@ -611,6 +613,26 @@ impl DotrainRegistry {
 
 #[cfg(not(target_family = "wasm"))]
 impl DotrainRegistry {
+    /// Creates a native RaindexYaml instance from the registry's shared settings.
+    ///
+    /// Native Rust consumers get the underlying app-settings YAML type directly,
+    /// instead of the JS/WASM facade used by browser consumers.
+    pub fn get_raindex_yaml(
+        &self,
+    ) -> Result<raindex_app_settings::yaml::raindex::RaindexYaml, DotrainRegistryError> {
+        use raindex_app_settings::yaml::{
+            raindex::{RaindexYaml, RaindexYamlValidation},
+            YamlParsable,
+        };
+
+        let yaml = RaindexYaml::new(
+            vec![self.settings.clone()],
+            RaindexYamlValidation::default(),
+        )
+        .map_err(RaindexYamlError::from)?;
+        Ok(yaml)
+    }
+
     pub async fn get_raindex_client(
         &self,
         db_path: Option<std::path::PathBuf>,
@@ -796,11 +818,11 @@ networks:
     chain-id: 8453
     currency: ETH
 subgraphs:
-  flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-flare/0.8/gn
-  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/raindex-base/0.9/gn
+  flare: https://example.com/subgraphs/flare/gn
+  base: https://example.com/subgraphs/base/gn
 metaboards:
-  flare: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-flare-0x893BBFB7/0.1/gn
-  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/mb-base-0x59401C93/0.1/gn
+  flare: https://example.com/metaboards/flare/gn
+  base: https://example.com/metaboards/base/gn
 rainlangs:
   flare:
     address: 0x1111111111111111111111111111111111111111
@@ -1681,6 +1703,8 @@ networks:
       - https://mainnet.infura.io
     chain-id: 1
     currency: ETH
+subgraphs:
+  mainnet: https://api.thegraph.com/subgraphs/name/xyz
 tokens:
   weth:
     network: mainnet
@@ -1702,6 +1726,8 @@ raindexes:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
     network: mainnet
+    subgraph: mainnet
+    deployment-block: 0
 registrys:
   mainnet:
     address: 0x1234567890123456789012345678901234567890
@@ -1782,6 +1808,23 @@ _ _: 0 0;
 
             let raindex_yaml = registry.get_raindex_yaml();
             assert!(raindex_yaml.is_ok());
+
+            #[cfg(not(target_family = "wasm"))]
+            {
+                let raindex_yaml = raindex_yaml.unwrap();
+                let networks = raindex_yaml.get_networks().unwrap();
+                assert!(networks.contains_key("mainnet"));
+
+                let subgraphs = raindex_yaml.get_subgraphs().unwrap();
+                assert!(subgraphs.contains_key("mainnet"));
+
+                let tokens = raindex_yaml.get_tokens().unwrap();
+                assert!(tokens.contains_key("weth"));
+                assert!(tokens.contains_key("usdc"));
+
+                let raindexes = raindex_yaml.get_raindexes().unwrap();
+                assert!(raindexes.contains_key("mainnet"));
+            }
         }
 
         #[tokio::test]

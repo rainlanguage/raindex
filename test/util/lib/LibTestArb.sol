@@ -18,9 +18,10 @@ import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IIn
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
+import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
@@ -85,7 +86,14 @@ library LibTestArb {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(raindexPullAmount);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        vm.etch(
+            LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS,
+            address(new RealisticOrderTakerMockRaindex(raindexPullAmount)).code
+        );
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         MockExchange exchange = new MockExchange();
 
         outputToken.mint(address(raindex), raindexOutputAmount);
@@ -150,7 +158,11 @@ library LibTestArb {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        RealisticOrderTakerMockRaindex raindex = new RealisticOrderTakerMockRaindex(amount);
+        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // runtime code (immutables included) at that address.
+        vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(new RealisticOrderTakerMockRaindex(amount)).code);
+        RealisticOrderTakerMockRaindex raindex =
+            RealisticOrderTakerMockRaindex(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         outputToken.mint(address(raindex), amount);
         inputToken.mint(exchange, amount);
