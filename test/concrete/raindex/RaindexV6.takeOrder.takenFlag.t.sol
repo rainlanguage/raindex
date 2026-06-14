@@ -6,28 +6,9 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-
-/// Records whether `onTakeOrders2` was invoked, so a test can assert the
-/// callback fires only when at least one order was actually taken.
-contract RecordingOrderTaker is IRaindexV6OrderTaker {
-    bool public called;
-    IRaindexV6 internal immutable iRaindex;
-
-    constructor(IRaindexV6 raindex) {
-        iRaindex = raindex;
-    }
-
-    function take(TakeOrdersConfigV5 memory config) external returns (Float, Float) {
-        return iRaindex.takeOrders4(config);
-    }
-
-    function onTakeOrders2(address, address, Float, Float, bytes calldata) external {
-        called = true;
-    }
-}
+import {RecordingOrderTaker} from "test/util/concrete/RecordingOrderTaker.sol";
 
 /// An order in a `takeOrders4` batch is taken only when its calculation yields a
 /// strictly positive output at a strictly positive ratio within the taker's
