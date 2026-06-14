@@ -3,7 +3,6 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
@@ -14,12 +13,7 @@ import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
-
-/// @dev A RaindexV6 harness etched from freshly-compiled runtime code so the
-/// external deposit/withdraw paths exercise the SOURCE under test (the committed
-/// `src/generated/RaindexV6.pointers.sol` bytecode that the mock-based suites
-/// etch is regenerated separately, so source edits are invisible to it).
-contract RaindexV6DepositWithdrawHarness is RaindexV6 {}
+import {RaindexV6DepositWithdrawHarness} from "test/util/concrete/RaindexV6DepositWithdrawHarness.sol";
 
 /// @title RaindexV6DepositWithdrawHarnessTest
 /// @notice Solvency-critical accounting for the external deposit4/withdraw4

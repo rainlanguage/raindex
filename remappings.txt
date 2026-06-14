@@ -14,4 +14,4 @@ rain-solmem-0.1.3/=dependencies/rain-solmem-0.1.3/
 rain-string-0.2.0/=dependencies/rain-string-0.2.0/
 rain-tofu-erc20-decimals-0.1.1/=dependencies/rain-tofu-erc20-decimals-0.1.1/
 raindex-interface-0.1.1/=dependencies/raindex-interface-0.1.1/
-rainlang-0.1.2/=dependencies/rainlang-0.1.2/
+rainlang-0.1.5/=dependencies/rainlang-0.1.5/

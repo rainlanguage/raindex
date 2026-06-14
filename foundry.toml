@@ -1,6 +1,6 @@
 [package]
 name = "raindex"
-version = "0.1.6"
+version = "0.1.7"
 
 [profile.default]
 src = 'src'
@@ -49,7 +49,7 @@ forge-std = "1.16.1"
 "@openzeppelin-contracts" = "5.6.1"
 # rainlanguage/rain.interpreter was renamed to rainlanguage/rainlang;
 # its Soldeer registry name follows.
-rainlang = "0.1.2"
+rainlang = "0.1.5"
 rain-interpreter-interface = "0.1.0"
 # rainlanguage/rain.raindex.interface was renamed to
 # rainlanguage/raindex.interface; Soldeer registry name follows.
