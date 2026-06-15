@@ -18,7 +18,7 @@ pub async fn read_allowance(
     read_call(rpcs, token, allowanceCall { owner, spender }).await
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use super::*;
     use alloy::hex::encode_prefixed;
