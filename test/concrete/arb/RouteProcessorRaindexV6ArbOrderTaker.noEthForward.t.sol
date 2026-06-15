@@ -6,28 +6,11 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRouteProcessor} from "src/interface/IRouteProcessor.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
-
-/// @dev Route processor mock that records the `msg.value` it was called with in
-/// storage slot 0, so a test can assert how much native ETH the arb forwarded.
-contract ValueRecordingRouteProcessor is IRouteProcessor {
-    function processRoute(address, uint256, address, uint256, address, bytes memory)
-        external
-        payable
-        returns (uint256)
-    {
-        // Slot 0 holds the last `msg.value` seen, readable via `vm.load` from
-        // the etched address.
-        assembly ("memory-safe") {
-            sstore(0, callvalue())
-        }
-        return 0;
-    }
-}
+import {ValueRecordingRouteProcessor} from "test/util/concrete/ValueRecordingRouteProcessor.sol";
 
 /// @title RouteProcessorRaindexV6ArbOrderTakerNoEthForwardTest
 /// @notice Locks the documented divergence from `LibGenericPoolExchange` (#2699):
