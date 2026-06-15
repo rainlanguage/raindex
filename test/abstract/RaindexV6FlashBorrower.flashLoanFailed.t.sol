@@ -25,10 +25,7 @@ import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
-import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
-
-/// @dev Mock raindex that returns false from flashLoan (inherits default stub).
-contract FalseFlashLoanMockRaindex is MockRaindexBase {}
+import {FalseFlashLoanMockRaindex} from "test/util/concrete/FalseFlashLoanMockRaindex.sol";
 
 contract RaindexV6FlashBorrowerFlashLoanFailedTest is Test {
     /// arb4 reverts with FlashLoanFailed when the raindex's flashLoan

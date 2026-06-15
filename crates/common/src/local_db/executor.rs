@@ -9,11 +9,19 @@ use rusqlite::{types::ValueRef, Connection};
 use serde_json::{json, Map, Value};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::spawn_blocking;
 
+/// Pool of idle SQLite connections, each already set up with WAL journal mode,
+/// a busy timeout, and the registered custom functions. Reusing them avoids
+/// paying the full `open_connection` setup cost on every query, which matters
+/// for bursts of concurrent order lookups.
+type ConnectionPool = Arc<Mutex<Vec<Connection>>>;
+
 pub struct RusqliteExecutor {
     db_path: PathBuf,
+    pool: ConnectionPool,
 }
 
 fn sqlvalue_to_rusqlite(v: SqlValue) -> rusqlite::types::Value {
@@ -32,7 +40,13 @@ impl RusqliteExecutor {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Self {
         Self {
             db_path: db_path.as_ref().to_path_buf(),
+            pool: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    #[cfg(test)]
+    fn pool_len(&self) -> usize {
+        self.pool.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     fn invoke_statement(conn: &Connection, stmt: &SqlStatement) -> Result<(), LocalDbQueryError> {
@@ -51,6 +65,24 @@ impl RusqliteExecutor {
         }
         Ok(())
     }
+}
+
+/// Take a ready-to-use connection: reuse an idle one from the pool if available,
+/// otherwise open (and fully set up) a fresh one. The mutex is held only for the
+/// brief pop, never across the open or the query, so concurrency is preserved.
+fn checkout(pool: &ConnectionPool, db_path: &Path) -> Result<Connection, LocalDbQueryError> {
+    let pooled = pool.lock().unwrap_or_else(|e| e.into_inner()).pop();
+    match pooled {
+        Some(conn) => Ok(conn),
+        None => open_connection(db_path),
+    }
+}
+
+/// Return a healthy connection to the pool for reuse. Only call this after the
+/// connection's work succeeded; a connection left in a bad state (e.g. mid
+/// failed transaction) must be dropped rather than released.
+fn release(pool: &ConnectionPool, conn: Connection) {
+    pool.lock().unwrap_or_else(|e| e.into_inner()).push(conn);
 }
 
 fn open_connection(db_path: &Path) -> Result<Connection, LocalDbQueryError> {
@@ -125,15 +157,17 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
         }
 
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let batch = batch.clone();
         spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             for stmt in &batch {
                 if let Err(err) = RusqliteExecutor::invoke_statement(&conn, stmt) {
                     let _ = conn.execute_batch("ROLLBACK");
                     return Err(err);
                 }
             }
+            release(&pool, conn);
             Ok(())
         })
         .await
@@ -142,10 +176,12 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
 
     async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let stmt = stmt.clone();
         spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             RusqliteExecutor::invoke_statement(&conn, &stmt)?;
+            release(&pool, conn);
             Ok(String::new())
         })
         .await
@@ -157,10 +193,11 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
         T: FromDbJson,
     {
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let stmt = stmt.clone();
 
         let json_value = spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             let mut s = conn.prepare(stmt.sql()).map_err(|e| {
                 LocalDbQueryError::database(format!("Failed to prepare query: {e}"))
             })?;
@@ -204,6 +241,11 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
                 let v = r.map_err(|e| LocalDbQueryError::database(format!("Row error: {e}")))?;
                 out.push(v);
             }
+
+            // Drop the prepared statement (which borrows `conn`) before returning
+            // the connection to the pool for reuse.
+            drop(s);
+            release(&pool, conn);
 
             Ok::<_, LocalDbQueryError>(Value::Array(out))
         })
@@ -792,5 +834,170 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sequential_queries_reuse_a_single_pooled_connection() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("pool-reuse.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+
+        // Nothing has run yet, so the pool starts empty.
+        assert_eq!(exec.pool_len(), 0, "pool should start empty");
+
+        // A query_text seeds the pool with one reusable connection.
+        exec.query_text(&SqlStatement::new(
+            "CREATE TABLE nums (n INTEGER); INSERT INTO nums (n) VALUES (10), (20), (30);",
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "successful query_text must return its connection to the pool"
+        );
+
+        #[derive(serde::Deserialize)]
+        struct SumRow {
+            total: i64,
+        }
+
+        // Run several sequential queries on the same executor. Each one must
+        // check the single connection out and put it back, so the results stay
+        // correct AND the pool never grows past one (proving reuse, not churn).
+        for _ in 0..5 {
+            let rows: Vec<SumRow> = exec
+                .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+                .await
+                .unwrap();
+            assert_eq!(rows[0].total, 60);
+            assert_eq!(
+                exec.pool_len(),
+                1,
+                "sequential queries must reuse the one pooled connection"
+            );
+        }
+
+        // execute_batch participates in the same pool on success.
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new("INSERT INTO nums (n) VALUES (40);"));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "successful execute_batch must return its connection to the pool"
+        );
+
+        let rows: Vec<SumRow> = exec
+            .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+            .await
+            .unwrap();
+        assert_eq!(rows[0].total, 100);
+    }
+
+    #[tokio::test]
+    async fn failed_batch_does_not_return_connection_to_pool() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("pool-fail.db");
+        let exec = RusqliteExecutor::new(&db_path);
+
+        let mut setup = SqlStatementBatch::new();
+        setup.add(SqlStatement::new(
+            "CREATE TABLE uniq (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+        ));
+        let setup = setup.ensure_transaction();
+        exec.execute_batch(&setup).await.unwrap();
+        assert_eq!(exec.pool_len(), 1, "successful setup seeds the pool");
+
+        // A batch that violates the primary key fails mid-transaction. It checks
+        // the single pooled connection out, then drops it (rather than releasing
+        // it) because it could be left in a bad state. The pool therefore ends
+        // empty: the connection was taken and not returned.
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new(
+            "INSERT INTO uniq (id, value) VALUES (1, 'first');",
+        ));
+        batch.add(SqlStatement::new(
+            "INSERT INTO uniq (id, value) VALUES (1, 'duplicate');",
+        ));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap_err();
+        assert_eq!(
+            exec.pool_len(),
+            0,
+            "a failed batch must drop its connection, not return it to the pool"
+        );
+
+        // The next successful query opens a fresh connection and seeds the pool
+        // again, proving the executor recovers cleanly after a failure.
+        exec.query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "a successful query after a failure re-seeds the pool"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_pool_access_does_not_deadlock() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("concurrent-pool.db");
+
+        let exec = std::sync::Arc::new(RusqliteExecutor::new(&db_path));
+
+        // Seed a small table so the concurrent readers have real rows to return.
+        exec.query_text(&SqlStatement::new(
+            "CREATE TABLE nums (n INTEGER); INSERT INTO nums (n) VALUES (1), (2), (3), (4), (5);",
+        ))
+        .await
+        .unwrap();
+
+        #[derive(serde::Deserialize)]
+        struct SumRow {
+            total: i64,
+        }
+
+        // Fire a large number of concurrent operations through the real executor
+        // API. Each one races to check a connection out of the shared pool, run
+        // its query, and release it back, so the pool mutex is hammered under
+        // heavy contention. A regression that held the lock across the query (or
+        // otherwise deadlocked checkout/release) would hang here and trip the
+        // timeout below rather than completing.
+        let mut handles = Vec::new();
+        for i in 0..200 {
+            let exec = exec.clone();
+            handles.push(tokio::spawn(async move {
+                // Interleave a few writes among the many reads so checkout/release
+                // is exercised from both query_json and execute_batch paths.
+                if i % 25 == 0 {
+                    let mut batch = SqlStatementBatch::new();
+                    batch.add(SqlStatement::new("INSERT INTO nums (n) VALUES (0);"));
+                    let batch = batch.ensure_transaction();
+                    exec.execute_batch(&batch).await.unwrap();
+                }
+                let rows: Vec<SumRow> = exec
+                    .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+                    .await
+                    .unwrap();
+                // The seeded rows sum to 15; the interleaved zero-inserts never
+                // change that, so every read must observe at least the seed total.
+                assert!(rows[0].total >= 15, "unexpected sum {}", rows[0].total);
+            }));
+        }
+
+        // A deadlock or lock-held-across-query regression manifests as a hang, so
+        // bound the whole fan-out and assert it finishes well inside the budget.
+        let joined = futures::future::join_all(handles);
+        let results = tokio::time::timeout(std::time::Duration::from_secs(30), joined)
+            .await
+            .expect("concurrent pool access must not deadlock (timed out)");
+
+        for result in results {
+            result.expect("a concurrent operation panicked");
+        }
     }
 }
