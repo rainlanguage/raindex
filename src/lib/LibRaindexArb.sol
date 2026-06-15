@@ -13,9 +13,13 @@ import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 library LibRaindexArb {
     using SafeERC20 for IERC20;
 
-    /// @dev Sends all remaining token balances and native gas to `msg.sender`,
-    /// then evaluates the post-arb task with a context column containing the
-    /// amounts sent as Floats.
+    /// @dev Sweeps the orders' input and output token balances and any native
+    /// gas held by this contract to `msg.sender`, then evaluates the post-arb
+    /// task with a context column containing those balances as Floats. Only the
+    /// two order tokens are swept; any other token left on the arb stays put.
+    /// The Float columns are the balances read immediately before each transfer,
+    /// so for fee-on-transfer tokens they can exceed the amount actually
+    /// received by `msg.sender`.
     function finalizeArb(
         TaskV2 memory task,
         address ordersInputToken,
