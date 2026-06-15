@@ -4,10 +4,10 @@ import { RegistryManager } from "../lib/providers/registry/RegistryManager";
 import { initialRegistry } from "../__fixtures__/RegistryManager";
 import { DotrainRegistry } from "@rainlanguage/raindex";
 
-// Mock dependencies. validate/new are spied so we can assert loadRegistryUrl
-// performs NO registry fetch of its own (the page reload + +layout.ts owns
-// fetching/validation). A regression that re-introduces a fetch here would
-// double the HTTP requests to GitHub (issue #2046).
+// Mock dependencies. validate/new are spied so the tests can assert that
+// loadRegistryUrl performs no registry fetch of its own. Fetching and
+// validation are owned by the post-reload +layout.ts (via DotrainRegistry.new);
+// loadRegistryUrl only persists the URL and reloads.
 vi.mock("@rainlanguage/raindex", () => ({
   DotrainRegistry: {
     validate: vi.fn(),
@@ -58,10 +58,9 @@ describe("loadRegistryUrl", () => {
 
     await loadRegistryUrl(testUrl, mockRegistryManager);
 
-    // The whole point of issue #2046: loadRegistryUrl must not refetch the
-    // registry/settings, because the post-reload +layout.ts already does so via
-    // DotrainRegistry.new. Calling validate (or new) here would re-download the
-    // same files from GitHub and trigger rate limiting.
+    // loadRegistryUrl does not fetch or validate the registry/settings: that
+    // is owned by the post-reload +layout.ts via DotrainRegistry.new. So
+    // neither validate nor new is called from here.
     expect(DotrainRegistry.validate).not.toHaveBeenCalled();
     expect(DotrainRegistry.new).not.toHaveBeenCalled();
   });

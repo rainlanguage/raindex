@@ -13,11 +13,10 @@ export async function loadRegistryUrl(
   }
 
   try {
-    // Persist the new registry URL and reload. The page-load (+layout.ts)
-    // calls DotrainRegistry.new(url), which fetches and validates the
-    // registry. Validating here as well would refetch the same registry and
-    // settings files from GitHub, doubling the HTTP requests, so validation is
-    // left to page-load.
+    // Persist the new registry URL and reload. Page-load (+layout.ts) calls
+    // DotrainRegistry.new(url), which owns fetching and validating the registry
+    // and settings files. This function persists and reloads only; it does not
+    // fetch or validate.
     registryManager.setRegistry(url);
     window.location.reload();
   } catch (e) {
