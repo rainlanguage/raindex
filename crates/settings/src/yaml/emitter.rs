@@ -582,4 +582,139 @@ rainlangs:
         assert!(output.contains("0x0000000000000000000000000000000000000001"));
         assert!(output.contains("0x0000000000000000000000000000000000000002"));
     }
+
+    // Re-parse emitted output into a StrictYaml document so structural/value
+    // assertions are exact rather than substring presence checks.
+    fn reparse(output: &str) -> StrictYaml {
+        strict_yaml_rust::StrictYamlLoader::load_from_str(output).unwrap()[0].clone()
+    }
+
+    // Collect the ordered root-level keys of an emitted document.
+    fn root_keys(output: &str) -> Vec<String> {
+        let doc = reparse(output);
+        let StrictYaml::Hash(ref hash) = doc else {
+            panic!("expected root hash, got: {output}");
+        };
+        hash.keys()
+            .filter_map(|k| k.as_str().map(String::from))
+            .collect()
+    }
+
+    #[test]
+    fn test_emit_later_document_scalar_overwrites_earlier() {
+        // Two documents collide on networks.mainnet.chain-id with scalar values.
+        // The merge is last-writer-wins: the later document's value must win.
+        // (A first-writer-wins merge would yield "1" instead of "137".)
+        let yaml1 = r#"
+networks:
+    mainnet:
+        chain-id: 1
+"#;
+        let yaml2 = r#"
+networks:
+    mainnet:
+        chain-id: 137
+"#;
+        let output = emit_documents(&[get_document(yaml1), get_document(yaml2)]).unwrap();
+        let doc = reparse(&output);
+        assert_eq!(
+            doc["networks"]["mainnet"]["chain-id"].as_str(),
+            Some("137"),
+            "the later document's scalar must overwrite the earlier one"
+        );
+    }
+
+    #[test]
+    fn test_emit_canonical_order_full_sequence() {
+        // Provide root sections deliberately out of canonical order, including
+        // `version` and `sentry` (which the relative-position test omits). The
+        // emitted root keys must be the exact CANONICAL_ROOT_KEYS subsequence,
+        // i.e. version before sentry before networks ... before deployments.
+        let yaml = r#"
+deployments:
+    deploy1:
+        order: order1
+        scenario: scenario1
+tokens:
+    weth:
+        network: mainnet
+        address: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+        decimals: 18
+sentry: https://sentry.example.com/123
+networks:
+    mainnet:
+        rpcs:
+            - https://eth.llamarpc.com
+        chain-id: 1
+version: "6"
+scenarios:
+    scenario1:
+        bindings:
+            key: value
+"#;
+        let output = emit_documents(&[get_document(yaml)]).unwrap();
+        let keys = root_keys(&output);
+        assert_eq!(
+            keys,
+            vec![
+                "version",
+                "sentry",
+                "networks",
+                "tokens",
+                "scenarios",
+                "deployments",
+            ],
+            "root sections must be emitted in canonical order"
+        );
+    }
+
+    #[test]
+    fn test_emit_unknown_root_key_fully_dropped_exact() {
+        // Keys outside CANONICAL_ROOT_KEYS are dropped entirely; only canonical
+        // keys survive, asserted as the exact remaining key set.
+        let yaml = r#"
+unknown-key: some-value
+networks:
+    mainnet:
+        rpcs:
+            - https://eth.llamarpc.com
+        chain-id: 1
+another-unknown:
+    nested: value
+"#;
+        let output = emit_documents(&[get_document(yaml)]).unwrap();
+        let keys = root_keys(&output);
+        assert_eq!(
+            keys,
+            vec!["networks"],
+            "only canonical keys survive; unknown roots are dropped"
+        );
+    }
+
+    #[test]
+    fn test_emit_strips_prefix_exact_first_line() {
+        // After stripping the leading `---` document marker, no leading
+        // whitespace must remain and the first content line must be the first
+        // canonical section header verbatim. (A strip that removed only `---`
+        // but not the trailing newline would leave a blank first line.)
+        let yaml = r#"
+networks:
+    mainnet:
+        chain-id: 1
+"#;
+        let output = emit_documents(&[get_document(yaml)]).unwrap();
+        assert!(
+            !output.starts_with("---"),
+            "leading --- marker must be stripped"
+        );
+        assert!(
+            !output.starts_with(char::is_whitespace),
+            "stripped output must not start with whitespace"
+        );
+        assert_eq!(
+            output.lines().next(),
+            Some("networks:"),
+            "first line after strip must be the networks section header"
+        );
+    }
 }
