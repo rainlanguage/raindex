@@ -95,8 +95,8 @@ describe("handleRemoveOrderAndWithdrawAll", () => {
     expect(mockHandleTransactionConfirmationModal).toHaveBeenCalledOnce();
     const args = mockHandleTransactionConfirmationModal.mock.calls[0][0].args;
 
-    // Exact-bytes assertion: a wrong order, a missing withdraw, or a wrong
-    // selector all change these bytes.
+    // The calldata is exactly the multicall of removeOrder then withdraw,
+    // in that order, under the multicall selector.
     expect(args.calldata).toBe(EXPECTED_BOTH);
 
     // Decode to prove it is a flat multicall containing the two calls in order.

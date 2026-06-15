@@ -256,7 +256,7 @@ describe("OrderDetail", () => {
     });
 
     await waitFor(() => {
-      // The dropdown trigger replaces the standalone remove button.
+      // When onRemoveAndWithdrawAll is provided, the dropdown trigger renders.
       expect(screen.getByTestId("remove-order-menu")).toBeInTheDocument();
     });
 
