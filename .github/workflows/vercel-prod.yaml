@@ -36,7 +36,7 @@ jobs:
     with:
       environment: production
       production: true
-      # Preserve the canary Vercel CLI the prod deploy previously pinned.
+      # Pin the canary Vercel CLI version for the deploy.
       vercel-version: canary
     secrets:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
