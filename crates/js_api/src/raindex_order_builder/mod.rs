@@ -25,6 +25,21 @@ pub struct RaindexOrderBuilder {
     state_update_callback: Option<js_sys::Function>,
 }
 
+impl RaindexOrderBuilder {
+    /// Wraps a core [`RaindexOrderBuilderInner`] together with an optional WASM state-update
+    /// callback. Used by callers in this crate (e.g. the registry wrapper) that obtain a core
+    /// builder and need to attach the JS callback.
+    pub(crate) fn from_inner(
+        inner: RaindexOrderBuilderInner,
+        state_update_callback: Option<js_sys::Function>,
+    ) -> Self {
+        Self {
+            inner,
+            state_update_callback,
+        }
+    }
+}
+
 #[wasm_export]
 impl RaindexOrderBuilder {
     /// Lists all available builder deployment keys from a dotrain YAML file.

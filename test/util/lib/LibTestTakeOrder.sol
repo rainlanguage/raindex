@@ -18,7 +18,7 @@ import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interfac
 import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
 import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.2/src/lib/deploy/LibInterpreterDeploy.sol";
+import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {
