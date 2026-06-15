@@ -122,6 +122,16 @@ impl RaindexVault {
     pub(crate) fn vault_id_string(&self) -> String {
         self.vault_id.to_string()
     }
+    /// The raw `vaultId` as a `U256`, available on every target (the public
+    /// `vault_id` getter returns a `BigInt` on wasm and a `U256` off-wasm).
+    pub(crate) fn raw_vault_id(&self) -> U256 {
+        self.vault_id
+    }
+    /// The vault token's address, available on every target (the public
+    /// `token().address()` getter returns a `String` on wasm).
+    pub(crate) fn token_address(&self) -> Address {
+        self.token.address
+    }
 }
 
 #[cfg(target_family = "wasm")]

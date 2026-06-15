@@ -1,10 +1,11 @@
 use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
+use crate::raindex_client::vaults::RaindexVault;
 use crate::utils::timing::Timing;
-use alloy::primitives::Address;
+use alloy::primitives::{Address, B256};
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1, IOV2};
 use raindex_quote::{
     get_order_quotes, BatchOrderQuotesResponse, NoopInjector, OrderQuoteValue, Pair,
     SignedContextInjector,
@@ -65,8 +66,47 @@ pub struct RaindexOrderQuoteValue {
     #[tsify(type = "Hex")]
     pub inverse_ratio: Float,
     pub formatted_inverse_ratio: String,
+    /// `maxOutput` expressed as a percentage of the current balance of the
+    /// output vault this pair sells from, formatted like the other amounts
+    /// (e.g. `"25"` for 25%). `None` (omitted) when the output vault cannot be
+    /// matched or its balance is zero (the percentage would be undefined).
+    /// Populated after the quote is fetched, from already-fetched vault
+    /// balances.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub formatted_max_output_as_percent_of_vault: Option<String>,
 }
 impl_wasm_traits!(RaindexOrderQuoteValue);
+
+/// Formats `amount / balance * 100` the same way the other quote amounts are
+/// formatted (so `1` of a `4`-balance vault renders as `"25"`). Returns `None`
+/// when `balance` is zero, because the percentage is undefined and dividing
+/// would error.
+fn format_amount_as_percent_of_balance(
+    amount: Float,
+    balance: Float,
+) -> Result<Option<String>, RaindexError> {
+    if balance.is_zero()? {
+        return Ok(None);
+    }
+    let hundred = Float::parse("100".to_string())?;
+    let percent = amount.div(balance)?.mul(hundred)?;
+    Ok(Some(percent.format()?))
+}
+
+/// Finds the balance of the vault whose `(token, vaultId)` matches `io`. The
+/// quote pair indices address the on-chain `validInputs`/`validOutputs`
+/// (decoded from the order bytes), whose ordering is independent of the
+/// subgraph `inputs`/`outputs` arrays, so the match is by identity rather than
+/// by position.
+fn vault_balance_for_io(io: &IOV2, vaults: &[RaindexVault]) -> Option<Float> {
+    vaults
+        .iter()
+        .find(|vault| {
+            vault.token_address() == io.token && B256::from(vault.raw_vault_id()) == io.vaultId
+        })
+        .map(|vault| vault.balance())
+}
 
 impl RaindexOrderQuoteValue {
     pub fn try_from_order_quote_value(value: OrderQuoteValue) -> Result<Self, RaindexError> {
@@ -93,6 +133,7 @@ impl RaindexOrderQuoteValue {
             formatted_ratio: value.ratio.format()?,
             inverse_ratio,
             formatted_inverse_ratio,
+            formatted_max_output_as_percent_of_vault: None,
         })
     }
 }
@@ -141,6 +182,37 @@ impl RaindexOrder {
 }
 
 impl RaindexOrder {
+    /// Fills in the per-pair vault-relative percentage on a quote's `data`,
+    /// so the UI can show each trade's max output amount as a percentage of
+    /// the output vault it sells from. This is the drawdown signal: how much
+    /// of the vault a single trade depletes (the input side measures inflow,
+    /// not drawdown, so it is deliberately not computed). Uses already-fetched
+    /// subgraph vault balances; never issues a network call. A successful
+    /// quote with no matching vault (or a zero balance) simply leaves the
+    /// percentage `None`. `order_v4` must be this order's decoded bytes, whose
+    /// `validOutputs` the pair output index addresses.
+    fn enrich_quote_with_vault_percentages(
+        &self,
+        quote: &mut RaindexOrderQuote,
+        order_v4: &OrderV4,
+    ) -> Result<(), RaindexError> {
+        let data = match quote.data.as_mut() {
+            Some(data) => data,
+            None => return Ok(()),
+        };
+
+        let output_balance = order_v4
+            .validOutputs
+            .get(quote.pair.output_index as usize)
+            .and_then(|io| vault_balance_for_io(io, self.output_vaults()));
+        if let Some(balance) = output_balance {
+            data.formatted_max_output_as_percent_of_vault =
+                format_amount_as_percent_of_balance(data.max_output, balance)?;
+        }
+
+        Ok(())
+    }
+
     /// Non-wasm variant of [`Self::get_quotes`] that threads a `counterparty`
     /// address and a caller-supplied [`SignedContextInjector`] through to the
     /// quote RPC. Used by single-take flows that need to populate signed
@@ -169,6 +241,7 @@ impl RaindexOrder {
             let rpcs = self.get_rpc_urls()?;
             let rpc_url_count = rpcs.len();
             let sg_order = self.clone().into_sg_order()?;
+            let order_v4: OrderV4 = sg_order.clone().try_into()?;
 
             info!(rpc_url_count, "starting order quotes");
 
@@ -194,7 +267,7 @@ impl RaindexOrder {
             })?;
 
             let conversion_started_at = Timing::now();
-            let result_order_quotes = order_quotes
+            let mut result_order_quotes = order_quotes
                 .into_iter()
                 .map(RaindexOrderQuote::try_from_batch_order_quotes_response)
                 .collect::<Result<Vec<_>, _>>()
@@ -206,6 +279,10 @@ impl RaindexOrder {
                     );
                     err
                 })?;
+
+            for quote in result_order_quotes.iter_mut() {
+                self.enrich_quote_with_vault_percentages(quote, &order_v4)?;
+            }
 
             let successful_quote_count = result_order_quotes
                 .iter()
@@ -410,6 +487,17 @@ pub async fn get_order_quotes_batch_with_injector(
         result.push(flat_raindex[offset..offset + count].to_vec());
         offset += count;
     }
+
+    // Express each pair's max input/output as a percentage of the vault it
+    // draws from, using the already-fetched subgraph balances. Done per order
+    // so the pair indices resolve against that order's own decoded IOs.
+    for (order, quotes) in orders.iter().zip(result.iter_mut()) {
+        let order_v4: OrderV4 = order.clone().into_sg_order()?.try_into()?;
+        for quote in quotes.iter_mut() {
+            order.enrich_quote_with_vault_percentages(quote, &order_v4)?;
+        }
+    }
+
     for (order, quotes) in orders.iter().zip(&result) {
         for quote in quotes.iter().filter(|quote| !quote.success) {
             debug!(
@@ -614,11 +702,172 @@ mod tests {
             assert_eq!(data.formatted_ratio, "2");
             assert!(data.inverse_ratio.eq(F0_5).unwrap());
             assert_eq!(data.formatted_inverse_ratio, "0.5");
+            // The subgraph vaults in `get_order1_json` carry a different
+            // vaultId than the order bytes' validOutputs, so no vault matches
+            // and the vault-relative percentage stays `None`. This guards
+            // against blind index-based matching producing a bogus percentage
+            // from a mismatched vault.
+            assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
             assert!(res.success);
             assert_eq!(res.error, None);
             assert_eq!(res.pair.pair_name, "WFLR/sFLR");
             assert_eq!(res.pair.input_index, 0);
             assert_eq!(res.pair.output_index, 0);
+        }
+
+        // Same order bytes as `get_order1_json`, whose decoded validInputs[0]
+        // (WFLR) and validOutputs[0] (sFLR) both carry vaultId 0x12 (18). We
+        // point the subgraph vaults at that *same* vaultId so they match the
+        // on-chain IOs by (token, vaultId), plus round balances (output sFLR =
+        // 4, input WFLR = 5) so the percentages come out exact.
+        fn get_order_matching_vaults_json() -> Value {
+            let mut order = get_order1_json();
+            let matching_vault_id = "18";
+            order["outputs"][0]["vaultId"] = json!(matching_vault_id);
+            order["outputs"][0]["balance"] = json!(Float::parse("4".to_string()).unwrap());
+            order["inputs"][0]["vaultId"] = json!(matching_vault_id);
+            order["inputs"][0]["balance"] = json!(Float::parse("5".to_string()).unwrap());
+            order
+        }
+
+        #[tokio::test]
+        async fn test_get_order_quote_vault_percentages() {
+            let server = MockServer::start_async().await;
+            server.mock(|when, then| {
+                when.path("/sg");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "orders": [get_order_matching_vaults_json()]
+                    }
+                }));
+            });
+
+            server.mock(|when, then| {
+                when.path("/rpc").body_contains("blockNumber");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x1",
+                }));
+            });
+
+            // outputMax = 1 (sFLR), ioRatio = 2 => maxInput = 2 (WFLR).
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
+            server.mock(|when, then| {
+                when.path("/rpc");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": response_hex,
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &server.url("/sg"),
+                    "http://localhost:3000",
+                    &server.url("/rpc"),
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+            let order = raindex_client
+                .get_order_by_hash(
+                    &RaindexIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+            let res = order.get_quotes(None, None).await.unwrap();
+            assert_eq!(res.len(), 1);
+            let data = res[0].data.as_ref().unwrap();
+
+            // The amounts themselves are unchanged: maxOutput = 1, maxInput = 2.
+            assert_eq!(data.formatted_max_output, "1");
+            assert_eq!(data.formatted_max_input, "2");
+            // maxOutput 1 / output vault balance 4 * 100 = 25%. Only the output
+            // side is computed (drawdown signal); there is no input percentage.
+            assert_eq!(
+                data.formatted_max_output_as_percent_of_vault,
+                Some("25".to_string())
+            );
+        }
+
+        #[tokio::test]
+        async fn test_get_order_quote_vault_percentages_zero_balance() {
+            let server = MockServer::start_async().await;
+            let mut order_json = get_order_matching_vaults_json();
+            // Zero the output vault balance: dividing by it is undefined, so the
+            // output percentage must be `None` even though the output vault
+            // matches by (token, vaultId). This isolates the divide-by-zero
+            // branch from the no-match branch (which the sibling test covers).
+            order_json["outputs"][0]["balance"] = json!(Float::parse("0".to_string()).unwrap());
+            server.mock(|when, then| {
+                when.path("/sg");
+                then.status(200).json_body_obj(&json!({
+                    "data": { "orders": [order_json] }
+                }));
+            });
+            server.mock(|when, then| {
+                when.path("/rpc").body_contains("blockNumber");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x1",
+                }));
+            });
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
+            server.mock(|when, then| {
+                when.path("/rpc");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": response_hex,
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &server.url("/sg"),
+                    "http://localhost:3000",
+                    &server.url("/rpc"),
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+            let order = raindex_client
+                .get_order_by_hash(
+                    &RaindexIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+            let res = order.get_quotes(None, None).await.unwrap();
+            let data = res[0].data.as_ref().unwrap();
+            // The output amount is still reported; only the percentage is
+            // suppressed because the vault balance is zero.
+            assert_eq!(data.formatted_max_output, "1");
+            assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
         }
 
         #[traced_test]

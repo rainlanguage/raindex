@@ -1,26 +1,26 @@
 {
   "arbitrum-one": {
     "Raindex": {
-      "address": "0x86594ac4319230870C6E587f4ACa48FAb575619e",
-      "startBlock": 473030678
+      "address": "0x7992F7A3044258c9a200835970D5bFf275Efe5e7",
+      "startBlock": 473863630
     }
   },
   "matic": {
     "Raindex": {
-      "address": "0x86594ac4319230870C6E587f4ACa48FAb575619e",
-      "startBlock": 88427102
+      "address": "0x7992F7A3044258c9a200835970D5bFf275Efe5e7",
+      "startBlock": 88567034
     }
   },
   "base": {
     "Raindex": {
-      "address": "0x86594ac4319230870C6E587f4ACa48FAb575619e",
-      "startBlock": 47278140
+      "address": "0x7992F7A3044258c9a200835970D5bFf275Efe5e7",
+      "startBlock": 47383088
     }
   },
   "flare": {
     "Raindex": {
-      "address": "0x86594ac4319230870C6E587f4ACa48FAb575619e",
-      "startBlock": 62835540
+      "address": "0x7992F7A3044258c9a200835970D5bFf275Efe5e7",
+      "startBlock": 63004971
     }
   }
 }
