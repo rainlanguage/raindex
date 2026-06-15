@@ -721,14 +721,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         ClearStateChangeV2 memory clearStateChange =
             calculateClearStateChange(aliceOrderIOCalculation, bobOrderIOCalculation);
 
+        Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
+        Float bobBounty = clearStateChange.bobOutput.sub(clearStateChange.aliceInput);
+
         // A negative bounty means there is a spread between the orders. This is a
         // critical error because it means the DEX could be exploited if allowed.
         // Checked before any vault settlement so a spread always reverts with this
         // explicit error.
-        if (
-            clearStateChange.aliceOutput.sub(clearStateChange.bobInput).lt(LibDecimalFloat.FLOAT_ZERO)
-                || clearStateChange.bobOutput.sub(clearStateChange.aliceInput).lt(LibDecimalFloat.FLOAT_ZERO)
-        ) {
+        if (aliceBounty.lt(LibDecimalFloat.FLOAT_ZERO) || bobBounty.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativeBounty();
         }
 
@@ -744,9 +744,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         pushVaultZeroInput(bobOrderIOCalculation);
 
         {
-            Float aliceBounty = clearStateChange.aliceOutput.sub(clearStateChange.bobInput);
-            Float bobBounty = clearStateChange.bobOutput.sub(clearStateChange.aliceInput);
-
             increaseVaultBalance(
                 msg.sender,
                 aliceOrder.validOutputs[clearConfig.aliceOutputIOIndex].token,
