@@ -35,11 +35,11 @@ export async function handleVaultWithdraw(deps: VaultWithdrawHandlerDependencies
 		onSubmit: async (amount: Float) => {
 			let calldata: string;
 			try {
-				const calldataResult = await vault.getWithdrawCalldata(amount);
-				if (calldataResult.error) {
-					return errToast(calldataResult.error.msg);
+				const calldatasResult = await vault.getCalldatas(amount);
+				if (calldatasResult.error) {
+					return errToast(calldatasResult.error.msg);
 				}
-				calldata = calldataResult.value;
+				calldata = calldatasResult.value.withdraw;
 				handleTransactionConfirmationModal({
 					open: true,
 					modalTitle: `Withdrawing ${amount.format().value} ${vault.token.symbol}...`,
