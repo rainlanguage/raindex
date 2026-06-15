@@ -374,4 +374,85 @@ describe("TanstackOrderQuote component", () => {
       expect(maxInputSpan).toHaveTextContent("10.175432109876543210");
     });
   });
+
+  it("shows max output as a percentage of the output vault balance under the amount", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            formattedMaxOutputAsPercentOfVault: "25",
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      const outputPercent = screen.getByTestId("max-output-percent-0");
+      expect(outputPercent).toHaveTextContent("25% of vault");
+    });
+
+    // It renders inside the same cell as the Maximum Output amount, so the
+    // drawdown percentage sits directly beneath the amount the user reads.
+    const outputPercent = screen.getByTestId("max-output-percent-0");
+    const outputCell = screen.getByText("1.5").closest("td");
+    expect(outputCell).not.toBeNull();
+    expect(outputCell).toContainElement(outputPercent);
+
+    // The input side is output-only by design: there is no input percentage.
+    expect(screen.queryByTestId("max-input-percent-0")).toBeNull();
+  });
+
+  it("omits the output vault-percentage when it is not provided", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            // no percentage field (e.g. output vault balance unknown / zero)
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("bodyRow")).toHaveTextContent("ETH/USDT");
+    });
+    expect(screen.queryByTestId("max-output-percent-0")).toBeNull();
+    expect(screen.queryByText(/% of vault/)).toBeNull();
+  });
 });
