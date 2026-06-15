@@ -502,14 +502,15 @@ if (import.meta.vitest) {
     expect(result[0].color).toEqual("#4E4AF6");
   });
 
-  it("returns the absolute value of the io ratio when amounts are negative", () => {
-    // A negative formatted input amount yields a negative raw ratio
-    // (-50 / 100 = -0.5); Math.abs is what makes the charted value positive.
+  it("returns the absolute value of the io ratio (the output vault balance change is negative)", () => {
+    // The output vault balance change is debited, so its formattedAmount is negative;
+    // the raw input/output ratio is negative (50 / -100 = -0.5) and Math.abs yields
+    // the positive charted value.
     const trades = [
       makeTrade({
         timestamp: 1632000000,
-        inputFormatted: "-50",
-        outputFormatted: "100",
+        inputFormatted: "50",
+        outputFormatted: "-100",
         outputAmount: BigInt(100),
       }),
     ];
