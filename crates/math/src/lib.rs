@@ -221,4 +221,100 @@ mod test {
             assert_eq!(&result, expected);
         }
     }
+
+    #[test]
+    fn test_big_uint_math_scale_up_overflow() {
+        // Scaling U256::MAX up by even one decimal cannot fit in U256, so the
+        // checked multiply fails and surfaces as MathError::Overflow.
+        let result = U256::MAX.scale_up(1);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+
+        // A value that needs more than the available headroom also overflows.
+        let result = U256::from(10_u8).pow(U256::from(40_u8)).scale_up(40);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+
+        // A scale_up that *does* fit returns the exact product (guards against a
+        // mutation that turns every overflow into a silent pass-through).
+        assert_eq!(U256::from(7_u8).scale_up(3).unwrap(), U256::from(7000_u16));
+    }
+
+    #[test]
+    fn test_big_uint_math_scale_18_scale_up_overflow() {
+        // scale_18 with decimals < 18 routes to scale_up; an oversized value must
+        // propagate the Overflow rather than wrap or pass through unchanged.
+        let result = U256::MAX.scale_18(0);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_big_uint_math_mul_div_div_by_zero() {
+        // Dividing by zero is guarded by checked_div returning None and surfaces
+        // as MathError::Overflow.
+        let result = U256::from(1000_u16).mul_div(U256::from(5_u8), U256::ZERO);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+
+        // Even a zero numerator over a zero divisor errors (the divisor guard
+        // fires before any quotient is computed).
+        let result = U256::ZERO.mul_div(U256::from(5_u8), U256::ZERO);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_big_uint_math_div_18_by_zero() {
+        // div_18(x, 0) computes x * 1e18 / 0, so the divide-by-zero guard fires
+        // and yields MathError::Overflow.
+        let result = U256::from(1000_u16).div_18(U256::ZERO);
+        assert!(
+            matches!(result, Err(MathError::Overflow)),
+            "expected Overflow, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_big_uint_math_mul_div_result_overflow() {
+        // When the 512-bit quotient does not fit back into U256, the narrowing
+        // conversion fails with FromUintErrorU256 (distinct from the div-by-zero
+        // Overflow variant).
+        let result = U256::MAX.mul_div(U256::MAX, U256::from(1_u8));
+        assert!(
+            matches!(result, Err(MathError::FromUintErrorU256(_))),
+            "expected FromUintErrorU256, got {result:?}"
+        );
+
+        // mul_18 narrows the same way: MAX * MAX / 1e18 still exceeds U256.
+        let result = U256::MAX.mul_18(U256::MAX);
+        assert!(
+            matches!(result, Err(MathError::FromUintErrorU256(_))),
+            "expected FromUintErrorU256, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_big_uint_math_scale_down_truncates_toward_zero() {
+        // Scaling down is integer division: the fractional part is dropped, never
+        // rounded up. 19 (1 over 18) at 18 decimals truncates to 1.
+        assert_eq!(U256::from(19_u8).scale_down(1).unwrap(), U256::from(1_u8));
+        // 9 / 10 truncates to 0 rather than rounding to 1.
+        assert_eq!(U256::from(9_u8).scale_down(1).unwrap(), U256::ZERO);
+        // An exact multiple is unaffected.
+        assert_eq!(
+            U256::from(2500_u16).scale_down(2).unwrap(),
+            U256::from(25_u8)
+        );
+    }
 }
