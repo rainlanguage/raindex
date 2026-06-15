@@ -3,20 +3,13 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {LibRaindex} from "src/lib/LibRaindex.sol";
+import {LibRaindexDoPostHarness} from "test/util/concrete/LibRaindexDoPostHarness.sol";
 import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IInterpreterV4, StackItem} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {StateNamespace} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v2/IInterpreterStoreV2.sol";
 import {EvaluableV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
 import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-
-/// @dev Exposes the internal `LibRaindex.doPost` for direct testing.
-contract LibRaindexDoPostHarness {
-    function doPost(bytes32[][] memory context, TaskV2[] memory post) external {
-        LibRaindex.doPost(context, post);
-    }
-}
 
 /// @title LibRaindexDoPostTest
 /// @notice Audit GAP-A11-1/2/3 (#2536): `doPost` skips work for an empty post

@@ -1,7 +1,10 @@
 use super::*;
-use crate::{add_order::AddOrderArgs, deposit::DepositArgs, transaction::TransactionArgs};
+use crate::{
+    add_order::AddOrderArgs, allowance::read_allowance, deposit::DepositArgs,
+    transaction::TransactionArgs,
+};
 use alloy::{
-    primitives::{Bytes, B256, U256},
+    primitives::{Bytes, U256},
     sol_types::SolCall,
 };
 use rain_math_float::Float;
@@ -163,20 +166,6 @@ impl RaindexOrderBuilder {
         Ok(results)
     }
 
-    async fn check_allowance(
-        &self,
-        deposit_args: &DepositArgs,
-        owner: &str,
-    ) -> Result<TokenAllowance, RaindexOrderBuilderError> {
-        let allowance = deposit_args
-            .read_allowance(Address::from_str(owner)?, self.get_transaction_args()?)
-            .await?;
-        Ok(TokenAllowance {
-            token: deposit_args.token,
-            allowance,
-        })
-    }
-
     pub fn prepare_calldata_generation(
         &mut self,
         calldata_function: CalldataFunction,
@@ -245,6 +234,8 @@ impl RaindexOrderBuilder {
             return Ok(ApprovalCalldataResult::NoDeposits);
         }
 
+        let owner = Address::from_str(&owner)?;
+
         let mut calldatas = Vec::new();
 
         for (token_address, deposit_amount) in &deposits_map {
@@ -258,15 +249,16 @@ impl RaindexOrderBuilder {
             let erc20 = ERC20::new(rpcs, *token_address);
             let decimals = erc20.decimals().await?;
 
-            let deposit_args = DepositArgs {
-                token: *token_address,
-                amount: *deposit_amount,
-                decimals,
-                vault_id: B256::ZERO,
-            };
-
-            let token_allowance = self.check_allowance(&deposit_args, &owner).await?;
-            let allowance_float = Float::from_fixed_decimal(token_allowance.allowance, decimals)?;
+            // An allowance read needs only the token, owner and raindex spender -
+            // no deposit context.
+            let allowance = read_allowance(
+                &tx_args.rpcs,
+                *token_address,
+                owner,
+                tx_args.raindex_address,
+            )
+            .await?;
+            let allowance_float = Float::from_fixed_decimal(allowance, decimals)?;
 
             if !allowance_float.eq(*deposit_amount)? {
                 let calldata = approveCall {

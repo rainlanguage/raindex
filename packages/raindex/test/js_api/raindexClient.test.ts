@@ -1010,6 +1010,59 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       ]);
     });
 
+    it("should express the order quote max output as a percentage of its output vault balance when the vault matches", async () => {
+      // order1's decoded on-chain validOutputs[0] references vaultId 0x12, but
+      // its subgraph output vault carries a different vaultId, so the "should
+      // get order quote" test above sees no match and the percentage field is
+      // absent. Here we point the subgraph output vault at the on-chain vaultId
+      // so the percentage is populated from the already-fetched balance.
+      const onchainVaultId = "0x12";
+      const matchingOrder = JSON.parse(JSON.stringify(order1)) as SgOrder;
+      matchingOrder.outputs[0].vaultId = onchainVaultId;
+
+      await mockServer
+        .forPost("/sg1")
+        .thenReply(200, JSON.stringify({ data: { orders: [matchingOrder] } }));
+      await mockServer.forPost("/rpc1").once().thenSendJsonRpcResult("0x01");
+      await mockServer
+        .forPost("/rpc1")
+        .thenSendJsonRpcResult(
+          "0x0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000060" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000002",
+        );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const order = extractWasmEncodedData(
+        await raindexClient.getOrderByHash(
+          1,
+          CHAIN_ID_1_RAINDEX_ADDRESS,
+          BYTES32_0123,
+        ),
+      );
+
+      const result = extractWasmEncodedData(await order.getQuotes());
+      assert.equal(result.length, 1);
+      // maxOutput 1 / output vault balance 10 * 100 = 10%. Asserting the exact
+      // value (not just a non-empty string) proves the computed percentage
+      // survives the wasm/serde boundary and reaches JS under the camelCase key
+      // the UI reads.
+      assert.equal(result[0].data?.formattedMaxOutput, "1");
+      assert.equal(result[0].data?.formattedMaxOutputAsPercentOfVault, "10");
+      // The input side is deliberately not computed (drawdown is an output-side
+      // concept), so the field never exists on the wasm boundary.
+      assert.equal(
+        "formattedMaxInputAsPercentOfVault" in (result[0].data ?? {}),
+        false,
+      );
+    });
+
     it("should get order quotes batch", async () => {
       await mockServer
         .forPost("/sg1")
@@ -2011,86 +2064,6 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       removeEvents: [],
     };
 
-    it("should get deposit calldata for a vault", async () => {
-      await mockServer
-        .forPost("/sg1")
-        .once()
-        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
-      await mockServer
-        .forPost("/sg1")
-        .once()
-        .thenReply(200, JSON.stringify({ data: { order } }));
-
-      const raindexClient = extractWasmEncodedData(
-        await RaindexClient.new([YAML]),
-      );
-      const vault = extractWasmEncodedData(
-        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
-      );
-      const res = extractWasmEncodedData(
-        await vault.getDepositCalldata(Float.parse("500").value as Float),
-      );
-      assert.equal(res.length, 330);
-    });
-
-    it("should handle invalid deposit amount", async () => {
-      await mockServer
-        .forPost("/sg1")
-        .once()
-        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
-      await mockServer
-        .forPost("/sg1")
-        .thenReply(200, JSON.stringify({ data: { order } }));
-
-      const raindexClient = extractWasmEncodedData(
-        await RaindexClient.new([YAML]),
-      );
-      const vault = extractWasmEncodedData(
-        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
-      );
-
-      let res = await vault.getDepositCalldata(Float.parse("0").value as Float);
-      if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Zero amount");
-
-      res = await vault.getDepositCalldata(Float.parse("-100").value as Float);
-      if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Negative amount");
-    });
-
-    it("should get withdraw calldata for a vault", async () => {
-      await mockServer
-        .forPost("/sg1")
-        .once()
-        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
-      await mockServer
-        .forPost("/sg1")
-        .thenReply(200, JSON.stringify({ data: { order } }));
-
-      const raindexClient = extractWasmEncodedData(
-        await RaindexClient.new([YAML]),
-      );
-      const vault = extractWasmEncodedData(
-        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
-      );
-
-      let res = await vault.getWithdrawCalldata(
-        Float.parse("500").value as Float,
-      );
-      if (res.error) assert.fail("expected to resolve, but failed");
-      assert.equal(res.value.length, 330);
-
-      res = await vault.getWithdrawCalldata(Float.parse("0").value as Float);
-      if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Zero amount");
-      assert.equal(res.error.readableMsg, "Amount cannot be zero");
-
-      res = await vault.getWithdrawCalldata(Float.parse("-100").value as Float);
-      if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Negative amount");
-      assert.equal(res.error.readableMsg, "Amount cannot be negative");
-    });
-
     it("should read allowance for a vault", async () => {
       await mockServer
         .forPost("/sg1")
@@ -2116,18 +2089,19 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       assert.equal(res, "0x64");
     });
 
-    it("should generate valid approval calldata with correct length", async () => {
+    it("should generate all calldatas with approval when allowance is insufficient", async () => {
       await mockServer
         .forPost("/sg1")
         .once()
         .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
+      // Allowance is 100, and user wants 600, so approval calldata is included.
       await mockServer.forPost("/rpc1").thenReply(
         200,
         JSON.stringify({
           jsonrpc: "2.0",
           id: 1,
           result:
-            "0x0000000000000000000000000000000000000000000000000000000000000064",
+            "0x0000000000000000000000000000000000000000000000056BC75E2D63100000",
         }),
       );
 
@@ -2139,18 +2113,22 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       );
 
       const res = extractWasmEncodedData(
-        await vault.getApprovalCalldata(Float.parse("600").value as Float),
+        await vault.getCalldatas(Float.parse("600").value as Float),
       );
-      assert.ok(res.startsWith("0x"));
-      assert.equal(res.length, 138);
+      assert.ok(res.approval?.startsWith("0x"));
+      assert.equal(res.approval?.length, 138);
+      assert.ok(res.deposit.startsWith("0x"));
+      assert.equal(res.deposit.length, 330);
+      assert.ok(res.withdraw.startsWith("0x"));
+      assert.equal(res.withdraw.length, 330);
     });
 
-    it("should handle approval amount equal to allowance", async () => {
+    it("should omit approval calldata when allowance is sufficient", async () => {
       await mockServer
         .forPost("/sg1")
         .once()
         .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
-      // Allowance is 100, and user tries to approve 100, so there should be no approval calldata
+      // Allowance is 100, and user wants 90, so no approval calldata is needed.
       await mockServer.forPost("/rpc1").thenReply(
         200,
         JSON.stringify({
@@ -2168,28 +2146,19 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
       );
 
-      const res = await vault.getApprovalCalldata(
-        Float.parse("100").value as Float,
+      const res = extractWasmEncodedData(
+        await vault.getCalldatas(Float.parse("90").value as Float),
       );
-      if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Existing allowance");
+      assert.equal(res.approval, undefined);
+      assert.ok(res.deposit.startsWith("0x"));
+      assert.ok(res.withdraw.startsWith("0x"));
     });
 
-    it("should handle approval amount less than allowance", async () => {
+    it("should reject getCalldatas for invalid amounts", async () => {
       await mockServer
         .forPost("/sg1")
         .once()
         .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
-      // Allowance is 100, and user tries to approve 90, so there should be approval calldata
-      await mockServer.forPost("/rpc1").thenReply(
-        200,
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          result:
-            "0x0000000000000000000000000000000000000000000000056BC75E2D63100000",
-        }),
-      );
 
       const raindexClient = extractWasmEncodedData(
         await RaindexClient.new([YAML]),
@@ -2198,11 +2167,15 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
       );
 
-      const res = await vault.getApprovalCalldata(
-        Float.parse("90").value as Float,
-      );
+      let res = await vault.getCalldatas(Float.parse("0").value as Float);
       if (!res.error) assert.fail("expected to reject, but resolved");
-      assert.equal(res.error.msg, "Existing allowance");
+      assert.equal(res.error.msg, "Zero amount");
+      assert.equal(res.error.readableMsg, "Amount cannot be zero");
+
+      res = await vault.getCalldatas(Float.parse("-100").value as Float);
+      if (!res.error) assert.fail("expected to reject, but resolved");
+      assert.equal(res.error.msg, "Negative amount");
+      assert.equal(res.error.readableMsg, "Amount cannot be negative");
     });
 
     it("should get all vault tokens", async function () {

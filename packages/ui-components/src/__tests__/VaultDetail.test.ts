@@ -184,6 +184,32 @@ describe("VaultDetail", () => {
     });
   });
 
+  it("shows hover title and aria-label on the deposit and withdraw icon buttons", async () => {
+    mockMatchesAccount.mockReturnValue(true);
+
+    render(VaultDetail, {
+      props: defaultProps,
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      const depositButton = screen.getByTestId("deposit-button");
+      expect(depositButton).toHaveAttribute("title", "Deposit to vault");
+      expect(depositButton).toHaveAttribute("aria-label", "Deposit to vault");
+
+      const withdrawButton = screen.getByTestId("withdraw-button");
+      expect(withdrawButton).toHaveAttribute("title", "Withdraw from vault");
+      expect(withdrawButton).toHaveAttribute(
+        "aria-label",
+        "Withdraw from vault",
+      );
+
+      const refreshButton = screen.getByTestId("top-refresh");
+      expect(refreshButton).toHaveAttribute("title", "Refresh vault");
+      expect(refreshButton).toHaveAttribute("aria-label", "Refresh vault");
+    });
+  });
+
   it("doesn't show deposit/withdraw buttons when account doesn't match", async () => {
     mockMatchesAccount.mockReturnValue(false);
 

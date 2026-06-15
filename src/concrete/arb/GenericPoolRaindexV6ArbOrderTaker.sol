@@ -26,7 +26,11 @@ contract GenericPoolRaindexV6ArbOrderTaker is RaindexV6ArbOrderTaker {
     }
 
     /// Allow arbitrary calls and ETH transfers to this contract without
-    /// reverting. Any ETH received is swept to msg.sender by finalizeArb.
+    /// reverting. Any ETH still held when `finalizeArb` runs is swept to
+    /// `msg.sender`. The arb holds no ETH between operations, so anyone who
+    /// sends ETH outside an `arb` call forfeits it: an in-flight generic pool
+    /// exchange forwards the contract's entire ETH balance to the pool before
+    /// `finalizeArb` is reached.
     receive() external payable {}
     fallback() external payable {}
 }

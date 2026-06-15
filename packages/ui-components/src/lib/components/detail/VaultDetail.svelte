@@ -89,6 +89,7 @@
 					color="light"
 					size="xs"
 					data-testid="deposit-button"
+					title="Deposit to vault"
 					aria-label="Deposit to vault"
 					on:click={() => onDeposit(raindexClient, data)}
 				>
@@ -98,6 +99,7 @@
 					color="light"
 					size="xs"
 					data-testid="withdraw-button"
+					title="Withdraw from vault"
 					aria-label="Withdraw from vault"
 					on:click={() => onWithdraw(raindexClient, data)}
 				>
@@ -107,6 +109,8 @@
 
 			<Refresh
 				testId="top-refresh"
+				title="Refresh vault"
+				ariaLabel="Refresh vault"
 				on:click={handleRefresh}
 				spin={$vaultDetailQuery.isLoading || $vaultDetailQuery.isFetching}
 			/>

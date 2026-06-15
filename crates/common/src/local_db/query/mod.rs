@@ -61,6 +61,12 @@ pub enum LocalDbQueryError {
 
     #[error("Operation not implemented: {operation}")]
     NotImplemented { operation: String },
+
+    #[error("not a raindex local-db: application_id {found:#010x} != expected {expected:#010x}")]
+    NotARaindexDb { expected: i32, found: i32 },
+
+    #[error("local-db schema version mismatch: user_version {found} != expected {expected}")]
+    SchemaVersionMismatch { expected: i32, found: i32 },
 }
 
 impl LocalDbQueryError {
