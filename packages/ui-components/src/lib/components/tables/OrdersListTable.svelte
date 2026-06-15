@@ -246,7 +246,7 @@
 		</TableBodyCell>
 
 		<TableBodyCell data-testid="orderListRowTrades" tdClass="break-word p-2">
-			{item.tradesCount > 99 ? '>99' : item.tradesCount}
+			{item.tradesCount}
 		</TableBodyCell>
 		{#if $account && (handleTakeOrderModal || handleOrderRemoveModal)}
 			<TableBodyCell data-testid="orderListRowActions" tdClass="px-2 py-2">
