@@ -4,7 +4,7 @@ WITH filtered_trades AS (
   FROM derived_trades tws
   WHERE tws.chain_id = ?1
     AND tws.raindex_address = ?2
-    AND tws.order_hash = ?3
+    /*ORDER_HASH_CLAUSE*/
   /*START_TS_CLAUSE*/
   /*END_TS_CLAUSE*/
   ORDER BY tws.block_timestamp DESC, tws.block_number DESC, tws.log_index DESC, tws.trade_kind, tws.trade_side

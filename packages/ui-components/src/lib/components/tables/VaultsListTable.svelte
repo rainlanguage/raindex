@@ -354,6 +354,8 @@
 						data-testid="vault-menu"
 						id={`vault-menu-${item.id}`}
 						class="mr-2 border-none px-2"
+						title="Vault actions"
+						aria-label="Vault actions"
 						on:click={(e) => {
 							e.stopPropagation();
 						}}
