@@ -3,15 +3,8 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {LibGenericPoolExchange, ZeroExchangeSpender, ZeroExchangePool} from "src/lib/LibGenericPoolExchange.sol";
-
-/// @dev Harness exposing the internal `exchange` so the guards can be tested
-/// directly without routing through an arb order taker.
-contract LibGenericPoolExchangeHarness {
-    function exchange(address token, bytes memory data) external {
-        LibGenericPoolExchange.exchange(token, data);
-    }
-}
+import {ZeroExchangeSpender, ZeroExchangePool} from "src/lib/LibGenericPoolExchange.sol";
+import {LibGenericPoolExchangeHarness} from "test/util/concrete/LibGenericPoolExchangeHarness.sol";
 
 /// @title LibGenericPoolExchangeZeroAddressTest
 /// @notice `exchange` decodes a caller-controlled `(spender, pool, ...)` from

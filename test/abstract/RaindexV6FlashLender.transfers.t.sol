@@ -2,82 +2,16 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {stdError} from "forge-std-1.16.1/src/Test.sol";
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {ERC20, IERC20Errors} from "@openzeppelin-contracts-5.6.1/token/ERC20/ERC20.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Errors} from "@openzeppelin-contracts-5.6.1/token/ERC20/ERC20.sol";
 
-import {
-    IERC3156FlashBorrower,
-    ON_FLASH_LOAN_CALLBACK_SUCCESS
-} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IERC3156FlashLender} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashLender.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {FlashLenderCallbackFailed} from "../../src/abstract/RaindexV6FlashLender.sol";
-
-contract TKN is ERC20 {
-    constructor(address recipient, uint256 supply) ERC20("TKN", "TKN") {
-        _mint(recipient, supply);
-    }
-}
-
-interface IPull {
-    function pull(address token, uint256 amount) external;
-}
-
-/// Alice has some daisy contract pull tokens from her.
-/// If the tokens are returned to her then she can complete the flash loan else
-/// the loan must be reverted.
-contract Alice is IERC3156FlashBorrower {
-    IPull immutable iPull;
-    bool immutable iSuccess;
-
-    constructor(IPull pull, bool success) {
-        iPull = pull;
-        iSuccess = success;
-    }
-
-    function onFlashLoan(address, address token, uint256 amount, uint256, bytes calldata)
-        public
-        override
-        returns (bytes32)
-    {
-        // Approve the puller to pull the tokens.
-        IERC20(token).approve(address(iPull), amount);
-        iPull.pull(token, amount);
-        // Approve the lender to pull the tokens back and repay the loan.
-        IERC20(token).approve(msg.sender, amount);
-        // Magic number for success.
-        return iSuccess ? ON_FLASH_LOAN_CALLBACK_SUCCESS : bytes32(0);
-    }
-}
-
-/// Bob pulls the tokens from Alice then returns them so she can repay the loan.
-contract Bob is IPull {
-    using SafeERC20 for IERC20;
-
-    function pull(address token, uint256 amount) public override {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(token).safeTransfer(msg.sender, amount);
-    }
-}
-
-/// Carol pulls tokens from Alice then returns only some of them so the loan
-/// fails.
-contract Carol is IPull {
-    using SafeERC20 for IERC20;
-
-    uint256 immutable iAmountWithheld;
-
-    constructor(uint256 amountWithheld) {
-        iAmountWithheld = amountWithheld;
-    }
-
-    function pull(address token, uint256 amount) public override {
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
-        IERC20(token).safeTransfer(msg.sender, amount - iAmountWithheld);
-    }
-}
+import {TKN} from "test/util/concrete/TKN.sol";
+import {IPull} from "test/util/concrete/IPull.sol";
+import {Alice} from "test/util/concrete/Alice.sol";
+import {Bob} from "test/util/concrete/Bob.sol";
+import {Carol} from "test/util/concrete/Carol.sol";
 
 /// @title RaindexV6FlashLenderTransferTest
 /// Tests the `RaindexV6FlashLender` transfer functions.
