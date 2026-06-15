@@ -686,4 +686,437 @@ mod tests {
             ));
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Batch-assembly coverage: raindex grouping, input-order scatter, chunk
+    // boundary stepping, mixed-revert bisection offsets, length-mismatch guard.
+    // ---------------------------------------------------------------------
+
+    use alloy::primitives::U256;
+    use raindex_bindings::IRaindexV6::QuoteV2;
+
+    // Build a `QuoteTarget` with a specific raindex address and a distinctive
+    // `inputIOIndex`. The index is ABI-encoded into the inner `quote2` calldata,
+    // so a large/unusual value (e.g. 0xAAAA) gives a hex substring that uniquely
+    // identifies this target inside the outer multicall request body. This lets
+    // a mock respond differently per-target / per-chunk without per-target paths.
+    fn target_with(raindex: Address, input_index: u64) -> QuoteTarget {
+        QuoteTarget {
+            raindex,
+            quote_config: QuoteV2 {
+                inputIOIndex: U256::from(input_index),
+                ..Default::default()
+            },
+        }
+    }
+
+    // Mock an eth_call that only matches when the request body contains
+    // `needle` (a hex substring identifying a specific inner quote2 call or the
+    // raindex `to` address), returning the given multicall hex.
+    fn mock_eth_call_when_body_contains(
+        server: &MockServer,
+        path: &str,
+        needle: &str,
+        result_hex: &str,
+    ) {
+        let result = result_hex.to_string();
+        let needle = needle.to_string();
+        server.mock(|when, then| {
+            when.method(POST).path(path).body_contains(&needle);
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": result,
+            }));
+        });
+    }
+
+    // Two targets pointing at two DISTINCT raindex addresses fall into separate
+    // groups (each gets its own multicall). The per-group results must scatter
+    // back into the original input positions. We key each group's mock on the
+    // raindex `to` address in the request body so they cannot be confused.
+    #[tokio::test]
+    async fn test_batch_quote_groups_by_raindex_and_scatters_in_input_order() {
+        let rpc_server = MockServer::start_async().await;
+
+        let raindex_a = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .parse::<Address>()
+            .unwrap();
+        let raindex_b = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .parse::<Address>()
+            .unwrap();
+
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+        let three = Float::parse("3".to_string()).unwrap();
+        let four = Float::parse("4".to_string()).unwrap();
+
+        // Group A (raindex_a) -> quote (1, 2); Group B (raindex_b) -> quote (3, 4).
+        let ret_a = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, two)]);
+        let ret_b = encode_multicall_return(vec![encode_quote2_return_bytes(true, three, four)]);
+        mock_eth_call_when_body_contains(&rpc_server, "/rpc", "aaaaaaaaaaaaaaaaaa", &ret_a);
+        mock_eth_call_when_body_contains(&rpc_server, "/rpc", "bbbbbbbbbbbbbbbbbb", &ret_b);
+
+        // Input order: A first, then B. Results must come back A, then B.
+        let quote_targets = vec![target_with(raindex_a, 0), target_with(raindex_b, 0)];
+        let result = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        let q0 = result[0].as_ref().unwrap();
+        let q1 = result[1].as_ref().unwrap();
+        // Position 0 carries group A's quote (1, 2); position 1 carries group B's (3, 4).
+        assert!(q0.max_output.eq(one).unwrap());
+        assert!(q0.ratio.eq(two).unwrap());
+        assert!(q1.max_output.eq(three).unwrap());
+        assert!(q1.ratio.eq(four).unwrap());
+    }
+
+    // With chunk_size smaller than the group size, the group is split into
+    // consecutive chunks. Three same-raindex targets and chunk_size = 2 ->
+    // chunk one holds targets [0, 1], chunk two holds target [2]. Each chunk is
+    // a separate multicall whose returned `bytes[]` length must equal the chunk
+    // size, and results must reassemble in input order.
+    #[tokio::test]
+    async fn test_batch_quote_chunks_group_and_preserves_order() {
+        let rpc_server = MockServer::start_async().await;
+        let raindex = "0xcccccccccccccccccccccccccccccccccccccccc"
+            .parse::<Address>()
+            .unwrap();
+
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+        let three = Float::parse("3".to_string()).unwrap();
+        let four = Float::parse("4".to_string()).unwrap();
+        let five = Float::parse("5".to_string()).unwrap();
+        let six = Float::parse("6".to_string()).unwrap();
+
+        // Distinctive indices so each chunk's multicall body is identifiable.
+        let idx0 = 0xAAAAu64;
+        let idx1 = 0xBBBBu64;
+        let idx2 = 0xCCCCu64;
+        let needle0 = format!("{idx0:064x}");
+        let needle1 = format!("{idx1:064x}");
+        let needle2 = format!("{idx2:064x}");
+
+        // Chunk one (targets 0 and 1) returns TWO inner results; matched by the
+        // presence of target 1's index (only present in the first chunk).
+        let ret_chunk1 = encode_multicall_return(vec![
+            encode_quote2_return_bytes(true, one, two),
+            encode_quote2_return_bytes(true, three, four),
+        ]);
+        mock_eth_call_when_body_contains(&rpc_server, "/rpc", &needle1, &ret_chunk1);
+        // Chunk two (target 2 only) returns ONE inner result; matched by target
+        // 2's index, which never appears in the first chunk.
+        let ret_chunk2 = encode_multicall_return(vec![encode_quote2_return_bytes(true, five, six)]);
+        mock_eth_call_when_body_contains(&rpc_server, "/rpc", &needle2, &ret_chunk2);
+        // Guard: target 0's index alone (without 1) would be the singleton path;
+        // not expected here, but make it observable if chunking regresses.
+        let _ = &needle0;
+
+        let quote_targets = vec![
+            target_with(raindex, idx0),
+            target_with(raindex, idx1),
+            target_with(raindex, idx2),
+        ];
+        let result = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            Address::ZERO,
+            None,
+            Some(2),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 3);
+        let q0 = result[0].as_ref().unwrap();
+        let q1 = result[1].as_ref().unwrap();
+        let q2 = result[2].as_ref().unwrap();
+        assert!(q0.max_output.eq(one).unwrap());
+        assert!(q0.ratio.eq(two).unwrap());
+        assert!(q1.max_output.eq(three).unwrap());
+        assert!(q1.ratio.eq(four).unwrap());
+        assert!(q2.max_output.eq(five).unwrap());
+        assert!(q2.ratio.eq(six).unwrap());
+    }
+
+    // A multicall whose returned `bytes[]` length does not match the number of
+    // targets in the chunk must be rejected by the length-mismatch guard, not
+    // silently mis-aligned. With a single target, the guard fires inside
+    // `quote_chunk_once`; the singleton path surfaces it as a per-target
+    // `CorruptReturnData` carrying the mismatch detail.
+    #[tokio::test]
+    async fn test_batch_quote_multicall_length_mismatch_is_rejected() {
+        let rpc_server = MockServer::start_async().await;
+
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+        // ONE target but TWO returned inner elements.
+        let ret = encode_multicall_return(vec![
+            encode_quote2_return_bytes(true, one, two),
+            encode_quote2_return_bytes(true, one, two),
+        ]);
+        mock_eth_call_static(&rpc_server, "/rpc", &ret);
+
+        let quote_targets = vec![QuoteTarget::default()];
+        let result = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            Err(FailedQuote::CorruptReturnData(msg)) => {
+                assert!(
+                    msg.contains("length mismatch"),
+                    "expected length-mismatch detail, got: {msg}"
+                );
+            }
+            other => panic!("expected CorruptReturnData length mismatch, got: {other:?}"),
+        }
+    }
+
+    // Mixed chunk: one target quotes successfully, the other reverts. The full
+    // chunk multicall (both inner calls) reverts because OZ Multicall bubbles
+    // the first failing inner call. Bisection must split to singletons, place
+    // the successful quote at its input offset and the revert at the other,
+    // never collapsing both into the same outcome.
+    #[tokio::test]
+    async fn test_batch_quote_mixed_chunk_bisects_success_and_revert_by_offset() {
+        let rpc_server = MockServer::start_async().await;
+        let raindex = "0xdddddddddddddddddddddddddddddddddddddddd"
+            .parse::<Address>()
+            .unwrap();
+
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+
+        let ok_idx = 0xAAAAu64;
+        let revert_idx = 0xBBBBu64;
+        let ok_needle = format!("{ok_idx:064x}");
+        let revert_needle = format!("{revert_idx:064x}");
+
+        // Singleton for the OK target: matches a body containing the OK index
+        // but NOT the revert index.
+        struct FakeRegistry;
+        #[async_trait::async_trait]
+        impl ErrorRegistry for FakeRegistry {
+            async fn lookup(
+                &self,
+                selector: [u8; 4],
+            ) -> Result<Vec<AlloyError>, rain_error_decoding::AbiDecodeFailedErrors> {
+                if selector == [0x73, 0x4b, 0xc7, 0x1c] {
+                    Ok(vec!["TokenSelfTrade()".parse().unwrap()])
+                } else {
+                    Ok(vec![])
+                }
+            }
+        }
+
+        // Resolution is by definition order (httpmock scans mocks ascending by
+        // id and takes the first match). Register the REVERT mock first, keyed
+        // on the revert index: it matches the full 2-call chunk (which contains
+        // both indices) AND the revert singleton, and wins for both. The OK
+        // singleton body contains only the OK index, so this revert mock does
+        // NOT match it.
+        rpc_server.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(revert_needle.clone());
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": { "code": 3, "message": "execution reverted", "data": "0x734bc71c" }
+            }));
+        });
+        // OK singleton: body contains the OK index but not the revert index, so
+        // only this mock matches it.
+        let ok_ret = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, two)]);
+        rpc_server.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(ok_needle.clone());
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": ok_ret,
+            }));
+        });
+
+        // Input order: OK target at index 0, revert target at index 1.
+        let quote_targets = vec![
+            target_with(raindex, ok_idx),
+            target_with(raindex, revert_idx),
+        ];
+        let result = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            Address::ZERO,
+            Some(&FakeRegistry),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        // Offset 0 -> the successful quote.
+        let q0 = result[0].as_ref().unwrap();
+        assert!(q0.max_output.eq(one).unwrap());
+        assert!(q0.ratio.eq(two).unwrap());
+        // Offset 1 -> the revert, decoded as TokenSelfTrade.
+        assert!(matches!(
+            &result[1],
+            Err(FailedQuote::RevertError(
+                rain_error_decoding::AbiDecodedErrorType::Known { name, .. }
+            )) if name == "TokenSelfTrade"
+        ));
+    }
+
+    // Bisection where a multi-element SUB-chunk succeeds wholesale. Four
+    // same-raindex targets: the first pair reverts, the second pair quotes.
+    // The full 4-call chunk reverts (OZ bubbles the first revert), so bisection
+    // splits into [0,2) and [2,4). The [2,4) half succeeds as a single
+    // 2-element multicall, exercising the Ok branch of the bisection loop with a
+    // chunk whose `start = 2` and offsets 0 and 1. Those successes must land at
+    // resolved[2] and resolved[3] (i.e. `resolved[start + offset]`), not at
+    // resolved[0]/resolved[1] — otherwise they would clobber the reverting
+    // pair's slots. The [0,2) half reverts and bisects to singletons.
+    #[tokio::test]
+    async fn test_batch_quote_bisection_multi_element_ok_subchunk_lands_at_offset() {
+        let rpc_server = MockServer::start_async().await;
+        let raindex = "0xee0000000000000000000000000000000000ee00"
+            .parse::<Address>()
+            .unwrap();
+
+        let three = Float::parse("3".to_string()).unwrap();
+        let four = Float::parse("4".to_string()).unwrap();
+        let five = Float::parse("5".to_string()).unwrap();
+        let six = Float::parse("6".to_string()).unwrap();
+
+        // Revert pair indices and success pair indices, each distinctive.
+        let r0 = 0xA0A0u64;
+        let r1 = 0xA1A1u64;
+        let s2 = 0xB2B2u64;
+        let s3 = 0xB3B3u64;
+        let r0_needle = format!("{r0:064x}");
+        let r1_needle = format!("{r1:064x}");
+        let s2_needle = format!("{s2:064x}");
+        let s3_needle = format!("{s3:064x}");
+
+        struct FakeRegistry;
+        #[async_trait::async_trait]
+        impl ErrorRegistry for FakeRegistry {
+            async fn lookup(
+                &self,
+                selector: [u8; 4],
+            ) -> Result<Vec<AlloyError>, rain_error_decoding::AbiDecodeFailedErrors> {
+                if selector == [0x73, 0x4b, 0xc7, 0x1c] {
+                    Ok(vec!["TokenSelfTrade()".parse().unwrap()])
+                } else {
+                    Ok(vec![])
+                }
+            }
+        }
+
+        // Resolution is first-match by definition order. Register revert mocks
+        // FIRST keyed on each revert index: a body containing r1 (full chunk,
+        // [0,2) half, r1 singleton) reverts; a body containing r0 (r0 singleton)
+        // reverts. The full chunk also contains s2/s3, but the r1 revert mock is
+        // earlier so it wins. The [2,4) half contains only s2/s3 (no r0/r1), so
+        // no revert mock matches it.
+        rpc_server.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(r1_needle.clone());
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": { "code": 3, "message": "execution reverted", "data": "0x734bc71c" }
+            }));
+        });
+        rpc_server.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(r0_needle.clone());
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "error": { "code": 3, "message": "execution reverted", "data": "0x734bc71c" }
+            }));
+        });
+        // Success mock for the [2,4) half: matches only when BOTH s2 and s3 are
+        // present (the 2-element sub-chunk). Returns a 2-element multicall.
+        let ok_pair = encode_multicall_return(vec![
+            encode_quote2_return_bytes(true, three, four),
+            encode_quote2_return_bytes(true, five, six),
+        ]);
+        rpc_server.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(s2_needle.clone())
+                .body_contains(s3_needle.clone());
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": ok_pair,
+            }));
+        });
+
+        // Input order: revert pair first (slots 0,1), success pair second (2,3).
+        let quote_targets = vec![
+            target_with(raindex, r0),
+            target_with(raindex, r1),
+            target_with(raindex, s2),
+            target_with(raindex, s3),
+        ];
+        let result = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            Address::ZERO,
+            Some(&FakeRegistry),
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 4);
+        // Slots 0 and 1: the reverting pair.
+        for r in &result[0..2] {
+            assert!(
+                matches!(
+                    r,
+                    Err(FailedQuote::RevertError(
+                        rain_error_decoding::AbiDecodedErrorType::Known { name, .. }
+                    )) if name == "TokenSelfTrade"
+                ),
+                "expected revert in slots 0/1, got: {r:?}"
+            );
+        }
+        // Slots 2 and 3: the successful pair, in order (3,4) then (5,6). If the
+        // Ok-branch offset were dropped, these would land at slots 0/1 instead.
+        let q2 = result[2].as_ref().unwrap();
+        let q3 = result[3].as_ref().unwrap();
+        assert!(q2.max_output.eq(three).unwrap());
+        assert!(q2.ratio.eq(four).unwrap());
+        assert!(q3.max_output.eq(five).unwrap());
+        assert!(q3.ratio.eq(six).unwrap());
+    }
 }
