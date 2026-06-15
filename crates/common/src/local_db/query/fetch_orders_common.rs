@@ -245,8 +245,8 @@ mod tests {
             .collect()
     }
 
-    // Kills negating/forcing the active-filter match arm: each variant maps to
-    // its exact lowercase string, pushed as the first parameter.
+    // Each active-filter variant maps to its exact lowercase string, pushed as
+    // the first parameter.
     #[test]
     fn active_filter_variants_map_to_exact_strings() {
         for (filter, expected) in [
@@ -263,10 +263,9 @@ mod tests {
         }
     }
 
-    // Kills removing owners `.sort()`/`.dedup()`: owners are deduplicated and
-    // sorted, so a duplicated/unsorted input yields exactly the unique sorted set
-    // both in params and in PreparedFilters is N/A (owners not returned) -> assert
-    // the bound owner params directly.
+    // Owners are deduplicated and sorted before binding, so a duplicated and
+    // unsorted input yields exactly the unique sorted set in the bound owner
+    // params.
     #[test]
     fn owners_are_sorted_and_deduplicated() {
         let a = address!("0x00000000000000000000000000000000000000aa");
@@ -294,9 +293,8 @@ mod tests {
         assert!(stmt.sql().contains("AND l.order_owner IN (?2, ?3, ?4)"));
     }
 
-    // Kills removing chain_ids dedup/sort in PreparedFilters: the returned
-    // chain_ids must be the unique, ascending set (consumed by the caller for
-    // the remaining clauses).
+    // The returned chain_ids are the unique, ascending set (consumed by the
+    // caller for the remaining clauses).
     #[test]
     fn prepared_chain_ids_are_sorted_and_deduplicated() {
         let args = FetchOrdersArgs {
@@ -307,7 +305,7 @@ mod tests {
         assert_eq!(prepared.chain_ids, vec![1, 42, 137]);
     }
 
-    // Kills removing raindexes dedup/sort in PreparedFilters.
+    // The returned raindexes are the unique, sorted set.
     #[test]
     fn prepared_raindexes_are_sorted_and_deduplicated() {
         let a = address!("0x00000000000000000000000000000000000000aa");
@@ -320,9 +318,8 @@ mod tests {
         assert_eq!(prepared.raindexes, vec![a, b]);
     }
 
-    // Kills the `input_tokens == output_tokens` combined-branch condition: when
-    // identical, ONE EXISTS with OR-logic is emitted (not two EXISTS), and the
-    // OUTPUT_TOKENS marker is fully removed.
+    // When input_tokens equals output_tokens, ONE EXISTS with OR-logic is
+    // emitted (not two EXISTS), and the OUTPUT_TOKENS marker is removed.
     #[test]
     fn identical_input_output_tokens_use_single_combined_exists() {
         let t = address!("0x00000000000000000000000000000000000000aa");
@@ -354,8 +351,8 @@ mod tests {
         assert_eq!(bound, 2);
     }
 
-    // Kills the same condition the other way: differing input/output token sets
-    // must produce TWO separate directional EXISTS clauses (no OR-combining).
+    // Differing input/output token sets produce TWO separate directional EXISTS
+    // clauses (no OR-combining).
     #[test]
     fn differing_input_output_tokens_use_two_separate_exists() {
         let i = address!("0x00000000000000000000000000000000000000aa");
@@ -373,9 +370,8 @@ mod tests {
         assert!(stmt.sql().contains("AND lower(io2.io_type) = 'output'"));
     }
 
-    // Kills changing the has_positive_output_vault_balance == Some(true) branch:
-    // only Some(true) injects the EXISTS clause with a ZERO vault-id guard param;
-    // Some(false) and None strip it entirely.
+    // has_positive_output_vault_balance == Some(true) injects the EXISTS clause
+    // with a ZERO vault-id guard param; Some(false) and None strip it entirely.
     #[test]
     fn positive_balance_some_true_injects_exists_with_zero_vault_id() {
         let args = FetchOrdersArgs {
@@ -411,8 +407,8 @@ mod tests {
         assert!(!stmt.sql().contains("FLOAT_GT_ZERO(vb_balance.balance)"));
     }
 
-    // Kills removing the order-hash clause binding: Some(hash) injects the
-    // COALESCE clause with a bound param; None strips the marker.
+    // Some(hash) injects the COALESCE clause with a bound param; None strips the
+    // marker.
     #[test]
     fn order_hash_some_binds_clause_none_strips() {
         use alloy::primitives::b256;

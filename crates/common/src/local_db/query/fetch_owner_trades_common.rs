@@ -146,8 +146,8 @@ mod tests {
         );
     }
 
-    // Kills removing chain_ids `.dedup()`: duplicated input must collapse to the
-    // unique set, so exactly two U64 params (1, 137) are bound — not four.
+    // Duplicated chain_ids collapse to the unique set, so exactly two U64 params
+    // (1, 137) are bound for a four-element input.
     #[test]
     fn chain_ids_are_deduplicated_before_binding() {
         let stmt = bind(&[137, 1, 137, 1], &[], &TimeFilter::default()).unwrap();
@@ -155,15 +155,14 @@ mod tests {
         assert!(stmt.sql().contains("AND tws.chain_id IN (?2, ?3)"));
     }
 
-    // Kills removing chain_ids `.sort_unstable()`: the bound list must be in
-    // ascending order regardless of input order.
+    // The bound chain_ids list is in ascending order regardless of input order.
     #[test]
     fn chain_ids_are_sorted_ascending() {
         let stmt = bind(&[137, 1, 42], &[], &TimeFilter::default()).unwrap();
         assert_eq!(u64_params(&stmt), vec![1, 42, 137]);
     }
 
-    // Kills removing raindex `.dedup()`: duplicate addresses collapse to one param.
+    // Duplicate raindex addresses collapse to one param.
     #[test]
     fn raindexes_are_deduplicated_before_binding() {
         let dup = address!("0x2f209e5b67a33b8fe96e28f24628df6da301c8eb");
@@ -186,8 +185,8 @@ mod tests {
         );
     }
 
-    // Kills `start > end` -> `start >= end`: an equal-bound window [t, t] is a
-    // valid (single-instant) filter and must NOT be rejected.
+    // An equal-bound window [t, t] is a valid (single-instant) filter and is
+    // accepted.
     #[test]
     fn equal_start_and_end_timestamps_are_accepted() {
         let stmt = bind(
@@ -207,8 +206,7 @@ mod tests {
         assert_eq!(stmt.params()[2], SqlValue::I64(1_000));
     }
 
-    // Kills weakening/removing the `start > end` guard: a strictly inverted
-    // window must error.
+    // A strictly inverted window (start > end) errors.
     #[test]
     fn inverted_window_is_rejected() {
         let err = bind(
@@ -223,8 +221,8 @@ mod tests {
         assert_eq!(err, SqlBuildError::new("start_timestamp > end_timestamp"));
     }
 
-    // Kills removing the start i64::try_from overflow guard: a start beyond
-    // i64::MAX must produce the range error, not silently bind a wrong value.
+    // A start beyond i64::MAX produces the range error rather than binding a
+    // wrong value.
     #[test]
     fn start_timestamp_overflowing_i64_errors() {
         let err = bind(
@@ -247,7 +245,7 @@ mod tests {
         }
     }
 
-    // Kills removing the end i64::try_from overflow guard.
+    // An end beyond i64::MAX produces the range error.
     #[test]
     fn end_timestamp_overflowing_i64_errors() {
         let err = bind(
@@ -270,8 +268,8 @@ mod tests {
         }
     }
 
-    // Kills swapping the start/end clause bodies and markers: each body must be
-    // spliced at its own marker, and only the start bound present when end=None.
+    // Each clause body is spliced at its own marker, and only the start bound is
+    // present when end=None.
     #[test]
     fn only_start_bound_when_end_is_none() {
         let stmt = bind(
@@ -308,8 +306,8 @@ mod tests {
         assert_eq!(stmt.params()[1], SqlValue::I64(900));
     }
 
-    // Kills removing either timestamp clause removal in the None/None case: with
-    // no time filter, both markers are stripped and no timestamp params bound.
+    // With no time filter, both timestamp markers are stripped and no timestamp
+    // params are bound.
     #[test]
     fn no_timestamp_clauses_when_filter_empty() {
         let stmt = bind(&[], &[], &TimeFilter::default()).unwrap();
@@ -320,8 +318,8 @@ mod tests {
         assert_eq!(stmt.params().len(), 1);
     }
 
-    // Kills removing the chain-id list-clause marker replacement: an empty
-    // chain_ids list must strip the marker entirely (no dangling placeholder).
+    // An empty chain_ids list strips the marker entirely (no dangling
+    // placeholder).
     #[test]
     fn empty_chain_ids_strips_clause() {
         let stmt = bind(&[], &[], &TimeFilter::default()).unwrap();
