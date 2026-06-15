@@ -231,6 +231,33 @@ describe("VaultsListTable", () => {
     );
   });
 
+  it("shows hover title and aria-label on the vault actions menu button", async () => {
+    mockMatchesAccount.mockReturnValue(true);
+    const mockQuery = vi.mocked(await import("@tanstack/svelte-query"));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
+      subscribe: (fn: (value: any) => void) => {
+        fn({
+          data: { pages: [mockVaultsList] },
+          status: "success",
+          isFetching: false,
+          isFetched: true,
+        });
+        return { unsubscribe: () => {} };
+      },
+    })) as Mock;
+
+    render(VaultsListTable, {
+      ...defaultProps,
+      handleDepositModal: vi.fn(),
+      handleWithdrawModal: vi.fn(),
+    } as unknown as VaultsListTableProps);
+
+    const menuButton = screen.getByTestId("vault-menu");
+    expect(menuButton).toHaveAttribute("title", "Vault actions");
+    expect(menuButton).toHaveAttribute("aria-label", "Vault actions");
+  });
+
   it("hides action buttons when user is not the vault owner", () => {
     mockMatchesAccount.mockReturnValue(false);
     render(VaultsListTable, {

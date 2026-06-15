@@ -20,24 +20,13 @@ import {
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotOrderOwner, StackItem, NegativeBounty, ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
 import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
-import {StateNamespace, EvalV4, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {StateNamespace, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {Math} from "@openzeppelin-contracts-5.6.1/utils/math/Math.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
 import {console2} from "forge-std-1.16.1/src/console2.sol";
-
-contract MockInterpreter {
-    StackItem[] internal sStack;
-
-    constructor(StackItem[] memory stack) {
-        sStack = stack;
-    }
-
-    function eval4(EvalV4 memory) external view returns (StackItem[] memory, bytes32[] memory) {
-        return (sStack, new bytes32[](0));
-    }
-}
+import {MockInterpreter} from "test/util/concrete/MockInterpreter.sol";
 
 /// @title RaindexV6ClearTest
 /// Tests clearing an order.
