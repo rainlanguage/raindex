@@ -382,6 +382,7 @@ describe("FixedBottomTransaction", () => {
       name: "Dismiss transaction",
     });
     expect(closeButton).toHaveAttribute("aria-label", "Dismiss transaction");
+    expect(closeButton).toHaveAttribute("title", "Dismiss transaction");
   });
 
   it("should open links in new tab with proper attributes", () => {

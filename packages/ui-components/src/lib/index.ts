@@ -73,6 +73,8 @@ export { default as FixedBottomTransaction } from "./components/transactions/Fix
 export { default as LocalDbStatusCard } from "./components/LocalDbStatusCard.svelte";
 export { default as LocalDbStatusBadge } from "./components/LocalDbStatusBadge.svelte";
 export { default as LocalDbStatusModal } from "./components/LocalDbStatusModal.svelte";
+export { aggregateLocalDbStatus } from "./utils/localDbStatus";
+export type { AggregableSyncStatus } from "./utils/localDbStatus";
 
 //Types
 export type { AppStoresInterface } from "./types/appStores.ts";

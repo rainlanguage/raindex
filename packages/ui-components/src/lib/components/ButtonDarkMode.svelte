@@ -10,6 +10,12 @@
 	}
 </script>
 
-<button type="button" on:click={toggle}>
+<button
+	type="button"
+	title="Toggle dark mode"
+	aria-label="Toggle dark mode"
+	data-testid="dark-mode-toggle"
+	on:click={toggle}
+>
 	<DarkMode />
 </button>
