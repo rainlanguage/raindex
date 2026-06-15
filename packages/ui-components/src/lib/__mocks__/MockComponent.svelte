@@ -9,9 +9,8 @@
 
 	// The received props are mirrored into a shared store so tests can assert on
 	// values (functions, objects) that cannot round-trip through DOM attributes.
-	// This runs in `afterUpdate` rather than a reactive `$:` block so it never
-	// re-enters the component's update cycle, which caused the invalid array
-	// length crash when multiple instances were mounted.
+	// This runs in `afterUpdate`, so the store write happens outside the
+	// component's update cycle and does not re-enter it.
 	afterUpdate(() => {
 		props.set($$restProps);
 	});

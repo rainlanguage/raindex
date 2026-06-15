@@ -36,10 +36,8 @@ test("mirrors the received props (excluding testid) into the shared store", () =
 });
 
 test("mounts more than one instance with distinct testids without crashing", () => {
-  // Reproduces the #1840 scenario: rendering more than one MockComponent in a
-  // single tree previously threw "RangeError: Invalid array length" from the
-  // reactive props store feedback loop. Distinct testids let each instance be
-  // queried individually.
+  // Rendering more than one MockComponent in a single tree is supported.
+  // Distinct testids let each instance be queried individually.
   render(MockComponentTest);
 
   const first = screen.getByTestId("first");
