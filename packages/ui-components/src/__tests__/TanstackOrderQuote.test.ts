@@ -83,6 +83,83 @@ describe("TanstackOrderQuote component", () => {
     });
   });
 
+  it("shows hover title and aria-label on the quote control icon buttons", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          block_number: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.550122181502135692",
+            formattedRatio: "6.563567234157974775",
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    const refreshButton = await screen.findByTestId("refresh-button");
+    expect(refreshButton).toHaveAttribute("title", "Refresh quotes");
+    expect(refreshButton).toHaveAttribute("aria-label", "Refresh quotes");
+
+    const pauseButton = screen.getByTestId("pause-refresh-button");
+    expect(pauseButton).toHaveAttribute("title", "Pause auto-refresh");
+    expect(pauseButton).toHaveAttribute("aria-label", "Pause auto-refresh");
+
+    const resumeButton = screen.getByTestId("resume-refresh-button");
+    expect(resumeButton).toHaveAttribute("title", "Resume auto-refresh");
+    expect(resumeButton).toHaveAttribute("aria-label", "Resume auto-refresh");
+
+    const debugButton = await screen.findByTestId("debug-quote-button");
+    expect(debugButton).toHaveAttribute("title", "Debug quote");
+    expect(debugButton).toHaveAttribute("aria-label", "Debug quote");
+  });
+
+  it("shows hover title and aria-label on the quote error icon buttons", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: false,
+          block_number: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: undefined,
+          error: "Failed to calculate quote",
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    const copyButton = await screen.findByRole("button", {
+      name: "Copy quote error",
+    });
+    expect(copyButton).toHaveAttribute("title", "Copy quote error");
+    expect(copyButton).toHaveAttribute("aria-label", "Copy quote error");
+
+    const debugErrorButton = screen.getByTestId("debug-quote-error-button");
+    expect(debugErrorButton).toHaveAttribute("title", "Debug quote");
+    expect(debugErrorButton).toHaveAttribute("aria-label", "Debug quote");
+  });
+
   it("refreshes the quote when the refresh icon is clicked", async () => {
     (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
       value: [
