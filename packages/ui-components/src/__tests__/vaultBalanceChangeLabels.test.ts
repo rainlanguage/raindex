@@ -21,7 +21,7 @@ describe("VAULT_BALANCE_CHANGE_LABELS", () => {
     });
   });
 
-  // Pin each entry individually so a single mutated value is caught precisely.
+  // Each entry is pinned individually so every label is asserted on its own.
   it.each([
     ["deposit", "Deposit"],
     ["withdrawal", "Withdrawal"],
@@ -92,8 +92,8 @@ describe("labelForVaultBalanceChangeType", () => {
   );
 
   it("returns the looked-up label, not the raw type, for a known type", () => {
-    // Guards against the lookup being dropped so the raw type leaks through:
-    // "takeOrder" must resolve to "Take order", which differs from the input.
+    // For a mapped type, the looked-up label is returned: "takeOrder"
+    // resolves to "Take order", which differs from the input string.
     const result = labelForVaultBalanceChangeType("takeOrder");
     expect(result).toBe("Take order");
     expect(result).not.toBe("takeOrder");
