@@ -12,6 +12,14 @@ import {HANDLE_IO_ENTRYPOINT} from "../../../src/concrete/raindex/RaindexV6.sol"
 import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
 
 library LibTestAddOrder {
+    /// Serialized parser (parse2) output for "_ _:1e18 1e18;:;": the
+    /// `[constants length][constants][bytecode length][bytecode]` blob that
+    /// `evaluable.bytecode` holds in production, not the bare rain bytecode. This
+    /// is the canonical valid order bytecode (two sources: calculate + handle IO)
+    /// that the addOrder source-count guard accepts.
+    bytes internal constant VALID_ORDER_BYTECODE =
+        hex"000000000000000000000000000000000000000000000000000000000000000100000012000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000015020000000c02020002011000000110000000000000";
+
     /// A little boilerplate to make it easier to build the order that we expect
     /// for a given order config.
     function expectedOrder(address owner, OrderConfigV4 memory config) internal pure returns (OrderV4 memory, bytes32) {
@@ -57,7 +65,6 @@ library LibTestAddOrder {
             }
         }
 
-        // Taken from parser for "_ _:1e18 1e18;:;".
-        config.evaluable.bytecode = hex"020000000c02020002010000000100000000000000";
+        config.evaluable.bytecode = VALID_ORDER_BYTECODE;
     }
 }

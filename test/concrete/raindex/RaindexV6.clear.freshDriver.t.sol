@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.16.1/src/Test.sol";
-import {RaindexV6, NegativeBounty, ClearZeroAmount, StackItem} from "src/concrete/raindex/RaindexV6.sol";
+import {NegativeBounty, ClearZeroAmount} from "src/concrete/raindex/RaindexV6.sol";
 import {
     OrderV4,
     OrderConfigV4,
@@ -17,41 +17,12 @@ import {
     TaskV2
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {EvalV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
-
-/// A constructable interpreter mock that returns [ratio, max] for the calculate
-/// entrypoint and an empty stack for handle IO.
-contract CalcInterpreter {
-    StackItem[] internal sCalcStack;
-
-    constructor(Float ratio, Float max) {
-        sCalcStack.push(StackItem.wrap(Float.unwrap(ratio)));
-        sCalcStack.push(StackItem.wrap(Float.unwrap(max)));
-    }
-
-    function eval4(EvalV4 memory) external view returns (StackItem[] memory, bytes32[] memory) {
-        // The calculate entrypoint reads [ratio, max] off this stack; the handle
-        // IO entrypoint discards the returned stack, so returning the same stack
-        // for both is harmless.
-        return (sCalcStack, new bytes32[](0));
-    }
-}
-
-/// @dev RaindexV6 subclass that exposes order-liveness and vault seeding so a
-/// full `clear3` can be driven against fresh-compiled source bytecode.
-contract RaindexV6ClearDriverHarness is RaindexV6 {
-    function setOrderLive(bytes32 orderHash) external {
-        sOrders[orderHash] = 1;
-    }
-
-    function seedVault(address owner, address token, bytes32 vaultId, Float amount) external {
-        sVaultBalances[owner][token][vaultId] = amount;
-    }
-}
+import {CalcInterpreter} from "test/util/concrete/CalcInterpreter.sol";
+import {RaindexV6ClearDriverHarness} from "test/util/concrete/RaindexV6ClearDriverHarness.sol";
 
 /// @title RaindexV6ClearFreshDriverTest
 /// @notice Drives the FULL `clear3` against fresh-compiled RaindexV6 bytecode so

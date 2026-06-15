@@ -60,7 +60,7 @@ impl RaindexVaultsList {
         }
         // Generate multicall calldata for all vaults
         for vault in vaults_to_withdraw {
-            match vault.get_withdraw_calldata(&vault.balance()).await {
+            match vault.build_withdraw_calldata(&vault.balance()).await {
                 Ok(calldata) => calldatas.push(calldata),
                 Err(e) => return Err(VaultsListError::WithdrawMulticallError(e.to_readable_msg())),
             }
