@@ -122,6 +122,38 @@ describe("CodeMirrorRainlang", () => {
     expect(onSave).toHaveBeenCalledWith("_a: 1;\n_b: 2;");
   });
 
+  it("renders the editor when the value is an empty string", async () => {
+    const screen = render(CodeMirrorRainlang, {
+      props: {
+        rainlangText: "",
+        codeMirrorTheme: writable({}),
+        codeMirrorDisabled: false,
+        codeMirrorStyles: {},
+      },
+    });
+
+    const editor = await screen.findByTestId("mock-component");
+    expect(editor).toHaveAttribute("value", "");
+  });
+
+  it("keeps the editor mounted when blur strips whitespace-only input to empty", async () => {
+    const screen = render(CodeMirrorRainlang, {
+      props: {
+        rainlangText: "   \n\t\n  \n",
+        codeMirrorTheme: writable({}),
+        codeMirrorDisabled: false,
+        codeMirrorStyles: {},
+      },
+    });
+
+    const editor = await screen.findByTestId("mock-component");
+    await fireEvent.blur(editor);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-component")).toHaveAttribute("value", "");
+    });
+  });
+
   it("does not strip whitespace on render before blur", async () => {
     const onSave = vi.fn();
     const screen = render(CodeMirrorRainlang, {

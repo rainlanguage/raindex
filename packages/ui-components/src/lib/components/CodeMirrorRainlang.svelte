@@ -27,7 +27,9 @@
 	}
 </script>
 
-{#if value}
+<!-- Render the editor whenever a source value is present, including an empty
+string left by stripping whitespace-only input on blur. -->
+{#if value != null}
 	<CodeMirror
 		{value}
 		extensions={[RainlangLR]}
