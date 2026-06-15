@@ -124,7 +124,7 @@ library LibRaindexDeploy {
         0x774ca4c194abf0720bca6c033580762029a80291feefd0a4b7855b16bcbbf7a9;
 
     /// The deployed address of the `RaindexV6` contract at the published `0.1.10`
-    /// tag. (Changed in 0.1.10 — seed calculations context before calculate eval.)
+    /// tag. (Changed in 0.1.10 — calc-context panic fix.)
     address constant RAINDEX_DEPLOYED_ADDRESS_0_1_10 = 0x7992F7A3044258c9a200835970D5bFf275Efe5e7;
 
     /// The runtime code hash of the `RaindexV6` contract at the published `0.1.10`
