@@ -322,6 +322,8 @@ pub enum RaindexOrderBuilderError {
     #[error(transparent)]
     WritableTransactionExecuteError(#[from] crate::transaction::WritableTransactionExecuteError),
     #[error(transparent)]
+    TransactionArgsError(#[from] crate::transaction::TransactionArgsError),
+    #[error(transparent)]
     AddOrderArgsError(#[from] crate::add_order::AddOrderArgsError),
     #[error(transparent)]
     ERC20Error(Box<crate::erc20::Error>),
@@ -414,6 +416,8 @@ impl RaindexOrderBuilderError {
                 format!("Unit conversion error: {}", err),
             Self::WritableTransactionExecuteError(err) =>
                 format!("Transaction execution error: {}", err),
+            Self::TransactionArgsError(err) =>
+                format!("Transaction arguments error: {}", err),
             Self::AddOrderArgsError(err) =>
                 format!("Invalid order arguments: {}", err),
             Self::ERC20Error(err) =>

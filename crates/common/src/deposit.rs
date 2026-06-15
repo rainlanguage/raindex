@@ -1,11 +1,10 @@
-use crate::transaction::{
-    read_call, TransactionArgs, TransactionArgsError, WritableTransactionExecuteError,
-};
+use crate::allowance::read_allowance;
+use crate::transaction::{TransactionArgs, TransactionArgsError, WritableTransactionExecuteError};
 use alloy::primitives::{Address, B256, U256};
 use rain_math_float::{Float, FloatError};
+use raindex_bindings::IRaindexV6::deposit4Call;
 #[cfg(not(target_family = "wasm"))]
 use raindex_bindings::IERC20::approveCall;
-use raindex_bindings::{IRaindexV6::deposit4Call, IERC20::allowanceCall};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -55,13 +54,11 @@ impl DepositArgs {
         owner: Address,
         transaction_args: TransactionArgs,
     ) -> Result<U256, DepositError> {
-        let res = read_call(
+        let res = read_allowance(
             &transaction_args.rpcs,
             self.token,
-            allowanceCall {
-                owner,
-                spender: transaction_args.raindex_address,
-            },
+            owner,
+            transaction_args.raindex_address,
         )
         .await?;
         Ok(res)

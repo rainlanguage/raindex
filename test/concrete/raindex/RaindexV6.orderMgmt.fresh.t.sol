@@ -31,8 +31,11 @@ contract RaindexV6OrderMgmtFreshTest is RaindexV6FreshTest, IMetaV1_2 {
     using Strings for address;
     using Strings for uint256;
 
-    /// Any bytecode is accepted by `addOrder4`; the stack/IO checks are runtime.
-    bytes constant CALC_BYTECODE = hex"02000000040000000000000000";
+    /// The canonical two-source (calculate + handle IO) serialized bytecode that
+    /// `addOrder4`'s source-count guard accepts, so each test exercises the
+    /// specific input/output/meta guard it targets rather than the source-count
+    /// guard. The runtime stack/IO checks are not reached by `addOrder4`.
+    bytes constant CALC_BYTECODE = LibTestAddOrder.VALID_ORDER_BYTECODE;
 
     // -----------------------------------------------------------------------
     // addOrder4: input/output guards (A1, A2)
