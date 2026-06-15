@@ -453,10 +453,7 @@ impl RaindexVault {
     /// Used by [`RaindexVault::get_calldatas`] so the on-chain allowance is only read once.
     /// It reads the allowance via [`Self::read_allowance`] (deposit-free), so it takes no
     /// [`DepositArgs`].
-    async fn build_approval_calldata(
-        &self,
-        amount: &Float,
-    ) -> Result<Option<Bytes>, RaindexError> {
+    async fn build_approval_calldata(&self, amount: &Float) -> Result<Option<Bytes>, RaindexError> {
         let allowance = self.read_allowance().await?;
         let allowance_float = Float::from_fixed_decimal(allowance, self.token.decimals)?;
 
