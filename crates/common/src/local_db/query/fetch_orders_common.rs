@@ -204,3 +204,238 @@ pub(crate) fn bind_common_order_filters(
         raindexes,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::fetch_orders::{
+        FetchOrdersActiveFilter, FetchOrdersArgs, FetchOrdersTokensFilter,
+    };
+    use super::*;
+    use alloy::primitives::address;
+
+    // Template carrying every marker the binder replaces, run in isolation.
+    fn template() -> String {
+        format!(
+            "X ?1 {} {} {} {} {} {} {} {} {}",
+            MAIN_CHAIN_IDS_CLAUSE,
+            LATEST_ADD_CHAIN_IDS_CLAUSE,
+            MAIN_RAINDEXES_CLAUSE,
+            LATEST_ADD_RAINDEXES_CLAUSE,
+            OWNERS_CLAUSE,
+            ORDER_HASH_CLAUSE,
+            INPUT_TOKENS_CLAUSE,
+            OUTPUT_TOKENS_CLAUSE,
+            POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE,
+        )
+    }
+
+    fn bind(args: &FetchOrdersArgs) -> (SqlStatement, PreparedFilters) {
+        let mut stmt = SqlStatement::new(template());
+        let prepared = bind_common_order_filters(&mut stmt, args).unwrap();
+        (stmt, prepared)
+    }
+
+    fn text_params(stmt: &SqlStatement) -> Vec<String> {
+        stmt.params()
+            .iter()
+            .filter_map(|p| match p {
+                SqlValue::Text(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    // Kills negating/forcing the active-filter match arm: each variant maps to
+    // its exact lowercase string, pushed as the first parameter.
+    #[test]
+    fn active_filter_variants_map_to_exact_strings() {
+        for (filter, expected) in [
+            (FetchOrdersActiveFilter::All, "all"),
+            (FetchOrdersActiveFilter::Active, "active"),
+            (FetchOrdersActiveFilter::Inactive, "inactive"),
+        ] {
+            let args = FetchOrdersArgs {
+                filter,
+                ..FetchOrdersArgs::default()
+            };
+            let (stmt, _) = bind(&args);
+            assert_eq!(stmt.params()[0], SqlValue::Text(expected.to_string()));
+        }
+    }
+
+    // Kills removing owners `.sort()`/`.dedup()`: owners are deduplicated and
+    // sorted, so a duplicated/unsorted input yields exactly the unique sorted set
+    // both in params and in PreparedFilters is N/A (owners not returned) -> assert
+    // the bound owner params directly.
+    #[test]
+    fn owners_are_sorted_and_deduplicated() {
+        let a = address!("0x00000000000000000000000000000000000000aa");
+        let b = address!("0x00000000000000000000000000000000000000bb");
+        let c = address!("0x00000000000000000000000000000000000000cc");
+        let args = FetchOrdersArgs {
+            owners: vec![c, a, b, a, c],
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&args);
+        // params[0] = active filter ("all"); the next three are the sorted,
+        // deduplicated owners.
+        let owners: Vec<String> = text_params(&stmt)
+            .into_iter()
+            .filter(|s| s.starts_with("0x000000000000000000000000000000000000"))
+            .collect();
+        assert_eq!(
+            owners,
+            vec![
+                "0x00000000000000000000000000000000000000aa".to_string(),
+                "0x00000000000000000000000000000000000000bb".to_string(),
+                "0x00000000000000000000000000000000000000cc".to_string(),
+            ]
+        );
+        assert!(stmt.sql().contains("AND l.order_owner IN (?2, ?3, ?4)"));
+    }
+
+    // Kills removing chain_ids dedup/sort in PreparedFilters: the returned
+    // chain_ids must be the unique, ascending set (consumed by the caller for
+    // the remaining clauses).
+    #[test]
+    fn prepared_chain_ids_are_sorted_and_deduplicated() {
+        let args = FetchOrdersArgs {
+            chain_ids: vec![137, 1, 137, 42, 1],
+            ..FetchOrdersArgs::default()
+        };
+        let (_, prepared) = bind(&args);
+        assert_eq!(prepared.chain_ids, vec![1, 42, 137]);
+    }
+
+    // Kills removing raindexes dedup/sort in PreparedFilters.
+    #[test]
+    fn prepared_raindexes_are_sorted_and_deduplicated() {
+        let a = address!("0x00000000000000000000000000000000000000aa");
+        let b = address!("0x00000000000000000000000000000000000000bb");
+        let args = FetchOrdersArgs {
+            raindex_addresses: vec![b, a, b],
+            ..FetchOrdersArgs::default()
+        };
+        let (_, prepared) = bind(&args);
+        assert_eq!(prepared.raindexes, vec![a, b]);
+    }
+
+    // Kills the `input_tokens == output_tokens` combined-branch condition: when
+    // identical, ONE EXISTS with OR-logic is emitted (not two EXISTS), and the
+    // OUTPUT_TOKENS marker is fully removed.
+    #[test]
+    fn identical_input_output_tokens_use_single_combined_exists() {
+        let t = address!("0x00000000000000000000000000000000000000aa");
+        let args = FetchOrdersArgs {
+            tokens: FetchOrdersTokensFilter {
+                inputs: vec![t],
+                outputs: vec![t],
+            },
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&args);
+        // Single combined EXISTS holding BOTH directional io_type checks joined
+        // by OR (the multi-line `OR` from COMBINED_TOKENS_CLAUSE_BODY).
+        assert_eq!(stmt.sql().matches("AND EXISTS (").count(), 1);
+        assert!(stmt
+            .sql()
+            .contains("(lower(io2.io_type) = 'input' AND io2.token IN ("));
+        assert!(stmt
+            .sql()
+            .contains("(lower(io2.io_type) = 'output' AND io2.token IN ("));
+        assert!(stmt.sql().contains("\n          OR\n"));
+        assert!(!stmt.sql().contains(OUTPUT_TOKENS_CLAUSE));
+        assert!(!stmt.sql().contains(INPUT_TOKENS_CLAUSE));
+        // Token bound twice (once per side of the OR).
+        let bound = text_params(&stmt)
+            .into_iter()
+            .filter(|s| s == "0x00000000000000000000000000000000000000aa")
+            .count();
+        assert_eq!(bound, 2);
+    }
+
+    // Kills the same condition the other way: differing input/output token sets
+    // must produce TWO separate directional EXISTS clauses (no OR-combining).
+    #[test]
+    fn differing_input_output_tokens_use_two_separate_exists() {
+        let i = address!("0x00000000000000000000000000000000000000aa");
+        let o = address!("0x00000000000000000000000000000000000000bb");
+        let args = FetchOrdersArgs {
+            tokens: FetchOrdersTokensFilter {
+                inputs: vec![i],
+                outputs: vec![o],
+            },
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&args);
+        assert_eq!(stmt.sql().matches("AND EXISTS (").count(), 2);
+        assert!(stmt.sql().contains("AND lower(io2.io_type) = 'input'"));
+        assert!(stmt.sql().contains("AND lower(io2.io_type) = 'output'"));
+    }
+
+    // Kills changing the has_positive_output_vault_balance == Some(true) branch:
+    // only Some(true) injects the EXISTS clause with a ZERO vault-id guard param;
+    // Some(false) and None strip it entirely.
+    #[test]
+    fn positive_balance_some_true_injects_exists_with_zero_vault_id() {
+        let args = FetchOrdersArgs {
+            has_positive_output_vault_balance: Some(true),
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&args);
+        assert!(!stmt.sql().contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(stmt.sql().contains("FLOAT_GT_ZERO(vb_balance.balance)"));
+        assert!(stmt.sql().contains("io_balance.vault_id != ?"));
+        // The vault-id guard binds U256::ZERO as a 32-byte hex text param.
+        assert!(text_params(&stmt).contains(
+            &"0x0000000000000000000000000000000000000000000000000000000000000000".to_string()
+        ));
+    }
+
+    #[test]
+    fn positive_balance_some_false_strips_clause() {
+        let args = FetchOrdersArgs {
+            has_positive_output_vault_balance: Some(false),
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&args);
+        assert!(!stmt.sql().contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(!stmt.sql().contains("FLOAT_GT_ZERO(vb_balance.balance)"));
+    }
+
+    #[test]
+    fn positive_balance_none_strips_clause() {
+        let args = FetchOrdersArgs::default();
+        let (stmt, _) = bind(&args);
+        assert!(!stmt.sql().contains(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE));
+        assert!(!stmt.sql().contains("FLOAT_GT_ZERO(vb_balance.balance)"));
+    }
+
+    // Kills removing the order-hash clause binding: Some(hash) injects the
+    // COALESCE clause with a bound param; None strips the marker.
+    #[test]
+    fn order_hash_some_binds_clause_none_strips() {
+        use alloy::primitives::b256;
+        let with = FetchOrdersArgs {
+            order_hash: Some(b256!(
+                "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+            )),
+            ..FetchOrdersArgs::default()
+        };
+        let (stmt, _) = bind(&with);
+        assert!(stmt
+            .sql()
+            .contains("AND COALESCE(la.order_hash, l.order_hash) = ?"));
+        assert!(!stmt.sql().contains(ORDER_HASH_CLAUSE));
+        assert!(text_params(&stmt).contains(
+            &"0x00000000000000000000000000000000000000000000000000000000deadbeef".to_string()
+        ));
+
+        let without = FetchOrdersArgs::default();
+        let (stmt2, _) = bind(&without);
+        assert!(!stmt2.sql().contains(ORDER_HASH_CLAUSE));
+        assert!(!stmt2
+            .sql()
+            .contains("AND COALESCE(la.order_hash, l.order_hash)"));
+    }
+}
