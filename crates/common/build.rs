@@ -9,7 +9,7 @@ use std::process::Command;
 // HEAD` rather than hard-failing the compile (or relying on a hand-written .env
 // that goes stale). Falls back to "unknown" if git isn't available. A build
 // script can't tell the test profile from a prod build, so the derivation runs
-// unconditionally — it's harmless for prod, which no longer reads the var.
+// unconditionally — it's harmless for prod, which doesn't read the var.
 fn main() {
     println!("cargo:rerun-if-env-changed=COMMIT_SHA");
 
