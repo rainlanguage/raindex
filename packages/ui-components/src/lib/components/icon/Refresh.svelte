@@ -15,6 +15,7 @@
 	export let size = ctx.size || 'md';
 	export let role = ctx.role || 'img';
 	export let ariaLabel = 'refresh';
+	export let title = 'Refresh';
 	export let spin = false;
 	export let testId = 'refresh-button';
 </script>
@@ -23,7 +24,7 @@
 	data-testid={testId}
 	xmlns="http://www.w3.org/2000/svg"
 	fill="none"
-	{...$$restProps}
+	{...{ title, ...$$restProps }}
 	class={twMerge(
 		'shrink-0 cursor-pointer outline-none',
 		sizes[size],

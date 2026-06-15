@@ -53,6 +53,7 @@ import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
     CONTEXT_CALCULATIONS_COLUMN,
+    CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_VAULT_IO_BALANCE_DIFF,
     CONTEXT_VAULT_INPUTS_COLUMN,
     CONTEXT_VAULT_IO_TOKEN,
@@ -451,6 +452,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             revert NoOrders();
         }
 
+        // Guard the max IO before dereferencing any order IO index so a zero max
+        // reverts with this explicit error rather than a bounds panic when an IO
+        // index is also out of range.
+        if (!config.maximumIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
+            revert ZeroMaximumIO();
+        }
+
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
         TakeOrdersIO memory io = TakeOrdersIO({
@@ -481,10 +489,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bool ordersTaken;
 
         {
-            if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
-                revert ZeroMaximumIO();
-            }
-
             uint256 i = 0;
             while (i < config.orders.length && io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 takeOrderConfig = config.orders[i];
@@ -801,6 +805,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
                     order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
                 );
+
+                // The calculations column holds the calculated max output and IO
+                // ratio, which only become known after the calculate eval below.
+                // Seed it with a zero-filled array of the right length so the
+                // `calculated-max-output` and `calculated-io-ratio` words read 0
+                // during calculate (per their NatSpec) instead of reverting on an
+                // out-of-bounds read. The real values overwrite this column after
+                // eval, before handle IO runs.
+                callingContext[CONTEXT_CALCULATIONS_COLUMN - 1] = new bytes32[](CONTEXT_CALCULATIONS_ROWS);
 
                 {
                     uint8 inputDecimals = _safeDecimalsReadOnly(order.validInputs[inputIOIndex].token);
