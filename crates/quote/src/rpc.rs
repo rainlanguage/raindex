@@ -818,8 +818,8 @@ mod tests {
         // 2's index, which never appears in the first chunk.
         let ret_chunk2 = encode_multicall_return(vec![encode_quote2_return_bytes(true, five, six)]);
         mock_eth_call_when_body_contains(&rpc_server, "/rpc", &needle2, &ret_chunk2);
-        // Guard: target 0's index alone (without 1) would be the singleton path;
-        // not expected here, but make it observable if chunking regresses.
+        // Target 0's index is bound for parity with the other chunk needles;
+        // chunk one is matched by target 1's index, so it is unused here.
         let _ = &needle0;
 
         let quote_targets = vec![
@@ -851,10 +851,10 @@ mod tests {
     }
 
     // A multicall whose returned `bytes[]` length does not match the number of
-    // targets in the chunk must be rejected by the length-mismatch guard, not
-    // silently mis-aligned. With a single target, the guard fires inside
-    // `quote_chunk_once`; the singleton path surfaces it as a per-target
-    // `CorruptReturnData` carrying the mismatch detail.
+    // targets in the chunk is rejected by the length-mismatch guard. With a
+    // single target, the guard fires inside `quote_chunk_once`; the singleton
+    // path surfaces it as a per-target `CorruptReturnData` carrying the mismatch
+    // detail.
     #[tokio::test]
     async fn test_batch_quote_multicall_length_mismatch_is_rejected() {
         let rpc_server = MockServer::start_async().await;
@@ -894,9 +894,8 @@ mod tests {
 
     // Mixed chunk: one target quotes successfully, the other reverts. The full
     // chunk multicall (both inner calls) reverts because OZ Multicall bubbles
-    // the first failing inner call. Bisection must split to singletons, place
-    // the successful quote at its input offset and the revert at the other,
-    // never collapsing both into the same outcome.
+    // the first failing inner call. Bisection splits to singletons and places
+    // the successful quote at its input offset and the revert at the other.
     #[tokio::test]
     async fn test_batch_quote_mixed_chunk_bisects_success_and_revert_by_offset() {
         let rpc_server = MockServer::start_async().await;
@@ -994,10 +993,9 @@ mod tests {
     // The full 4-call chunk reverts (OZ bubbles the first revert), so bisection
     // splits into [0,2) and [2,4). The [2,4) half succeeds as a single
     // 2-element multicall, exercising the Ok branch of the bisection loop with a
-    // chunk whose `start = 2` and offsets 0 and 1. Those successes must land at
-    // resolved[2] and resolved[3] (i.e. `resolved[start + offset]`), not at
-    // resolved[0]/resolved[1] — otherwise they would clobber the reverting
-    // pair's slots. The [0,2) half reverts and bisects to singletons.
+    // chunk whose `start = 2` and offsets 0 and 1. Those successes land at
+    // resolved[2] and resolved[3] (i.e. `resolved[start + offset]`). The [0,2)
+    // half reverts and bisects to singletons.
     #[tokio::test]
     async fn test_batch_quote_bisection_multi_element_ok_subchunk_lands_at_offset() {
         let rpc_server = MockServer::start_async().await;
@@ -1110,8 +1108,7 @@ mod tests {
                 "expected revert in slots 0/1, got: {r:?}"
             );
         }
-        // Slots 2 and 3: the successful pair, in order (3,4) then (5,6). If the
-        // Ok-branch offset were dropped, these would land at slots 0/1 instead.
+        // Slots 2 and 3: the successful pair, in order (3,4) then (5,6).
         let q2 = result[2].as_ref().unwrap();
         let q3 = result[3].as_ref().unwrap();
         assert!(q2.max_output.eq(three).unwrap());
