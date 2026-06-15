@@ -1,4 +1,5 @@
 pub mod add_order;
+pub mod allowance;
 pub mod csv;
 pub mod deposit;
 pub mod dotrain_add_order_lsp;
@@ -12,6 +13,7 @@ pub mod parsed_meta;
 pub mod raindex_client;
 pub mod raindex_order_builder;
 pub mod rainlang;
+pub mod registry;
 pub mod remove_order;
 #[cfg(not(target_family = "wasm"))]
 pub mod replays;
