@@ -377,6 +377,27 @@ describe("OrderDetail", () => {
     );
   });
 
+  it("shows hover title and aria-label on the deposit and withdraw icon buttons", async () => {
+    mockMatchesAccount.mockReturnValue(true);
+
+    render(OrderDetail, {
+      props: defaultProps,
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Order")).toBeInTheDocument();
+    });
+
+    const depositButton = screen.getAllByTestId("deposit-button")[0];
+    expect(depositButton).toHaveAttribute("title", "Deposit into vault");
+    expect(depositButton).toHaveAttribute("aria-label", "Deposit into vault");
+
+    const withdrawButton = screen.getAllByTestId("withdraw-button")[0];
+    expect(withdrawButton).toHaveAttribute("title", "Withdraw from vault");
+    expect(withdrawButton).toHaveAttribute("aria-label", "Withdraw from vault");
+  });
+
   it("does not show Take Order button for inactive orders", async () => {
     (mockRaindexClient.getOrderByHash as Mock).mockResolvedValue({
       value: {

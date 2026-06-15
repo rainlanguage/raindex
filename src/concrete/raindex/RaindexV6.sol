@@ -11,6 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensio
 
 import {LibContext} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.1.5/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,
@@ -224,10 +225,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         if (vaultId != bytes32(0)) {
             return sVaultBalances[owner][token][vaultId];
         } else {
-            (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForTokenReadOnly(token);
-            if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-                revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-            }
+            uint8 decimals = _safeDecimalsReadOnly(token);
             //slither-disable-next-line unused-return
             (Float ownerTokenBalance,) =
                 LibDecimalFloat.fromFixedDecimalLossyPacked(IERC20(token).balanceOf(owner), decimals);
@@ -333,6 +331,17 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         nonReentrant
         returns (bool)
     {
+        // An order that lacks the calculate and handle IO entrypoints is
+        // unevaluable so it MUST NOT be added.
+        uint256 sourceCount =
+            LibBytecode.sourceCount(LibInterpreterStateDataContract.bytecodeOf(orderConfig.evaluable.bytecode));
+        if (sourceCount <= SourceIndexV2.unwrap(CALCULATE_ORDER_ENTRYPOINT)) {
+            revert OrderNoSources();
+        }
+        if (sourceCount <= SourceIndexV2.unwrap(HANDLE_IO_ENTRYPOINT)) {
+            revert OrderNoHandleIO();
+        }
+
         if (orderConfig.validInputs.length == 0) {
             revert OrderNoInputs();
         }
@@ -366,12 +375,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 emit MetaV1_2(order.owner, orderHash, orderConfig.meta);
             }
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
 
         return stateChange;
@@ -392,13 +396,17 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             sOrders[orderHash] = ORDER_DEAD;
             emit RemoveOrderV3(msg.sender, orderHash, order);
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
+    }
+
+    /// @dev Runs the post tasks for an order mutation (`addOrder4` / `removeOrder3`)
+    /// with a context of the order hash and the caller.
+    function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
+        LibRaindex.doPost(
+            LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
+            post
+        );
     }
 
     /// @dev Reverts with `TokenSelfTrade` if the input and output tokens are
@@ -679,12 +687,14 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // If either order is dead the clear is a no-op other than emitting
             // `OrderNotFound`. Returning rather than erroring makes it easier to
             // bulk clear using `Multicall`.
-            if (sOrders[aliceOrder.hash()] == ORDER_DEAD) {
-                emit OrderNotFound(msg.sender, aliceOrder.owner, aliceOrder.hash());
+            bytes32 aliceOrderHash = aliceOrder.hash();
+            if (sOrders[aliceOrderHash] == ORDER_DEAD) {
+                emit OrderNotFound(msg.sender, aliceOrder.owner, aliceOrderHash);
                 return;
             }
-            if (sOrders[bobOrder.hash()] == ORDER_DEAD) {
-                emit OrderNotFound(msg.sender, bobOrder.owner, bobOrder.hash());
+            bytes32 bobOrderHash = bobOrder.hash();
+            if (sOrders[bobOrderHash] == ORDER_DEAD) {
+                emit OrderNotFound(msg.sender, bobOrder.owner, bobOrderHash);
                 return;
             }
 
@@ -792,13 +802,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 );
 
                 {
-                    (TOFUOutcome inputOutcome, uint8 inputDecimals) =
-                        LibTOFUTokenDecimals.decimalsForTokenReadOnly(order.validInputs[inputIOIndex].token);
-                    if (inputOutcome != TOFUOutcome.Consistent && inputOutcome != TOFUOutcome.Initial) {
-                        revert ITOFUTokenDecimals.TokenDecimalsReadFailure(
-                            order.validInputs[inputIOIndex].token, inputOutcome
-                        );
-                    }
+                    uint8 inputDecimals = _safeDecimalsReadOnly(order.validInputs[inputIOIndex].token);
 
                     Float inputTokenVaultBalance = _vaultBalance(
                         order.owner, order.validInputs[inputIOIndex].token, order.validInputs[inputIOIndex].vaultId
@@ -814,13 +818,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 }
 
                 {
-                    (TOFUOutcome outputOutcome, uint8 outputDecimals) =
-                        LibTOFUTokenDecimals.decimalsForTokenReadOnly(order.validOutputs[outputIOIndex].token);
-                    if (outputOutcome != TOFUOutcome.Consistent && outputOutcome != TOFUOutcome.Initial) {
-                        revert ITOFUTokenDecimals.TokenDecimalsReadFailure(
-                            order.validOutputs[outputIOIndex].token, outputOutcome
-                        );
-                    }
+                    uint8 outputDecimals = _safeDecimalsReadOnly(order.validOutputs[outputIOIndex].token);
 
                     Float outputTokenVaultBalance = _vaultBalance(
                         order.owner, order.validOutputs[outputIOIndex].token, order.validOutputs[outputIOIndex].vaultId
@@ -1133,6 +1131,28 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
+    /// @dev Reads the token decimals via TOFU (state-writing variant) and reverts
+    /// with `TokenDecimalsReadFailure` if the read outcome is not consistent or
+    /// initial. Returns the decimals.
+    function _safeDecimals(address token) private returns (uint8) {
+        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
+        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
+            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
+        }
+        return decimals;
+    }
+
+    /// @dev Reads the token decimals via TOFU (read-only variant) and reverts with
+    /// `TokenDecimalsReadFailure` if the read outcome is not consistent or initial.
+    /// Returns the decimals.
+    function _safeDecimalsReadOnly(address token) private view returns (uint8) {
+        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForTokenReadOnly(token);
+        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
+            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
+        }
+        return decimals;
+    }
+
     /// @dev Pulls `amount` of `token` from `account` via `safeTransferFrom`.
     /// Returns the fixed-decimal amount transferred and the token decimals.
     ///
@@ -1145,10 +1165,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// path. Such dust is under one base unit per conversion and can never cause
     /// insolvency.
     function pullTokens(address account, address token, Float amount) internal returns (uint256, uint8) {
-        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
-        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-        }
+        uint8 decimals = _safeDecimals(token);
         if (amount.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePull();
         }
@@ -1174,10 +1191,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// `pullTokens` for the full rounding policy and its solvency / residual-dust
     /// tradeoff.
     function pushTokens(address account, address token, Float amountFloat) internal returns (uint256, uint8) {
-        (TOFUOutcome tofuOutcome, uint8 decimals) = LibTOFUTokenDecimals.decimalsForToken(token);
-        if (tofuOutcome != TOFUOutcome.Consistent && tofuOutcome != TOFUOutcome.Initial) {
-            revert ITOFUTokenDecimals.TokenDecimalsReadFailure(token, tofuOutcome);
-        }
+        uint8 decimals = _safeDecimals(token);
 
         if (amountFloat.lt(LibDecimalFloat.FLOAT_ZERO)) {
             revert NegativePush();

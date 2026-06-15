@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
-import {RaindexV6FlashBorrower} from "../../src/abstract/RaindexV6FlashBorrower.sol";
+import {NoExchangeFlashBorrower} from "test/util/concrete/NoExchangeFlashBorrower.sol";
 import {LeftoverFlashLendingMockRaindex} from "test/util/concrete/LeftoverFlashLendingMockRaindex.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
@@ -20,13 +20,6 @@ import {
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-
-/// @dev Deployable child of the abstract flash borrower with a no-op `_exchange`
-/// so the test exercises ONLY the abstract `arb4` decimals/finalize plumbing,
-/// not any concrete swap.
-contract NoExchangeFlashBorrower is RaindexV6FlashBorrower {
-    constructor() {}
-}
 
 /// @dev Discriminates that `arb4` passes the INPUT token's OWN decimals and the
 /// OUTPUT token's OWN decimals to `finalizeArb` in the correct positions. The

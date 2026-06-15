@@ -492,7 +492,7 @@ describe("OrdersListTable", () => {
     })) as Mock;
 
     render(OrdersListTable, defaultProps as OrdersListTableProps);
-    expect(screen.getByTestId("orderListRowTrades")).toHaveTextContent(">99");
+    expect(screen.getByTestId("orderListRowTrades")).toHaveTextContent("100");
   });
 
   it("shows Take button for active orders", async () => {
