@@ -207,7 +207,7 @@ describe('TakeOrderModal', () => {
 		const amountInput = inputs[0];
 		const priceCapInput = screen.getByTestId('price-cap-input');
 		await fireEvent.input(amountInput, { target: { value: '10' } });
-		// 19 decimal places (the value from issue #2109).
+		// 19 decimal places, one more than the maximum.
 		await fireEvent.input(priceCapInput, { target: { value: '0.0015116073271035947' } });
 
 		await waitFor(() => {
@@ -229,7 +229,7 @@ describe('TakeOrderModal', () => {
 		const amountInput = inputs[0];
 		const priceCapInput = screen.getByTestId('price-cap-input');
 		await fireEvent.input(amountInput, { target: { value: '10' } });
-		// 18 decimal places (the value that works in issue #2109).
+		// 18 decimal places, exactly the maximum.
 		await fireEvent.input(priceCapInput, { target: { value: '0.001511607327103594' } });
 
 		await waitFor(() => {

@@ -1,9 +1,8 @@
 /**
  * The maximum number of fractional (post-decimal-point) digits that the
  * underlying `Float` decimal parser accepts. A value with more than this many
- * decimal places (e.g. `0.0015116073271035947`, which has 19) fails to parse
- * with a cryptic low-level error, so we reject it client-side first with a
- * friendly message.
+ * decimal places (e.g. `0.0015116073271035947`, which has 19) is rejected
+ * client-side with a friendly message.
  */
 export const MAX_DECIMALS = 18;
 
@@ -17,8 +16,8 @@ export interface AmountDecimalsValidation {
  *
  * Returns `null` when the input is not a plain decimal number (empty, or
  * containing anything other than an optional leading sign and digits around a
- * single decimal point), so callers can defer to the underlying parser for
- * those cases instead of producing a misleading "too many decimals" message.
+ * single decimal point), so callers defer to the underlying parser for those
+ * cases.
  *
  * @param value The raw string entered by the user.
  */

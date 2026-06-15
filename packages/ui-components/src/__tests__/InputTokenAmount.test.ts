@@ -47,7 +47,7 @@ describe("InputTokenAmount", () => {
     });
     const input = getByRole("textbox");
 
-    // 19 decimal places (the value from issue #2109).
+    // 19 decimal places, one more than the maximum.
     await fireEvent.input(input, {
       target: { value: "0.0015116073271035947" },
     });
@@ -67,7 +67,7 @@ describe("InputTokenAmount", () => {
     });
     const input = getByRole("textbox");
 
-    // 18 decimal places (the value that works in issue #2109).
+    // 18 decimal places, exactly the maximum.
     await fireEvent.input(input, {
       target: { value: "0.001511607327103594" },
     });
