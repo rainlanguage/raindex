@@ -199,11 +199,12 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             assertEq(vm.getRecordedLogs().length, 1, "logs");
             // - reentrancy guard x3
             // - vault balance floats x2
-            // - token decimals x2
-            assertTrue(reads.length == 5, "reads");
-            // // - reentrancy guard x2
-            // // - vault balance x1
-            assertTrue(writes.length == 4 || writes.length == 3, "writes");
+            // - dust credit floats x2 (sDustCredit SLOAD in pullTokens)
+            assertTrue(reads.length == 7, "reads");
+            // - reentrancy guard x2
+            // - vault balance x1
+            // - dust credit x1 (sDustCredit SSTORE in pullTokens)
+            assertTrue(writes.length == 4, "writes");
             assertTrue(
                 iRaindex.vaultBalance2(actions[i].depositor, actions[i].token, actions[i].vaultId)
                     .eq(actions[i].amount.add(vaultBalanceBefore)),

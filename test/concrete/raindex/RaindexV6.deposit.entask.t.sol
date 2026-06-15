@@ -26,12 +26,15 @@ contract RaindexV6DepositEnactTest is RaindexV6ExternalRealTest {
         // ReentrancyGuard.REENTRANCY_GUARD_STORAGE
         bytes32 reentrancyGuardStorage = 0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00;
 
-        assertEq(reads.length, 5);
+        // pullTokens reads sDustCredit (2 SLOADs of the Float slot) and writes it
+        // back (1 SSTORE), adding 2 reads and 1 write over the pre-dust-credit
+        // 5 reads (reentrancy x3 + vault balance x2) / 3 writes.
+        assertEq(reads.length, 7);
         assertEq(reads[0], reentrancyGuardStorage);
         assertEq(reads[1], reentrancyGuardStorage);
         assertEq(reads[reads.length - 1], reentrancyGuardStorage);
 
-        assertEq(writes.length, 3);
+        assertEq(writes.length, 4);
         assertEq(writes[0], reentrancyGuardStorage);
         assertEq(writes[writes.length - 1], reentrancyGuardStorage);
     }

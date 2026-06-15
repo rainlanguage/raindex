@@ -56,8 +56,11 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         vm.record();
         iRaindex.withdraw4(address(iToken0), vaultId, amount, new TaskV2[](0));
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
-        assertEq(reads.length, 6, "reads");
-        assertEq(writes.length, 3, "writes");
+        // The noop withdraw still calls pushTokens, which reads sDustCredit (2
+        // SLOADs of the Float slot) and unconditionally writes it back (1 SSTORE),
+        // adding 2 reads and 1 write over the pre-dust-credit 6 reads / 3 writes.
+        assertEq(reads.length, 8, "reads");
+        assertEq(writes.length, 4, "writes");
     }
 
     /// Withdrawing the full amount from a vault should delete the vault.

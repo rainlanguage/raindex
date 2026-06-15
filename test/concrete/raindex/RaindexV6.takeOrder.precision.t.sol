@@ -85,7 +85,15 @@ contract RaindexV6TakeOrderPrecisionTest is RaindexV6ExternalRealTest {
         {
             (uint256 absoluteTakerInputAmount, bool lossless) =
                 expectedTakerTotalInput.toFixedDecimalLossy(outputTokenDecimals);
-            (lossless);
+            // When the output vault is non-zero the taker is also the depositor,
+            // so the lossy seed deposit above over-pulled by `ceil - exact` and
+            // booked it as dust credit for `(this, outputToken)`. The matching
+            // push to the taker realizes that credit, sending `floor(exact +
+            // credit) == ceil` rather than the truncated `floor(exact)`. A vault-0
+            // output has no seed deposit so the push is the plain truncation.
+            if (!lossless && outputVaultId != bytes32(0)) {
+                ++absoluteTakerInputAmount;
+            }
             vm.mockCall(
                 outputToken,
                 abi.encodeWithSelector(IERC20.transfer.selector, address(this), absoluteTakerInputAmount),
@@ -109,7 +117,16 @@ contract RaindexV6TakeOrderPrecisionTest is RaindexV6ExternalRealTest {
         }
 
         if (inputVaultId == bytes32(0)) {
-            (uint256 absoluteInputAmount,) = expectedTakerTotalOutput.toFixedDecimalLossy(inputTokenDecimals);
+            // The vault-0 input is pushed back out to the owner, who is also the
+            // taker here. The taker payment pull above over-pulled by `ceil -
+            // exact` and booked it as dust credit for `(this, inputToken)`, so the
+            // vault-0 push realizes that credit and sends `floor(exact + credit)
+            // == ceil` rather than the truncated `floor(exact)`.
+            (uint256 absoluteInputAmount, bool lossless) =
+                expectedTakerTotalOutput.toFixedDecimalLossy(inputTokenDecimals);
+            if (!lossless) {
+                ++absoluteInputAmount;
+            }
             mockVault0Input(inputToken, address(this), absoluteInputAmount);
         }
 
