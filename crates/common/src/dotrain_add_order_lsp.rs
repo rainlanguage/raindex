@@ -24,10 +24,10 @@ use std::collections::HashSet;
 /// dotrain front matter (recursing through nested scenarios).
 ///
 /// dotrain parses only the body after the front matter splitter, so an elided
-/// binding that is actually provided by a front matter scenario is still flagged
-/// as an unresolved elided binding. This set lets [`DotrainAddOrderLsp::problems`]
-/// suppress those false positives while leaving genuinely unset elided bindings
-/// reported.
+/// binding provided by a front matter scenario is reported as an unresolved
+/// elided binding. [`DotrainAddOrderLsp::problems`] uses this set to filter out
+/// the elided binding problems whose names appear here, while elided bindings
+/// absent from the set remain reported.
 #[cfg(not(target_family = "wasm"))]
 fn frontmatter_scenario_binding_keys(text: &str) -> HashSet<String> {
     let mut keys = HashSet::new();
@@ -318,9 +318,9 @@ _ _: 0 0;
             .await;
 
         // `fixed-io-output-token` is an elided binding (`#fixed-io-output-token !...`)
-        // that IS set in the `flare` scenario front matter bindings, so its elided
-        // binding error must be suppressed. `fixed-io` is elided AND never set in the
-        // front matter, so its elided binding error must still be reported.
+        // set in the `flare` scenario front matter bindings, so its elided binding
+        // error is filtered out. `fixed-io` is elided and absent from the front
+        // matter bindings, so its elided binding error is reported.
         let expected_msgs = [
             "invalid reference to binding: raindex-subparser, only literal bindings can be referenced",
             "invalid expression line",
@@ -338,7 +338,7 @@ _ _: 0 0;
              unset elided binding 'fixed-io' should remain"
         );
 
-        // The suppressed binding must be gone entirely, not merely reordered.
+        // No reported problem mentions the filtered-out `fixed-io-output-token`.
         assert!(
             !actual_msgs
                 .iter()
@@ -377,9 +377,8 @@ scenarios:
 
     #[test]
     fn test_frontmatter_scenario_binding_keys_ignores_non_binding_keys() {
-        // Keys that are not under a `bindings` map (scenario names, network keys,
-        // runs, etc.) must NOT be treated as provided bindings, otherwise unrelated
-        // elided bindings would be silently suppressed.
+        // Only keys under a `bindings` map count as provided bindings; scenario
+        // names, network keys, `runs`, and other non-`bindings` keys are excluded.
         let text = r#"
 scenarios:
   flare:
@@ -419,8 +418,7 @@ scenarios:
         let local_evm = LocalEvm::new().await;
 
         // `bound` is elided in the body but provided by the `flare` scenario, so it
-        // must compose cleanly with zero problems. `unbound` would be a counter-case
-        // (it is exercised by test_problems / the assertion below).
+        // composes cleanly with zero problems.
         let dotrain = format!(
             r#"
 version: {spec_version}
