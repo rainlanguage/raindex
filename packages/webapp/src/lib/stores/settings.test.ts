@@ -10,12 +10,12 @@ describe('settings store', () => {
 		validChainIds.set([]);
 	});
 
-	describe('selectedChainIds pruning via validChainIds (issue #2208)', () => {
+	describe('selectedChainIds pruning via validChainIds', () => {
 		it('prunes chain IDs that are absent from validChainIds when validChainIds is populated', () => {
-			// User had chains 1, 137, 42161 selected from a previous settings configuration.
+			// Chains 1, 137, 42161 are selected.
 			selectedChainIds.set([1, 137, 42161]);
 
-			// The current settings configuration only knows about chains 1 and 42161.
+			// The valid configuration contains only chains 1 and 42161.
 			validChainIds.set([1, 42161]);
 
 			// 137 is stale (not in the current configuration) and must be removed.
@@ -40,8 +40,7 @@ describe('settings store', () => {
 		});
 
 		it('leaves selectedChainIds untouched while validChainIds is empty', () => {
-			// Before the app populates validChainIds it is empty; the persisted selection
-			// must survive (otherwise a fresh load with empty validChainIds would wipe it).
+			// While validChainIds is empty, the persisted selection is retained in full.
 			selectedChainIds.set([1, 137, 42161]);
 
 			validChainIds.set([]);
@@ -55,7 +54,7 @@ describe('settings store', () => {
 			validChainIds.set([1, 137, 42161]);
 			expect(get(selectedChainIds)).toEqual([1, 137, 42161]);
 
-			// A later settings change narrows the valid set; the stale 137 is pruned.
+			// Narrowing the valid set prunes the stale 137.
 			validChainIds.set([1, 42161]);
 			expect(get(selectedChainIds)).toEqual([1, 42161]);
 		});
