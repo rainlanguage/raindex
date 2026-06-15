@@ -239,15 +239,14 @@ mod test {
             "expected Overflow, got {result:?}"
         );
 
-        // A scale_up that *does* fit returns the exact product (guards against a
-        // mutation that turns every overflow into a silent pass-through).
+        // A scale_up that *does* fit returns the exact scaled product.
         assert_eq!(U256::from(7_u8).scale_up(3).unwrap(), U256::from(7000_u16));
     }
 
     #[test]
     fn test_big_uint_math_scale_18_scale_up_overflow() {
-        // scale_18 with decimals < 18 routes to scale_up; an oversized value must
-        // propagate the Overflow rather than wrap or pass through unchanged.
+        // scale_18 with decimals < 18 routes to scale_up; an oversized value
+        // propagates the Overflow.
         let result = U256::MAX.scale_18(0);
         assert!(
             matches!(result, Err(MathError::Overflow)),
