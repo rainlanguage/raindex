@@ -4,13 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {IERC165} from "@openzeppelin-contracts-5.6.1/utils/introspection/IERC165.sol";
-import {RaindexV6FlashLender, IERC3156FlashLender} from "../../src/abstract/RaindexV6FlashLender.sol";
-
-/// @dev We need a contract that is deployable in order to test the abstract
-/// base contract.
-contract ChildRaindexV6FlashLender is RaindexV6FlashLender {
-    constructor() RaindexV6FlashLender() {}
-}
+import {IERC3156FlashLender} from "../../src/abstract/RaindexV6FlashLender.sol";
+import {ChildRaindexV6FlashLender} from "test/util/concrete/ChildRaindexV6FlashLender.sol";
 
 contract RaindexV6FlashLenderIERC165Test is Test {
     /// Test that ERC165 and IERC3156FlashLender are supported interfaces
