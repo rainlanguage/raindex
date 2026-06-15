@@ -11,7 +11,9 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 /// whoever controls the upstream tag inject code into our CI the moment it
 /// moves (https://github.com/rainlanguage/raindex/issues/620). First-party
 /// `rainlanguage/*` shared-CI refs are intentionally excluded -- pinning those
-/// is an org-wide decision, not this repo's.
+/// is an org-wide decision, not this repo's. A workflow therefore satisfies the
+/// invariant either by SHA-pinning a third-party action inline or by delegating
+/// to a `rainlanguage/rainix/.github/actions/*` composite that pins it once.
 ///
 /// `script/check-pinned-actions.sh` enumerates the refs (via FFI) and returns
 /// `OK` only when every third-party action is SHA-pinned; otherwise it returns

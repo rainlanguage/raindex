@@ -28,7 +28,7 @@ jobs:
       version: ${{ env.NEW_VERSION }}
     steps:
       # checkout with SSH key to allow pushing version bump commits back to repo
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: rainlanguage/rainix/.github/actions/checkout@main
         with:
           ssh-key: ${{ secrets.PUBLISH_PRIVATE_KEY }}
       # WASM builds require significant disk space; free up space to prevent build failures
@@ -36,32 +36,19 @@ jobs:
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
         with:
           swap-storage: false
-      # install nix for building WASM artifacts and running tests
-      - uses: nixbuild/nix-quick-install-action@5bb6a3b3abe66fd09bbf250dce8ada94f856a703 # v30
+      # Shared nix + cachix preamble (nix-quick-install, Cachix,
+      # cache-nix-action). The third-party action SHAs are pinned once in the
+      # rainix composite. checkout: false because the ssh-key checkout above and
+      # free-disk-space both run before nix-quick-install.
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
         with:
-          nix_conf: |
-            keep-env-derivations = true
-            keep-outputs = true
-      # pull rainix derivations from shared Cachix; push new ones if the
-      # token is set. continue-on-error so a token miss / Cachix outage
-      # degrades gracefully.
-      - uses: cachix/cachix-action@ad2ddac53f961de1989924296a1f236fcfbaa4fc # v15
-        continue-on-error: true
-        with:
-          name: rainlanguage
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          useDaemon: false
-      - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
-        with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-
-          gc-max-store-size-linux: 8G
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+          checkout: false
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - uses: rainlanguage/rainix/.github/actions/rust-cache@main
         with:
           prefix-key: rust-${{ github.workflow }}
       - name: Cache npm
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: rainlanguage/rainix/.github/actions/cache@main
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
@@ -251,19 +238,18 @@ jobs:
           git push -u origin "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Create gitHub release with tarballs
+      # Create gitHub release with tarballs. The softprops/action-gh-release SHA
+      # is pinned once in the rainix composite.
       - name: Create GitHub Release
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
-        id: gh_release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: rainlanguage/rainix/.github/actions/gh-release@main
         with:
-          tag_name: npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}
+          tag-name: npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}
           name: NPM Package Release raindex v${{ env.RAINDEX_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
           files: |
             raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
             ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

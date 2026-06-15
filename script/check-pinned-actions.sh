@@ -9,9 +9,13 @@
 # code our CI runs, so a compromised `@v4` runs in our pipeline the moment it
 # moves.
 #
-# First-party `rainlanguage/*` refs are excluded: the org's shared CI
-# (rainix / github-chore reusable workflows + actions) is intentionally tracked
+# First-party `rainlanguage/*` refs are excluded: the org's shared CI (rainix /
+# github-chore reusable workflows + composite actions) is intentionally tracked
 # at `@main`, so pinning those is an org-wide decision rather than this repo's.
+# The shared third-party actions used by the nix/cachix CI preamble are wrapped
+# in rainix composite actions that pin each SHA once, so a workflow satisfies
+# this check either by SHA-pinning a third-party action inline or by delegating
+# to a `rainlanguage/rainix/.github/actions/*` composite that already pins it.
 #
 # Consumed by `test/PinnedActions.t.sol` via FFI. Output is one of:
 #   OK                       - every third-party action is SHA-pinned
