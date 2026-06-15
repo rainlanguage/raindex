@@ -55,6 +55,8 @@
 			color="alternative"
 			class="absolute left-2 top-2 flex size-8 items-center p-5 lg:hidden"
 			data-testid="sidebar-bars"
+			title="Open menu"
+			aria-label="Open menu"
 		>
 			<BarsSolid class="" />
 		</Button>
@@ -69,6 +71,8 @@
 			<CloseButton
 				data-testid="close-button"
 				class="absolute right-3 top-2 z-20 flex size-8 items-center border dark:border-gray-700 lg:hidden"
+				title="Close menu"
+				name="Close menu"
 				on:click={() => (sideBarHidden = true)}
 			/>
 		{/if}

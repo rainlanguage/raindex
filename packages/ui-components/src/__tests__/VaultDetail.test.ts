@@ -203,6 +203,10 @@ describe("VaultDetail", () => {
         "aria-label",
         "Withdraw from vault",
       );
+
+      const refreshButton = screen.getByTestId("top-refresh");
+      expect(refreshButton).toHaveAttribute("title", "Refresh vault");
+      expect(refreshButton).toHaveAttribute("aria-label", "Refresh vault");
     });
   });
 
