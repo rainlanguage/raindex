@@ -3,8 +3,8 @@ import { bigintStringToPercentage } from "../lib/utils/number";
 
 describe("bigintStringToPercentage", () => {
   it("scales the value by 100 to express it as a percentage", () => {
-    // 12345 at 4 decimals is 1.2345; as a percentage that is 123.45.
-    // Without the *100 scaling this would be "1.2345".
+    // 12345 at 4 decimals is 1.2345; the *100 scaling expresses that as the
+    // percentage 123.45.
     expect(bigintStringToPercentage("12345", 4)).toBe("123.45");
   });
 
@@ -35,8 +35,8 @@ describe("bigintStringToPercentage", () => {
   });
 
   it("drops the decimal point entirely when finalDecimalsDigits is 0", () => {
-    // raw percentage "123.45"; 0 fractional digits => integer part only,
-    // and crucially NOT "123." (no trailing dot).
+    // raw percentage "123.45"; 0 fractional digits keeps the integer part
+    // only, with no trailing dot.
     expect(bigintStringToPercentage("12345", 4, 0)).toBe("123");
   });
 
@@ -48,7 +48,7 @@ describe("bigintStringToPercentage", () => {
 
   it("does not corrupt a non-fractional result when finalDecimalsDigits is 0", () => {
     // formatUnits("50") has no ".", so indexOf is -1 and the truncation
-    // branch must be skipped: result stays "50", not a sliced "5".
+    // branch is skipped: the full "50" is returned.
     expect(bigintStringToPercentage("5", 1, 0)).toBe("50");
   });
 });
