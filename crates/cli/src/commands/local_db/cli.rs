@@ -325,4 +325,69 @@ mod tests {
         assert!(output.contains("job <unknown-raindex> failed"));
         assert!(output.contains("EngineRun"));
     }
+
+    // The terse "job <key> failed" line is reserved for the fully-unknown raindex
+    // (chain id zero AND a zero address). A failure that is identified by EITHER a
+    // non-zero chain id OR a non-zero address must use the detailed
+    // "chain ... raindex ... (key)" line instead. These two mixed-identity cases
+    // pin the `&&` in `render_failure_to`; with `||` they would be misrendered as
+    // the terse unknown-job line.
+    #[test]
+    fn render_failure_to_zero_address_nonzero_chain_uses_detailed_line() {
+        let failure = TargetFailure {
+            raindex_id: RaindexIdentifier::new(42161, Address::ZERO),
+            raindex_key: Some("book".into()),
+            stage: TargetStage::EngineRun,
+            error: LocalDbError::CustomError("boom".into()),
+        };
+        let mut buffer = Vec::new();
+        render_failure_to(&failure, &mut buffer).expect("render succeeds");
+        let output = String::from_utf8(buffer).expect("utf8");
+
+        assert_eq!(
+            output,
+            format!(
+                "- chain {} raindex {:#x} ({}) failed at {:?}: {}\n",
+                42161,
+                Address::ZERO,
+                "book",
+                TargetStage::EngineRun,
+                "boom",
+            )
+        );
+        assert!(
+            !output.starts_with("- job "),
+            "non-zero chain id must not collapse to the terse unknown-job line: {output}"
+        );
+    }
+
+    #[test]
+    fn render_failure_to_nonzero_address_zero_chain_uses_detailed_line() {
+        let raindex_address = address!("0000000000000000000000000000000000000fA1");
+        let failure = TargetFailure {
+            raindex_id: RaindexIdentifier::new(0, raindex_address),
+            raindex_key: Some("book".into()),
+            stage: TargetStage::EngineRun,
+            error: LocalDbError::CustomError("boom".into()),
+        };
+        let mut buffer = Vec::new();
+        render_failure_to(&failure, &mut buffer).expect("render succeeds");
+        let output = String::from_utf8(buffer).expect("utf8");
+
+        assert_eq!(
+            output,
+            format!(
+                "- chain {} raindex {:#x} ({}) failed at {:?}: {}\n",
+                0,
+                raindex_address,
+                "book",
+                TargetStage::EngineRun,
+                "boom",
+            )
+        );
+        assert!(
+            !output.starts_with("- job "),
+            "non-zero address must not collapse to the terse unknown-job line: {output}"
+        );
+    }
 }
