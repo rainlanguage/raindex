@@ -326,12 +326,11 @@ mod tests {
         assert!(output.contains("EngineRun"));
     }
 
-    // The terse "job <key> failed" line is reserved for the fully-unknown raindex
-    // (chain id zero AND a zero address). A failure that is identified by EITHER a
-    // non-zero chain id OR a non-zero address must use the detailed
-    // "chain ... raindex ... (key)" line instead. These two mixed-identity cases
-    // pin the `&&` in `render_failure_to`; with `||` they would be misrendered as
-    // the terse unknown-job line.
+    // The terse "job <key> failed" line is used only for the fully-unknown raindex
+    // (chain id zero AND a zero address). A failure identified by EITHER a non-zero
+    // chain id OR a non-zero address renders the detailed
+    // "chain ... raindex ... (key)" line. These two cases cover the mixed-identity
+    // combinations where one component is zero and the other is non-zero.
     #[test]
     fn render_failure_to_zero_address_nonzero_chain_uses_detailed_line() {
         let failure = TargetFailure {
