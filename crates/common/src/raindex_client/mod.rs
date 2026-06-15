@@ -453,10 +453,10 @@ pub enum RaindexError {
     ZeroAmount,
     #[error("Negative amount")]
     NegativeAmount,
-    #[error("Existing allowance")]
-    ExistingAllowance,
     #[error(transparent)]
     WritableTransactionExecuteError(#[from] WritableTransactionExecuteError),
+    #[error(transparent)]
+    TransactionArgsError(#[from] crate::transaction::TransactionArgsError),
     #[error(transparent)]
     DepositArgsError(#[from] DepositError),
     #[error("Raindex not found for address: {0} on chain ID: {1}")]
@@ -629,8 +629,8 @@ impl RaindexError {
             RaindexError::WritableTransactionExecuteError(err) => {
                 format!("Failed to execute transaction: {}", err)
             }
-            RaindexError::ExistingAllowance => {
-                "There is already an allowance for this vault".to_string()
+            RaindexError::TransactionArgsError(err) => {
+                format!("Invalid transaction arguments: {}", err)
             }
             RaindexError::DepositArgsError(err) => {
                 format!("Failed to create deposit arguments: {}", err)

@@ -1,6 +1,6 @@
 [package]
 name = "raindex"
-version = "0.1.7"
+version = "0.1.9"
 
 [profile.default]
 src = 'src'

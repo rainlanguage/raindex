@@ -269,6 +269,8 @@
 														color="light"
 														size="xs"
 														data-testid="deposit-button"
+														title="Deposit into vault"
+														aria-label="Deposit into vault"
 														on:click={() => onDeposit(raindexClient, vault)}
 													>
 														<ArrowDownToBracketOutline size="xs" />
@@ -277,6 +279,8 @@
 														color="light"
 														size="xs"
 														data-testid="withdraw-button"
+														title="Withdraw from vault"
+														aria-label="Withdraw from vault"
 														on:click={() => onWithdraw(raindexClient, vault)}
 													>
 														<ArrowUpFromBracketOutline size="xs" />
