@@ -452,6 +452,13 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             revert NoOrders();
         }
 
+        // Guard the max IO before dereferencing any order IO index so a zero max
+        // reverts with this explicit error rather than a bounds panic when an IO
+        // index is also out of range.
+        if (!config.maximumIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
+            revert ZeroMaximumIO();
+        }
+
         TakeOrderConfigV4 memory takeOrderConfig;
         OrderV4 memory order;
         TakeOrdersIO memory io = TakeOrdersIO({
@@ -482,10 +489,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bool ordersTaken;
 
         {
-            if (!io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
-                revert ZeroMaximumIO();
-            }
-
             uint256 i = 0;
             while (i < config.orders.length && io.remainingTakerIO.gt(LibDecimalFloat.FLOAT_ZERO)) {
                 takeOrderConfig = config.orders[i];

@@ -132,6 +132,16 @@ library LibRaindexDeploy {
     bytes32 constant RAINDEX_DEPLOYED_CODEHASH_0_1_10 =
         0x0987e1f3d1054a64438372e154a09e5ee4f65d51f221bf64efb04220bc4b7712;
 
+    /// The deployed address of the `RaindexV6` contract at the published `0.1.11`
+    /// tag. (Changed in 0.1.11 — takeOrders4 ZeroMaximumIO guard hoisted ahead of
+    /// the IO-index dereference.)
+    address constant RAINDEX_DEPLOYED_ADDRESS_0_1_11 = 0x1115EBC9C82F074454F6AC28f123B0684A453aF7;
+
+    /// The runtime code hash of the `RaindexV6` contract at the published `0.1.11`
+    /// tag.
+    bytes32 constant RAINDEX_DEPLOYED_CODEHASH_0_1_11 =
+        0xb9aa0944893a2aa695250428cee0d2e839f3794aebbc229e2070f064598c4b31;
+
     /// The address of the `RaindexV6SubParser` contract when deployed with
     /// the rain standard zoltu deployer.
     address constant SUB_PARSER_DEPLOYED_ADDRESS = SUB_PARSER_ADDR;
@@ -230,6 +240,15 @@ library LibRaindexDeploy {
     bytes32 constant SUB_PARSER_DEPLOYED_CODEHASH_0_1_10 =
         0x704aadc1ed56f63ff918ab219e6681a5d2851d774e2ee136bbe7904ea3b2fdcd;
 
+    /// The deployed address of the `RaindexV6SubParser` contract at the
+    /// published `0.1.11` tag. (Unchanged from `0.1.2`.)
+    address constant SUB_PARSER_DEPLOYED_ADDRESS_0_1_11 = 0x09Bc7AF266012F44fb41D8Bd682da931666605e1;
+
+    /// The runtime code hash of the `RaindexV6SubParser` contract at the
+    /// published `0.1.11` tag.
+    bytes32 constant SUB_PARSER_DEPLOYED_CODEHASH_0_1_11 =
+        0x704aadc1ed56f63ff918ab219e6681a5d2851d774e2ee136bbe7904ea3b2fdcd;
+
     /// The address of the `RouteProcessor4` contract when deployed with the
     /// rain standard zoltu deployer.
     address constant ROUTE_PROCESSOR_DEPLOYED_ADDRESS = ROUTE_PROCESSOR_ADDR;
@@ -320,12 +339,21 @@ library LibRaindexDeploy {
         0xeb3745a79c6ba48e8767b9c355b8e7b79f9d6edeca004e4bb91be4de515a7eeb;
 
     /// The deployed address of the `RouteProcessor4` contract at the published
-    /// `0.1.10` tag. (Unchanged from `0.1.0`.)
+    /// `0.1.10` tag. (Unchanged from `0.1.7`.)
     address constant ROUTE_PROCESSOR_DEPLOYED_ADDRESS_0_1_10 = 0x6E2d0e71d900474b262E545Bc4C98b71ab368d21;
 
     /// The runtime code hash of the `RouteProcessor4` contract at the published
-    /// `0.1.10` tag. (Unchanged from `0.1.0`.)
+    /// `0.1.10` tag.
     bytes32 constant ROUTE_PROCESSOR_DEPLOYED_CODEHASH_0_1_10 =
+        0xeb3745a79c6ba48e8767b9c355b8e7b79f9d6edeca004e4bb91be4de515a7eeb;
+
+    /// The deployed address of the `RouteProcessor4` contract at the published
+    /// `0.1.11` tag. (Unchanged from `0.1.7`.)
+    address constant ROUTE_PROCESSOR_DEPLOYED_ADDRESS_0_1_11 = 0x6E2d0e71d900474b262E545Bc4C98b71ab368d21;
+
+    /// The runtime code hash of the `RouteProcessor4` contract at the published
+    /// `0.1.11` tag.
+    bytes32 constant ROUTE_PROCESSOR_DEPLOYED_CODEHASH_0_1_11 =
         0xeb3745a79c6ba48e8767b9c355b8e7b79f9d6edeca004e4bb91be4de515a7eeb;
 
     /// The address of the `GenericPoolRaindexV6ArbOrderTaker` contract when
@@ -429,6 +457,16 @@ library LibRaindexDeploy {
     /// at the published `0.1.10` tag.
     bytes32 constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_10 =
         0xbb3d77dffbd445fefbb5afffc585f69049011c8a0e849ef615737013d0222d68;
+
+    /// The deployed address of the `GenericPoolRaindexV6ArbOrderTaker` contract
+    /// at the published `0.1.11` tag. (Changed in 0.1.11 — embeds the new raindex
+    /// address.)
+    address constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_11 = 0x032dE54A767125d7F72f30694044E2a8416bF554;
+
+    /// The runtime code hash of the `GenericPoolRaindexV6ArbOrderTaker` contract
+    /// at the published `0.1.11` tag.
+    bytes32 constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_11 =
+        0x04b0da6d34aaa9b7df623ea46c7849a9e13bcff32dbb02e781b94acaab02bacf;
 
     /// The address of the `RouteProcessorRaindexV6ArbOrderTaker` contract
     /// when deployed with the rain standard zoltu deployer.
@@ -542,6 +580,17 @@ library LibRaindexDeploy {
     bytes32 constant ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_10 =
         0xb43361716164df8696fa8b60b402029f8a78d321be440fc2b3d436be7ca4633c;
 
+    /// The deployed address of the `RouteProcessorRaindexV6ArbOrderTaker`
+    /// contract at the published `0.1.11` tag. (Changed in 0.1.11 — embeds the
+    /// new raindex address.)
+    address constant ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_11 =
+        0xA24Db2268976817aed62186AD7EF6084a66683C8;
+
+    /// The runtime code hash of the `RouteProcessorRaindexV6ArbOrderTaker`
+    /// contract at the published `0.1.11` tag.
+    bytes32 constant ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_11 =
+        0x14f012211cd8e3e0f07777b5e93f1f441a80bbeb8845b762913d7b9362ba71f6;
+
     /// The address of the `GenericPoolRaindexV6FlashBorrower` contract when
     /// deployed with the rain standard zoltu deployer.
     address constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS = GENERIC_POOL_FB_ADDR;
@@ -644,8 +693,18 @@ library LibRaindexDeploy {
     bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH_0_1_10 =
         0xd06b7fc152b0d8854c6aa2e7b78fad780f639d7fe500cce0fecd41f9cc8df49e;
 
-    uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 473863630;
-    uint256 constant RAINDEX_START_BLOCK_BASE = 47383088;
-    uint256 constant RAINDEX_START_BLOCK_FLARE = 63004971;
-    uint256 constant RAINDEX_START_BLOCK_POLYGON = 88567034;
+    /// The deployed address of the `GenericPoolRaindexV6FlashBorrower` contract
+    /// at the published `0.1.11` tag. (Changed in 0.1.11 — embeds the new raindex
+    /// address.)
+    address constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS_0_1_11 = 0x83ae30FA284da3541904dA0D58772E1d2CDAE5ea;
+
+    /// The runtime code hash of the `GenericPoolRaindexV6FlashBorrower` contract
+    /// at the published `0.1.11` tag.
+    bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH_0_1_11 =
+        0x09617589f55317f6e41e1a1fba10d0d77996af310e5ce4d2705249fcaf3cb029;
+
+    uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 473877912;
+    uint256 constant RAINDEX_START_BLOCK_BASE = 47384882;
+    uint256 constant RAINDEX_START_BLOCK_FLARE = 63007250;
+    uint256 constant RAINDEX_START_BLOCK_POLYGON = 88569424;
 }
