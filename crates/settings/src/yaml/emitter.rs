@@ -583,8 +583,8 @@ rainlangs:
         assert!(output.contains("0x0000000000000000000000000000000000000002"));
     }
 
-    // Re-parse emitted output into a StrictYaml document so structural/value
-    // assertions are exact rather than substring presence checks.
+    // Re-parse emitted output into a StrictYaml document for exact
+    // structural/value assertions.
     fn reparse(output: &str) -> StrictYaml {
         strict_yaml_rust::StrictYamlLoader::load_from_str(output).unwrap()[0].clone()
     }
@@ -603,8 +603,7 @@ rainlangs:
     #[test]
     fn test_emit_later_document_scalar_overwrites_earlier() {
         // Two documents collide on networks.mainnet.chain-id with scalar values.
-        // The merge is last-writer-wins: the later document's value must win.
-        // (A first-writer-wins merge would yield "1" instead of "137".)
+        // The merge is last-writer-wins: the later document's value ("137") is emitted.
         let yaml1 = r#"
 networks:
     mainnet:
@@ -626,10 +625,10 @@ networks:
 
     #[test]
     fn test_emit_canonical_order_full_sequence() {
-        // Provide root sections deliberately out of canonical order, including
-        // `version` and `sentry` (which the relative-position test omits). The
-        // emitted root keys must be the exact CANONICAL_ROOT_KEYS subsequence,
-        // i.e. version before sentry before networks ... before deployments.
+        // Root sections supplied out of canonical order, including `version`
+        // and `sentry`, are emitted as the exact CANONICAL_ROOT_KEYS
+        // subsequence: version before sentry before networks ... before
+        // deployments.
         let yaml = r#"
 deployments:
     deploy1:
@@ -693,10 +692,9 @@ another-unknown:
 
     #[test]
     fn test_emit_strips_prefix_exact_first_line() {
-        // After stripping the leading `---` document marker, no leading
-        // whitespace must remain and the first content line must be the first
-        // canonical section header verbatim. (A strip that removed only `---`
-        // but not the trailing newline would leave a blank first line.)
+        // The leading `---` document marker and its trailing newline are
+        // stripped: the output starts with no leading whitespace and the first
+        // content line is the first canonical section header verbatim.
         let yaml = r#"
 networks:
     mainnet:
