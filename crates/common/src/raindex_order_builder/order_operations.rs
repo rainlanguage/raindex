@@ -59,6 +59,9 @@ pub struct DepositAndAddOrderCalldataResult(pub Bytes);
 pub struct IOVaultIds(pub HashMap<String, HashMap<String, Option<U256>>>);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct IOVaultless(pub HashMap<String, HashMap<String, bool>>);
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct WithdrawCalldataResult(pub Vec<Bytes>);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -477,6 +480,58 @@ impl RaindexOrderBuilder {
         Ok(IOVaultIds(map))
     }
 
+    pub fn set_vaultless(
+        &mut self,
+        r#type: VaultType,
+        token: String,
+        vaultless: bool,
+    ) -> Result<(), RaindexOrderBuilderError> {
+        let deployment = self.get_current_deployment()?;
+        self.dotrain_order
+            .dotrain_yaml()
+            .get_order(&deployment.deployment.order.key)?
+            .update_vaultless(r#type, token, vaultless)?;
+
+        Ok(())
+    }
+
+    pub fn get_vaultless(&self) -> Result<IOVaultless, RaindexOrderBuilderError> {
+        let deployment = self.get_current_deployment()?;
+
+        let input_map = deployment
+            .deployment
+            .order
+            .inputs
+            .iter()
+            .map(|input| {
+                input
+                    .token
+                    .as_ref()
+                    .map(|token| (token.key.clone(), input.vaultless))
+                    .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)
+            })
+            .collect::<Result<HashMap<_, _>, _>>()?;
+
+        let output_map = deployment
+            .deployment
+            .order
+            .outputs
+            .iter()
+            .map(|output| {
+                output
+                    .token
+                    .as_ref()
+                    .map(|token| (token.key.clone(), output.vaultless))
+                    .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)
+            })
+            .collect::<Result<HashMap<_, _>, _>>()?;
+
+        Ok(IOVaultless(HashMap::from([
+            ("input".to_string(), input_map),
+            ("output".to_string(), output_map),
+        ])))
+    }
+
     pub fn has_any_vault_id(&self) -> Result<bool, RaindexOrderBuilderError> {
         let map = self.get_vault_ids()?;
         Ok(map
@@ -809,6 +864,59 @@ mod tests {
         assert_eq!(res.0.len(), 2);
         assert_eq!(res.0["input"]["token1"], Some(U256::from(999)));
         assert_eq!(res.0["output"]["token1"], Some(U256::from(888)));
+    }
+
+    #[tokio::test]
+    async fn test_set_and_get_vaultless() {
+        let mut builder = initialize_builder(Some("other-deployment".to_string())).await;
+
+        let res = builder.get_vaultless().unwrap();
+        assert_eq!(res.0.len(), 2);
+        assert!(!res.0["input"]["token1"]);
+        assert!(!res.0["output"]["token1"]);
+
+        builder
+            .set_vaultless(VaultType::Input, "token1".to_string(), true)
+            .unwrap();
+
+        let res = builder.get_vaultless().unwrap();
+        assert!(res.0["input"]["token1"]);
+        assert!(!res.0["output"]["token1"]);
+        assert_eq!(builder.get_vault_ids().unwrap().0["input"]["token1"], None);
+        assert!(builder
+            .generate_dotrain_text()
+            .unwrap()
+            .contains("vaultless"));
+
+        builder
+            .set_vault_id(
+                VaultType::Input,
+                "token1".to_string(),
+                Some("999".to_string()),
+            )
+            .unwrap();
+
+        let res = builder.get_vaultless().unwrap();
+        assert!(!res.0["input"]["token1"]);
+        assert_eq!(
+            builder.get_vault_ids().unwrap().0["input"]["token1"],
+            Some(U256::from(999))
+        );
+        assert!(!builder
+            .generate_dotrain_text()
+            .unwrap()
+            .contains("vaultless"));
+
+        builder
+            .set_vaultless(VaultType::Input, "token1".to_string(), true)
+            .unwrap();
+        builder
+            .set_vaultless(VaultType::Input, "token1".to_string(), false)
+            .unwrap();
+
+        let res = builder.get_vaultless().unwrap();
+        assert!(!res.0["input"]["token1"]);
+        assert_eq!(builder.get_vault_ids().unwrap().0["input"]["token1"], None);
     }
 
     #[tokio::test]
