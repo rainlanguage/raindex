@@ -211,9 +211,19 @@ jobs:
       - name: Rename raindex NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: mv ${{ env.RAINDEX_NPM_PACKAGE }} raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+      # first publish raindex pkg to npm (uses NPM_TOKEN)
+      - name: First Publish raindex pkg To NPM
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
+        run: |
+          npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && && env.FIRST_PUBLISH == 'false'}}
         run: |
           npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
             --access public \
@@ -226,9 +236,19 @@ jobs:
       - name: Rename ui-components NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
+      # first publish ui-components to npm (uses NPM_TOKEN)
+      - name: First Publish ui-components To NPM
+        if: ${{ env.OLD_HASH != env.NEW_HASH && && env.FIRST_PUBLISH == 'true'}}
+        run: |
+          npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # publish ui-components to npm
       - name: Publish ui-components To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && && env.FIRST_PUBLISH == 'false'}}
         run: |
           npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
             --access public \
