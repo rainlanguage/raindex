@@ -220,6 +220,10 @@ test("renders a debug button for each trade", async () => {
   await waitFor(async () => {
     const buttons = screen.getAllByTestId("debug-trade-button");
     expect(buttons).toHaveLength(mockTradeOrdersList.length);
+    buttons.forEach((button) => {
+      expect(button).toHaveAttribute("title", "Debug trade");
+      expect(button).toHaveAttribute("aria-label", "Debug trade");
+    });
   });
 });
 

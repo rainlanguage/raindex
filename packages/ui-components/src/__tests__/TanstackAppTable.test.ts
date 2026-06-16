@@ -214,6 +214,18 @@ test("shows refresh icon", async () => {
   );
 });
 
+test("shows hover title and aria-label on the refresh icon", async () => {
+  const pages = createPages();
+  const mockQuery = createMockQuery(pages);
+  renderTable(mockQuery);
+
+  await waitFor(() => {
+    const refreshButton = screen.getByTestId("refreshButton");
+    expect(refreshButton).toHaveAttribute("title", "Refresh");
+    expect(refreshButton).toHaveAttribute("aria-label", "Refresh");
+  });
+});
+
 test("invalidates queries when refresh button is clicked", async () => {
   const mockRefetch = vi.fn();
   const mockQuery = createMockQuery(createPages(), {
