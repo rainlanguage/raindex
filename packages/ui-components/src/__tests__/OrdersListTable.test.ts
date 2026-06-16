@@ -586,6 +586,32 @@ describe("OrdersListTable", () => {
     );
   });
 
+  it("shows hover title and aria-label on the order actions menu button", async () => {
+    mockMatchesAccount.mockReturnValue(true);
+    const mockQuery = vi.mocked(await import("@tanstack/svelte-query"));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
+      subscribe: (fn: (value: any) => void) => {
+        fn({
+          data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
+          status: "success",
+          isFetching: false,
+          isFetched: true,
+        });
+        return { unsubscribe: () => {} };
+      },
+    })) as Mock;
+
+    render(OrdersListTable, {
+      ...defaultProps,
+      handleOrderRemoveModal: vi.fn(),
+    } as unknown as OrdersListTableProps);
+
+    const menuButton = screen.getByTestId(`order-menu-${mockOrder.id}`);
+    expect(menuButton).toHaveAttribute("title", "Order actions");
+    expect(menuButton).toHaveAttribute("aria-label", "Order actions");
+  });
+
   it("passes raindexAddresses filter to getOrders when raindexes are selected", async () => {
     const raindexAddress = "0x1111111111111111111111111111111111111111";
 

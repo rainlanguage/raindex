@@ -83,6 +83,83 @@ describe("TanstackOrderQuote component", () => {
     });
   });
 
+  it("shows hover title and aria-label on the quote control icon buttons", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          block_number: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.550122181502135692",
+            formattedRatio: "6.563567234157974775",
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    const refreshButton = await screen.findByTestId("refresh-button");
+    expect(refreshButton).toHaveAttribute("title", "Refresh quotes");
+    expect(refreshButton).toHaveAttribute("aria-label", "Refresh quotes");
+
+    const pauseButton = screen.getByTestId("pause-refresh-button");
+    expect(pauseButton).toHaveAttribute("title", "Pause auto-refresh");
+    expect(pauseButton).toHaveAttribute("aria-label", "Pause auto-refresh");
+
+    const resumeButton = screen.getByTestId("resume-refresh-button");
+    expect(resumeButton).toHaveAttribute("title", "Resume auto-refresh");
+    expect(resumeButton).toHaveAttribute("aria-label", "Resume auto-refresh");
+
+    const debugButton = await screen.findByTestId("debug-quote-button");
+    expect(debugButton).toHaveAttribute("title", "Debug quote");
+    expect(debugButton).toHaveAttribute("aria-label", "Debug quote");
+  });
+
+  it("shows hover title and aria-label on the quote error icon buttons", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: false,
+          block_number: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: undefined,
+          error: "Failed to calculate quote",
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    const copyButton = await screen.findByRole("button", {
+      name: "Copy quote error",
+    });
+    expect(copyButton).toHaveAttribute("title", "Copy quote error");
+    expect(copyButton).toHaveAttribute("aria-label", "Copy quote error");
+
+    const debugErrorButton = screen.getByTestId("debug-quote-error-button");
+    expect(debugErrorButton).toHaveAttribute("title", "Debug quote");
+    expect(debugErrorButton).toHaveAttribute("aria-label", "Debug quote");
+  });
+
   it("refreshes the quote when the refresh icon is clicked", async () => {
     (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
       value: [
@@ -373,5 +450,86 @@ describe("TanstackOrderQuote component", () => {
       expect(maxInputSpan?.classList.contains("truncate")).toBe(true);
       expect(maxInputSpan).toHaveTextContent("10.175432109876543210");
     });
+  });
+
+  it("shows max output as a percentage of the output vault balance under the amount", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            formattedMaxOutputAsPercentOfVault: "25",
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      const outputPercent = screen.getByTestId("max-output-percent-0");
+      expect(outputPercent).toHaveTextContent("25% of vault");
+    });
+
+    // It renders inside the same cell as the Maximum Output amount, so the
+    // drawdown percentage sits directly beneath the amount the user reads.
+    const outputPercent = screen.getByTestId("max-output-percent-0");
+    const outputCell = screen.getByText("1.5").closest("td");
+    expect(outputCell).not.toBeNull();
+    expect(outputCell).toContainElement(outputPercent);
+
+    // The input side is output-only by design: there is no input percentage.
+    expect(screen.queryByTestId("max-input-percent-0")).toBeNull();
+  });
+
+  it("omits the output vault-percentage when it is not provided", async () => {
+    (mockOrder.getQuotes as Mock).mockResolvedValueOnce({
+      value: [
+        {
+          success: true,
+          blockNumber: "0x123",
+          pair: { pairName: "ETH/USDT", inputIndex: 0, outputIndex: 1 },
+          data: {
+            formattedMaxOutput: "1.5",
+            formattedRatio: "2",
+            formattedInverseRatio: "0.5",
+            formattedMaxInput: "3",
+            // no percentage field (e.g. output vault balance unknown / zero)
+          },
+          error: undefined,
+        },
+      ],
+    });
+
+    const queryClient = new QueryClient();
+
+    render(TanstackOrderQuote, {
+      props: {
+        order: mockOrder,
+        handleQuoteDebugModal: vi.fn(),
+      },
+      context: new Map([["$$_queryClient", queryClient]]),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("bodyRow")).toHaveTextContent("ETH/USDT");
+    });
+    expect(screen.queryByTestId("max-output-percent-0")).toBeNull();
+    expect(screen.queryByText(/% of vault/)).toBeNull();
   });
 });

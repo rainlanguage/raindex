@@ -14,8 +14,10 @@ orchestration around:
 - Developer ergonomics: LSP helpers, fuzz/unit‑test runners, and EVM fork
   utilities to parse/evaluate Rainlang and replay transactions.
 
-The library is built as `rlib` and `cdylib`. A Git commit identifier is embedded
-as `GH_COMMIT_SHA` for traceability.
+The library is built as `rlib` and `cdylib`. In test builds a Git commit
+identifier is embedded as `GH_COMMIT_SHA` for traceability; the binding is gated
+behind `#[cfg(test)]`, so production builds neither carry the constant nor
+require its `COMMIT_SHA` env var.
 
 ## Module Overview
 
@@ -56,7 +58,8 @@ as `GH_COMMIT_SHA` for traceability.
 - `unit_tests` — Programmatic runner that executes DOTRAIN
   pre/calculate‑io/handle‑io/post entrypoints on a fork for deterministic tests.
 - `test_helpers` — Sample DOTRAIN used in tests.
-- `lib` — Public module wiring, re‑exports, and `GH_COMMIT_SHA` env binding.
+- `lib` — Public module wiring, re‑exports, and the test‑only `GH_COMMIT_SHA`
+  env binding.
 
 Target gating is used extensively:
 
@@ -264,7 +267,7 @@ Target gating is used extensively:
   - `RAINDEX_ORDER_ENTRYPOINTS` = [`calculate-io`, `handle-io`]
   - `RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS` = [`handle-add-order`]
   - `types::vault::NO_SYMBOL` — fallback when token symbol is absent
-  - `GH_COMMIT_SHA` — compile‑time commit id
+  - `GH_COMMIT_SHA` — compile‑time commit id (test builds only; `#[cfg(test)]`)
 
 ## Error Handling
 
@@ -372,8 +375,10 @@ are provided so frontends can submit via their own providers.
 
 ## Constants & Build Flags
 
-- `GH_COMMIT_SHA` is set at compile time via the `COMMIT_SHA` env var and can be
-  displayed for “About/Version” screens.
+- `GH_COMMIT_SHA` is a test‑only constant (`#[cfg(test)]`) set at compile time
+  via the `COMMIT_SHA` env var, used for test‑side traceability. Because it is
+  gated behind `#[cfg(test)]`, production builds do not read `COMMIT_SHA` and do
+  not need it set.
 - `crate-type = ["rlib", "cdylib"]` enables consumption as a Rust lib and a
   WASM/FFI‑ready dynamic library.
 - Conditional `tokio` features are selected for WASM vs native targets in

@@ -461,6 +461,14 @@ impl RaindexOrder {
         RaindexVaultsList::new(get_io_by_type(self, RaindexVaultType::InputOutput))
     }
 }
+impl RaindexOrder {
+    /// The order's output vaults, in the same order as the subgraph returned
+    /// them. Unlike [`Self::outputs_list`] this is not filtered by vault type,
+    /// so vaults that act as both input and output are still included.
+    pub(crate) fn output_vaults(&self) -> &[RaindexVault] {
+        &self.outputs
+    }
+}
 #[cfg(not(target_family = "wasm"))]
 impl RaindexOrder {
     pub fn chain_id(&self) -> u32 {
@@ -3964,6 +3972,7 @@ mod tests {
                 formatted_ratio: "2".to_string(),
                 inverse_ratio,
                 formatted_inverse_ratio: "0.5".to_string(),
+                formatted_max_output_as_percent_of_vault: None,
             }
         }
 
