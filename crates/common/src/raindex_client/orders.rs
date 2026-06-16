@@ -346,6 +346,16 @@ impl RaindexOrder {
     pub fn inputs_outputs_list(&self) -> RaindexVaultsList {
         RaindexVaultsList::new(get_io_by_type(self, RaindexVaultType::InputOutput))
     }
+    
+    /// Extract oracle URL from raw meta bytes.
+    /// 
+    /// Takes raw meta bytes, CBOR decodes them as RainMetaDocumentV1Items,
+    /// and finds RaindexSignedContextOracleV1 by magic number.
+    /// Returns the oracle URL if found, None otherwise.
+    #[wasm_bindgen(js_name = extractOracleUrl)]
+    pub fn extract_oracle_url_wasm(meta_bytes: &[u8]) -> Option<String> {
+        RaindexOrder::extract_oracle_url(meta_bytes)
+    }
 }
 #[cfg(not(target_family = "wasm"))]
 impl RaindexOrder {
@@ -421,6 +431,19 @@ impl RaindexOrder {
     }
     pub fn inputs_outputs_list(&self) -> RaindexVaultsList {
         RaindexVaultsList::new(get_io_by_type(self, RaindexVaultType::InputOutput))
+    }
+    
+    /// Extract oracle URL from raw meta bytes.
+    /// 
+    /// Takes raw meta bytes, CBOR decodes them as RainMetaDocumentV1Items,
+    /// and finds RaindexSignedContextOracleV1 by magic number.
+    /// Returns the oracle URL if found, None otherwise.
+    pub fn extract_oracle_url(meta_bytes: &[u8]) -> Option<String> {
+        use rain_metadata::{types::raindex_signed_context_oracle::RaindexSignedContextOracleV1, RainMetaDocumentV1Item};
+        
+        let items = RainMetaDocumentV1Item::cbor_decode(meta_bytes).ok()?;
+        let oracle = RaindexSignedContextOracleV1::find_in_items(&items).ok()??;
+        Some(oracle.url().to_string())
     }
 }
 
