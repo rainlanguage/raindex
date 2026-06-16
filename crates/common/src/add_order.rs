@@ -29,7 +29,7 @@ use rain_metadata::{
     ContentLanguage, ContentType, Error as RainMetaError, KnownMagic, RainMetaDocumentV1Item,
 };
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
-use raindex_app_settings::deployment::DeploymentCfg;
+use raindex_app_settings::{deployment::DeploymentCfg, order::OrderIOCfg};
 use raindex_bindings::provider::{mk_read_provider, ReadProviderError};
 use raindex_bindings::IRaindexV6::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
 use serde::{Deserialize, Serialize};
@@ -98,6 +98,14 @@ pub struct AddOrderArgs {
 }
 
 impl AddOrderArgs {
+    fn order_io_vault_id(io: &OrderIOCfg, random_vault_id: B256) -> B256 {
+        if io.vaultless {
+            B256::ZERO
+        } else {
+            io.vault_id.map(B256::from).unwrap_or(random_vault_id)
+        }
+    }
+
     /// create a new  instance from Deployment
     pub async fn new_from_deployment(
         dotrain: String,
@@ -115,7 +123,7 @@ impl AddOrderArgs {
 
             inputs.push(IOV2 {
                 token: input_token.address,
-                vaultId: input.vault_id.map(B256::from).unwrap_or(random_vault_id),
+                vaultId: Self::order_io_vault_id(input, random_vault_id),
             });
         }
 
@@ -128,7 +136,7 @@ impl AddOrderArgs {
 
             outputs.push(IOV2 {
                 token: output_token.address,
-                vaultId: output.vault_id.map(B256::from).unwrap_or(random_vault_id),
+                vaultId: Self::order_io_vault_id(output, random_vault_id),
             });
         }
 
@@ -757,6 +765,144 @@ _ _: 0 0;
 
         // input0 and output0 vaults should be the same random value
         assert_eq!(result.inputs[0].vaultId, result.outputs[0].vaultId);
+    }
+
+    #[tokio::test]
+    async fn test_add_order_vaultless_io_uses_zero_vault_id() {
+        let network = NetworkCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "test-network".to_string(),
+            rpcs: vec![Url::parse("https://some-rpc.com").unwrap()],
+            chain_id: 137,
+            label: None,
+            network_id: None,
+            currency: None,
+        };
+        let network_arc = Arc::new(network);
+        let rainlang = RainlangCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "".to_string(),
+            network: network_arc.clone(),
+            address: Address::default(),
+        };
+        let scenario = ScenarioCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            documents: default_documents(),
+            key: "test-scenario".to_string(),
+            bindings: HashMap::new(),
+            runs: None,
+            blocks: None,
+            rainlang: Arc::new(rainlang),
+        };
+        let token1 = Arc::new(TokenCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "token1".to_string(),
+            address: Address::repeat_byte(1),
+            network: network_arc.clone(),
+            decimals: Some(18),
+            label: None,
+            symbol: Some("Token1".to_string()),
+            logo_uri: None,
+            extensions: None,
+        });
+        let token2 = Arc::new(TokenCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "token2".to_string(),
+            address: Address::repeat_byte(2),
+            network: network_arc.clone(),
+            decimals: Some(18),
+            label: None,
+            symbol: Some("Token2".to_string()),
+            logo_uri: None,
+            extensions: None,
+        });
+        let token3 = Arc::new(TokenCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "token3".to_string(),
+            address: Address::repeat_byte(3),
+            network: network_arc.clone(),
+            decimals: Some(18),
+            label: None,
+            symbol: Some("Token3".to_string()),
+            logo_uri: None,
+            extensions: None,
+        });
+        let token4 = Arc::new(TokenCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "token4".to_string(),
+            address: Address::repeat_byte(4),
+            network: network_arc.clone(),
+            decimals: Some(18),
+            label: None,
+            symbol: Some("Token4".to_string()),
+            logo_uri: None,
+            extensions: None,
+        });
+        let known_vault_id = U256::from(7);
+        let order = OrderCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "".to_string(),
+            inputs: vec![
+                OrderIOCfg {
+                    token_key: token1.key.clone(),
+                    token: Some(token1.clone()),
+                    vaultless: true,
+                    vault_id: None,
+                },
+                OrderIOCfg {
+                    token_key: token2.key.clone(),
+                    token: Some(token2.clone()),
+                    vaultless: false,
+                    vault_id: Some(known_vault_id),
+                },
+            ],
+            outputs: vec![
+                OrderIOCfg {
+                    token_key: token3.key.clone(),
+                    token: Some(token3.clone()),
+                    vaultless: true,
+                    vault_id: None,
+                },
+                OrderIOCfg {
+                    token_key: token4.key.clone(),
+                    token: Some(token4.clone()),
+                    vaultless: false,
+                    vault_id: None,
+                },
+            ],
+            network: network_arc.clone(),
+            rainlang: None,
+            raindex: None,
+            oracle_url: None,
+        };
+        let deployment = DeploymentCfg {
+            document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
+            key: "".to_string(),
+            scenario: Arc::new(scenario),
+            order: Arc::new(order),
+        };
+
+        let dotrain = format!(
+            "
+version: {spec_version}
+---
+#calculate-io
+_ _: 0 0;
+#handle-io
+:;
+#handle-add-order
+_ _: 0 0;
+",
+            spec_version = SpecVersion::current()
+        );
+        let result = AddOrderArgs::new_from_deployment(dotrain, deployment, None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.inputs[0].vaultId, B256::ZERO);
+        assert_eq!(result.outputs[0].vaultId, B256::ZERO);
+        assert_eq!(result.inputs[1].vaultId, B256::from(known_vault_id));
+        assert_ne!(result.outputs[1].vaultId, B256::ZERO);
     }
 
     #[tokio::test]
