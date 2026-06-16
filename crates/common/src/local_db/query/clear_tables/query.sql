@@ -1,5 +1,7 @@
 BEGIN TRANSACTION;
 
+DROP VIEW IF EXISTS vault_deltas;
+
 DROP TABLE IF EXISTS target_watermarks;
 DROP TABLE IF EXISTS db_metadata;
 DROP TABLE IF EXISTS context_values;
@@ -18,6 +20,8 @@ DROP TABLE IF EXISTS interpreter_store_sets;
 DROP TABLE IF EXISTS sync_status;
 DROP TABLE IF EXISTS vault_balance_changes;
 DROP TABLE IF EXISTS running_vault_balances;
+DROP TABLE IF EXISTS derived_vault_deltas;
+DROP TABLE IF EXISTS derived_trades;
 
 COMMIT;
 

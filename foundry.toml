@@ -1,7 +1,12 @@
+[package]
+name = "raindex"
+version = "0.1.12"
+
 [profile.default]
 src = 'src'
 out = 'out'
-libs = ['lib']
+# All Solidity dependencies are Soldeer-managed; no git submodules remain.
+libs = ['dependencies']
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
@@ -17,9 +22,9 @@ evm_version = "cancun"
 
 # optimizer settings for snapshotting.
 optimizer = true
-# Lowered from 1000000 → 1000 → 800 to stay under the EIP-170 24KB contract
-# size limit. At 1000 runs OrderBookV6 was 24,650 bytes (74 over); at 800 it
-# is 23,437 bytes (1,139 under).
+# Lowered from 1000000 → 1000 → 800 to stay under the EIP-170 24576-byte
+# contract size limit. With the per-owner state overlay removed (untaken orders
+# make no state change), RaindexV6 is 24,424 bytes at 800 runs (152 under).
 optimizer_runs = 800
 
 bytecode_hash = "none"
@@ -28,41 +33,52 @@ cbor_metadata = false
 # Build metadata used for testing rain meta aware contracts in this folder rather
 # than expose ffi to forge.
 fs_permissions = [
-  { access = "read", path = "./meta"}, {access = "read", path = "./lib/rain.interpreter/meta/RainterpreterExpressionDeployerNPE2.rain.meta"},
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterParserNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterStoreNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterNPE2" },
-  { access = "read", path = "./lib/rain.interpreter/deployments/latest/RainterpreterExpressionDeployerNPE2" },
-  { access = "read-write", path = "./meta/OrderBookV6SubParserAuthoringMeta.rain.meta"},
+  { access = "read", path = "./meta" },
+  { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta" },
   { access = "read-write", path = "src/generated" },
   { access = "read", path = "./subgraph" },
 ]
 
 remappings = [
-  "forge-std/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/forge-std/src/",
-  "openzeppelin-contracts/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/openzeppelin-contracts/",
-  "rain.interpreter/=lib/rain.interpreter/src/",
-  "rain.metadata/=lib/rain.interpreter/lib/rain.metadata/src/",
-  "rain.interpreter.interface/=lib/rain.raindex.interface/lib/rain.interpreter.interface/src/",
-  "rain.intorastring/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.intorastring/src/",
-  "rain.sol.codegen/=lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.sol.codegen/src/",
-  "rain.solmem/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.solmem/src",
-  "rain.math.float/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.math.float/src/",
-  "rain.tofu.erc20-decimals/=lib/rain.interpreter/lib/rain.tofu.erc20-decimals/src/",
-  "rain.deploy/=lib/rain.deploy/src/",
-  "rain.lib.typecast/=lib/rain.raindex.interface/lib/rain.interpreter.interface/lib/rain.lib.typecast/src/",
-  "sushixswap-v2/=lib/sushixswap-v2/",
+  # Custom remap so @openzeppelin packages' own internal imports resolve.
+  "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.6.1/",
 ]
+
+[dependencies]
+forge-std = "1.16.1"
+"@openzeppelin-contracts" = "5.6.1"
+# rainlanguage/rain.interpreter was renamed to rainlanguage/rainlang;
+# its Soldeer registry name follows.
+rainlang = "0.1.5"
+rain-interpreter-interface = "0.1.0"
+# rainlanguage/rain.raindex.interface was renamed to
+# rainlanguage/raindex.interface; Soldeer registry name follows.
+raindex-interface = "0.1.1"
+rain-metadata = "0.1.0"
+rain-intorastring = "0.1.0"
+rain-sol-codegen = "0.1.0"
+rain-solmem = "0.1.3"
+rain-math-float = "0.1.1"
+rain-tofu-erc20-decimals = "0.1.1"
+rain-deploy = "0.1.2"
+rain-lib-typecast = "0.1.0"
+rain-lib-hash = "0.1.0"
+rain-math-binary = "0.1.1"
+rain-string = "0.2.0"
+rain-lib-memkv = "0.1.0"
+
+[soldeer]
+recursive_deps = false
 
 [fuzz]
 runs = 5096
 
 [rpc_endpoints]
-arbitrum = "${CI_DEPLOY_ARBITRUM_RPC_URL}"
-base = "${CI_DEPLOY_BASE_RPC_URL}"
-base_sepolia = "${CI_DEPLOY_BASE_SEPOLIA_RPC_URL}"
-flare = "${CI_DEPLOY_FLARE_RPC_URL}"
-polygon = "${CI_DEPLOY_POLYGON_RPC_URL}"
+arbitrum = "${ARBITRUM_RPC_URL}"
+base = "${BASE_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+flare = "${FLARE_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
 
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }

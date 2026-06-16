@@ -1,6 +1,6 @@
 use crate::local_db::{
     query::{SqlStatement, SqlValue},
-    OrderbookIdentifier,
+    RaindexIdentifier,
 };
 use alloy::primitives::{Address, B256};
 use serde::{Deserialize, Serialize};
@@ -20,14 +20,14 @@ pub struct LocalDbTransaction {
 /// Builds a SQL statement to fetch transaction info by transaction hash
 /// from the deposits and withdrawals tables.
 pub fn build_fetch_transaction_by_hash_stmt(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     tx_hash: B256,
 ) -> SqlStatement {
     SqlStatement::new_with_params(
         QUERY_TEMPLATE,
         vec![
-            SqlValue::from(ob_id.chain_id),
-            SqlValue::from(ob_id.orderbook_address),
+            SqlValue::from(raindex_id.chain_id),
+            SqlValue::from(raindex_id.raindex_address),
             SqlValue::from(tx_hash),
         ],
     )
@@ -40,11 +40,11 @@ mod tests {
 
     #[test]
     fn builds_correct_sql_with_params() {
-        let orderbook = address!("0x1234567890123456789012345678901234567890");
+        let raindex = address!("0x1234567890123456789012345678901234567890");
         let tx_hash = b256!("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890");
-        let ob_id = OrderbookIdentifier::new(1, orderbook);
+        let raindex_id = RaindexIdentifier::new(1, raindex);
 
-        let stmt = build_fetch_transaction_by_hash_stmt(&ob_id, tx_hash);
+        let stmt = build_fetch_transaction_by_hash_stmt(&raindex_id, tx_hash);
 
         assert!(stmt.sql.contains("SELECT"));
         assert!(stmt.sql.contains("FROM deposits"));

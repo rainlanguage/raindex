@@ -1,82 +1,85 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
-import { beforeEach, expect, describe, vi, afterEach } from 'vitest';
-import License from '../lib/components/License.svelte';
-import { LICENSE_URL } from '../lib/consts';
+import { render, screen, waitFor } from "@testing-library/svelte";
+import { beforeEach, expect, describe, vi, afterEach } from "vitest";
+import License from "../lib/components/License.svelte";
+import { LICENSE_URL } from "../lib/consts";
 
 // Mock the global fetch function
 const mockFetch = vi.fn();
 
-vi.stubGlobal('fetch', mockFetch);
+vi.stubGlobal("fetch", mockFetch);
 
-vi.mock('svelte-markdown', async () => {
-	const MockMarkdown = (await import('../lib/__mocks__/MockComponent.svelte')).default;
-	return { default: MockMarkdown };
+vi.mock("svelte-markdown", async () => {
+  const MockMarkdown = (await import("../lib/__mocks__/MockComponent.svelte"))
+    .default;
+  return { default: MockMarkdown };
 });
 
-describe('License', () => {
-	const mockMarkdownContent = 'This is license text.';
+describe("License", () => {
+  const mockMarkdownContent = "This is license text.";
 
-	beforeEach(() => {
-		mockFetch.mockReset();
-	});
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
 
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
-	it('fetches and renders markdown content on mount', async () => {
-		mockFetch.mockResolvedValue({
-			ok: true,
-			text: async () => mockMarkdownContent
-		});
+  it("fetches and renders markdown content on mount", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => mockMarkdownContent,
+    });
 
-		render(License);
+    render(License);
 
-		await waitFor(() => {
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
-		});
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
+    });
 
-		await waitFor(() => {
-			expect(screen.getByTestId('mock-component').getAttribute('source')).toBe(mockMarkdownContent);
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-component").getAttribute("source")).toBe(
+        mockMarkdownContent,
+      );
+    });
+  });
 
-	it('handles fetch network error gracefully', async () => {
-		mockFetch.mockRejectedValue(new Error('Network error'));
+  it("handles fetch network error gracefully", async () => {
+    mockFetch.mockRejectedValue(new Error("Network error"));
 
-		render(License);
+    render(License);
 
-		await waitFor(() => {
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
-		});
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
+    });
 
-		await waitFor(() => {
-			expect(screen.getByTestId('mock-component').getAttribute('source')).toBe(
-				'Failed to fetch license.'
-			);
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-component").getAttribute("source")).toBe(
+        "Failed to fetch license.",
+      );
+    });
+  });
 
-	it('handles non-OK HTTP responses gracefully', async () => {
-		mockFetch.mockResolvedValue({
-			ok: false,
-			status: 404,
-			statusText: 'Not Found'
-		});
+  it("handles non-OK HTTP responses gracefully", async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+    });
 
-		render(License);
+    render(License);
 
-		await waitFor(() => {
-			expect(mockFetch).toHaveBeenCalledTimes(1);
-			expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
-		});
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(LICENSE_URL);
+    });
 
-		await waitFor(() => {
-			expect(screen.getByTestId('mock-component').getAttribute('source')).toBe(
-				'Failed to fetch license: HTTP 404'
-			);
-		});
-	});
+    await waitFor(() => {
+      expect(screen.getByTestId("mock-component").getAttribute("source")).toBe(
+        "Failed to fetch license: HTTP 404",
+      );
+    });
+  });
 });

@@ -3,13 +3,13 @@ use alloy::sol;
 sol!(
     #![sol(all_derives = true, rpc)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IRaindexV6, "../../out/IRaindexV6.sol/IRaindexV6.json"
+    IRaindexV6, "./abis/IRaindexV6.json"
 );
 
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    OrderBook, "../../out/OrderBookV6.sol/OrderBookV6.json"
+    Raindex, "./abis/RaindexV6.json"
 );
 
 // Inline definition avoids non-deterministic artifact collision between
@@ -32,18 +32,18 @@ sol!(
 
 sol!(
     #![sol(all_derives = true)]
-    ERC20, "../../out/ERC20.sol/ERC20.json"
+    ERC20, "./abis/ERC20.json"
 );
 
 sol!(
     #![sol(all_derives = true, rpc)]
-    IERC20Metadata, "../../out/IERC20Metadata.sol/IERC20Metadata.json"
+    IERC20Metadata, "./abis/IERC20Metadata.json"
 );
 
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IInterpreterStoreV3, "../../out/IInterpreterStoreV3.sol/IInterpreterStoreV3.json"
+    IInterpreterStoreV3, "./abis/IInterpreterStoreV3.json"
 );
 
 pub mod provider;
@@ -60,11 +60,11 @@ pub mod topics {
         IRaindexV6::{
             AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
         },
-        OrderBook::MetaV1_2,
+        Raindex::MetaV1_2,
     };
     use alloy::{primitives::B256, sol_types::SolEvent};
 
-    pub const ORDERBOOK_EVENT_TOPICS: [B256; 8] = [
+    pub const RAINDEX_EVENT_TOPICS: [B256; 8] = [
         AddOrderV3::SIGNATURE_HASH,
         TakeOrderV3::SIGNATURE_HASH,
         WithdrawV2::SIGNATURE_HASH,

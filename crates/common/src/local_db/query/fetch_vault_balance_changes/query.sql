@@ -1,7 +1,7 @@
 WITH params AS (
   SELECT
     ?1 AS chain_id,
-    ?2 AS orderbook_address,
+    ?2 AS raindex_address,
     ?3 AS vault_id,
     ?4 AS token,
     ?5 AS owner
@@ -20,7 +20,7 @@ SELECT
 FROM vault_balance_changes vbc
 JOIN params p
   ON p.chain_id = vbc.chain_id
- AND p.orderbook_address = vbc.orderbook_address
+ AND p.raindex_address = vbc.raindex_address
  AND p.vault_id = vbc.vault_id
  AND p.token = vbc.token
  AND p.owner = vbc.owner

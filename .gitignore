@@ -1,7 +1,6 @@
 out
 cache
 result
-meta
 target
 .DS_Store
 .env
@@ -10,10 +9,10 @@ subgraph/tests/.latest.json
 node_modules
 temp
 dist
-packages/orderbook/cjs.js
-packages/orderbook/cjs.d.ts
-packages/orderbook/esm.js
-packages/orderbook/esm.d.ts
+packages/raindex/cjs.js
+packages/raindex/cjs.d.ts
+packages/raindex/esm.js
+packages/raindex/esm.d.ts
 .direnv/
 
 # Audit proposed fixes
@@ -24,3 +23,8 @@ packages/orderbook/esm.d.ts
 .ai_docs/
 .ai_spec/
 .cursor/
+
+dependencies/
+
+# Local pre-commit hook config
+.pre-commit-config.yaml

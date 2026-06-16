@@ -1,4 +1,4 @@
-pub mod clear_orderbook_data;
+pub mod clear_raindex_data;
 pub mod clear_tables;
 pub mod create_tables;
 pub mod create_views;
@@ -13,9 +13,15 @@ pub mod fetch_order_vaults_volume;
 pub mod fetch_orders;
 pub(crate) mod fetch_orders_common;
 pub mod fetch_orders_count;
+pub mod fetch_owner_trades;
+pub(crate) mod fetch_owner_trades_common;
+pub mod fetch_owner_trades_count;
 pub mod fetch_store_addresses;
+pub mod fetch_table_columns;
 pub mod fetch_tables;
 pub mod fetch_target_watermark;
+pub mod fetch_trades;
+pub mod fetch_trades_by_tx;
 pub mod fetch_transaction_by_hash;
 pub mod fetch_vault_balance_changes;
 pub mod fetch_vaults;
@@ -24,6 +30,8 @@ pub mod integrity_check;
 pub mod sql_statement;
 pub mod sql_statement_batch;
 pub mod update_last_synced_block;
+pub mod upsert_derived_trades;
+pub mod upsert_derived_vault_deltas;
 pub mod upsert_target_watermark;
 pub mod upsert_vault_balances;
 
@@ -53,6 +61,12 @@ pub enum LocalDbQueryError {
 
     #[error("Operation not implemented: {operation}")]
     NotImplemented { operation: String },
+
+    #[error("not a raindex local-db: application_id {found:#010x} != expected {expected:#010x}")]
+    NotARaindexDb { expected: i32, found: i32 },
+
+    #[error("local-db schema version mismatch: user_version {found} != expected {expected}")]
+    SchemaVersionMismatch { expected: i32, found: i32 },
 }
 
 impl LocalDbQueryError {

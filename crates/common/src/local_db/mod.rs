@@ -20,8 +20,8 @@ use decode::DecodeError;
 pub use fetch::{FetchConfig, FetchConfigError};
 use insert::InsertError;
 use query::{LocalDbQueryError, SqlBuildError};
-use rain_orderbook_app_settings::remote::manifest::FetchManifestError;
-use rain_orderbook_app_settings::yaml::YamlError;
+use raindex_app_settings::remote::manifest::FetchManifestError;
+use raindex_app_settings::yaml::YamlError;
 use serde::{Deserialize, Serialize};
 use std::array::TryFromSliceError;
 use std::num::ParseIntError;
@@ -56,8 +56,8 @@ pub enum LocalDbError {
     #[error("Missing local-db sync config for network '{network}'")]
     MissingLocalDbSyncForNetwork { network: String },
 
-    #[error("Missing local-db remote for orderbook '{orderbook_key}'")]
-    MissingLocalDbRemote { orderbook_key: String },
+    #[error("Missing local-db remote for raindex '{raindex_key}'")]
+    MissingLocalDbRemote { raindex_key: String },
 
     #[error("Invalid block number '{value}'")]
     InvalidBlockNumber {
@@ -83,10 +83,10 @@ pub enum LocalDbError {
     #[error("Configuration error: {message}")]
     Config { message: String },
 
-    #[error("Missing runner target for chain {chain_id} orderbook {orderbook_address}")]
+    #[error("Missing runner target for chain {chain_id} raindex {raindex_address}")]
     MissingRunnerTarget {
         chain_id: u32,
-        orderbook_address: Address,
+        raindex_address: Address,
     },
 
     #[error(
@@ -218,9 +218,9 @@ impl LocalDbError {
             LocalDbError::Rpc(err) => format!("RPC error: {}", err),
             LocalDbError::JsonParse(err) => format!("Failed to parse JSON response: {}", err),
             LocalDbError::MissingField { field } => format!("Missing expected field: {}", field),
-            LocalDbError::MissingLocalDbRemote { orderbook_key } => format!(
-                "Missing local-db remote configuration for orderbook '{}'",
-                orderbook_key
+            LocalDbError::MissingLocalDbRemote { raindex_key } => format!(
+                "Missing local-db remote configuration for raindex '{}'",
+                raindex_key
             ),
             LocalDbError::InvalidBlockNumber { value, .. } => {
                 format!("Invalid block number provided: {}", value)
@@ -251,10 +251,10 @@ impl LocalDbError {
             LocalDbError::Config { message } => format!("Configuration error: {}", message),
             LocalDbError::MissingRunnerTarget {
                 chain_id,
-                orderbook_address,
+                raindex_address,
             } => format!(
-                "Missing runner target for chain {} orderbook {:#x}",
-                chain_id, orderbook_address
+                "Missing runner target for chain {} raindex {:#x}",
+                chain_id, raindex_address
             ),
             LocalDbError::RunnerNetworkChainIdMismatch {
                 network_key,
@@ -343,18 +343,18 @@ impl LocalDbError {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
-pub struct OrderbookIdentifier {
+pub struct RaindexIdentifier {
     pub chain_id: u32,
-    pub orderbook_address: Address,
+    pub raindex_address: Address,
 }
 #[cfg(target_family = "wasm")]
-impl_wasm_traits!(OrderbookIdentifier);
+impl_wasm_traits!(RaindexIdentifier);
 
-impl OrderbookIdentifier {
-    pub fn new(chain_id: u32, orderbook_address: Address) -> Self {
+impl RaindexIdentifier {
+    pub fn new(chain_id: u32, raindex_address: Address) -> Self {
         Self {
             chain_id,
-            orderbook_address,
+            raindex_address,
         }
     }
 }

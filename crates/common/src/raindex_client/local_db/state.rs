@@ -1,10 +1,10 @@
-use super::LocalDb;
+use super::{LocalDb, LocalDbSyncStatusStore};
 #[cfg(not(target_family = "wasm"))]
 use crate::raindex_client::local_db::pipeline::runner::scheduler::NativeSyncHandle;
 #[cfg(target_family = "wasm")]
 use crate::raindex_client::local_db::pipeline::runner::scheduler::SchedulerHandle;
-use rain_orderbook_app_settings::network::NetworkCfg;
-use rain_orderbook_app_settings::yaml::orderbook::OrderbookYaml;
+use raindex_app_settings::network::NetworkCfg;
+use raindex_app_settings::yaml::raindex::RaindexYaml;
 #[cfg(target_family = "wasm")]
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -32,6 +32,7 @@ pub(crate) struct LocalDbState {
     pub(crate) scheduler: Arc<Mutex<Option<NativeSyncHandle>>>,
     pub(crate) sync_readiness: SyncReadiness,
     pub(crate) sync_configured_chains: HashSet<u32>,
+    pub(crate) sync_status_store: LocalDbSyncStatusStore,
 }
 
 impl Default for LocalDbState {
@@ -47,6 +48,7 @@ impl Default for LocalDbState {
             scheduler: Arc::new(Mutex::new(None)),
             sync_readiness: SyncReadiness::new(),
             sync_configured_chains: HashSet::new(),
+            sync_status_store: LocalDbSyncStatusStore::new(),
         }
     }
 }
@@ -58,12 +60,14 @@ impl LocalDbState {
         scheduler: Rc<RefCell<Option<SchedulerHandle>>>,
         sync_readiness: SyncReadiness,
         sync_configured_chains: HashSet<u32>,
+        sync_status_store: LocalDbSyncStatusStore,
     ) -> Self {
         Self {
             db: Rc::new(RefCell::new(db)),
             scheduler,
             sync_readiness,
             sync_configured_chains,
+            sync_status_store,
         }
     }
 
@@ -79,12 +83,14 @@ impl LocalDbState {
         scheduler: Arc<Mutex<Option<NativeSyncHandle>>>,
         sync_readiness: SyncReadiness,
         sync_configured_chains: HashSet<u32>,
+        sync_status_store: LocalDbSyncStatusStore,
     ) -> Self {
         Self {
             db: Arc::new(Mutex::new(db)),
             scheduler,
             sync_readiness,
             sync_configured_chains,
+            sync_status_store,
         }
     }
 
@@ -98,7 +104,7 @@ impl LocalDbState {
 }
 
 impl LocalDbState {
-    pub(crate) fn compute_chain_ids(yaml: &OrderbookYaml) -> HashSet<u32> {
+    pub(crate) fn compute_chain_ids(yaml: &RaindexYaml) -> HashSet<u32> {
         let syncs = match yaml.get_local_db_syncs() {
             Ok(s) => s,
             Err(_) => return HashSet::new(),
@@ -125,6 +131,10 @@ impl LocalDbState {
             }
         }
         QuerySource::Subgraph
+    }
+
+    pub(crate) fn local_db(&self) -> Option<LocalDb> {
+        self.db()
     }
 
     pub(crate) fn classify_chains(&self, networks: &[NetworkCfg]) -> ClassifiedChains {
@@ -223,9 +233,9 @@ mod tests {
     use crate::local_db::query::{
         FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
     };
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_app_settings::yaml::orderbook::{OrderbookYaml, OrderbookYamlValidation};
-    use rain_orderbook_app_settings::yaml::YamlParsable;
+    use raindex_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::yaml::raindex::{RaindexYaml, RaindexYamlValidation};
+    use raindex_app_settings::yaml::YamlParsable;
 
     struct NoopExec;
 
@@ -273,6 +283,7 @@ mod tests {
             Arc::new(Mutex::new(None)),
             readiness,
             configured.iter().copied().collect(),
+            LocalDbSyncStatusStore::new(),
         )
     }
 
@@ -414,8 +425,8 @@ local-db-sync:
     finality-depth: 12
     bootstrap-block-threshold: 1000
     sync-interval-ms: 5000
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -423,8 +434,8 @@ orderbooks:
 "#,
             version = SpecVersion::current()
         );
-        let yaml = OrderbookYaml::new(vec![yaml_str], OrderbookYamlValidation::default())
-            .expect("valid yaml");
+        let yaml =
+            RaindexYaml::new(vec![yaml_str], RaindexYamlValidation::default()).expect("valid yaml");
         let ids = LocalDbState::compute_chain_ids(&yaml);
         assert_eq!(ids, HashSet::from([42161]));
         assert!(!ids.contains(&137));
@@ -442,8 +453,8 @@ networks:
     chain-id: 42161
 subgraphs:
   anvil: https://subgraph.example/anvil
-orderbooks:
-  ob-a:
+raindexes:
+  raindex-a:
     address: 0x00000000000000000000000000000000000000a1
     network: anvil
     subgraph: anvil
@@ -451,8 +462,8 @@ orderbooks:
 "#,
             version = SpecVersion::current()
         );
-        let yaml = OrderbookYaml::new(vec![yaml_str], OrderbookYamlValidation::default())
-            .expect("valid yaml");
+        let yaml =
+            RaindexYaml::new(vec![yaml_str], RaindexYamlValidation::default()).expect("valid yaml");
         let ids = LocalDbState::compute_chain_ids(&yaml);
         assert!(ids.is_empty());
     }

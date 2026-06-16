@@ -1,2 +1,2 @@
 export const REGISTRY_URL =
-	'https://raw.githubusercontent.com/rainlanguage/rain.strategies/3c5077c3900f283f28748d8b1732aa3c9bce979e/registry';
+  "https://raw.githubusercontent.com/rainlanguage/rain.strategies/85c5d10a507f9759b936ae6327e06c2d759cee55/registry";

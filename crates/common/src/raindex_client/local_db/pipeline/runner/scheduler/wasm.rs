@@ -14,11 +14,14 @@ use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter
 use crate::raindex_client::local_db::pipeline::status::{
     set_scheduler_state, set_status_callback, ClientStatusBus,
 };
-use crate::raindex_client::local_db::{LocalDb, NetworkSyncStatus, SchedulerState, SyncReadiness};
+use crate::raindex_client::local_db::{
+    LocalDb, LocalDbSyncStatusStore, NetworkSyncStatus, RaindexSyncStatus, SchedulerState,
+    SyncReadiness,
+};
 use gloo_timers::future::TimeoutFuture;
 use js_sys::Function;
-use rain_orderbook_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
-use rain_orderbook_app_settings::network::NetworkCfg;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+use raindex_app_settings::network::NetworkCfg;
 use std::cell::Cell;
 use std::collections::HashMap;
 use std::future::Future;
@@ -84,12 +87,13 @@ pub(crate) fn start(
     db: LocalDb,
     status_callback: Option<Function>,
     sync_readiness: SyncReadiness,
+    status_store: LocalDbSyncStatusStore,
 ) -> Result<SchedulerHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
-    for ob in settings.orderbooks.values() {
+    for raindex_cfg in settings.raindexes.values() {
         networks_map
-            .entry(ob.network.key.clone())
-            .or_insert_with(|| (*ob.network).clone());
+            .entry(raindex_cfg.network.key.clone())
+            .or_insert_with(|| (*raindex_cfg.network).clone());
     }
     let mut networks: Vec<NetworkCfg> = networks_map.into_values().collect();
     networks.sort_by(|a, b| a.key.cmp(&b.key));
@@ -102,6 +106,7 @@ pub(crate) fn start(
 
     let stop_flag = Rc::new(Cell::new(false));
     let callback = status_callback.map(Rc::new);
+    status_store.seed(&settings);
 
     let bootstrap = ClientBootstrapAdapter::new();
     let db_clone = db.clone();
@@ -120,6 +125,7 @@ pub(crate) fn start(
         {
             for network in &networks_for_spawn {
                 emit_network_status(
+                    &status_store,
                     callback.as_deref(),
                     NetworkSyncStatus::failure(network.chain_id, err.to_readable_msg()),
                 );
@@ -135,6 +141,7 @@ pub(crate) fn start(
                     Ok(config) => config,
                     Err(err) => {
                         emit_network_status(
+                            &status_store,
                             callback.as_deref(),
                             NetworkSyncStatus::failure(network.chain_id, err.to_readable_msg()),
                         );
@@ -143,12 +150,13 @@ pub(crate) fn start(
                 };
 
             let leadership = DefaultLeadership::with_network_key(network.key.clone());
-            let environment = default_environment();
+            let environment = default_environment(status_store.clone());
 
             let runner = match ClientRunner::from_config(config.clone(), environment, leadership) {
                 Ok(r) => r,
                 Err(err) => {
                     emit_network_status(
+                        &status_store,
                         callback.as_deref(),
                         NetworkSyncStatus::failure(network.chain_id, err.to_readable_msg()),
                     );
@@ -160,6 +168,7 @@ pub(crate) fn start(
                 Some(sync_cfg) => sync_cfg.sync_interval_ms as u32,
                 None => {
                     emit_network_status(
+                        &status_store,
                         callback.as_deref(),
                         NetworkSyncStatus::failure(
                             network.chain_id,
@@ -180,6 +189,7 @@ pub(crate) fn start(
                 Rc::clone(&stop_flag_init),
                 interval_ms,
                 sync_readiness.clone(),
+                status_store.clone(),
             );
         }
     });
@@ -197,11 +207,21 @@ fn spawn_network_loop<R>(
     stop_flag: Rc<Cell<bool>>,
     interval_ms: u32,
     sync_readiness: SyncReadiness,
+    status_store: LocalDbSyncStatusStore,
 ) where
     R: SchedulerRunner + 'static,
 {
     spawn_local(async move {
-        run_network_loop(runner, db, callback, stop_flag, interval_ms, sync_readiness).await;
+        run_network_loop(
+            runner,
+            db,
+            callback,
+            stop_flag,
+            interval_ms,
+            sync_readiness,
+            status_store,
+        )
+        .await;
     });
 }
 
@@ -212,13 +232,18 @@ async fn run_network_loop<R>(
     stop_flag: Rc<Cell<bool>>,
     interval_ms: u32,
     sync_readiness: SyncReadiness,
+    status_store: LocalDbSyncStatusStore,
 ) where
     R: SchedulerRunner + 'static,
 {
     let chain_id = runner.chain_id().unwrap_or(0);
     let mut was_leader_last_cycle = false;
 
-    emit_network_status(callback.as_deref(), NetworkSyncStatus::syncing(chain_id));
+    emit_network_status(
+        &status_store,
+        callback.as_deref(),
+        NetworkSyncStatus::syncing(chain_id),
+    );
 
     loop {
         if stop_flag.get() {
@@ -226,7 +251,11 @@ async fn run_network_loop<R>(
         }
 
         if was_leader_last_cycle {
-            emit_network_status(callback.as_deref(), NetworkSyncStatus::syncing(chain_id));
+            emit_network_status(
+                &status_store,
+                callback.as_deref(),
+                NetworkSyncStatus::syncing(chain_id),
+            );
         }
 
         match runner.run_once(&db).await {
@@ -237,19 +266,26 @@ async fn run_network_loop<R>(
 
                     if report.failures.is_empty() {
                         sync_readiness.mark_ready(chain_id);
+                        status_store.record_chain_ready(chain_id);
                         emit_network_status(
+                            &status_store,
                             callback.as_deref(),
                             NetworkSyncStatus::active(chain_id, SchedulerState::Leader),
                         );
                     } else {
                         let first = &report.failures[0];
                         let msg = format!(
-                            "ob {:#x} failed at {:?}: {}",
-                            first.ob_id.orderbook_address,
+                            "raindex {:#x} failed at {:?}: {}",
+                            first.raindex_id.raindex_address,
                             first.stage,
                             first.error.to_readable_msg()
                         );
+                        status_store.record_raindex_status(RaindexSyncStatus::failure(
+                            first.raindex_id.clone(),
+                            msg.clone(),
+                        ));
                         emit_network_status(
+                            &status_store,
                             callback.as_deref(),
                             NetworkSyncStatus::failure(chain_id, msg),
                         );
@@ -258,7 +294,10 @@ async fn run_network_loop<R>(
                 RunOutcome::NotLeader => {
                     was_leader_last_cycle = false;
                     set_scheduler_state(SchedulerState::NotLeader);
+                    sync_readiness.mark_ready(chain_id);
+                    status_store.record_chain_ready(chain_id);
                     emit_network_status(
+                        &status_store,
                         callback.as_deref(),
                         NetworkSyncStatus::active(chain_id, SchedulerState::NotLeader),
                     );
@@ -267,6 +306,7 @@ async fn run_network_loop<R>(
             Err(err) => {
                 was_leader_last_cycle = true;
                 emit_network_status(
+                    &status_store,
                     callback.as_deref(),
                     NetworkSyncStatus::failure(chain_id, err.to_readable_msg()),
                 );
@@ -281,7 +321,12 @@ async fn run_network_loop<R>(
     }
 }
 
-fn emit_network_status(callback: Option<&Function>, status: NetworkSyncStatus) {
+fn emit_network_status(
+    status_store: &LocalDbSyncStatusStore,
+    callback: Option<&Function>,
+    status: NetworkSyncStatus,
+) {
+    status_store.record_network_status(status.clone());
     if let Some(callback) = callback {
         if let Ok(value) = serde_wasm_bindgen::to_value(&status) {
             let _ = callback.call1(&JsValue::NULL, &value);
@@ -294,7 +339,7 @@ mod wasm_tests {
     use super::*;
     use crate::local_db::pipeline::runner::utils::parse_runner_settings;
     use crate::local_db::pipeline::runner::{RunReport, TargetFailure, TargetStage};
-    use crate::local_db::OrderbookIdentifier;
+    use crate::local_db::RaindexIdentifier;
     use crate::raindex_client::local_db::pipeline::status::get_scheduler_state;
     use crate::raindex_client::local_db::LocalDbStatus;
     use alloy::primitives::Address;
@@ -360,8 +405,8 @@ mod wasm_tests {
                         if should_fail {
                             failures.set(failures.get() + 1);
                             let failure = TargetFailure {
-                                ob_id: OrderbookIdentifier::new(1, Address::ZERO),
-                                orderbook_key: None,
+                                raindex_id: RaindexIdentifier::new(1, Address::ZERO),
+                                raindex_key: None,
                                 stage: TargetStage::EngineRun,
                                 error: LocalDbError::CustomError("runner failure".to_string()),
                             };
@@ -411,6 +456,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;
@@ -442,6 +488,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;
@@ -478,6 +525,7 @@ mod wasm_tests {
             closure.forget();
             function
         };
+        let readiness = SyncReadiness::new();
 
         spawn_network_loop(
             runner,
@@ -485,7 +533,8 @@ mod wasm_tests {
             Some(Rc::new(status_callback)),
             Rc::clone(&stop_flag),
             1,
-            SyncReadiness::new(),
+            readiness.clone(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;
@@ -505,6 +554,10 @@ mod wasm_tests {
             get_scheduler_state(),
             SchedulerState::Leader,
             "scheduler state should be Leader after recovering"
+        );
+        assert!(
+            readiness.is_ready(1),
+            "observer should be able to read local DB"
         );
     }
 
@@ -540,6 +593,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;
@@ -605,6 +659,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;
@@ -676,8 +731,14 @@ mod wasm_tests {
 
         let yaml = get_local_db_test_yaml();
         let settings = parse_runner_settings(&yaml).expect("should parse valid yaml");
-        let handle = start(settings, noop_local_db(), None, SyncReadiness::new())
-            .expect("should start with valid yaml");
+        let handle = start(
+            settings,
+            noop_local_db(),
+            None,
+            SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
+        )
+        .expect("should start with valid yaml");
 
         handle.stop();
 
@@ -707,6 +768,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
         spawn_network_loop(
             fast_runner,
@@ -715,6 +777,7 @@ mod wasm_tests {
             Rc::clone(&stop_flag),
             1,
             SyncReadiness::new(),
+            LocalDbSyncStatusStore::new(),
         );
 
         TimeoutFuture::new(0).await;

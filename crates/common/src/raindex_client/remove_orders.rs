@@ -5,10 +5,12 @@ use crate::raindex_client::local_db::orders::LocalDbOrders;
 use crate::raindex_client::orders::{fetch_orders_dotrain_sources, RaindexOrder};
 use crate::raindex_client::QuerySource;
 use crate::retry::{retry_with_constant_interval, RetryError};
+use crate::utils::timing::Timing;
 use alloy::primitives::{hex::decode, Bytes, B256};
 use alloy::sol_types::{SolCall, SolValue};
-use rain_orderbook_bindings::IRaindexV6::{removeOrder3Call, OrderV4};
-use rain_orderbook_subgraph_client::types::order_detail_traits::OrderDetailError;
+use raindex_bindings::IRaindexV6::{removeOrder3Call, OrderV4};
+use raindex_subgraph_client::types::order_detail_traits::OrderDetailError;
+use tracing::{error, info, info_span};
 
 const DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS: usize = 10;
 const DEFAULT_REMOVE_ORDER_POLL_INTERVAL_MS: u64 = 1_000;
@@ -48,11 +50,11 @@ impl RaindexClient {
         #[wasm_export(js_name = "chainId", param_description = "Chain ID for the network")]
         chain_id: u32,
         #[wasm_export(
-            js_name = "orderbookAddress",
-            param_description = "Orderbook contract address",
+            js_name = "raindexAddress",
+            param_description = "Raindex contract address",
             unchecked_param_type = "Address"
         )]
-        orderbook_address: String,
+        raindex_address: String,
         #[wasm_export(
             js_name = "txHash",
             param_description = "Transaction hash",
@@ -70,11 +72,11 @@ impl RaindexClient {
         )]
         interval_ms: Option<u32>,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let orderbook_address = Address::from_str(&orderbook_address)?;
+        let raindex_address = Address::from_str(&raindex_address)?;
         let tx_hash = B256::from_str(&tx_hash)?;
         self.get_remove_orders_for_transaction(
             chain_id,
-            orderbook_address,
+            raindex_address,
             tx_hash,
             max_attempts.map(|v| v as usize),
             interval_ms.map(|v| v as u64),
@@ -86,7 +88,7 @@ impl RaindexClient {
     async fn get_remove_orders_for_transaction(
         &self,
         chain_id: u32,
-        orderbook_address: Address,
+        raindex_address: Address,
         tx_hash: B256,
         max_attempts: Option<usize>,
         interval_ms: Option<u64>,
@@ -104,7 +106,7 @@ impl RaindexClient {
                 let local_result = retry_with_constant_interval(
                     || async {
                         let orders = local_source
-                            .get_removed_by_tx_hash(chain_id, orderbook_address, tx_hash)
+                            .get_removed_by_tx_hash(chain_id, raindex_address, tx_hash)
                             .await
                             .map_err(PollError::Inner)?;
                         if orders.is_empty() {
@@ -136,12 +138,12 @@ impl RaindexClient {
                 let subgraph_result = retry_with_constant_interval(
                     || async {
                         let orders = match subgraph_source
-                            .get_removed_by_tx_hash(chain_id, orderbook_address, tx_hash)
+                            .get_removed_by_tx_hash(chain_id, raindex_address, tx_hash)
                             .await
                         {
                             Ok(orders) => orders,
-                            Err(RaindexError::OrderbookSubgraphClientError(
-                                rain_orderbook_subgraph_client::OrderbookSubgraphClientError::Empty,
+                            Err(RaindexError::RaindexSubgraphClientError(
+                                raindex_subgraph_client::RaindexSubgraphClientError::Empty,
                             )) => return Err(PollError::Empty),
                             Err(e) => return Err(PollError::Inner(e)),
                         };
@@ -175,10 +177,10 @@ impl RaindexClient {
 
 #[wasm_export]
 impl RaindexOrder {
-    /// Generates ABI-encoded calldata for the `removeOrder2()` function on the orderbook contract
+    /// Generates ABI-encoded calldata for the `removeOrder2()` function on the raindex contract
     ///
     /// Takes an existing order from the subgraph and creates the transaction calldata needed
-    /// to remove it from the orderbook. The order must be active and owned by the caller.
+    /// to remove it from the raindex. The order must be active and owned by the caller.
     ///
     /// ## Examples
     ///
@@ -198,11 +200,38 @@ impl RaindexOrder {
         unchecked_return_type = "Hex"
     )]
     pub fn get_remove_calldata(&self) -> Result<Bytes, RaindexError> {
+        let started_at = Timing::now();
+        let span = info_span!(
+            "get_remove_calldata",
+            chain_id = self.chain_id(),
+            raindex = %self.raindex(),
+            order_hash = %self.order_hash(),
+        );
+        let _entered = span.enter();
+
+        info!("building remove order calldata");
+        let order = match self.try_into() {
+            Ok(order) => order,
+            Err(err) => {
+                error!(
+                    duration_ms = started_at.elapsed_ms(),
+                    error = %err,
+                    "failed decoding order for remove calldata"
+                );
+                return Err(RaindexError::from(err));
+            }
+        };
         let remove_order_call = removeOrder3Call {
-            order: self.try_into()?,
+            order,
             tasks: vec![],
         };
-        Ok(Bytes::copy_from_slice(&remove_order_call.abi_encode()))
+        let calldata = Bytes::copy_from_slice(&remove_order_call.abi_encode());
+        info!(
+            calldata_len = calldata.len(),
+            duration_ms = started_at.elapsed_ms(),
+            "built remove order calldata"
+        );
+        Ok(calldata)
     }
 }
 
@@ -227,16 +256,14 @@ mod tests {
                 fetch_orders::LocalDbOrder, FromDbJson, LocalDbQueryError, LocalDbQueryExecutor,
                 SqlStatement, SqlStatementBatch,
             },
-            local_db::OrderbookIdentifier,
+            local_db::RaindexIdentifier,
             raindex_client::local_db::LocalDb,
-            raindex_client::tests::{
-                get_test_yaml, new_with_local_db, CHAIN_ID_1_ORDERBOOK_ADDRESS,
-            },
+            raindex_client::tests::{get_test_yaml, new_with_local_db, CHAIN_ID_1_RAINDEX_ADDRESS},
         };
         use alloy::primitives::{b256, Address, Bytes, U256};
         use async_trait::async_trait;
         use httpmock::MockServer;
-        use rain_orderbook_subgraph_client::utils::float::*;
+        use raindex_subgraph_client::utils::float::*;
         use serde_json::{json, Value};
         use std::{
             str::FromStr,
@@ -245,6 +272,7 @@ mod tests {
                 Arc,
             },
         };
+        use tracing_test::traced_test;
 
         #[derive(Clone)]
         struct CountingJsonExec {
@@ -319,7 +347,7 @@ mod tests {
                                   "symbol": "sFLR",
                                   "decimals": "18"
                                 },
-                                "orderbook": {
+                                "raindex": {
                                   "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                                 },
                                 "ordersAsOutput": [
@@ -346,7 +374,7 @@ mod tests {
                                   "symbol": "WFLR",
                                   "decimals": "18"
                                 },
-                                "orderbook": {
+                                "raindex": {
                                   "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                                 },
                                 "ordersAsOutput": [],
@@ -360,7 +388,7 @@ mod tests {
                                 "balanceChanges": []
                               }
                             ],
-                            "orderbook": {
+                            "raindex": {
                               "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                             },
                             "active": true,
@@ -409,7 +437,7 @@ mod tests {
             let res = raindex_client
                 .get_remove_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     None,
                     None,
@@ -453,7 +481,7 @@ mod tests {
             assert_eq!(order.meta(), Some(Bytes::from_str("0xff0a89c674ee7874a3005902252f2a20302e2063616c63756c6174652d696f202a2f200a7573696e672d776f7264732d66726f6d203078466532343131434461313933443945346538334135633233344337466433323031303138383361430a616d743a203130302c0a696f3a2063616c6c3c323e28293b0a0a2f2a20312e2068616e646c652d696f202a2f200a3a63616c6c3c333e28292c0a3a656e7375726528657175616c2d746f286f75747075742d7661756c742d64656372656173652829203130302920226d7573742074616b652066756c6c20616d6f756e7422293b0a0a2f2a20322e206765742d696f2d726174696f2d6e6f77202a2f200a656c61707365643a2063616c6c3c343e28292c0a696f3a2073617475726174696e672d73756228302e3031373733353620646976286d756c28656c61707365642073756228302e3031373733353620302e30313733383434292920363029293b0a0a2f2a20332e206f6e652d73686f74202a2f200a3a656e737572652869732d7a65726f286765742868617368286f726465722d68617368282920226861732d657865637574656422292929202268617320657865637574656422292c0a3a7365742868617368286f726465722d68617368282920226861732d657865637574656422292031293b0a0a2f2a20342e206765742d656c6170736564202a2f200a5f3a20737562286e6f772829206765742868617368286f726465722d68617368282920226465706c6f792d74696d65222929293b011bff13109e41336ff20278186170706c69636174696f6e2f6f637465742d73747265616d").unwrap()));
             assert!(order.active());
             assert_eq!(
-                order.orderbook(),
+                order.raindex(),
                 Address::from_str("0xcee8cd002f151a536394e564b84076c41bbbcd4d").unwrap()
             );
 
@@ -490,7 +518,7 @@ mod tests {
             assert_eq!(output.token().symbol(), Some("sFLR".to_string()));
             assert_eq!(output.token().decimals(), 18);
             assert_eq!(
-                output.orderbook(),
+                output.raindex(),
                 Address::from_str("0xcee8cd002f151a536394e564b84076c41bbbcd4d").unwrap()
             );
             assert_eq!(output.orders_as_outputs().len(), 1);
@@ -538,7 +566,7 @@ mod tests {
             assert_eq!(input.token().symbol(), Some("WFLR".to_string()));
             assert_eq!(input.token().decimals(), 18);
             assert_eq!(
-                input.orderbook(),
+                input.raindex(),
                 Address::from_str("0xcee8cd002f151a536394e564b84076c41bbbcd4d").unwrap()
             );
             assert!(input.orders_as_outputs().is_empty());
@@ -577,8 +605,8 @@ mod tests {
               "owner": "0xf08bcbce72f62c95dcb7c07dcb5ed26acfcfbc11",
               "outputs": [],
               "inputs": [],
-              "orderbook": {
-                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+              "raindex": {
+                "id": CHAIN_ID_1_RAINDEX_ADDRESS
               },
               "active": true,
               "timestampAdded": "1739448802",
@@ -589,6 +617,7 @@ mod tests {
             })
         }
 
+        #[traced_test]
         #[tokio::test]
         async fn test_get_remove_calldata() {
             let sg_server = MockServer::start_async().await;
@@ -615,9 +644,9 @@ mod tests {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -628,6 +657,7 @@ mod tests {
                 calldata,
                 Bytes::from_str("0x1f69cb75000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002c00000000000000000000000006171c21b2e553c59a64d1337211b77c367cefe5d00000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000001000000000000000000000000379b966dc6b117dd47b5fc5308534256a4ab1bcc0000000000000000000000006e4b01603edbda617002a077420e98c86595748e000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000950000000000000000000000000000000000000000000000000000000000000002ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000b1a2bc2ec5000000000000000000000000000000000000000000000000000000000000000000015020000000c020200020110000001100001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000050c5725949a6f0c72e6c4a641f24049a917db0cb00000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000001000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda0291300000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000").unwrap()
             );
+            assert!(logs_contain("built remove order calldata"));
         }
 
         #[tokio::test]
@@ -655,7 +685,7 @@ mod tests {
             let res = raindex_client
                 .get_remove_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS),
                     Some(10),
@@ -690,7 +720,7 @@ mod tests {
             let err = raindex_client
                 .get_remove_orders_for_transaction(
                     1,
-                    Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                    Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                     Some(DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS),
                     Some(10),
@@ -710,7 +740,7 @@ mod tests {
         async fn test_get_transaction_remove_orders_prefers_local_db() {
             let tx_hash =
                 b256!("0x00000000000000000000000000000000000000000000000000000000deadbeef");
-            let orderbook_address =
+            let raindex_address =
                 Address::from_str("0x0987654321098765432109876543210987654321").unwrap();
             let owner = Address::from_str("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap();
 
@@ -721,8 +751,9 @@ mod tests {
                 ),
                 owner,
                 block_timestamp: 1_000,
+                block_timestamp_removed: Some(1_000),
                 block_number: 50,
-                orderbook_address,
+                raindex_address,
                 order_bytes: Bytes::from_str("0x01").unwrap(),
                 transaction_hash: tx_hash,
                 inputs: None,
@@ -759,13 +790,7 @@ mod tests {
             .await;
 
             let res = client
-                .get_remove_orders_for_transaction(
-                    137,
-                    orderbook_address,
-                    tx_hash,
-                    Some(3),
-                    Some(1),
-                )
+                .get_remove_orders_for_transaction(137, raindex_address, tx_hash, Some(3), Some(1))
                 .await
                 .unwrap();
 
@@ -785,7 +810,7 @@ mod tests {
         async fn test_get_transaction_remove_orders_exhausts_local_without_fallback() {
             let tx_hash =
                 b256!("0x00000000000000000000000000000000000000000000000000000000cafebabe");
-            let orderbook_address =
+            let raindex_address =
                 Address::from_str("0x0987654321098765432109876543210987654321").unwrap();
 
             let local_exec = CountingJsonExec {
@@ -815,13 +840,7 @@ mod tests {
             .await;
 
             let err = client
-                .get_remove_orders_for_transaction(
-                    137,
-                    orderbook_address,
-                    tx_hash,
-                    Some(2),
-                    Some(1),
-                )
+                .get_remove_orders_for_transaction(137, raindex_address, tx_hash, Some(2), Some(1))
                 .await
                 .unwrap_err();
 

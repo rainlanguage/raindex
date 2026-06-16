@@ -33,7 +33,7 @@
 		RaindexVaultsList,
 		type Address,
 		type Hex
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import { useToasts } from '$lib/providers/toasts/useToasts';
 	import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 
@@ -41,7 +41,7 @@
 	export let handleDebugTradeModal: DebugTradeModalHandler | undefined = undefined;
 	export let codeMirrorTheme;
 	export let lightweightChartsTheme;
-	export let orderbookAddress: Address;
+	export let raindexAddress: Address;
 	export let orderHash: Hex;
 	export let chainId: number;
 	export let rpcs: string[] | undefined = undefined;
@@ -86,7 +86,7 @@
 	$: orderDetailQuery = createQuery<RaindexOrder>({
 		queryKey: [QKEY_ORDER, orderHash],
 		queryFn: async () => {
-			const result = await raindexClient.getOrderByHash(chainId, orderbookAddress, orderHash);
+			const result = await raindexClient.getOrderByHash(chainId, raindexAddress, orderHash);
 			if (result.error) throw new Error(result.error.readableMsg);
 			return result.value;
 		}
@@ -118,11 +118,11 @@
 		}
 	] as const;
 
-	const formatGuiState = (guiState: string) => {
+	const formatBuilderState = (builderState: string) => {
 		try {
-			return JSON.stringify(JSON.parse(guiState), null, 2);
+			return JSON.stringify(JSON.parse(builderState), null, 2);
 		} catch {
-			return 'Invalid GUI state';
+			return 'Invalid builder state';
 		}
 	};
 </script>
@@ -158,6 +158,8 @@
 
 				<Refresh
 					testId="top-refresh"
+					title="Refresh order"
+					ariaLabel="Refresh order"
 					on:click={handleRefresh}
 					spin={$orderDetailQuery.isLoading || $orderDetailQuery.isFetching}
 				/>
@@ -167,9 +169,9 @@
 	<svelte:fragment slot="card" let:data>
 		<div class="flex flex-col gap-y-6">
 			<CardProperty>
-				<svelte:fragment slot="key">Orderbook</svelte:fragment>
+				<svelte:fragment slot="key">Raindex</svelte:fragment>
 				<svelte:fragment slot="value">
-					<Hash type={HashType.Identifier} shorten={false} value={data.orderbook} />
+					<Hash type={HashType.Identifier} shorten={false} value={data.raindex} />
 				</svelte:fragment>
 			</CardProperty>
 
@@ -261,7 +263,7 @@
 						<svelte:fragment slot="value">
 							<div class="mt-2 space-y-2">
 								{#each filteredVaults as vault}
-									<ButtonVaultLink tokenVault={vault} {chainId} {orderbookAddress}>
+									<ButtonVaultLink tokenVault={vault} {chainId} {raindexAddress}>
 										<svelte:fragment slot="buttons">
 											{#if matchesAccount(vault.owner)}
 												<div class="flex gap-1">
@@ -269,6 +271,8 @@
 														color="light"
 														size="xs"
 														data-testid="deposit-button"
+														title="Deposit into vault"
+														aria-label="Deposit into vault"
 														on:click={() => onDeposit(raindexClient, vault)}
 													>
 														<ArrowDownToBracketOutline size="xs" />
@@ -277,6 +281,8 @@
 														color="light"
 														size="xs"
 														data-testid="withdraw-button"
+														title="Withdraw from vault"
+														aria-label="Withdraw from vault"
 														on:click={() => onWithdraw(raindexClient, vault)}
 													>
 														<ArrowUpFromBracketOutline size="xs" />
@@ -339,12 +345,12 @@
 					></CodeMirrorRainlang>
 				</div>
 			</TabItem>
-			{#if data.dotrainGuiState}
-				<TabItem title="Gui State">
+			{#if data.orderBuilderState}
+				<TabItem title="Builder State">
 					<div class="mb-4">
 						<div class="overflow-auto rounded-lg border bg-gray-50 p-4 dark:bg-gray-800">
-							<pre class="text-sm" data-testid="gui-state-json">
-								{formatGuiState(data.dotrainGuiState)}
+							<pre class="text-sm" data-testid="builder-state-json">
+								{formatBuilderState(data.orderBuilderState)}
 							</pre>
 						</div>
 					</div>

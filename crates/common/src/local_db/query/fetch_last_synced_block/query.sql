@@ -1,8 +1,8 @@
 SELECT
     chain_id,
-    orderbook_address,
+    raindex_address,
     last_synced_block,
     updated_at
 FROM sync_status
 WHERE chain_id = ?1
-  AND orderbook_address = ?2;
+  AND raindex_address = ?2;

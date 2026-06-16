@@ -21,7 +21,7 @@ query OrderTakeDetailQuery($id: Bytes!) {
     order {
       orderHash
     }
-    orderbook {
+    raindex {
       id
     }
     inputVaultBalanceChange {

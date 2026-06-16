@@ -3,7 +3,7 @@ import {
 	handleVaultWithdraw,
 	type VaultWithdrawHandlerDependencies
 } from '../lib/services/handleVaultWithdraw';
-import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/orderbook';
+import { Float, type RaindexClient, type RaindexVault } from '@rainlanguage/raindex';
 import type { Hex } from 'viem';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 
@@ -24,7 +24,7 @@ const mockVault = {
 	token: {
 		symbol: 'TEST'
 	},
-	getWithdrawCalldata: vi.fn()
+	getCalldatas: vi.fn()
 } as unknown as RaindexVault;
 
 const mockDeps: VaultWithdrawHandlerDependencies = {
@@ -54,8 +54,8 @@ describe('handleVaultWithdraw', () => {
 		});
 	});
 
-	it('should show error toast if getVaultWithdrawCalldata returns an error', async () => {
-		vi.mocked(mockVault.getWithdrawCalldata).mockResolvedValue({
+	it('should show error toast if getCalldatas returns an error', async () => {
+		vi.mocked(mockVault.getCalldatas).mockResolvedValue({
 			error: { msg: 'Calldata error', readableMsg: 'Calldata error readable' },
 			value: undefined
 		});
@@ -69,8 +69,8 @@ describe('handleVaultWithdraw', () => {
 		expect(mockHandleTransactionConfirmationModal).not.toHaveBeenCalled();
 	});
 
-	it('should show error toast if getVaultWithdrawCalldata throws', async () => {
-		vi.mocked(mockVault.getWithdrawCalldata).mockRejectedValue(new Error('Fetch failed'));
+	it('should show error toast if getCalldatas throws', async () => {
+		vi.mocked(mockVault.getCalldatas).mockRejectedValue(new Error('Fetch failed'));
 
 		await handleVaultWithdraw(mockDeps);
 
@@ -83,8 +83,8 @@ describe('handleVaultWithdraw', () => {
 
 	it('should call handleTransactionConfirmationModal on successful calldata fetch', async () => {
 		const mockCalldata = '0xcalldata' as Hex;
-		vi.mocked(mockVault.getWithdrawCalldata).mockResolvedValue({
-			value: mockCalldata,
+		vi.mocked(mockVault.getCalldatas).mockResolvedValue({
+			value: { deposit: '0xdeposit' as Hex, withdraw: mockCalldata },
 			error: undefined
 		});
 
@@ -108,8 +108,8 @@ describe('handleVaultWithdraw', () => {
 	it('should call manager.createWithdrawTransaction on transaction confirmation', async () => {
 		const mockCalldata = '0xcalldata' as Hex;
 		const mockTxHash = '0xtxhash' as Hex;
-		vi.mocked(mockVault.getWithdrawCalldata).mockResolvedValue({
-			value: mockCalldata,
+		vi.mocked(mockVault.getCalldatas).mockResolvedValue({
+			value: { deposit: '0xdeposit' as Hex, withdraw: mockCalldata },
 			error: undefined
 		});
 

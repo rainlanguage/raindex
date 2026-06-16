@@ -46,10 +46,10 @@ describe("Handle deposit", () => {
 
     handleDeposit(event);
 
-    // we should have an orderbook entity
-    assert.entityCount("Orderbook", 1);
+    // we should have an raindex entity
+    assert.entityCount("Raindex", 1);
     assert.fieldEquals(
-      "Orderbook",
+      "Raindex",
       event.address.toHexString(),
       "id",
       event.address.toHexString()

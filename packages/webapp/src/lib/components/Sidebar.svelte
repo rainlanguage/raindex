@@ -17,6 +17,7 @@
 	} from 'flowbite-svelte-icons';
 	import {
 		ButtonDarkMode,
+		ButtonScrub,
 		IconTelegram,
 		IconExternalLink,
 		logoDark,
@@ -27,7 +28,7 @@
 	} from '@rainlanguage/ui-components';
 	import { onMount } from 'svelte';
 	import { connected, appKitModal } from '$lib/stores/wagmi';
-	import { networkStatuses, orderbookStatuses } from '$lib/stores/localDbStatus';
+	import { networkStatuses, raindexStatuses } from '$lib/stores/localDbStatus';
 	export let colorTheme;
 	export let page;
 
@@ -55,6 +56,8 @@
 			color="alternative"
 			class="absolute left-2 top-2 flex size-8 items-center p-5 lg:hidden"
 			data-testid="sidebar-bars"
+			title="Open menu"
+			aria-label="Open menu"
 		>
 			<BarsSolid class="" />
 		</Button>
@@ -69,6 +72,8 @@
 			<CloseButton
 				data-testid="close-button"
 				class="absolute right-3 top-2 z-20 flex size-8 items-center border dark:border-gray-700 lg:hidden"
+				title="Close menu"
+				name="Close menu"
 				on:click={() => (sideBarHidden = true)}
 			/>
 		{/if}
@@ -112,10 +117,7 @@
 				<WalletConnect {appKitModal} {connected} classes="w-full" />
 			</SidebarGroup>
 			<SidebarGroup border ulClass="list-none">
-				<LocalDbStatusCard
-					networkStatuses={$networkStatuses}
-					orderbookStatuses={$orderbookStatuses}
-				/>
+				<LocalDbStatusCard networkStatuses={$networkStatuses} raindexStatuses={$raindexStatuses} />
 			</SidebarGroup>
 			<SidebarGroup border ulClass="list-none">
 				<SidebarItem
@@ -149,8 +151,9 @@
 					</svelte:fragment>
 				</SidebarItem>
 			</SidebarGroup>
-			<SidebarGroup border class="flex justify-start" ulClass="list-none">
+			<SidebarGroup border class="flex justify-start gap-2" ulClass="list-none">
 				<ButtonDarkMode {colorTheme} />
+				<ButtonScrub />
 			</SidebarGroup>
 			<SidebarGroup border class="min-h-0 flex-1 overflow-hidden" ulClass="list-none h-full">
 				<TransactionList />

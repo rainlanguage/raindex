@@ -1,22 +1,19 @@
-import type {
-	NetworkSyncStatus,
-	LocalDbStatus,
-	OrderbookSyncStatus
-} from '@rainlanguage/orderbook';
+import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
+import { aggregateLocalDbStatus } from '@rainlanguage/ui-components';
 import { writable, derived } from 'svelte/store';
 
 export const networkStatuses = writable<Map<number, NetworkSyncStatus>>(new Map());
 
-export const orderbookStatuses = writable<Map<string, OrderbookSyncStatus>>(new Map());
+export const raindexStatuses = writable<Map<string, RaindexSyncStatus>>(new Map());
 
-function orderbookStatusKey(status: OrderbookSyncStatus): string {
-	return `${status.obId.chainId}:${status.obId.orderbookAddress}`;
+function raindexStatusKey(status: RaindexSyncStatus): string {
+	return `${status.raindexId.chainId}:${status.raindexId.raindexAddress}`;
 }
 
-function isOrderbookSyncStatus(
-	status: NetworkSyncStatus | OrderbookSyncStatus
-): status is OrderbookSyncStatus {
-	return 'obId' in status;
+function isRaindexSyncStatus(
+	status: NetworkSyncStatus | RaindexSyncStatus
+): status is RaindexSyncStatus {
+	return 'raindexId' in status;
 }
 
 export function updateNetworkStatus(status: NetworkSyncStatus) {
@@ -26,46 +23,29 @@ export function updateNetworkStatus(status: NetworkSyncStatus) {
 	});
 }
 
-export function updateOrderbookStatus(status: OrderbookSyncStatus) {
-	orderbookStatuses.update((map) => {
-		const key = orderbookStatusKey(status);
+export function updateRaindexStatus(status: RaindexSyncStatus) {
+	raindexStatuses.update((map) => {
+		const key = raindexStatusKey(status);
 		map.set(key, status);
 		return new Map(map);
 	});
 }
 
-export function updateStatus(status: NetworkSyncStatus | OrderbookSyncStatus) {
-	if (isOrderbookSyncStatus(status)) {
-		updateOrderbookStatus(status);
+export function updateStatus(status: NetworkSyncStatus | RaindexSyncStatus) {
+	if (isRaindexSyncStatus(status)) {
+		updateRaindexStatus(status);
 	} else {
 		updateNetworkStatus(status);
 	}
 }
 
 export const aggregateStatus = derived(
-	[networkStatuses, orderbookStatuses],
-	([$networkMap, $orderbookMap]) => {
-		const allStatuses: { status: LocalDbStatus; error?: string }[] = [
+	[networkStatuses, raindexStatuses],
+	([$networkMap, $raindexMap]) =>
+		aggregateLocalDbStatus([
 			...Array.from($networkMap.values()),
-			...Array.from($orderbookMap.values())
-		];
-
-		if (allStatuses.length === 0) {
-			return { status: 'active' as LocalDbStatus, error: undefined };
-		}
-
-		const failure = allStatuses.find((s) => s.status === 'failure');
-		if (failure) {
-			return { status: 'failure' as LocalDbStatus, error: failure.error };
-		}
-
-		const syncing = allStatuses.find((s) => s.status === 'syncing');
-		if (syncing) {
-			return { status: 'syncing' as LocalDbStatus, error: undefined };
-		}
-
-		return { status: 'active' as LocalDbStatus, error: undefined };
-	}
+			...Array.from($raindexMap.values())
+		])
 );
 
 export const localDbStatus = aggregateStatus;

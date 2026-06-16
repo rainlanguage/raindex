@@ -18,7 +18,7 @@
                         "symbol": "sFLR",
                         "decimals": "18"
                     },
-                    "orderbook": {
+                    "raindex": {
                         "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                     },
                     "ordersAsOutput": [
@@ -54,7 +54,7 @@
                                 "blockNumber": "41639973",
                                 "timestamp": "1747395764"
                             },
-                            "orderbook": {
+                            "raindex": {
                                 "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                             }
                         }
@@ -74,7 +74,7 @@
                         "symbol": "cysFLR",
                         "decimals": "18"
                     },
-                    "orderbook": {
+                    "raindex": {
                         "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
                     },
                     "ordersAsOutput": [],
@@ -88,7 +88,7 @@
                     "balanceChanges": []
                 }
             ],
-            "orderbook": {
+            "raindex": {
                 "id": "0xcee8cd002f151a536394e564b84076c41bbbcd4d"
             },
             "active": true,

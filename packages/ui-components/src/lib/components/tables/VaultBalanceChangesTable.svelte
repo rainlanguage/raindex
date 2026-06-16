@@ -5,7 +5,7 @@
 		RaindexVault,
 		type RaindexVaultBalanceChange,
 		type VaultBalanceChangeFilter
-	} from '@rainlanguage/orderbook';
+	} from '@rainlanguage/raindex';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import Hash, { HashType } from '../Hash.svelte';
 	import { QKEY_VAULT_CHANGES } from '../../queries/keys';

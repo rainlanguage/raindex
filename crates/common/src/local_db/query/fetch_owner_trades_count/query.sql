@@ -1,0 +1,7 @@
+SELECT COUNT(*) AS trade_count
+FROM derived_trades tws
+WHERE tws.order_owner = ?1
+/*TAKE_ORDERS_CHAIN_IDS_CLAUSE*/
+/*TAKE_ORDERS_RAINDEXS_CLAUSE*/
+/*START_TS_CLAUSE*/
+/*END_TS_CLAUSE*/;

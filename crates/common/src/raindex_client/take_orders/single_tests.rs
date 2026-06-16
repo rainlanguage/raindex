@@ -1,4 +1,4 @@
-use crate::local_db::OrderbookIdentifier;
+use crate::local_db::RaindexIdentifier;
 use crate::raindex_client::order_quotes::RaindexOrderQuote;
 use crate::raindex_client::take_orders::single::{
     build_candidate_from_quote, estimate_take_order, execute_single_take, RpcContext,
@@ -22,8 +22,8 @@ use alloy::serde::WithOtherFields;
 use alloy::sol_types::SolCall;
 use httpmock::MockServer;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
-use rain_orderbook_quote::Pair;
+use raindex_bindings::IRaindexV6::takeOrders4Call;
+use raindex_quote::Pair;
 use serde_json::json;
 use std::ops::{Div, Mul};
 
@@ -94,13 +94,13 @@ async fn test_single_order_take_happy_path_buy_up_to() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -109,7 +109,7 @@ async fn test_single_order_take_happy_path_buy_up_to() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -144,7 +144,7 @@ async fn test_single_order_take_happy_path_buy_up_to() {
 
     assert!(result.is_ready());
     let result = result.take_orders_info().unwrap();
-    assert_eq!(result.orderbook(), setup.orderbook);
+    assert_eq!(result.raindex(), setup.raindex);
     assert!(!result.calldata().is_empty());
     assert_eq!(
         result.prices().len(),
@@ -200,13 +200,13 @@ async fn test_single_order_take_happy_path_buy_exact() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -215,7 +215,7 @@ async fn test_single_order_take_happy_path_buy_exact() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -301,13 +301,13 @@ async fn test_single_order_take_happy_path_spend_up_to() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -316,7 +316,7 @@ async fn test_single_order_take_happy_path_spend_up_to() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -408,13 +408,13 @@ async fn test_single_order_take_no_capacity_returns_error() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -458,13 +458,13 @@ async fn test_single_order_take_invalid_io_index_returns_none() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -526,13 +526,13 @@ async fn test_single_order_take_buy_exact_insufficient_liquidity() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -541,7 +541,7 @@ async fn test_single_order_take_buy_exact_insufficient_liquidity() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -614,13 +614,13 @@ async fn test_single_order_take_price_exceeds_cap() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -629,7 +629,7 @@ async fn test_single_order_take_price_exceeds_cap() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -700,13 +700,13 @@ async fn test_single_order_take_failed_quote_returns_none() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -751,13 +751,13 @@ async fn test_single_order_take_preflight_insufficient_balance() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -798,7 +798,7 @@ async fn test_single_order_take_preflight_insufficient_balance() {
     );
     let approval_info = result.approval_info().expect("Should have approval info");
     assert_eq!(approval_info.token(), setup.token1);
-    assert_eq!(approval_info.spender(), setup.orderbook);
+    assert_eq!(approval_info.spender(), setup.raindex);
 }
 
 #[tokio::test]
@@ -836,13 +836,13 @@ async fn test_single_order_take_preflight_insufficient_allowance() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -901,7 +901,7 @@ async fn test_single_order_take_preflight_insufficient_allowance() {
     );
     let approval_info = result.approval_info().expect("Should have approval info");
     assert_eq!(approval_info.token(), setup.token1);
-    assert_eq!(approval_info.spender(), setup.orderbook);
+    assert_eq!(approval_info.spender(), setup.raindex);
 }
 
 #[tokio::test]
@@ -939,13 +939,13 @@ async fn test_single_order_take_approval_then_ready_flow() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1006,7 +1006,7 @@ async fn test_single_order_take_approval_then_ready_flow() {
 
     let approval_info = result.approval_info().expect("Should have approval info");
     assert_eq!(approval_info.token(), setup.token1);
-    assert_eq!(approval_info.spender(), setup.orderbook);
+    assert_eq!(approval_info.spender(), setup.raindex);
     assert!(
         !approval_info.calldata().is_empty(),
         "Approval calldata should not be empty"
@@ -1051,7 +1051,7 @@ async fn test_single_order_take_approval_then_ready_flow() {
     let take_info = result
         .take_orders_info()
         .expect("Should have take orders info");
-    assert_eq!(take_info.orderbook(), setup.orderbook);
+    assert_eq!(take_info.raindex(), setup.raindex);
     assert!(
         !take_info.calldata().is_empty(),
         "Take orders calldata should not be empty"
@@ -1102,13 +1102,13 @@ async fn test_single_order_take_calldata_encoding_buy_mode() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1117,7 +1117,7 @@ async fn test_single_order_take_calldata_encoding_buy_mode() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -1209,13 +1209,13 @@ async fn test_single_order_take_expected_spend_calculation() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1224,7 +1224,7 @@ async fn test_single_order_take_expected_spend_calculation() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -1317,13 +1317,13 @@ async fn test_single_order_take_spend_exact_mode() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1332,7 +1332,7 @@ async fn test_single_order_take_spend_exact_mode() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -1546,13 +1546,13 @@ async fn test_single_order_take_spend_exact_insufficient_liquidity() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1561,7 +1561,7 @@ async fn test_single_order_take_spend_exact_insufficient_liquidity() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -1634,13 +1634,13 @@ async fn test_single_order_take_calldata_encoding_spend_mode() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1649,7 +1649,7 @@ async fn test_single_order_take_calldata_encoding_spend_mode() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;
@@ -1765,13 +1765,13 @@ async fn test_single_order_take_expected_receive_calculation() {
         123,
         &setup.local_evm.url().to_string(),
         &sg_server.url("/sg"),
-        &setup.orderbook.to_string(),
+        &setup.raindex.to_string(),
     );
 
     let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
     let order = client
-        .get_order_by_hash(&OrderbookIdentifier::new(123, setup.orderbook), order_hash)
+        .get_order_by_hash(&RaindexIdentifier::new(123, setup.raindex), order_hash)
         .await
         .unwrap();
 
@@ -1780,7 +1780,7 @@ async fn test_single_order_take_expected_receive_calculation() {
         &setup,
         setup.token1,
         taker,
-        setup.orderbook,
+        setup.raindex,
         U256::from(10).pow(U256::from(22)),
     )
     .await;

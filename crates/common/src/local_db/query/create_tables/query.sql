@@ -1,5 +1,15 @@
 BEGIN TRANSACTION;
 
+-- Structural schema-version guard stamped into the SQLite file header.
+-- `application_id` labels the file as a raindex local-db (0x73DCDCFD, a uniform
+-- identifier matching `RAINDEX_APPLICATION_ID`); `user_version` carries the
+-- schema version. Both live in the header, so they survive table corruption and
+-- are readable without touching `db_metadata`. Keep `user_version` in lockstep
+-- with `DB_SCHEMA_VERSION`; the `pragmas_match_schema_version` test enforces
+-- this.
+PRAGMA application_id = 0x73DCDCFD;
+PRAGMA user_version = 5;
+
 -- Global DB metadata (singleton)
 CREATE TABLE IF NOT EXISTS db_metadata (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -8,27 +18,27 @@ CREATE TABLE IF NOT EXISTS db_metadata (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Per-target watermarks keyed by (chain_id, orderbook_address)
+-- Per-target watermarks keyed by (chain_id, raindex_address)
 CREATE TABLE IF NOT EXISTS target_watermarks (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     last_block INTEGER NOT NULL DEFAULT 0,
     last_hash TEXT,
     updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER) * 1000),
-    PRIMARY KEY (chain_id, orderbook_address)
+    PRIMARY KEY (chain_id, raindex_address)
 );
 
 CREATE TABLE IF NOT EXISTS sync_status (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     last_synced_block INTEGER NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (chain_id, orderbook_address)
+    PRIMARY KEY (chain_id, raindex_address)
 );
 
 CREATE TABLE raw_events (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -37,14 +47,14 @@ CREATE TABLE raw_events (
     topics TEXT NOT NULL,
     data TEXT NOT NULL,
     raw_json TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
-CREATE INDEX idx_raw_events_block ON raw_events(chain_id, orderbook_address, block_number, log_index);
-CREATE INDEX idx_raw_events_address ON raw_events(chain_id, orderbook_address, address);
+CREATE INDEX idx_raw_events_block ON raw_events(chain_id, raindex_address, block_number, log_index);
+CREATE INDEX idx_raw_events_address ON raw_events(chain_id, raindex_address, address);
 
 CREATE TABLE deposits (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -54,12 +64,12 @@ CREATE TABLE deposits (
     vault_id TEXT NOT NULL,
     deposit_amount TEXT NOT NULL,
     deposit_amount_uint256 TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE withdrawals (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -70,12 +80,12 @@ CREATE TABLE withdrawals (
     target_amount TEXT NOT NULL,
     withdraw_amount TEXT NOT NULL,
     withdraw_amount_uint256 TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE order_events (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -88,27 +98,27 @@ CREATE TABLE order_events (
     order_owner TEXT NOT NULL,
     order_nonce TEXT NOT NULL,
     order_bytes TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE order_ios (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     io_index INTEGER NOT NULL,
     io_type TEXT NOT NULL,
     token TEXT NOT NULL,
     vault_id TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index, io_index, io_type),
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index, io_index, io_type),
     FOREIGN KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index
     ) REFERENCES order_events (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index
     )
@@ -116,7 +126,7 @@ CREATE TABLE order_ios (
 
 CREATE TABLE take_orders (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -128,31 +138,31 @@ CREATE TABLE take_orders (
     output_io_index INTEGER NOT NULL,
     taker_input TEXT NOT NULL,
     taker_output TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE take_order_contexts (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     context_index INTEGER NOT NULL,
     context_value TEXT NOT NULL,
     PRIMARY KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index,
         context_index
     ),
     FOREIGN KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index
     ) REFERENCES take_orders (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index
     )
@@ -160,7 +170,7 @@ CREATE TABLE take_order_contexts (
 
 CREATE TABLE context_values (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     context_index INTEGER NOT NULL,
@@ -168,7 +178,7 @@ CREATE TABLE context_values (
     value TEXT NOT NULL,
     PRIMARY KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index,
         context_index,
@@ -176,13 +186,13 @@ CREATE TABLE context_values (
     ),
     FOREIGN KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index,
         context_index
     ) REFERENCES take_order_contexts (
         chain_id,
-        orderbook_address,
+        raindex_address,
         transaction_hash,
         log_index,
         context_index
@@ -191,7 +201,7 @@ CREATE TABLE context_values (
 
 CREATE TABLE clear_v3_events (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -211,12 +221,12 @@ CREATE TABLE clear_v3_events (
     bob_bounty_vault_id TEXT NOT NULL,
     bob_input_vault_id TEXT NOT NULL,
     bob_output_vault_id TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE after_clear_v2_events (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -226,12 +236,12 @@ CREATE TABLE after_clear_v2_events (
     bob_output TEXT NOT NULL,
     alice_input TEXT NOT NULL,
     bob_input TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
 
 CREATE TABLE meta_events (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
     block_number INTEGER NOT NULL,
@@ -239,51 +249,55 @@ CREATE TABLE meta_events (
     sender TEXT NOT NULL,
     subject TEXT NOT NULL,
     meta TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
-CREATE INDEX idx_deposits_vault ON deposits(chain_id, orderbook_address, sender, token, vault_id);
-CREATE INDEX idx_deposits_block ON deposits(chain_id, orderbook_address, block_number);
-CREATE INDEX idx_deposits_token ON deposits(chain_id, orderbook_address, token);
+CREATE INDEX idx_deposits_vault ON deposits(chain_id, raindex_address, sender, token, vault_id);
+CREATE INDEX idx_deposits_block ON deposits(chain_id, raindex_address, block_number);
+CREATE INDEX idx_deposits_token ON deposits(chain_id, raindex_address, token);
 
-CREATE INDEX idx_withdrawals_vault ON withdrawals(chain_id, orderbook_address, sender, token, vault_id);
-CREATE INDEX idx_withdrawals_block ON withdrawals(chain_id, orderbook_address, block_number);
-CREATE INDEX idx_withdrawals_token ON withdrawals(chain_id, orderbook_address, token);
+CREATE INDEX idx_withdrawals_vault ON withdrawals(chain_id, raindex_address, sender, token, vault_id);
+CREATE INDEX idx_withdrawals_block ON withdrawals(chain_id, raindex_address, block_number);
+CREATE INDEX idx_withdrawals_token ON withdrawals(chain_id, raindex_address, token);
 
-CREATE INDEX idx_order_events_hash ON order_events(chain_id, orderbook_address, order_hash);
-CREATE INDEX idx_order_events_owner ON order_events(chain_id, orderbook_address, order_owner);
-CREATE INDEX idx_order_events_block ON order_events(chain_id, orderbook_address, block_number);
-CREATE INDEX idx_order_events_store ON order_events(chain_id, orderbook_address, store_address);
+CREATE INDEX idx_order_events_hash ON order_events(chain_id, raindex_address, order_hash);
+CREATE INDEX idx_order_events_owner ON order_events(chain_id, raindex_address, order_owner);
+CREATE INDEX idx_order_events_owner_nonce_time
+    ON order_events(chain_id, raindex_address, order_owner, order_nonce, event_type, block_number, log_index);
+CREATE INDEX idx_order_events_block ON order_events(chain_id, raindex_address, block_number);
+CREATE INDEX idx_order_events_store ON order_events(chain_id, raindex_address, store_address);
 
-CREATE INDEX idx_order_ios_token ON order_ios(chain_id, orderbook_address, token);
+CREATE INDEX idx_order_ios_token ON order_ios(chain_id, raindex_address, token);
 
-CREATE INDEX idx_take_orders_owner ON take_orders(chain_id, orderbook_address, order_owner);
-CREATE INDEX idx_take_orders_block ON take_orders(chain_id, orderbook_address, block_number);
+CREATE INDEX idx_take_orders_owner ON take_orders(chain_id, raindex_address, order_owner);
+CREATE INDEX idx_take_orders_block ON take_orders(chain_id, raindex_address, block_number);
+CREATE INDEX idx_take_orders_sender_time ON take_orders(chain_id, raindex_address, sender, block_timestamp DESC, block_number DESC, log_index DESC);
 
-CREATE INDEX idx_clear_events_alice_bob ON clear_v3_events(chain_id, orderbook_address, alice_order_hash, bob_order_hash);
-CREATE INDEX idx_clear_events_block ON clear_v3_events(chain_id, orderbook_address, block_number);
-CREATE INDEX idx_clear_alice_vaults ON clear_v3_events(chain_id, orderbook_address, alice_input_vault_id, alice_output_vault_id);
-CREATE INDEX idx_clear_bob_vaults ON clear_v3_events(chain_id, orderbook_address, bob_input_vault_id, bob_output_vault_id);
+CREATE INDEX idx_clear_events_alice_bob ON clear_v3_events(chain_id, raindex_address, alice_order_hash, bob_order_hash);
+CREATE INDEX idx_clear_events_block ON clear_v3_events(chain_id, raindex_address, block_number);
+CREATE INDEX idx_clear_events_sender_time ON clear_v3_events(chain_id, raindex_address, sender, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_clear_alice_vaults ON clear_v3_events(chain_id, raindex_address, alice_input_vault_id, alice_output_vault_id);
+CREATE INDEX idx_clear_bob_vaults ON clear_v3_events(chain_id, raindex_address, bob_input_vault_id, bob_output_vault_id);
 
-CREATE INDEX idx_after_clear_block ON after_clear_v2_events(chain_id, orderbook_address, block_number);
+CREATE INDEX idx_after_clear_block ON after_clear_v2_events(chain_id, raindex_address, block_number);
 
-CREATE INDEX idx_meta_subject ON meta_events(chain_id, orderbook_address, subject);
-CREATE INDEX idx_meta_block ON meta_events(chain_id, orderbook_address, block_number);
+CREATE INDEX idx_meta_subject ON meta_events(chain_id, raindex_address, subject);
+CREATE INDEX idx_meta_block ON meta_events(chain_id, raindex_address, block_number);
 
 CREATE TABLE erc20_tokens (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     token_address TEXT NOT NULL,
     name     TEXT    NOT NULL,
     symbol   TEXT    NOT NULL,
     decimals INTEGER NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, token_address)
+    PRIMARY KEY (chain_id, raindex_address, token_address)
 );
 CREATE INDEX idx_erc20_tokens_token
-    ON erc20_tokens(chain_id, orderbook_address, token_address);
+    ON erc20_tokens(chain_id, raindex_address, token_address);
 
 CREATE TABLE interpreter_store_sets (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     store_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     log_index INTEGER NOT NULL,
@@ -292,15 +306,15 @@ CREATE TABLE interpreter_store_sets (
     namespace TEXT NOT NULL,
     key TEXT NOT NULL,
     value TEXT NOT NULL,
-    PRIMARY KEY (chain_id, orderbook_address, transaction_hash, log_index)
+    PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
 );
-CREATE INDEX idx_store_sets_store ON interpreter_store_sets(chain_id, orderbook_address, store_address);
-CREATE INDEX idx_store_sets_block ON interpreter_store_sets(chain_id, orderbook_address, block_number);
-CREATE INDEX idx_store_sets_namespace ON interpreter_store_sets(chain_id, orderbook_address, namespace);
+CREATE INDEX idx_store_sets_store ON interpreter_store_sets(chain_id, raindex_address, store_address);
+CREATE INDEX idx_store_sets_block ON interpreter_store_sets(chain_id, raindex_address, block_number);
+CREATE INDEX idx_store_sets_namespace ON interpreter_store_sets(chain_id, raindex_address, namespace);
 
 CREATE TABLE IF NOT EXISTS vault_balance_changes (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     transaction_hash TEXT NOT NULL,
     owner TEXT NOT NULL,
     token TEXT NOT NULL,
@@ -313,7 +327,7 @@ CREATE TABLE IF NOT EXISTS vault_balance_changes (
     running_balance TEXT NOT NULL,
     PRIMARY KEY (
         chain_id,
-        orderbook_address,
+        raindex_address,
         owner,
         token,
         vault_id,
@@ -323,7 +337,7 @@ CREATE TABLE IF NOT EXISTS vault_balance_changes (
 );
 CREATE INDEX idx_vbc_timestamp ON vault_balance_changes(
     chain_id,
-    orderbook_address,
+    raindex_address,
     owner,
     token,
     vault_id,
@@ -334,7 +348,7 @@ CREATE INDEX idx_vbc_timestamp ON vault_balance_changes(
 
 CREATE TABLE IF NOT EXISTS running_vault_balances (
     chain_id INTEGER NOT NULL,
-    orderbook_address TEXT NOT NULL,
+    raindex_address TEXT NOT NULL,
     owner TEXT NOT NULL,
     token TEXT NOT NULL,
     vault_id TEXT NOT NULL,
@@ -342,9 +356,84 @@ CREATE TABLE IF NOT EXISTS running_vault_balances (
     last_block INTEGER NOT NULL,
     last_log_index INTEGER NOT NULL,
     updated_at INTEGER NOT NULL DEFAULT (CAST(strftime('%s','now') AS INTEGER) * 1000),
-    PRIMARY KEY (chain_id, orderbook_address, owner, token, vault_id)
+    PRIMARY KEY (chain_id, raindex_address, owner, token, vault_id)
 );
-CREATE INDEX idx_rvb_owner ON running_vault_balances(chain_id, orderbook_address, owner);
-CREATE INDEX idx_rvb_token ON running_vault_balances(chain_id, orderbook_address, token, vault_id);
+CREATE INDEX idx_rvb_owner ON running_vault_balances(chain_id, raindex_address, owner);
+CREATE INDEX idx_rvb_token ON running_vault_balances(chain_id, raindex_address, token, vault_id);
+
+-- Pipeline-maintained read models use the `derived_` prefix. These tables are
+-- not DB-native materialized views; they are rebuilt by local DB sync writes.
+CREATE TABLE IF NOT EXISTS derived_vault_deltas (
+    chain_id INTEGER NOT NULL,
+    raindex_address TEXT NOT NULL,
+    transaction_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    block_number INTEGER NOT NULL,
+    block_timestamp INTEGER NOT NULL,
+    owner TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    token TEXT NOT NULL,
+    vault_id TEXT NOT NULL,
+    delta TEXT NOT NULL,
+    PRIMARY KEY (
+        chain_id,
+        raindex_address,
+        transaction_hash,
+        log_index,
+        owner,
+        kind,
+        token,
+        vault_id
+    )
+);
+CREATE INDEX idx_derived_vault_deltas_window
+    ON derived_vault_deltas(chain_id, raindex_address, block_number, log_index);
+CREATE INDEX idx_derived_vault_deltas_balance_key
+    ON derived_vault_deltas(chain_id, raindex_address, owner, token, vault_id, block_number, log_index);
+
+CREATE TABLE IF NOT EXISTS derived_trades (
+    chain_id INTEGER NOT NULL,
+    raindex_address TEXT NOT NULL,
+    trade_id TEXT NOT NULL,
+
+    trade_kind TEXT NOT NULL,
+    trade_side TEXT NOT NULL,
+
+    order_hash TEXT NOT NULL,
+    order_owner TEXT NOT NULL,
+    order_nonce TEXT NOT NULL,
+
+    transaction_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    block_number INTEGER NOT NULL,
+    block_timestamp INTEGER NOT NULL,
+    transaction_sender TEXT NOT NULL,
+
+    input_vault_id TEXT NOT NULL,
+    input_token TEXT NOT NULL,
+    input_delta TEXT NOT NULL,
+    input_running_balance TEXT,
+
+    output_vault_id TEXT NOT NULL,
+    output_token TEXT NOT NULL,
+    output_delta TEXT NOT NULL,
+    output_running_balance TEXT,
+
+    PRIMARY KEY (chain_id, raindex_address, trade_id)
+);
+CREATE INDEX idx_derived_trades_input_token_time
+    ON derived_trades(chain_id, raindex_address, input_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_output_token_time
+    ON derived_trades(chain_id, raindex_address, output_token, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_owner_time
+    ON derived_trades(chain_id, raindex_address, order_owner, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_taker_time
+    ON derived_trades(chain_id, raindex_address, transaction_sender, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_order_hash_time
+    ON derived_trades(chain_id, raindex_address, order_hash, block_timestamp DESC, block_number DESC, log_index DESC);
+CREATE INDEX idx_derived_trades_tx
+    ON derived_trades(chain_id, raindex_address, transaction_hash);
+CREATE INDEX idx_derived_trades_time
+    ON derived_trades(chain_id, raindex_address, block_timestamp DESC, block_number DESC, log_index DESC);
 
 COMMIT;

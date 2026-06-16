@@ -1,15 +1,19 @@
 use super::*;
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::orders_list::RaindexOrders;
-use alloy::primitives::Address;
+use crate::raindex_client::vaults::RaindexVault;
+use crate::utils::timing::Timing;
+use alloy::primitives::{Address, B256};
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
-use rain_orderbook_quote::{
+use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1, IOV2};
+use raindex_quote::{
     get_order_quotes, BatchOrderQuotesResponse, NoopInjector, OrderQuoteValue, Pair,
     SignedContextInjector,
 };
-use rain_orderbook_subgraph_client::utils::float::{F0, F1};
+use raindex_subgraph_client::utils::float::{F0, F1};
 use std::ops::{Div, Mul};
+use tracing::{debug, error, info, info_span, warn, Instrument};
+use wasm_bindgen_utils::impl_wasm_traits;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -62,8 +66,47 @@ pub struct RaindexOrderQuoteValue {
     #[tsify(type = "Hex")]
     pub inverse_ratio: Float,
     pub formatted_inverse_ratio: String,
+    /// `maxOutput` expressed as a percentage of the current balance of the
+    /// output vault this pair sells from, formatted like the other amounts
+    /// (e.g. `"25"` for 25%). `None` (omitted) when the output vault cannot be
+    /// matched or its balance is zero (the percentage would be undefined).
+    /// Populated after the quote is fetched, from already-fetched vault
+    /// balances.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[tsify(optional)]
+    pub formatted_max_output_as_percent_of_vault: Option<String>,
 }
 impl_wasm_traits!(RaindexOrderQuoteValue);
+
+/// Formats `amount / balance * 100` the same way the other quote amounts are
+/// formatted (so `1` of a `4`-balance vault renders as `"25"`). Returns `None`
+/// when `balance` is zero, because the percentage is undefined and dividing
+/// would error.
+fn format_amount_as_percent_of_balance(
+    amount: Float,
+    balance: Float,
+) -> Result<Option<String>, RaindexError> {
+    if balance.is_zero()? {
+        return Ok(None);
+    }
+    let hundred = Float::parse("100".to_string())?;
+    let percent = amount.div(balance)?.mul(hundred)?;
+    Ok(Some(percent.format()?))
+}
+
+/// Finds the balance of the vault whose `(token, vaultId)` matches `io`. The
+/// quote pair indices address the on-chain `validInputs`/`validOutputs`
+/// (decoded from the order bytes), whose ordering is independent of the
+/// subgraph `inputs`/`outputs` arrays, so the match is by identity rather than
+/// by position.
+fn vault_balance_for_io(io: &IOV2, vaults: &[RaindexVault]) -> Option<Float> {
+    vaults
+        .iter()
+        .find(|vault| {
+            vault.token_address() == io.token && B256::from(vault.raw_vault_id()) == io.vaultId
+        })
+        .map(|vault| vault.balance())
+}
 
 impl RaindexOrderQuoteValue {
     pub fn try_from_order_quote_value(value: OrderQuoteValue) -> Result<Self, RaindexError> {
@@ -90,6 +133,7 @@ impl RaindexOrderQuoteValue {
             formatted_ratio: value.ratio.format()?,
             inverse_ratio,
             formatted_inverse_ratio,
+            formatted_max_output_as_percent_of_vault: None,
         })
     }
 }
@@ -132,29 +176,43 @@ impl RaindexOrder {
         )]
         chunk_size: Option<u32>,
     ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
-        let rpcs = self.get_rpc_urls()?;
-        let sg_order = self.clone().into_sg_order()?;
-
-        let order_quotes = get_order_quotes(
-            vec![sg_order],
-            block_number,
-            rpcs.iter().map(|s| s.to_string()).collect(),
-            chunk_size.map(|v| v as usize),
-            Address::ZERO,
-            &NoopInjector,
-        )
-        .await?;
-
-        let mut result_order_quotes = vec![];
-        for order_quote in order_quotes {
-            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
-            result_order_quotes.push(data);
-        }
-        Ok(result_order_quotes)
+        self.get_quotes_with_injector(block_number, chunk_size, Address::ZERO, &NoopInjector)
+            .await
     }
 }
 
 impl RaindexOrder {
+    /// Fills in the per-pair vault-relative percentage on a quote's `data`,
+    /// so the UI can show each trade's max output amount as a percentage of
+    /// the output vault it sells from. This is the drawdown signal: how much
+    /// of the vault a single trade depletes (the input side measures inflow,
+    /// not drawdown, so it is deliberately not computed). Uses already-fetched
+    /// subgraph vault balances; never issues a network call. A successful
+    /// quote with no matching vault (or a zero balance) simply leaves the
+    /// percentage `None`. `order_v4` must be this order's decoded bytes, whose
+    /// `validOutputs` the pair output index addresses.
+    fn enrich_quote_with_vault_percentages(
+        &self,
+        quote: &mut RaindexOrderQuote,
+        order_v4: &OrderV4,
+    ) -> Result<(), RaindexError> {
+        let data = match quote.data.as_mut() {
+            Some(data) => data,
+            None => return Ok(()),
+        };
+
+        let output_balance = order_v4
+            .validOutputs
+            .get(quote.pair.output_index as usize)
+            .and_then(|io| vault_balance_for_io(io, self.output_vaults()));
+        if let Some(balance) = output_balance {
+            data.formatted_max_output_as_percent_of_vault =
+                format_amount_as_percent_of_balance(data.max_output, balance)?;
+        }
+
+        Ok(())
+    }
+
     /// Non-wasm variant of [`Self::get_quotes`] that threads a `counterparty`
     /// address and a caller-supplied [`SignedContextInjector`] through to the
     /// quote RPC. Used by single-take flows that need to populate signed
@@ -168,25 +226,91 @@ impl RaindexOrder {
         counterparty: Address,
         injector: &dyn SignedContextInjector,
     ) -> Result<Vec<RaindexOrderQuote>, RaindexError> {
-        let rpcs = self.get_rpc_urls()?;
-        let sg_order = self.clone().into_sg_order()?;
+        let span = info_span!(
+            "get_order_quotes",
+            chain_id = self.chain_id(),
+            raindex = %self.raindex(),
+            order_hash = %self.order_hash(),
+            block_number = ?block_number,
+            chunk_size = ?chunk_size,
+            counterparty = %counterparty,
+        );
 
-        let order_quotes = get_order_quotes(
-            vec![sg_order],
-            block_number,
-            rpcs.iter().map(|s| s.to_string()).collect(),
-            chunk_size.map(|v| v as usize),
-            counterparty,
-            injector,
-        )
-        .await?;
+        async move {
+            let started_at = Timing::now();
+            let rpcs = self.get_rpc_urls()?;
+            let rpc_url_count = rpcs.len();
+            let sg_order = self.clone().into_sg_order()?;
+            let order_v4: OrderV4 = sg_order.clone().try_into()?;
 
-        let mut result_order_quotes = vec![];
-        for order_quote in order_quotes {
-            let data = RaindexOrderQuote::try_from_batch_order_quotes_response(order_quote)?;
-            result_order_quotes.push(data);
+            info!(rpc_url_count, "starting order quotes");
+
+            let quote_started_at = Timing::now();
+            let order_quotes = get_order_quotes(
+                vec![sg_order],
+                block_number,
+                rpcs.iter().map(|s| s.to_string()).collect(),
+                chunk_size.map(|v| v as usize),
+                counterparty,
+                injector,
+            )
+            .instrument(info_span!("order_quotes.executing_batch_quote"))
+            .await
+            .map_err(|err| {
+                error!(
+                    rpc_url_count,
+                    duration_ms = quote_started_at.elapsed_ms(),
+                    error = %err,
+                    "failed executing order quotes"
+                );
+                err
+            })?;
+
+            let conversion_started_at = Timing::now();
+            let mut result_order_quotes = order_quotes
+                .into_iter()
+                .map(RaindexOrderQuote::try_from_batch_order_quotes_response)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|err| {
+                    error!(
+                        duration_ms = conversion_started_at.elapsed_ms(),
+                        error = %err,
+                        "failed converting order quotes"
+                    );
+                    err
+                })?;
+
+            for quote in result_order_quotes.iter_mut() {
+                self.enrich_quote_with_vault_percentages(quote, &order_v4)?;
+            }
+
+            let successful_quote_count = result_order_quotes
+                .iter()
+                .filter(|quote| quote.success)
+                .count();
+            let failed_quote_count = result_order_quotes
+                .len()
+                .saturating_sub(successful_quote_count);
+            for quote in result_order_quotes.iter().filter(|quote| !quote.success) {
+                debug!(
+                    input_index = quote.pair.input_index,
+                    output_index = quote.pair.output_index,
+                    error = ?quote.error,
+                    "order quote failed"
+                );
+            }
+            info!(
+                rpc_url_count,
+                quote_count = result_order_quotes.len(),
+                successful_quote_count,
+                failed_quote_count,
+                duration_ms = started_at.elapsed_ms(),
+                "completed order quotes"
+            );
+            Ok(result_order_quotes)
         }
-        Ok(result_order_quotes)
+        .instrument(span)
+        .await
     }
 }
 
@@ -268,13 +392,23 @@ pub async fn get_order_quotes_batch_with_injector(
     counterparty: Address,
     injector: &dyn SignedContextInjector,
 ) -> Result<Vec<Vec<RaindexOrderQuote>>, RaindexError> {
+    let started_at = Timing::now();
     if orders.is_empty() {
+        info!(
+            order_count = 0usize,
+            "quote batch skipped for empty order list"
+        );
         return Ok(vec![]);
     }
 
     let expected_chain_id = orders[0].chain_id();
     for order in &orders[1..] {
         if order.chain_id() != expected_chain_id {
+            warn!(
+                expected_chain_id,
+                found_chain_id = order.chain_id(),
+                "quote batch rejected mixed chain IDs"
+            );
             return Err(RaindexError::PreflightError(format!(
                 "All orders must share the same chain ID, expected {} but found {}",
                 expected_chain_id,
@@ -288,6 +422,7 @@ pub async fn get_order_quotes_batch_with_injector(
         .into_iter()
         .map(|u| u.to_string())
         .collect();
+    let rpc_url_count = rpcs.len();
 
     let sg_orders = orders
         .iter()
@@ -309,6 +444,17 @@ pub async fn get_order_quotes_batch_with_injector(
             Ok::<usize, RaindexError>(count)
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let total_pair_count: usize = pair_counts.iter().sum();
+
+    info!(
+        order_count = orders.len(),
+        expected_chain_id,
+        total_pair_count,
+        chunk_size = ?chunk_size,
+        block_number = ?block_number,
+        rpc_url_count,
+        "starting order quote batch"
+    );
 
     let flat_results = get_order_quotes(
         sg_orders,
@@ -324,6 +470,16 @@ pub async fn get_order_quotes_batch_with_injector(
         .into_iter()
         .map(RaindexOrderQuote::try_from_batch_order_quotes_response)
         .collect::<Result<Vec<_>, _>>()?;
+    let successful_quote_count = flat_raindex.iter().filter(|quote| quote.success).count();
+    let failed_quote_count = flat_raindex.len().saturating_sub(successful_quote_count);
+    for quote in flat_raindex.iter().filter(|quote| !quote.success) {
+        debug!(
+            input_index = quote.pair.input_index,
+            output_index = quote.pair.output_index,
+            error = ?quote.error,
+            "order quote failed"
+        );
+    }
 
     let mut result = Vec::with_capacity(orders.len());
     let mut offset = 0;
@@ -331,6 +487,42 @@ pub async fn get_order_quotes_batch_with_injector(
         result.push(flat_raindex[offset..offset + count].to_vec());
         offset += count;
     }
+
+    // Express each pair's max input/output as a percentage of the vault it
+    // draws from, using the already-fetched subgraph balances. Done per order
+    // so the pair indices resolve against that order's own decoded IOs.
+    for (order, quotes) in orders.iter().zip(result.iter_mut()) {
+        let order_v4: OrderV4 = order.clone().into_sg_order()?.try_into()?;
+        for quote in quotes.iter_mut() {
+            order.enrich_quote_with_vault_percentages(quote, &order_v4)?;
+        }
+    }
+
+    for (order, quotes) in orders.iter().zip(&result) {
+        for quote in quotes.iter().filter(|quote| !quote.success) {
+            debug!(
+                order_hash = %order.order_hash(),
+                raindex = %order.raindex(),
+                input_index = quote.pair.input_index,
+                output_index = quote.pair.output_index,
+                error = ?quote.error,
+                "order quote failed for order"
+            );
+        }
+    }
+
+    info!(
+        order_count = orders.len(),
+        expected_chain_id,
+        total_pair_count,
+        chunk_size = ?chunk_size,
+        block_number = ?block_number,
+        rpc_url_count,
+        successful_quote_count,
+        failed_quote_count,
+        duration_ms = started_at.elapsed_ms(),
+        "completed order quote batch"
+    );
 
     Ok(result)
 }
@@ -343,22 +535,17 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod quote_non_wasm_tests {
         use super::*;
-        use crate::local_db::OrderbookIdentifier;
-        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS};
+        use crate::local_db::RaindexIdentifier;
+        use crate::raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS};
         use alloy::hex::encode_prefixed;
-        use alloy::primitives::{b256, Address, U256};
+        use alloy::primitives::{b256, Address, Bytes, U256};
         use alloy::{sol, sol_types::SolValue};
         use httpmock::MockServer;
         use rain_math_float::Float;
-        use rain_orderbook_subgraph_client::utils::float::{F0_5, F2};
+        use raindex_subgraph_client::utils::float::{F0_5, F2};
         use serde_json::{json, Value};
+        use tracing_test::traced_test;
 
-        sol!(
-            struct Result {
-                bool success;
-                bytes returnData;
-            }
-        );
         sol!(
             struct quoteReturn {
                 bool exists;
@@ -366,6 +553,13 @@ mod tests {
                 uint256 ioRatio;
             }
         );
+
+        // OZ Multicall returns `bytes[]`; helper to wrap per-target
+        // `quote2Return`s into the outer multicall return payload.
+        fn encode_multicall_bytes(inner: Vec<quoteReturn>) -> String {
+            let elements: Vec<Bytes> = inner.into_iter().map(|r| r.abi_encode().into()).collect();
+            encode_prefixed(<Vec<Bytes> as SolValue>::abi_encode(&elements))
+        }
 
         fn get_order1_json() -> Value {
             json!(                        {
@@ -386,8 +580,8 @@ mod tests {
                     "symbol": "sFLR",
                     "decimals": "18"
                   },
-                  "orderbook": {
-                    "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+                  "raindex": {
+                    "id": CHAIN_ID_1_RAINDEX_ADDRESS
                   },
                   "ordersAsOutput": [],
                   "ordersAsInput": [],
@@ -407,16 +601,16 @@ mod tests {
                     "symbol": "WFLR",
                     "decimals": "18"
                   },
-                  "orderbook": {
-                    "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+                  "raindex": {
+                    "id": CHAIN_ID_1_RAINDEX_ADDRESS
                   },
                   "ordersAsOutput": [],
                   "ordersAsInput": [],
                   "balanceChanges": []
                 },
               ],
-              "orderbook": {
-                "id": CHAIN_ID_1_ORDERBOOK_ADDRESS
+              "raindex": {
+                "id": CHAIN_ID_1_RAINDEX_ADDRESS
               },
               "active": true,
               "timestampAdded": "1739448802",
@@ -449,17 +643,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -483,9 +671,9 @@ mod tests {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -514,6 +702,12 @@ mod tests {
             assert_eq!(data.formatted_ratio, "2");
             assert!(data.inverse_ratio.eq(F0_5).unwrap());
             assert_eq!(data.formatted_inverse_ratio, "0.5");
+            // The subgraph vaults in `get_order1_json` carry a different
+            // vaultId than the order bytes' validOutputs, so no vault matches
+            // and the vault-relative percentage stays `None`. This guards
+            // against blind index-based matching producing a bogus percentage
+            // from a mismatched vault.
+            assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
             assert!(res.success);
             assert_eq!(res.error, None);
             assert_eq!(res.pair.pair_name, "WFLR/sFLR");
@@ -521,21 +715,29 @@ mod tests {
             assert_eq!(res.pair.output_index, 0);
         }
 
-        #[tokio::test]
-        async fn test_get_order_quotes_batch_empty() {
-            let result = get_order_quotes_batch(&[], None, None).await;
-            assert!(result.is_ok());
-            assert!(result.unwrap().is_empty());
+        // Same order bytes as `get_order1_json`, whose decoded validInputs[0]
+        // (WFLR) and validOutputs[0] (sFLR) both carry vaultId 0x12 (18). We
+        // point the subgraph vaults at that *same* vaultId so they match the
+        // on-chain IOs by (token, vaultId), plus round balances (output sFLR =
+        // 4, input WFLR = 5) so the percentages come out exact.
+        fn get_order_matching_vaults_json() -> Value {
+            let mut order = get_order1_json();
+            let matching_vault_id = "18";
+            order["outputs"][0]["vaultId"] = json!(matching_vault_id);
+            order["outputs"][0]["balance"] = json!(Float::parse("4".to_string()).unwrap());
+            order["inputs"][0]["vaultId"] = json!(matching_vault_id);
+            order["inputs"][0]["balance"] = json!(Float::parse("5".to_string()).unwrap());
+            order
         }
 
         #[tokio::test]
-        async fn test_get_order_quote_with_chunk_override() {
+        async fn test_get_order_quote_vault_percentages() {
             let server = MockServer::start_async().await;
             server.mock(|when, then| {
                 when.path("/sg");
                 then.status(200).json_body_obj(&json!({
                     "data": {
-                        "orders": [get_order1_json()]
+                        "orders": [get_order_matching_vaults_json()]
                     }
                 }));
             });
@@ -549,17 +751,12 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            // outputMax = 1 (sFLR), ioRatio = 2 => maxInput = 2 (WFLR).
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -583,9 +780,157 @@ mod tests {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+            let res = order.get_quotes(None, None).await.unwrap();
+            assert_eq!(res.len(), 1);
+            let data = res[0].data.as_ref().unwrap();
+
+            // The amounts themselves are unchanged: maxOutput = 1, maxInput = 2.
+            assert_eq!(data.formatted_max_output, "1");
+            assert_eq!(data.formatted_max_input, "2");
+            // maxOutput 1 / output vault balance 4 * 100 = 25%. Only the output
+            // side is computed (drawdown signal); there is no input percentage.
+            assert_eq!(
+                data.formatted_max_output_as_percent_of_vault,
+                Some("25".to_string())
+            );
+        }
+
+        #[tokio::test]
+        async fn test_get_order_quote_vault_percentages_zero_balance() {
+            let server = MockServer::start_async().await;
+            let mut order_json = get_order_matching_vaults_json();
+            // Zero the output vault balance: dividing by it is undefined, so the
+            // output percentage must be `None` even though the output vault
+            // matches by (token, vaultId). This isolates the divide-by-zero
+            // branch from the no-match branch (which the sibling test covers).
+            order_json["outputs"][0]["balance"] = json!(Float::parse("0".to_string()).unwrap());
+            server.mock(|when, then| {
+                when.path("/sg");
+                then.status(200).json_body_obj(&json!({
+                    "data": { "orders": [order_json] }
+                }));
+            });
+            server.mock(|when, then| {
+                when.path("/rpc").body_contains("blockNumber");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x1",
+                }));
+            });
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
+            server.mock(|when, then| {
+                when.path("/rpc");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": response_hex,
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &server.url("/sg"),
+                    "http://localhost:3000",
+                    &server.url("/rpc"),
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+            let order = raindex_client
+                .get_order_by_hash(
+                    &RaindexIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                    ),
+                    b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
+                )
+                .await
+                .unwrap();
+            let res = order.get_quotes(None, None).await.unwrap();
+            let data = res[0].data.as_ref().unwrap();
+            // The output amount is still reported; only the percentage is
+            // suppressed because the vault balance is zero.
+            assert_eq!(data.formatted_max_output, "1");
+            assert_eq!(data.formatted_max_output_as_percent_of_vault, None);
+        }
+
+        #[traced_test]
+        #[tokio::test]
+        async fn test_get_order_quotes_batch_empty() {
+            let result = get_order_quotes_batch(&[], None, None).await;
+            assert!(result.is_ok());
+            assert!(result.unwrap().is_empty());
+            assert!(logs_contain("quote batch skipped for empty order list"));
+        }
+
+        #[tokio::test]
+        async fn test_get_order_quote_with_chunk_override() {
+            let server = MockServer::start_async().await;
+            server.mock(|when, then| {
+                when.path("/sg");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "orders": [get_order1_json()]
+                    }
+                }));
+            });
+
+            server.mock(|when, then| {
+                when.path("/rpc").body_contains("blockNumber");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x1",
+                }));
+            });
+
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
+            server.mock(|when, then| {
+                when.path("/rpc");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": response_hex,
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &server.url("/sg"),
+                    "http://localhost:3000",
+                    &server.url("/rpc"),
+                    "http://localhost:3000",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+            let order = raindex_client
+                .get_order_by_hash(
+                    &RaindexIdentifier::new(
+                        1,
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -617,17 +962,11 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![Result {
-                success: true,
-                returnData: quoteReturn {
-                    exists: true,
-                    outputMax: U256::from(1),
-                    ioRatio: U256::from(2),
-                }
-                .abi_encode()
-                .into(),
-            }];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            let response_hex = encode_multicall_bytes(vec![quoteReturn {
+                exists: true,
+                outputMax: U256::from(1),
+                ioRatio: U256::from(2),
+            }]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -651,9 +990,9 @@ mod tests {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )
@@ -698,29 +1037,18 @@ mod tests {
                 }));
             });
 
-            let aggregate_result = vec![
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(1),
-                        ioRatio: U256::from(2),
-                    }
-                    .abi_encode()
-                    .into(),
+            let response_hex = encode_multicall_bytes(vec![
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(1),
+                    ioRatio: U256::from(2),
                 },
-                Result {
-                    success: true,
-                    returnData: quoteReturn {
-                        exists: true,
-                        outputMax: U256::from(2),
-                        ioRatio: U256::from(1),
-                    }
-                    .abi_encode()
-                    .into(),
+                quoteReturn {
+                    exists: true,
+                    outputMax: U256::from(2),
+                    ioRatio: U256::from(1),
                 },
-            ];
-            let response_hex = encode_prefixed(aggregate_result.abi_encode());
+            ]);
             server.mock(|when, then| {
                 when.path("/rpc");
                 then.json_body(json!({
@@ -744,9 +1072,9 @@ mod tests {
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
-                    &OrderbookIdentifier::new(
+                    &RaindexIdentifier::new(
                         1,
-                        Address::from_str(CHAIN_ID_1_ORDERBOOK_ADDRESS).unwrap(),
+                        Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
                     ),
                     b256!("0x0000000000000000000000000000000000000000000000000000000000000123"),
                 )

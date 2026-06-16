@@ -8,9 +8,9 @@ use url::Url;
 mod input;
 pub use input::*;
 
-/// Rain orderbook Quoter CLI app entrypoint sruct
+/// Rain raindex Quoter CLI app entrypoint sruct
 #[derive(Parser, Debug, Clone)]
-#[command(author, version, about = "Rain Orderbook Quote CLI", long_about = None)]
+#[command(author, version, about = "Rain Raindex Quote CLI", long_about = None)]
 pub struct Quoter {
     // input group, only one of which can be specified at a time
     #[command(flatten)]
@@ -36,9 +36,11 @@ pub struct Quoter {
     #[arg(short, long, env, value_name = "INTEGER")]
     pub block_number: Option<u64>,
 
-    /// Optional multicall3 address to use when quoting
-    #[arg(short, long, env, value_name = "ADDRESS")]
-    pub multicall_address: Option<Address>,
+    /// Counterparty address used as `from` of each `eth_call` when quoting.
+    /// This is what `msg.sender` / `order-counterparty()` will see inside
+    /// `calculate-io`. Defaults to the zero address.
+    #[arg(short, long, env, value_name = "ADDRESS", default_value_t = Address::ZERO)]
+    pub counterparty: Address,
 
     /// Optional file path to write the output results into
     #[arg(short, long, env, value_name = "PATH")]
@@ -93,7 +95,7 @@ impl Quoter {
                 .do_quote(
                     vec![self.rpc.to_string()],
                     self.block_number,
-                    self.multicall_address,
+                    self.counterparty,
                     None,
                 )
                 .await?
@@ -104,7 +106,7 @@ impl Quoter {
                         sg.as_str(),
                         vec![self.rpc.to_string()],
                         self.block_number,
-                        self.multicall_address,
+                        self.counterparty,
                         None,
                     )
                     .await?
@@ -148,12 +150,11 @@ mod tests {
     use super::*;
     use crate::{error::FailedQuote, BatchQuoteSpec, QuoteSpec};
     use alloy::primitives::{hex::encode_prefixed, keccak256, B256, U256};
-    use alloy::providers::bindings::IMulticall3::Result as MulticallResult;
     use alloy::sol_types::{SolCall, SolValue};
     use clap::CommandFactory;
     use httpmock::{Method::POST, MockServer};
     use rain_math_float::Float;
-    use rain_orderbook_bindings::IRaindexV6::{quote2Call, quote2Return, OrderV4, IOV2};
+    use raindex_bindings::IRaindexV6::{quote2Call, quote2Return, OrderV4, IOV2};
     use serde_json::json;
     use std::{fs::read_to_string, str::FromStr};
     use tempfile::NamedTempFile;
@@ -170,14 +171,14 @@ mod tests {
         let output = PathBuf::from_str("./a/b").unwrap();
 
         let batch_quote_specs = BatchQuoteSpec(vec![QuoteSpec {
-            orderbook: Address::random(),
+            raindex: Address::random(),
             input_io_index: 0,
             output_io_index: 0,
             order_hash: U256::from(1),
             signed_context: vec![],
         }]);
         let mut bytes = vec![];
-        bytes.extend(batch_quote_specs.0[0].orderbook.0);
+        bytes.extend(batch_quote_specs.0[0].raindex.0);
         bytes.push(batch_quote_specs.0[0].input_io_index);
         bytes.push(batch_quote_specs.0[0].output_io_index);
         bytes.extend(batch_quote_specs.0[0].order_hash.to_be_bytes_vec());
@@ -204,8 +205,8 @@ mod tests {
             Some(&batch_quote_specs)
         );
 
-        let orderbook1 = encode_prefixed(Address::random().0);
-        let orderbook2 = encode_prefixed(Address::random().0);
+        let raindex1 = encode_prefixed(Address::random().0);
+        let raindex2 = encode_prefixed(Address::random().0);
         let order_bytes1 = encode_prefixed(OrderV4::default().abi_encode());
         let order_bytes2 = encode_prefixed(OrderV4::default().abi_encode());
         let input_index = U256::from(8).to_string();
@@ -218,12 +219,12 @@ mod tests {
             "--rpc",
             rpc.as_str(),
             "--target",
-            &orderbook1,
+            &raindex1,
             &input_index,
             &output_index,
             &order_bytes1,
             "--target",
-            &orderbook2,
+            &raindex2,
             &input_index,
             &output_index,
             &order_bytes2,
@@ -237,8 +238,8 @@ mod tests {
                 .map(Iterator::collect)
                 .collect::<Vec<Vec<&String>>>(),
             vec![
-                vec![&orderbook1, &input_index, &output_index, &order_bytes1],
-                vec![&orderbook2, &input_index, &output_index, &order_bytes2]
+                vec![&raindex1, &input_index, &output_index, &order_bytes1],
+                vec![&raindex2, &input_index, &output_index, &order_bytes2]
             ]
         );
 
@@ -249,7 +250,7 @@ mod tests {
                 "--output",
                 output.clone().to_str().unwrap(),
                 "--target",
-                &orderbook1,
+                &raindex1,
                 &input_index,
                 &output_index,
                 &order_bytes1,
@@ -266,7 +267,7 @@ mod tests {
             rpc: Url::parse("http://a.com").unwrap(),
             subgraph: None,
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: true,
             input: Input {
@@ -291,27 +292,18 @@ mod tests {
         let rpc_url = rpc_server.url("/rpc");
         let sg_url = rpc_server.url("/sg");
 
-        let rpc_response_data = vec![
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: true,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: false,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-        ]
-        .abi_encode();
+        // Only one of the two specs resolves to a QuoteTarget (the default
+        // spec is missing from the subgraph → yields `NonExistent` before
+        // any RPC call), so the raindex-native multicall response carries
+        // a single element.
+        let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: Float::default().get_inner(),
+            ioRatio: Float::default().get_inner(),
+        })
+        .into();
+        let rpc_response_data =
+            <Vec<alloy::primitives::Bytes> as SolValue>::abi_encode(&vec![exists_true]);
 
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
@@ -323,7 +315,7 @@ mod tests {
         });
 
         // mock subgraph
-        let orderbook = Address::random();
+        let raindex = Address::random();
         let order = OrderV4 {
             validInputs: vec![IOV2::default()],
             validOutputs: vec![IOV2::default()],
@@ -333,7 +325,7 @@ mod tests {
         let order_hash_u256 = U256::from_be_bytes(order_hash_bytes);
         let order_hash = encode_prefixed(order_hash_bytes);
         let mut order_id = vec![];
-        order_id.extend_from_slice(orderbook.as_ref());
+        order_id.extend_from_slice(raindex.as_ref());
         order_id.extend_from_slice(&order_hash_bytes);
         let order_id = encode_prefixed(keccak256(order_id));
         let retrun_sg_data = serde_json::json!({
@@ -355,7 +347,7 @@ mod tests {
                         },
                         "balance": "0",
                         "vaultId": order.validOutputs[0].vaultId.to_string(),
-                        "orderbook": { "id": encode_prefixed(B256::random()) },
+                        "raindex": { "id": encode_prefixed(B256::random()) },
                         "ordersAsOutput": [],
                         "ordersAsInput": [],
                         "balanceChanges": []
@@ -372,12 +364,12 @@ mod tests {
                         },
                         "balance": "0",
                         "vaultId": order.validInputs[0].vaultId.to_string(),
-                        "orderbook": { "id": encode_prefixed(B256::random()) },
+                        "raindex": { "id": encode_prefixed(B256::random()) },
                         "ordersAsOutput": [],
                         "ordersAsInput": [],
                         "balanceChanges": []
                     }],
-                    "orderbook": { "id": encode_prefixed(B256::random()) },
+                    "raindex": { "id": encode_prefixed(B256::random()) },
                     "active": true,
                     "addEvents": [{
                         "transaction": {
@@ -406,7 +398,7 @@ mod tests {
                 input_io_index: 0,
                 output_io_index: 0,
                 signed_context: vec![],
-                orderbook,
+                raindex,
             },
             QuoteSpec::default(),
         ]);
@@ -415,7 +407,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: Some(Url::parse(&sg_url).unwrap()),
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: false,
             input: Input {
@@ -438,11 +430,11 @@ mod tests {
 
         // specs input
         let specs_str = vec![
-            encode_prefixed(orderbook.0),
+            encode_prefixed(raindex.0),
             0.to_string(),
             0.to_string(),
             encode_prefixed(order_hash_bytes),
-            encode_prefixed(orderbook.0),
+            encode_prefixed(raindex.0),
             0.to_string(),
             0.to_string(),
             encode_prefixed([0u8; 32]),
@@ -452,7 +444,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: Some(Url::parse(&sg_url).unwrap()),
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: true,
             pretty: false,
             input: Input {
@@ -481,11 +473,11 @@ mod tests {
         let test_file = NamedTempFile::new().unwrap();
         let test_path = test_file.path().to_path_buf();
 
-        let orderbook = Address::random();
+        let raindex = Address::random();
         let input_io_index = 0u8;
         let output_io_index = 0u8;
         let targets_str = vec![
-            encode_prefixed(orderbook.0),
+            encode_prefixed(raindex.0),
             input_io_index.to_string(),
             output_io_index.to_string(),
             encode_prefixed(OrderV4::default().abi_encode()),
@@ -496,7 +488,7 @@ mod tests {
             rpc: Url::parse(&rpc_url).unwrap(),
             subgraph: None,
             block_number: None,
-            multicall_address: None,
+            counterparty: Address::ZERO,
             no_stdout: false,
             pretty: false,
             input: Input {
@@ -506,27 +498,17 @@ mod tests {
             },
         };
 
-        let rpc_response_data = vec![
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: true,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-            MulticallResult {
-                success: true,
-                returnData: quote2Call::abi_encode_returns(&quote2Return {
-                    exists: false,
-                    outputMax: Float::default().get_inner(),
-                    ioRatio: Float::default().get_inner(),
-                })
-                .into(),
-            },
-        ]
-        .abi_encode();
+        // The CLI `--target` flag here is parsed into a single QuoteTarget
+        // (four arg tokens per target), so the raindex's multicall carries
+        // a single inner `quote2` return.
+        let exists_true: alloy::primitives::Bytes = quote2Call::abi_encode_returns(&quote2Return {
+            exists: true,
+            outputMax: Float::default().get_inner(),
+            ioRatio: Float::default().get_inner(),
+        })
+        .into();
+        let rpc_response_data =
+            <Vec<alloy::primitives::Bytes> as SolValue>::abi_encode(&vec![exists_true]);
         rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
             then.json_body_obj(&json!({
@@ -538,7 +520,7 @@ mod tests {
 
         // run
         let QuoterResult(result) = cli.run().await.unwrap();
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.len(), 1);
 
         let quote = if let QuoterResultInner::Ok(v) = &result[0] {
             v
@@ -548,17 +530,7 @@ mod tests {
         assert!(quote.max_output.eq(Float::default()).unwrap());
         assert!(quote.ratio.eq(Float::default()).unwrap());
 
-        let err = if let QuoterResultInner::Error(v) = &result[1] {
-            v
-        } else {
-            panic!("expected error quote result");
-        };
-        assert_eq!(err, &FailedQuote::NonExistent.to_string());
-
-        let expected = QuoterResult(vec![
-            QuoterResultInner::Ok(OrderQuoteValue::default()),
-            QuoterResultInner::Error(FailedQuote::NonExistent.to_string()),
-        ]);
+        let expected = QuoterResult(vec![QuoterResultInner::Ok(OrderQuoteValue::default())]);
 
         // output json format containing array of ok/err quote results:
         // [

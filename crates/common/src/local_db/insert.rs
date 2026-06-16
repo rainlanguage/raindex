@@ -1,6 +1,6 @@
 use super::decode::{DecodedEvent, DecodedEventData, InterpreterStoreSetEvent};
 use super::query::{SqlStatement, SqlStatementBatch, SqlValue};
-use super::OrderbookIdentifier;
+use super::RaindexIdentifier;
 use crate::{erc20::TokenInfo, rpc_client::LogEntryResponse};
 use alloy::primitives::Bytes;
 use alloy::sol_types::SolValue;
@@ -10,11 +10,11 @@ use alloy::{
 };
 use itertools::Itertools;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IRaindexV6::{
+use raindex_bindings::IRaindexV6::{
     AddOrderV3, AfterClearV2, ClearV3, DepositV2, OrderV4, RemoveOrderV3, TakeOrderV3, WithdrawV2,
     IOV2,
 };
-use rain_orderbook_bindings::OrderBook::MetaV1_2;
+use raindex_bindings::Raindex::MetaV1_2;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use thiserror::Error;
@@ -67,7 +67,7 @@ fn vault_id_by_index<'a>(
 }
 
 struct EventContext {
-    ob_id: OrderbookIdentifier,
+    raindex_id: RaindexIdentifier,
     block_number: u64,
     block_timestamp: u64,
     transaction_hash: B256,
@@ -75,11 +75,11 @@ struct EventContext {
 }
 
 fn event_context(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     event: &DecodedEventData<DecodedEvent>,
 ) -> Result<EventContext, InsertError> {
     Ok(EventContext {
-        ob_id: ob_id.clone(),
+        raindex_id: raindex_id.clone(),
         block_number: u256_to_u64(&event.block_number, "block_number")?,
         block_timestamp: u256_to_u64(&event.block_timestamp, "block_timestamp")?,
         transaction_hash: event.transaction_hash,
@@ -88,14 +88,14 @@ fn event_context(
 }
 
 pub fn decoded_events_to_statements(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     events: &[DecodedEventData<DecodedEvent>],
     decimals_by_token: &HashMap<Address, u8>,
 ) -> Result<SqlStatementBatch, InsertError> {
     let mut batch = SqlStatementBatch::new();
 
     for event in events {
-        let context = event_context(ob_id, event)?;
+        let context = event_context(raindex_id, event)?;
         match &event.decoded_data {
             DecodedEvent::DepositV2(decoded) => {
                 batch.add(generate_deposit_statement(
@@ -150,7 +150,7 @@ pub fn decoded_events_to_statements(
 }
 
 pub fn raw_events_to_statements(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     raw_events: &[LogEntryResponse],
 ) -> Result<SqlStatementBatch, InsertError> {
     struct RawEventRow<'a> {
@@ -199,7 +199,7 @@ pub fn raw_events_to_statements(
         batch.add(SqlStatement::new_with_params(
             r#"INSERT INTO raw_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -222,8 +222,8 @@ pub fn raw_events_to_statements(
 );
 "#,
             vec![
-                SqlValue::from(ob_id.chain_id),
-                SqlValue::from(ob_id.orderbook_address),
+                SqlValue::from(raindex_id.chain_id),
+                SqlValue::from(raindex_id.raindex_address),
                 SqlValue::from(row.block_number),
                 block_timestamp,
                 SqlValue::from(row.event.transaction_hash),
@@ -241,7 +241,7 @@ pub fn raw_events_to_statements(
 
 /// Build upsert SQL for erc20_tokens. Only include successfully fetched tokens.
 pub fn generate_erc20_token_statements(
-    ob_id: &OrderbookIdentifier,
+    raindex_id: &RaindexIdentifier,
     tokens: &[(Address, TokenInfo)],
 ) -> SqlStatementBatch {
     let mut batch = SqlStatementBatch::new();
@@ -250,7 +250,7 @@ pub fn generate_erc20_token_statements(
         batch.add(SqlStatement::new_with_params(
             r#"INSERT INTO erc20_tokens (
             chain_id,
-            orderbook_address,
+            raindex_address,
             token_address,
             name,
             symbol,
@@ -263,11 +263,11 @@ pub fn generate_erc20_token_statements(
             ?5,
             ?6
         )
-        ON CONFLICT(chain_id, orderbook_address, token_address) DO UPDATE SET decimals = excluded.decimals, name = excluded.name, symbol = excluded.symbol;
+        ON CONFLICT(chain_id, raindex_address, token_address) DO UPDATE SET decimals = excluded.decimals, name = excluded.name, symbol = excluded.symbol;
         "#,
             [
-                SqlValue::from(ob_id.chain_id),
-                SqlValue::from(ob_id.orderbook_address),
+                SqlValue::from(raindex_id.chain_id),
+                SqlValue::from(raindex_id.raindex_address),
                 SqlValue::from(*addr),
                 SqlValue::from(info.name.clone()),
                 SqlValue::from(info.symbol.clone()),
@@ -311,7 +311,7 @@ fn generate_deposit_statement(
     Ok(SqlStatement::new_with_params(
         r#"INSERT INTO deposits (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -336,8 +336,8 @@ fn generate_deposit_statement(
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -355,7 +355,7 @@ fn generate_withdraw_statement(context: &EventContext, decoded: &WithdrawV2) -> 
     SqlStatement::new_with_params(
         r#"INSERT INTO withdrawals (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -382,8 +382,8 @@ fn generate_withdraw_statement(context: &EventContext, decoded: &WithdrawV2) -> 
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -402,7 +402,7 @@ fn generate_add_order_statement(context: &EventContext, decoded: &AddOrderV3) ->
     SqlStatement::new_with_params(
         r#"INSERT INTO order_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -433,8 +433,8 @@ fn generate_add_order_statement(context: &EventContext, decoded: &AddOrderV3) ->
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -457,7 +457,7 @@ fn generate_remove_order_statement(
     SqlStatement::new_with_params(
         r#"INSERT INTO order_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -488,8 +488,8 @@ fn generate_remove_order_statement(
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -515,7 +515,7 @@ fn generate_take_order_statement(
     Ok(SqlStatement::new_with_params(
         r#"INSERT INTO take_orders (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -544,8 +544,8 @@ fn generate_take_order_statement(
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -567,7 +567,7 @@ fn generate_take_order_context_statements(
 ) -> SqlStatementBatch {
     const INSERT_CONTEXT_SQL: &str = r#"INSERT INTO take_order_contexts (
     chain_id,
-    orderbook_address,
+    raindex_address,
     transaction_hash,
     log_index,
     context_index,
@@ -596,8 +596,8 @@ fn generate_take_order_context_statements(
         batch.add(SqlStatement::new_with_params(
             INSERT_CONTEXT_SQL,
             vec![
-                SqlValue::from(context.ob_id.chain_id),
-                SqlValue::from(context.ob_id.orderbook_address),
+                SqlValue::from(context.raindex_id.chain_id),
+                SqlValue::from(context.raindex_id.raindex_address),
                 SqlValue::from(transaction_hash),
                 SqlValue::from(log_index),
                 SqlValue::from(context_index as u64),
@@ -615,7 +615,7 @@ fn generate_take_order_context_value_statements(
 ) -> SqlStatementBatch {
     const INSERT_VALUE_SQL: &str = r#"INSERT INTO context_values (
     chain_id,
-    orderbook_address,
+    raindex_address,
     transaction_hash,
     log_index,
     context_index,
@@ -641,8 +641,8 @@ fn generate_take_order_context_value_statements(
             batch.add(SqlStatement::new_with_params(
                 INSERT_VALUE_SQL,
                 vec![
-                    SqlValue::from(context.ob_id.chain_id),
-                    SqlValue::from(context.ob_id.orderbook_address),
+                    SqlValue::from(context.raindex_id.chain_id),
+                    SqlValue::from(context.raindex_id.raindex_address),
                     SqlValue::from(transaction_hash),
                     SqlValue::from(log_index),
                     SqlValue::from(context_index as u64),
@@ -696,7 +696,7 @@ fn generate_clear_v3_statement(
     Ok(SqlStatement::new_with_params(
         r#"INSERT INTO clear_v3_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -741,8 +741,8 @@ fn generate_clear_v3_statement(
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -770,7 +770,7 @@ fn generate_after_clear_statement(context: &EventContext, decoded: &AfterClearV2
     SqlStatement::new_with_params(
         r#"INSERT INTO after_clear_v2_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -795,8 +795,8 @@ fn generate_after_clear_statement(context: &EventContext, decoded: &AfterClearV2
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -814,7 +814,7 @@ fn generate_meta_statement(context: &EventContext, decoded: &MetaV1_2) -> SqlSta
     SqlStatement::new_with_params(
         r#"INSERT INTO meta_events (
     chain_id,
-    orderbook_address,
+    raindex_address,
     block_number,
     block_timestamp,
     transaction_hash,
@@ -835,8 +835,8 @@ fn generate_meta_statement(context: &EventContext, decoded: &MetaV1_2) -> SqlSta
 );
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
             SqlValue::from(context.transaction_hash),
@@ -855,7 +855,7 @@ fn generate_store_set_statement(
     SqlStatement::new_with_params(
         r#"INSERT INTO interpreter_store_sets (
     chain_id,
-    orderbook_address,
+    raindex_address,
     store_address,
     block_number,
     block_timestamp,
@@ -875,7 +875,7 @@ fn generate_store_set_statement(
     ?8,
     ?9,
     ?10
-) ON CONFLICT(chain_id, orderbook_address, transaction_hash, log_index) DO UPDATE SET
+) ON CONFLICT(chain_id, raindex_address, transaction_hash, log_index) DO UPDATE SET
     store_address = excluded.store_address,
     block_number = excluded.block_number,
     block_timestamp = excluded.block_timestamp,
@@ -884,8 +884,8 @@ fn generate_store_set_statement(
     value = excluded.value;
 "#,
         vec![
-            SqlValue::from(context.ob_id.chain_id),
-            SqlValue::from(context.ob_id.orderbook_address),
+            SqlValue::from(context.raindex_id.chain_id),
+            SqlValue::from(context.raindex_id.raindex_address),
             SqlValue::from(decoded.store_address),
             SqlValue::from(context.block_number),
             SqlValue::from(context.block_timestamp),
@@ -901,7 +901,7 @@ fn generate_store_set_statement(
 fn generate_order_ios_statements(context: &EventContext, order: &OrderV4) -> SqlStatementBatch {
     const INSERT_IO_SQL: &str = r#"INSERT INTO order_ios (
     chain_id,
-    orderbook_address,
+    raindex_address,
     transaction_hash,
     log_index,
     io_index,
@@ -928,8 +928,8 @@ fn generate_order_ios_statements(context: &EventContext, order: &OrderV4) -> Sql
         batch.add(SqlStatement::new_with_params(
             INSERT_IO_SQL,
             vec![
-                SqlValue::from(context.ob_id.chain_id),
-                SqlValue::from(context.ob_id.orderbook_address),
+                SqlValue::from(context.raindex_id.chain_id),
+                SqlValue::from(context.raindex_id.raindex_address),
                 SqlValue::from(transaction_hash),
                 SqlValue::from(log_index),
                 SqlValue::from(index as u64),
@@ -944,8 +944,8 @@ fn generate_order_ios_statements(context: &EventContext, order: &OrderV4) -> Sql
         batch.add(SqlStatement::new_with_params(
             INSERT_IO_SQL,
             vec![
-                SqlValue::from(context.ob_id.chain_id),
-                SqlValue::from(context.ob_id.orderbook_address),
+                SqlValue::from(context.raindex_id.chain_id),
+                SqlValue::from(context.raindex_id.raindex_address),
                 SqlValue::from(transaction_hash),
                 SqlValue::from(log_index),
                 SqlValue::from(index as u64),
@@ -967,8 +967,8 @@ mod tests {
     use crate::rpc_client::LogEntryResponse;
     use alloy::hex;
     use alloy::primitives::{address, b256, Address, Bytes, FixedBytes, B256, U256};
-    use rain_orderbook_bindings::IInterpreterStoreV3::Set;
-    use rain_orderbook_bindings::IRaindexV6::{
+    use raindex_bindings::IInterpreterStoreV3::Set;
+    use raindex_bindings::IRaindexV6::{
         ClearConfigV2, ClearStateChangeV2, EvaluableV4, SignedContextV1, TakeOrderConfigV4,
     };
     use std::collections::HashMap;
@@ -1215,7 +1215,7 @@ mod tests {
     #[test]
     fn store_set_sql_generation() {
         let event = sample_store_set_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::InterpreterStoreSet(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1228,12 +1228,12 @@ mod tests {
         assert_eq!(params.len(), 10);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(
             matches!(params[2], SqlValue::Text(ref v) if v == &hex::encode_prefixed(decoded.store_address))
@@ -1263,7 +1263,7 @@ mod tests {
     #[test]
     fn deposit_statement_generation() {
         let event = sample_deposit_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::DepositV2(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1277,12 +1277,12 @@ mod tests {
         assert_eq!(params.len(), 11);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[2], SqlValue::U64(v) if v == context.block_number));
         assert!(matches!(params[3], SqlValue::U64(v) if v == context.block_timestamp));
@@ -1302,7 +1302,7 @@ mod tests {
     #[test]
     fn add_order_sql_includes_evaluable_addresses() {
         let event = sample_add_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::AddOrderV3(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1315,12 +1315,12 @@ mod tests {
         assert_eq!(params.len(), 13);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[5], SqlValue::U64(v) if v == context.log_index));
         let expected_sender = hex::encode_prefixed(decoded.sender);
@@ -1343,7 +1343,7 @@ mod tests {
     #[test]
     fn remove_order_sql_includes_evaluable_addresses() {
         let event = sample_remove_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::RemoveOrderV3(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1355,12 +1355,12 @@ mod tests {
         assert_eq!(params.len(), 13);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[5], SqlValue::U64(v) if v == context.log_index));
         let expected_sender = hex::encode_prefixed(decoded.sender);
@@ -1376,7 +1376,7 @@ mod tests {
     #[test]
     fn take_order_sql_generation() {
         let event = sample_take_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::TakeOrderV3(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1387,12 +1387,12 @@ mod tests {
         assert_eq!(params.len(), 13);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[2], SqlValue::U64(v) if v == context.block_number));
         assert!(matches!(params[3], SqlValue::U64(v) if v == context.block_timestamp));
@@ -1425,7 +1425,7 @@ mod tests {
     #[test]
     fn after_clear_sql_generation() {
         let event = sample_after_clear_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::AfterClearV2(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1438,12 +1438,12 @@ mod tests {
         assert_eq!(params.len(), 11);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[2], SqlValue::U64(v) if v == context.block_number));
         assert!(matches!(params[3], SqlValue::U64(v) if v == context.block_timestamp));
@@ -1460,7 +1460,7 @@ mod tests {
     #[test]
     fn meta_sql_generation() {
         let event = sample_meta_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::MetaV1_2(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1471,12 +1471,12 @@ mod tests {
         assert_eq!(params.len(), 9);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[2], SqlValue::U64(v) if v == context.block_number));
         assert!(matches!(params[3], SqlValue::U64(v) if v == context.block_timestamp));
@@ -1492,7 +1492,7 @@ mod tests {
     #[test]
     fn clear_v3_sql_generation() {
         let event = sample_clear_event();
-        let context = event_context(&OrderbookIdentifier::new(1, Address::ZERO), &event).unwrap();
+        let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
         let DecodedEvent::ClearV3(decoded) = &event.decoded_data else {
             unreachable!()
         };
@@ -1503,12 +1503,12 @@ mod tests {
         assert_eq!(params.len(), 21);
         assert!(matches!(
             params[0],
-            SqlValue::U64(v) if v == context.ob_id.chain_id as u64
+            SqlValue::U64(v) if v == context.raindex_id.chain_id as u64
         ));
         assert!(matches!(
             params[1],
             SqlValue::Text(ref v)
-                if v == &hex::encode_prefixed(context.ob_id.orderbook_address)
+                if v == &hex::encode_prefixed(context.raindex_id.raindex_address)
         ));
         assert!(matches!(params[2], SqlValue::U64(v) if v == context.block_number));
         assert!(matches!(params[3], SqlValue::U64(v) if v == context.block_timestamp));
@@ -1528,7 +1528,7 @@ mod tests {
             decimals.insert(deposit.token, 6);
         }
         let batch = decoded_events_to_statements(
-            &OrderbookIdentifier::new(1, Address::from([0x11; 20])),
+            &RaindexIdentifier::new(1, Address::from([0x11; 20])),
             &[deposit_event, clear_event],
             &decimals,
         )
@@ -1553,7 +1553,7 @@ mod tests {
             }),
         );
         let batch = decoded_events_to_statements(
-            &OrderbookIdentifier::new(1, Address::from([0x11; 20])),
+            &RaindexIdentifier::new(1, Address::from([0x11; 20])),
             &[unknown_event],
             &HashMap::new(),
         )
@@ -1586,9 +1586,8 @@ mod tests {
             ),
         ];
 
-        let orderbook = Address::from([0x11; 20]);
-        let batch =
-            generate_erc20_token_statements(&OrderbookIdentifier::new(1, orderbook), &tokens);
+        let raindex = Address::from([0x11; 20]);
+        let batch = generate_erc20_token_statements(&RaindexIdentifier::new(1, raindex), &tokens);
         assert_eq!(batch.len(), tokens.len());
 
         for (statement, (expected_addr, expected_info)) in
@@ -1596,16 +1595,14 @@ mod tests {
         {
             let sql = statement.sql();
             assert!(sql.contains("INSERT INTO erc20_tokens"));
-            assert!(
-                sql.contains("ON CONFLICT(chain_id, orderbook_address, token_address) DO UPDATE")
-            );
+            assert!(sql.contains("ON CONFLICT(chain_id, raindex_address, token_address) DO UPDATE"));
 
             let params = statement.params();
             assert_eq!(params.len(), 6);
             assert!(matches!(params[0], SqlValue::U64(1u64)));
             assert!(matches!(
                 &params[1],
-                SqlValue::Text(addr) if addr == &format!("0x{:x}", orderbook)
+                SqlValue::Text(addr) if addr == &format!("0x{:x}", raindex)
             ));
             assert!(matches!(
                 &params[2],
@@ -1668,9 +1665,8 @@ mod tests {
             },
         )];
 
-        let orderbook = Address::from([0x22; 20]);
-        let batch =
-            generate_erc20_token_statements(&OrderbookIdentifier::new(5, orderbook), &tokens);
+        let raindex = Address::from([0x22; 20]);
+        let batch = generate_erc20_token_statements(&RaindexIdentifier::new(5, raindex), &tokens);
         assert_eq!(batch.len(), 1);
         let statement = &batch.statements()[0];
         let sql = statement.sql();
@@ -1681,7 +1677,7 @@ mod tests {
         assert!(matches!(params[0], SqlValue::U64(5u64)));
         assert!(matches!(
             &params[1],
-            SqlValue::Text(orderbook_param) if orderbook_param == &format!("0x{:x}", orderbook)
+            SqlValue::Text(raindex_param) if raindex_param == &format!("0x{:x}", raindex)
         ));
         assert!(matches!(
             &params[2],
@@ -1752,10 +1748,9 @@ mod tests {
             },
         ];
 
-        let orderbook_address = Address::from([0x10; 20]);
+        let raindex_address = Address::from([0x10; 20]);
         let batch =
-            raw_events_to_statements(&OrderbookIdentifier::new(1, orderbook_address), &events)
-                .unwrap();
+            raw_events_to_statements(&RaindexIdentifier::new(1, raindex_address), &events).unwrap();
         assert_eq!(batch.len(), 3);
 
         let hashes: Vec<_> = batch
@@ -1814,7 +1809,7 @@ mod tests {
         }];
 
         let result = raw_events_to_statements(
-            &OrderbookIdentifier::new(1, Address::from([0x10; 20])),
+            &RaindexIdentifier::new(1, Address::from([0x10; 20])),
             &events,
         );
         assert!(matches!(

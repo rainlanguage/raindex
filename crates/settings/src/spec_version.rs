@@ -5,7 +5,7 @@ use strict_yaml_rust::StrictYaml;
 #[derive(Clone, Debug)]
 pub struct SpecVersion;
 
-pub const CURRENT_SPEC_VERSION: &str = "5";
+pub const CURRENT_SPEC_VERSION: &str = "6";
 
 impl SpecVersion {
     pub fn current() -> String {
@@ -90,13 +90,13 @@ mod tests {
 
     #[test]
     fn test_is_current() {
-        assert!(SpecVersion::is_current("5"));
+        assert!(SpecVersion::is_current("6"));
         assert!(!SpecVersion::is_current("1"));
     }
 
     #[test]
     fn test_current() {
-        assert_eq!(SpecVersion::current(), "5");
+        assert_eq!(SpecVersion::current(), "6");
     }
 
     #[test]

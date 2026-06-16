@@ -1,5 +1,13 @@
-use crate::local_db::{query::LocalDbQueryError, LocalDbError};
-use crate::raindex_client::local_db::{LocalDb, SyncReadiness};
+use crate::local_db::{
+    query::{
+        fetch_last_synced_block::{fetch_last_synced_block_stmt, SyncStatusResponse},
+        LocalDbQueryError, LocalDbQueryExecutor,
+    },
+    LocalDbError,
+};
+use crate::raindex_client::local_db::{
+    LocalDb, LocalDbSyncSnapshot, LocalDbSyncStatusStore, SyncReadiness,
+};
 use crate::{
     add_order::AddOrderArgsError, deposit::DepositError, dotrain_order::DotrainOrderError,
     meta::TryDecodeRainlangSourceError, transaction::WritableTransactionExecuteError,
@@ -14,18 +22,18 @@ use alloy::{
 };
 pub(crate) use local_db::{ClassifiedChains, LocalDbState, QuerySource};
 use rain_math_float::FloatError;
-use rain_orderbook_app_settings::{
+use raindex_app_settings::{
     network::NetworkCfg,
     remote_networks::ParseRemoteNetworksError,
     remote_tokens::ParseRemoteTokensError,
     yaml::{
-        orderbook::{OrderbookYaml, OrderbookYamlValidation},
+        raindex::{RaindexYaml, RaindexYamlValidation},
         YamlError, YamlParsable,
     },
 };
-use rain_orderbook_subgraph_client::{
-    types::order_detail_traits::OrderDetailError, MultiSubgraphArgs, OrderbookSubgraphClient,
-    OrderbookSubgraphClientError,
+use raindex_subgraph_client::{
+    types::order_detail_traits::OrderDetailError, MultiSubgraphArgs, RaindexSubgraphClient,
+    RaindexSubgraphClientError,
 };
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_family = "wasm"))]
@@ -40,33 +48,31 @@ pub(crate) type ClientRef = std::rc::Rc<RaindexClient>;
 pub(crate) type ClientRef = std::sync::Arc<RaindexClient>;
 
 use thiserror::Error;
-use tsify::Tsify;
 use url::Url;
-use wasm_bindgen_utils::{impl_wasm_traits, prelude::*, wasm_export};
+use wasm_bindgen_utils::{prelude::*, wasm_export};
 
 pub mod add_orders;
 pub mod local_db;
 pub mod order_quotes;
-pub mod orderbook_yaml;
 pub mod orders;
 pub mod orders_list;
+pub mod raindex_yaml;
 pub mod remove_orders;
 pub mod take_orders;
 pub mod trades;
 pub mod transactions;
+pub mod types;
 pub mod vaults;
 pub mod vaults_list;
 
-#[derive(Serialize, Deserialize, Debug, Clone, Tsify)]
-pub struct ChainIds(#[tsify(type = "number[]")] pub Vec<u32>);
-impl_wasm_traits!(ChainIds);
+pub use types::*;
 
-/// RaindexClient provides a simplified interface for querying orderbook data across
+/// RaindexClient provides a simplified interface for querying raindex data across
 /// multiple networks with automatic configuration management.
 ///
 /// This client abstracts away complex network-specific configurations by parsing YAML
-/// configuration files that define networks, tokens, orderbooks, and subgraph endpoints.
-/// It enables querying orderbook data either from specific chains or across all
+/// configuration files that define networks, tokens, raindexes, and subgraph endpoints.
+/// It enables querying raindex data either from specific chains or across all
 /// configured networks with automatic fallback mechanisms.
 ///
 /// The client handles:
@@ -96,7 +102,7 @@ impl_wasm_traits!(ChainIds);
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[wasm_bindgen]
 pub struct RaindexClient {
-    orderbook_yaml: OrderbookYaml,
+    raindex_yaml: RaindexYaml,
     #[serde(skip_serializing, skip_deserializing)]
     local_db_state: LocalDbState,
 }
@@ -129,12 +135,12 @@ impl RaindexClient {
     )]
     pub async fn new(
         #[wasm_export(
-            js_name = "obYamls",
+            js_name = "raindexYamls",
             param_description = "List of YAML configuration strings. \
-            The YAML files must match the [orderbook yaml spec](https://github.com/rainlanguage/specs/blob/main/ob-yaml.md)
+            The YAML files must match the [raindex yaml spec](https://github.com/rainlanguage/specs/blob/main/raindex-yaml.md)
             "
         )]
-        ob_yamls: Vec<String>,
+        raindex_yamls: Vec<String>,
         validate: Option<bool>,
         #[wasm_export(
             js_name = "queryCallback",
@@ -152,18 +158,22 @@ impl RaindexClient {
         )]
         status_callback: Option<js_sys::Function>,
     ) -> Result<RaindexClient, RaindexError> {
-        let mut orderbook_yaml = OrderbookYaml::new(
-            ob_yamls,
+        let mut raindex_yaml = RaindexYaml::new(
+            raindex_yamls,
             match validate {
-                Some(true) => OrderbookYamlValidation::full(),
-                _ => OrderbookYamlValidation::default(),
+                Some(true) => RaindexYamlValidation::full(),
+                _ => RaindexYamlValidation::default(),
             },
         )?;
-        orderbook_yaml.fetch_remote_data().await?;
+        raindex_yaml.fetch_remote_data().await?;
 
-        let sync_configured_chains = LocalDbState::compute_chain_ids(&orderbook_yaml);
+        let sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
         let sync_readiness = SyncReadiness::new();
+        let sync_status_store = LocalDbSyncStatusStore::new();
         let has_syncs = !sync_configured_chains.is_empty();
+        if !has_syncs {
+            sync_status_store.reset();
+        }
 
         let local_db = if has_syncs {
             let cb = query_callback
@@ -179,13 +189,14 @@ impl RaindexClient {
                 .expect("local_db should be set when has_syncs");
             let settings =
                 crate::local_db::pipeline::runner::utils::parse_runner_settings_from_yaml(
-                    &orderbook_yaml,
+                    &raindex_yaml,
                 )?;
             let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
                 settings,
                 db,
                 status_callback,
                 sync_readiness.clone(),
+                sync_status_store.clone(),
             )?;
             Rc::new(RefCell::new(Some(handle)))
         } else {
@@ -195,12 +206,13 @@ impl RaindexClient {
         let scheduler = Arc::new(std::sync::Mutex::new(None));
 
         Ok(RaindexClient {
-            orderbook_yaml,
+            raindex_yaml,
             local_db_state: LocalDbState::new(
                 local_db,
                 scheduler,
                 sync_readiness,
                 sync_configured_chains,
+                sync_status_store,
             ),
         })
     }
@@ -216,12 +228,12 @@ impl RaindexClient {
             Some(ids) if !ids.is_empty() => {
                 let mut networks = Vec::with_capacity(ids.len());
                 for id in ids {
-                    networks.push(self.orderbook_yaml.get_network_by_chain_id(id)?);
+                    networks.push(self.raindex_yaml.get_network_by_chain_id(id)?);
                 }
                 Ok(networks)
             }
             Some(_) | None => {
-                let all_nets = self.orderbook_yaml.get_networks()?;
+                let all_nets = self.raindex_yaml.get_networks()?;
                 let networks = all_nets.values().cloned().collect();
                 Ok(networks)
             }
@@ -235,15 +247,15 @@ impl RaindexClient {
         let networks = self.resolve_networks(chain_ids)?;
         let mut result: BTreeMap<u32, Vec<MultiSubgraphArgs>> = BTreeMap::new();
         for network in networks {
-            let orderbooks = self
-                .orderbook_yaml
-                .get_orderbooks_by_network_key(&network.key)?;
-            for orderbook in orderbooks {
+            let raindexes = self
+                .raindex_yaml
+                .get_raindexes_by_network_key(&network.key)?;
+            for raindex in raindexes {
                 result
                     .entry(network.chain_id)
                     .or_default()
                     .push(MultiSubgraphArgs {
-                        url: orderbook.subgraph.url.clone(),
+                        url: raindex.subgraph.url.clone(),
                         name: network.label.clone().unwrap_or(network.key.clone()),
                     });
             }
@@ -256,18 +268,16 @@ impl RaindexClient {
     }
 
     #[wasm_export(skip)]
-    pub fn get_orderbook_client(
+    pub fn get_raindex_subgraph_client(
         &self,
-        orderbook_address: Address,
-    ) -> Result<OrderbookSubgraphClient, RaindexError> {
-        let orderbook = self
-            .orderbook_yaml
-            .get_orderbook_by_address(orderbook_address)?;
-        Ok(OrderbookSubgraphClient::new(orderbook.subgraph.url.clone()))
+        raindex_address: Address,
+    ) -> Result<RaindexSubgraphClient, RaindexError> {
+        let raindex = self.raindex_yaml.get_raindex_by_address(raindex_address)?;
+        Ok(RaindexSubgraphClient::new(raindex.subgraph.url.clone()))
     }
 
     fn get_rpc_urls_for_chain(&self, chain_id: u32) -> Result<Vec<Url>, RaindexError> {
-        let network = self.orderbook_yaml.get_network_by_chain_id(chain_id)?;
+        let network = self.raindex_yaml.get_network_by_chain_id(chain_id)?;
         Ok(network.rpcs.clone())
     }
 
@@ -282,39 +292,82 @@ impl RaindexClient {
         let networks = self.resolve_networks(chain_ids)?;
         Ok(self.local_db_state.classify_chains(&networks))
     }
+
+    /// Returns the latest known local DB sync status snapshot.
+    ///
+    /// The live status fields are maintained by the sync scheduler as it emits
+    /// status updates. When a local DB handle is available, persisted
+    /// `lastSyncedBlock` watermark information is added per raindex.
+    #[wasm_export(
+        js_name = "getLocalDbSyncSnapshot",
+        return_description = "Latest local DB sync status snapshot"
+    )]
+    pub async fn get_local_db_sync_snapshot(&self) -> Result<LocalDbSyncSnapshot, RaindexError> {
+        let mut snapshot = self.local_db_state.sync_status_store.snapshot();
+        let Some(db) = self.local_db_state.local_db() else {
+            return Ok(snapshot);
+        };
+
+        for raindex in &mut snapshot.raindexes {
+            let stmt = fetch_last_synced_block_stmt(&raindex.raindex_id);
+            match db.query_json::<Vec<SyncStatusResponse>>(&stmt).await {
+                Ok(rows) => {
+                    if let Some(row) = rows.into_iter().next() {
+                        raindex.last_synced_block = Some(row.last_synced_block);
+                        raindex.updated_at = row.updated_at;
+                    }
+                }
+                Err(err) => {
+                    tracing::debug!(
+                        chain_id = raindex.raindex_id.chain_id,
+                        raindex = %format!("{:#x}", raindex.raindex_id.raindex_address),
+                        error = %err,
+                        "failed to read local DB sync watermark for snapshot"
+                    );
+                }
+            }
+        }
+
+        Ok(snapshot)
+    }
 }
 
 #[cfg(not(target_family = "wasm"))]
 impl RaindexClient {
     pub async fn new(
-        ob_yamls: Vec<String>,
+        raindex_yamls: Vec<String>,
         validate: Option<bool>,
         db_path: Option<std::path::PathBuf>,
     ) -> Result<RaindexClient, RaindexError> {
-        let mut orderbook_yaml = OrderbookYaml::new(
-            ob_yamls,
+        let mut raindex_yaml = RaindexYaml::new(
+            raindex_yamls,
             match validate {
-                Some(true) => OrderbookYamlValidation::full(),
-                _ => OrderbookYamlValidation::default(),
+                Some(true) => RaindexYamlValidation::full(),
+                _ => RaindexYamlValidation::default(),
             },
         )?;
-        orderbook_yaml.fetch_remote_data().await?;
+        raindex_yaml.fetch_remote_data().await?;
 
-        let sync_configured_chains = LocalDbState::compute_chain_ids(&orderbook_yaml);
+        let sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
         let sync_readiness = SyncReadiness::new();
+        let sync_status_store = LocalDbSyncStatusStore::new();
         let has_syncs = !sync_configured_chains.is_empty();
+        if !has_syncs {
+            sync_status_store.reset();
+        }
 
         let (local_db, scheduler) = if has_syncs {
             let path =
                 db_path.ok_or_else(|| RaindexError::LocalDbSetupMissing("db_path".to_string()))?;
             let settings =
                 crate::local_db::pipeline::runner::utils::parse_runner_settings_from_yaml(
-                    &orderbook_yaml,
+                    &raindex_yaml,
                 )?;
             let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
                 settings,
                 path.clone(),
                 sync_readiness.clone(),
+                sync_status_store.clone(),
             )?;
             let executor = crate::local_db::executor::RusqliteExecutor::new(&path);
             (Some(LocalDb::new(executor)), Some(handle))
@@ -323,12 +376,13 @@ impl RaindexClient {
         };
 
         Ok(RaindexClient {
-            orderbook_yaml,
+            raindex_yaml,
             local_db_state: LocalDbState::new(
                 local_db,
                 Arc::new(std::sync::Mutex::new(scheduler)),
                 sync_readiness,
                 sync_configured_chains,
+                sync_status_store,
             ),
         })
     }
@@ -382,7 +436,7 @@ pub enum RaindexError {
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
     #[error(transparent)]
-    OrderbookSubgraphClientError(#[from] OrderbookSubgraphClientError),
+    RaindexSubgraphClientError(#[from] RaindexSubgraphClientError),
     #[error(transparent)]
     TryDecodeRainlangSourceError(#[from] TryDecodeRainlangSourceError),
     #[error(transparent)]
@@ -399,14 +453,14 @@ pub enum RaindexError {
     ZeroAmount,
     #[error("Negative amount")]
     NegativeAmount,
-    #[error("Existing allowance")]
-    ExistingAllowance,
     #[error(transparent)]
     WritableTransactionExecuteError(#[from] WritableTransactionExecuteError),
     #[error(transparent)]
+    TransactionArgsError(#[from] crate::transaction::TransactionArgsError),
+    #[error(transparent)]
     DepositArgsError(#[from] DepositError),
-    #[error("Orderbook not found for address: {0} on chain ID: {1}")]
-    OrderbookNotFound(String, u32),
+    #[error("Raindex not found for address: {0} on chain ID: {1}")]
+    RaindexNotFound(String, u32),
     #[error("Order not found for address: {0} on chain ID: {1} with hash: {2}")]
     OrderNotFound(String, u32, B256),
     #[error("Vault not found for address: {0} on chain ID: {1} with id: {2}")]
@@ -416,13 +470,13 @@ pub enum RaindexError {
     #[error(transparent)]
     AddOrderArgsError(#[from] AddOrderArgsError),
     #[error(transparent)]
-    OrderbookQuoteError(#[from] rain_orderbook_quote::error::Error),
+    RaindexQuoteError(#[from] raindex_quote::error::Error),
     #[error("Missing subgraph {0} for order {1}")]
     SubgraphNotFound(String, String),
     #[error("Invalid vault balance change type: {0}")]
     InvalidVaultBalanceChangeType(String),
     #[error(transparent)]
-    Erc20(#[from] crate::erc20::Error),
+    Erc20(Box<crate::erc20::Error>),
     #[error("Float error: {0}")]
     Float(#[from] FloatError),
     #[error("Failed to parse an integer: {0}")]
@@ -488,6 +542,12 @@ impl From<LocalDbError> for RaindexError {
     }
 }
 
+impl From<crate::erc20::Error> for RaindexError {
+    fn from(err: crate::erc20::Error) -> Self {
+        Self::Erc20(Box::new(err))
+    }
+}
+
 impl From<serde_wasm_bindgen::Error> for RaindexError {
     fn from(err: serde_wasm_bindgen::Error) -> Self {
         RaindexError::SerdeError(err.into())
@@ -539,7 +599,7 @@ impl RaindexError {
                     err
                 )
             }
-            RaindexError::OrderbookSubgraphClientError(err) => {
+            RaindexError::RaindexSubgraphClientError(err) => {
                 format!("Failed to query subgraph: {}. Check network connection and subgraph availability.", err)
             }
             RaindexError::TryDecodeRainlangSourceError(err) => {
@@ -569,15 +629,15 @@ impl RaindexError {
             RaindexError::WritableTransactionExecuteError(err) => {
                 format!("Failed to execute transaction: {}", err)
             }
-            RaindexError::ExistingAllowance => {
-                "There is already an allowance for this vault".to_string()
+            RaindexError::TransactionArgsError(err) => {
+                format!("Invalid transaction arguments: {}", err)
             }
             RaindexError::DepositArgsError(err) => {
                 format!("Failed to create deposit arguments: {}", err)
             }
-            RaindexError::OrderbookNotFound(address, chain_id) => {
+            RaindexError::RaindexNotFound(address, chain_id) => {
                 format!(
-                    "Orderbook not found for address: {} on chain ID: {}",
+                    "Raindex not found for address: {} on chain ID: {}",
                     address, chain_id
                 )
             }
@@ -597,7 +657,7 @@ impl RaindexError {
             RaindexError::AddOrderArgsError(e) => {
                 format!("Failed to prepare the add order calldata: {}", e)
             }
-            RaindexError::OrderbookQuoteError(err) => {
+            RaindexError::RaindexQuoteError(err) => {
                 format!("Failed to get order quote: {}", err)
             }
             RaindexError::SubgraphNotFound(subgraph, order) => {
@@ -702,10 +762,10 @@ impl From<RaindexError> for WasmEncodedError {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use rain_orderbook_app_settings::spec_version::SpecVersion;
+    use raindex_app_settings::spec_version::SpecVersion;
 
     #[cfg(not(target_family = "wasm"))]
-    pub const CHAIN_ID_1_ORDERBOOK_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
+    pub const CHAIN_ID_1_RAINDEX_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
     pub fn get_test_yaml(subgraph1: &str, subgraph2: &str, rpc1: &str, rpc2: &str) -> String {
         format!(
             r#"
@@ -731,21 +791,21 @@ subgraphs:
 metaboards:
     mainnet: https://api.thegraph.com/subgraphs/name/xyz
     polygon: https://api.thegraph.com/subgraphs/name/polygon
-orderbooks:
-    mainnet-orderbook:
+raindexes:
+    mainnet-raindex:
         address: 0x1234567890123456789012345678901234567890
         network: mainnet
         subgraph: mainnet
         local-db-remote: remote
-        label: Primary Orderbook
+        label: Primary Raindex
         deployment-block: 12345
-    polygon-orderbook:
+    polygon-raindex:
         address: 0x0987654321098765432109876543210987654321
         network: polygon
         subgraph: polygon
         local-db-remote: remote
         deployment-block: 12345
-        label: Polygon Orderbook
+        label: Polygon Raindex
 tokens:
     weth:
         network: mainnet
@@ -795,7 +855,7 @@ accounts:
         query_callback: js_sys::Function,
         chain_ids: Vec<u32>,
     ) -> RaindexClient {
-        let orderbook_yaml = OrderbookYaml::new(yamls, OrderbookYamlValidation::default())
+        let raindex_yaml = RaindexYaml::new(yamls, RaindexYamlValidation::default())
             .expect("test yaml should be valid");
         let sync_readiness = SyncReadiness::new();
         let mut db_chain_ids = std::collections::HashSet::new();
@@ -804,7 +864,7 @@ accounts:
             db_chain_ids.insert(id);
         }
         RaindexClient {
-            orderbook_yaml,
+            raindex_yaml,
             local_db_state: LocalDbState::new(
                 Some(super::local_db::LocalDb::from_js_callback(
                     query_callback,
@@ -813,6 +873,7 @@ accounts:
                 Rc::new(RefCell::new(None)),
                 sync_readiness,
                 db_chain_ids,
+                LocalDbSyncStatusStore::new(),
             ),
         }
     }
@@ -820,8 +881,102 @@ accounts:
     #[cfg(not(target_family = "wasm"))]
     mod native_tests {
         use super::*;
+        use crate::local_db::pipeline::runner::utils::parse_runner_settings;
+        use crate::local_db::query::{FromDbJson, SqlStatement, SqlStatementBatch};
+        use crate::raindex_client::local_db::LocalDbStatus;
         use httpmock::MockServer;
         use std::str::FromStr;
+
+        #[derive(Clone)]
+        struct SnapshotDbExec {
+            rows: Vec<SyncStatusResponse>,
+        }
+
+        #[async_trait::async_trait]
+        impl crate::local_db::query::LocalDbQueryExecutor for SnapshotDbExec {
+            async fn execute_batch(&self, _: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+
+            async fn query_json<T>(&self, _: &SqlStatement) -> Result<T, LocalDbQueryError>
+            where
+                T: FromDbJson,
+            {
+                let value = serde_json::to_value(&self.rows)
+                    .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))?;
+                serde_json::from_value(value)
+                    .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
+            }
+
+            async fn query_text(&self, _: &SqlStatement) -> Result<String, LocalDbQueryError> {
+                Ok(String::new())
+            }
+
+            async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+        }
+
+        fn local_db_snapshot_yaml() -> String {
+            format!(
+                r#"
+version: {spec_version}
+networks:
+    arbitrum:
+        rpcs:
+            - https://arb.example/rpc
+        chain-id: 42161
+        label: Arbitrum
+        network-id: 42161
+        currency: ETH
+subgraphs:
+    arbitrum: https://arb.example/subgraph
+local-db-remotes:
+    remote: https://remote.example/manifest
+local-db-sync:
+    arbitrum:
+        batch-size: 10
+        max-concurrent-batches: 2
+        retry-attempts: 1
+        retry-delay-ms: 1
+        rate-limit-delay-ms: 1
+        finality-depth: 12
+        bootstrap-block-threshold: 100
+        sync-interval-ms: 5000
+raindexes:
+    arbitrum-raindex:
+        address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
+        network: arbitrum
+        subgraph: arbitrum
+        local-db-remote: remote
+        deployment-block: 1
+"#,
+                spec_version = SpecVersion::current()
+            )
+        }
+
+        fn client_with_snapshot_db(
+            yaml: String,
+            rows: Vec<SyncStatusResponse>,
+            sync_status_store: LocalDbSyncStatusStore,
+        ) -> RaindexClient {
+            let raindex_yaml = RaindexYaml::new(vec![yaml], RaindexYamlValidation::default())
+                .expect("test yaml should parse");
+            let sync_readiness = SyncReadiness::new();
+            sync_readiness.mark_ready(42161);
+            let mut configured_chains = std::collections::HashSet::new();
+            configured_chains.insert(42161);
+            RaindexClient {
+                raindex_yaml,
+                local_db_state: LocalDbState::new(
+                    Some(LocalDb::new(SnapshotDbExec { rows })),
+                    Arc::new(std::sync::Mutex::new(None)),
+                    sync_readiness,
+                    configured_chains,
+                    sync_status_store,
+                ),
+            }
+        }
 
         #[tokio::test]
         async fn test_create_fetches_remote_networks() {
@@ -921,7 +1076,7 @@ using-tokens-from:
 
             let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
-            let tokens = client.orderbook_yaml.get_tokens().unwrap();
+            let tokens = client.raindex_yaml.get_tokens().unwrap();
             let expected_key =
                 "test-network-RemoteToken-0x0000000000000000000000000000000000000001";
             assert!(tokens.contains_key(expected_key));
@@ -934,6 +1089,70 @@ using-tokens-from:
             assert_eq!(token.network.chain_id, 123);
             assert_eq!(token.network.key, "test-network");
             assert_eq!(token.decimals, Some(18));
+        }
+
+        #[tokio::test]
+        async fn get_local_db_sync_snapshot_returns_not_configured_without_syncs() {
+            let client = RaindexClient::new(
+                vec![get_test_yaml(
+                    "https://mainnet.example/subgraph",
+                    "https://polygon.example/subgraph",
+                    "https://mainnet.example/rpc",
+                    "https://polygon.example/rpc",
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let snapshot = client.get_local_db_sync_snapshot().await.unwrap();
+
+            assert!(!snapshot.configured);
+            assert!(snapshot.healthy);
+            assert_eq!(snapshot.status, LocalDbStatus::Active);
+            assert!(snapshot.networks.is_empty());
+            assert!(snapshot.raindexes.is_empty());
+        }
+
+        #[tokio::test]
+        async fn get_local_db_sync_snapshot_includes_config_and_db_watermark() {
+            let yaml = local_db_snapshot_yaml();
+            let settings = parse_runner_settings(&yaml).expect("settings should parse");
+            let sync_status_store = LocalDbSyncStatusStore::new();
+            sync_status_store.seed(&settings);
+
+            let client = client_with_snapshot_db(
+                yaml,
+                vec![SyncStatusResponse {
+                    chain_id: 42161,
+                    raindex_address: "0x2f209e5b67a33b8fe96e28f24628df6da301c8eb".to_string(),
+                    last_synced_block: 123_456,
+                    updated_at: Some("2026-05-01 12:00:00".to_string()),
+                }],
+                sync_status_store,
+            );
+
+            let snapshot = client.get_local_db_sync_snapshot().await.unwrap();
+
+            assert!(snapshot.configured);
+            assert_eq!(snapshot.networks.len(), 1);
+            assert_eq!(snapshot.networks[0].chain_id, 42161);
+            assert_eq!(
+                snapshot.networks[0].network_key,
+                Some("arbitrum".to_string())
+            );
+            assert_eq!(snapshot.networks[0].raindex_count, 1);
+            assert_eq!(snapshot.raindexes.len(), 1);
+            assert_eq!(
+                snapshot.raindexes[0].raindex_key,
+                Some("arbitrum-raindex".to_string())
+            );
+            assert_eq!(snapshot.raindexes[0].last_synced_block, Some(123_456));
+            assert_eq!(
+                snapshot.raindexes[0].updated_at,
+                Some("2026-05-01 12:00:00".to_string())
+            );
         }
     }
 
@@ -954,8 +1173,8 @@ subgraphs:
     arbitrum: https://arb.subgraph
 metaboards:
     arbitrum: https://arb.metaboard
-orderbooks:
-    arbitrum-orderbook:
+raindexes:
+    arbitrum-raindex:
         address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
         network: arbitrum
         subgraph: arbitrum
@@ -988,7 +1207,7 @@ accounts:
     #[cfg(target_family = "wasm")]
     mod wasm_tests {
         use super::*;
-        use rain_orderbook_app_settings::yaml::YamlError;
+        use raindex_app_settings::yaml::YamlError;
         use url::Url;
         use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -1001,8 +1220,8 @@ accounts:
             rpcs:
                 - https://mainnet.infura.io
             chain-id: 1
-    orderbooks:
-        invalid-orderbook:
+    raindexes:
+        invalid-raindex:
             address: 0x1234567890123456789012345678901234567890
             network: nonexistent-network
             subgraph: nonexistent-subgraph
@@ -1027,7 +1246,7 @@ accounts:
             )
             .await
             .unwrap();
-            assert!(!client.orderbook_yaml.documents.is_empty());
+            assert!(!client.raindex_yaml.documents.is_empty());
         }
 
         #[wasm_bindgen_test]
@@ -1219,13 +1438,13 @@ accounts:
         test-rainlang:
             address: 0x2222222222222222222222222222222222222222
             network: isolated
-    orderbooks:
-        test-orderbook:
+    raindexes:
+        test-raindex:
             address: 0x1111111111111111111111111111111111111111
             network: some-network
             subgraph: test
             local-db-remote: remote
-            label: Test Orderbook
+            label: Test Raindex
             deployment-block: 12345
     "#,
                 spec_version = SpecVersion::current()
@@ -1238,11 +1457,11 @@ accounts:
             let err = client.get_multi_subgraph_args(None).unwrap_err();
             assert!(matches!(
                 err,
-                RaindexError::YamlError(YamlError::NotFound(ref msg)) if msg.contains("orderbook with network key: isolated")
+                RaindexError::YamlError(YamlError::NotFound(ref msg)) if msg.contains("raindex with network key: isolated")
             ));
             assert!(err
                 .to_readable_msg()
-                .contains("orderbook with network key: isolated not found"));
+                .contains("raindex with network key: isolated not found"));
         }
     }
 }

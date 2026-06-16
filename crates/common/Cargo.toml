@@ -1,6 +1,6 @@
 [package]
-name = "rain_orderbook_common"
-description = "Rain Orderbook CLI."
+name = "raindex_common"
+description = "Raindex CLI."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,12 +16,11 @@ browser-tests = []
 crate-type = ["rlib", "cdylib"]
 
 [dependencies]
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_subgraph_client = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_quote = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_subgraph_client = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_quote = { workspace = true }
 alloy = { workspace = true, features = ["dyn-abi", "rand"] }
-alloy-ethers-typecast = { workspace = true }
 url = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -45,11 +44,15 @@ chrono = { workspace = true }
 futures = { workspace = true }
 rain-error-decoding = { workspace = true }
 rain-interpreter-eval = { workspace = true }
+wasm-bindgen = { workspace = true }
 wasm-bindgen-utils = { workspace = true }
 eyre.workspace = true
 rain-math-float.workspace = true
 tower.workspace = true
 flate2 = "1.0.34"
+base64 = "0.22.1"
+bincode = "1.3.3"
+sha2 = "0.10.8"
 itertools = { workspace = true }
 async-trait = { workspace = true }
 web-sys = { version = "0.3", features = ["Window", "Navigator", "console"] }
@@ -64,18 +67,28 @@ rusqlite = { version = "0.32", features = ["functions"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { workspace = true, features = [
-    "sync",
-    "macros",
-    "io-util",
-    "rt",
-    "time",
+  "sync",
+  "macros",
+  "io-util",
+  "rt",
+  "time",
 ] }
 serde-wasm-bindgen = "0.4"
 getrandom = { workspace = true }
+# alloy's `rand` feature pulls getrandom 0.4 transitively (via alloy-primitives),
+# which needs the `wasm_js` feature on wasm — the .cargo/config getrandom_backend
+# cfg only covers 0.2/0.3. common is built standalone by the wasm-pack browser
+# tests, so it must enable this itself rather than rely on js_api.
+getrandom_v04 = { package = "getrandom", version = "0.4", features = [
+  "wasm_js",
+] }
 wasm-bindgen-test = "0.3"
 wasm-bindgen-futures = "0.4"
 
+[dev-dependencies]
+tracing-test = "0.2.6"
+
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 httpmock = "0.7.0"
-rain_orderbook_test_fixtures = { workspace = true }
+raindex_test_fixtures = { workspace = true }
 tempfile = "3"

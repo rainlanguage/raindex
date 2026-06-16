@@ -1,4 +1,4 @@
-use rain_orderbook_subgraph_client::OrderbookSubgraphClient;
+use raindex_subgraph_client::RaindexSubgraphClient;
 use serde::{Deserialize, Serialize};
 use url::{ParseError, Url};
 
@@ -8,8 +8,8 @@ pub struct SubgraphArgs {
 }
 
 impl SubgraphArgs {
-    pub fn to_subgraph_client(&self) -> Result<OrderbookSubgraphClient, ParseError> {
-        Ok(OrderbookSubgraphClient::new(Url::parse(self.url.as_str())?))
+    pub fn to_subgraph_client(&self) -> Result<RaindexSubgraphClient, ParseError> {
+        Ok(RaindexSubgraphClient::new(Url::parse(self.url.as_str())?))
     }
 }
 

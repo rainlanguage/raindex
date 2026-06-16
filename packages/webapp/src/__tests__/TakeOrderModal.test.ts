@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen, waitFor } from '@testing-library/svelte';
 import TakeOrderModal from '$lib/components/TakeOrderModal.svelte';
 import type { ComponentProps } from 'svelte';
-import { Float, type RaindexOrder } from '@rainlanguage/orderbook';
+import { Float, type RaindexOrder } from '@rainlanguage/raindex';
 
 type ModalProps = ComponentProps<TakeOrderModal>;
 
@@ -21,7 +21,7 @@ vi.mock('../lib/stores/wagmi', () => ({
 	signerAddress: mockSignerAddressStore
 }));
 
-const MOCK_ORDERBOOK_ADDRESS = '0x1234567890123456789012345678901234567890';
+const MOCK_RAINDEX_ADDRESS = '0x1234567890123456789012345678901234567890';
 const MOCK_SIGNER_ADDRESS = '0x9876543210987654321098765432109876543210';
 
 describe('TakeOrderModal', () => {
@@ -51,7 +51,7 @@ describe('TakeOrderModal', () => {
 		id: '0xorderid',
 		orderHash: '0xorderhash',
 		chainId: 1,
-		orderbook: MOCK_ORDERBOOK_ADDRESS,
+		raindex: MOCK_RAINDEX_ADDRESS,
 		getQuotes: vi.fn().mockResolvedValue({
 			value: mockQuotes,
 			error: undefined
@@ -134,6 +134,21 @@ describe('TakeOrderModal', () => {
 		});
 	});
 
+	it('shows hover title and aria-label on the refresh quote icon', async () => {
+		vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+			value: mockQuotes as never,
+			error: undefined
+		});
+
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			const refreshButton = screen.getByTestId('refresh-button');
+			expect(refreshButton).toHaveAttribute('title', 'Refresh quote');
+			expect(refreshButton).toHaveAttribute('aria-label', 'Refresh quote');
+		});
+	});
+
 	it('shows pair selector when multiple quotes are available', async () => {
 		const multiQuotes = [
 			...mockQuotes,
@@ -193,6 +208,48 @@ describe('TakeOrderModal', () => {
 
 		await waitFor(() => {
 			expect(screen.getByTestId('price-cap-input')).toBeInTheDocument();
+		});
+	});
+
+	it('rejects a price cap with more than 18 decimals and keeps submit disabled', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 19 decimal places, one more than the maximum.
+		await fireEvent.input(priceCapInput, { target: { value: '0.0015116073271035947' } });
+
+		await waitFor(() => {
+			expect(screen.getByTestId('price-cap-error')).toHaveTextContent(
+				'Too many decimal places. A maximum of 18 decimal places is allowed.'
+			);
+		});
+		expect(screen.getByTestId('submit-button')).toBeDisabled();
+	});
+
+	it('accepts a price cap with exactly 18 decimals and enables submit', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 18 decimal places, exactly the maximum.
+		await fireEvent.input(priceCapInput, { target: { value: '0.001511607327103594' } });
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('price-cap-error')).not.toBeInTheDocument();
+			expect(screen.getByTestId('submit-button')).not.toBeDisabled();
 		});
 	});
 

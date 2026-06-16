@@ -2,11 +2,10 @@ use alloy::{
     primitives::{hex::FromHexError, U256},
     providers::MulticallError,
 };
-use alloy_ethers_typecast::ReadableClientError;
 use rain_error_decoding::{AbiDecodeFailedErrors, AbiDecodedErrorType};
-use rain_orderbook_bindings::provider::ReadProviderError;
-use rain_orderbook_subgraph_client::{
-    types::order_detail_traits::OrderDetailError, OrderbookSubgraphClientError,
+use raindex_bindings::provider::ReadProviderError;
+use raindex_subgraph_client::{
+    types::order_detail_traits::OrderDetailError, RaindexSubgraphClientError,
 };
 use thiserror::Error;
 use url::ParseError;
@@ -31,11 +30,9 @@ pub enum FailedQuote {
 #[derive(Debug, Error)]
 pub enum Error {
     #[error(transparent)]
-    RpcCallError(#[from] ReadableClientError),
-    #[error(transparent)]
     UrlParseError(#[from] ParseError),
     #[error(transparent)]
-    SubgraphClientError(#[from] OrderbookSubgraphClientError),
+    SubgraphClientError(#[from] RaindexSubgraphClientError),
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
     #[error(transparent)]
@@ -51,6 +48,15 @@ pub enum Error {
     ReadProviderError(#[from] ReadProviderError),
     #[error("Multicall failed: {0}")]
     MulticallError(#[from] MulticallError),
+    /// Internal signal from `quote_chunk_once` that the raindex's own
+    /// `multicall(bytes[])` reverted at the chunk level (OZ Multicall bubbles
+    /// the first failing inner call's revert; it cannot isolate per-element).
+    /// The quote RPC layer consumes this to drive bisection and attribute the
+    /// failure to a specific `QuoteTarget`.
+    #[error("Quote chunk reverted: {0}")]
+    ChunkReverted(Box<FailedQuote>),
+    #[error("RPC transport error: {0}")]
+    TransportError(String),
 }
 
 #[cfg(target_family = "wasm")]

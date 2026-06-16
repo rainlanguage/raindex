@@ -2,16 +2,24 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {META_MAGIC_NUMBER_V1} from "rain.metadata/lib/LibMeta.sol";
+import {META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, IOV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
-import {IInterpreterV4, SourceIndexV2} from "rain.interpreter.interface/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain.interpreter.interface/interface/IInterpreterStoreV3.sol";
-import {EvaluableV4} from "rain.interpreter.interface/interface/IInterpreterCallerV4.sol";
-import {HANDLE_IO_ENTRYPOINT} from "../../../src/concrete/ob/OrderBookV6.sol";
-import {LibBytecode} from "rain.interpreter.interface/lib/bytecode/LibBytecode.sol";
+import {OrderConfigV4, OrderV4, IOV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IInterpreterV4, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
+import {EvaluableV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
+import {HANDLE_IO_ENTRYPOINT} from "../../../src/concrete/raindex/RaindexV6.sol";
+import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
 
 library LibTestAddOrder {
+    /// Serialized parser (parse2) output for "_ _:1e18 1e18;:;": the
+    /// `[constants length][constants][bytecode length][bytecode]` blob that
+    /// `evaluable.bytecode` holds in production, not the bare rain bytecode. This
+    /// is the canonical valid order bytecode (two sources: calculate + handle IO)
+    /// that the addOrder source-count guard accepts.
+    bytes internal constant VALID_ORDER_BYTECODE =
+        hex"000000000000000000000000000000000000000000000000000000000000000100000012000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000015020000000c02020002011000000110000000000000";
+
     /// A little boilerplate to make it easier to build the order that we expect
     /// for a given order config.
     function expectedOrder(address owner, OrderConfigV4 memory config) internal pure returns (OrderV4 memory, bytes32) {
@@ -57,7 +65,6 @@ library LibTestAddOrder {
             }
         }
 
-        // Taken from parser for "_ _:1e18 1e18;:;".
-        config.evaluable.bytecode = hex"020000000c02020002010000000100000000000000";
+        config.evaluable.bytecode = VALID_ORDER_BYTECODE;
     }
 }

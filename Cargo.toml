@@ -1,9 +1,5 @@
 [workspace]
 members = ["crates/*"]
-exclude = [
-    "lib/rain.interpreter",
-    "lib/rain.raindex.interface",
-]
 resolver = "2"
 
 [workspace.package]
@@ -15,7 +11,6 @@ homepage = "https://github.com/rainlanguage/raindex"
 [workspace.dependencies]
 foundry-block-explorers = "0.2.6"
 alloy = { version = "1.0.9", features = ["sol-types", "json", "json-abi"] }
-alloy-ethers-typecast = { git = "https://github.com/rainlanguage/alloy-ethers-typecast", rev = "bcc3a04394aefe191fef4ae8e6e94381a419c99a" }
 anyhow = "1.0.70"
 async-trait = "0.1.77"
 clap = { version = "4.2.5", features = ["cargo", "derive"] }
@@ -39,13 +34,13 @@ thiserror = "1.0.56"
 strict-yaml-rust = "0.1.2"
 dotrain = "6.0.1-alpha.24"
 dotrain-lsp = "6.0.1-alpha.24"
-rain-metadata = { path = "lib/rain.interpreter/lib/rain.metadata/crates/cli" }
-rain-metadata-bindings = { path = "lib/rain.interpreter/lib/rain.metadata/crates/bindings" }
-rain-metaboard-subgraph = { path = "lib/rain.interpreter/lib/rain.metadata/crates/metaboard" }
-rain_interpreter_bindings = { path = "lib/rain.interpreter/crates/bindings" }
-rain_interpreter_dispair = { path = "lib/rain.interpreter/crates/dispair" }
-rain_interpreter_parser = { path = "lib/rain.interpreter/crates/parser" }
-rain-interpreter-eval = { path = "lib/rain.interpreter/crates/eval" }
+rain-metadata = "0.1.1"
+rain-metadata-bindings = "0.1.5"
+rain-metaboard-subgraph = "0.1.3"
+rain_interpreter_bindings = { package = "rainlang_bindings", version = "0.1.15" }
+rain_interpreter_dispair = { package = "rainlang_dispair", version = "0.1.10" }
+rain_interpreter_parser = { package = "rainlang_parser", version = "0.1.3" }
+rain-interpreter-eval = { package = "rainlang-eval", version = "0.1.2" }
 csv = "1.3.0"
 insta = { version = "1.34.0" }
 proptest = "1.4.0"
@@ -53,44 +48,48 @@ derive_builder = "0.20.0"
 thirtyfour = "0.31.0"
 test-context = "0.3.0"
 portpicker = "0.1.1"
-rain-erc = { git = "https://github.com/rainlanguage/rain.erc", rev = "1014cbd72fab790b4ab1f5aab3e6780f13cd8efb" }
-rain-math-float = { path = "lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float/crates/float" }
-rain-error-decoding = { git = "https://github.com/rainlanguage/rain.error", rev = "3d2ed70fb2f7c6156706846e10f163d1e493a8d3" }
-wasm-bindgen-utils = { git = "https://github.com/rainlanguage/rain.wasm", rev = "06990d85a0b7c55378a1c8cca4dd9e2bc34a596a" }
+rain-erc = "0.1.1"
+rain-math-float = "0.1.7"
+rain-error-decoding = "0.1.2"
+# Direct dep required: the #[wasm_bindgen] macro emits `::wasm_bindgen` paths, and
+# without a direct dep the 0.2.122 macro recurses without bound on opaque-class
+# structs. Crates with bare #[wasm_bindgen] structs (common, js_api) depend on this.
+wasm-bindgen = "0.2.122"
+wasm-bindgen-utils = "0.1.2"
 tempfile = "3.20.0"
 eyre = "0.6.12"
 tower = "0.5.2"
 getrandom = { version = "0.2", features = ["js"] }
 itertools = "0.14.0"
 
-[workspace.dependencies.rain_orderbook_bindings]
+[workspace.dependencies.raindex_bindings]
 path = "crates/bindings"
 
-[workspace.dependencies.rain_orderbook_common]
+[workspace.dependencies.raindex_common]
 path = "crates/common"
 
-[workspace.dependencies.rain_orderbook_cli]
+[workspace.dependencies.raindex_cli]
 path = "crates/cli"
 
-[workspace.dependencies.rain_orderbook_subgraph_client]
+[workspace.dependencies.raindex_subgraph_client]
 path = "crates/subgraph"
 
-[workspace.dependencies.rain_orderbook_app_settings]
+[workspace.dependencies.raindex_app_settings]
 path = "crates/settings"
 
-[workspace.dependencies.rain_orderbook_quote]
+[workspace.dependencies.raindex_quote]
 path = "crates/quote"
 
-[workspace.dependencies.rain_orderbook_test_fixtures]
+[workspace.dependencies.raindex_test_fixtures]
 path = "crates/test_fixtures"
 
-[workspace.dependencies.rain_orderbook_math]
+[workspace.dependencies.raindex_math]
 path = "crates/math"
 
-[workspace.dependencies.rain_orderbook_js_api]
+[workspace.dependencies.raindex_js_api]
 path = "crates/js_api"
 
-[workspace.dependencies.rain_orderbook_rest_api]
+[workspace.dependencies.raindex_rest_api]
 path = "crates/rest_api"
 
 # release profile for wasm build optimized for size reduction

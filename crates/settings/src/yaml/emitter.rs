@@ -6,7 +6,7 @@ use crate::{
     accounts::AccountCfg, local_db_remotes::LocalDbRemoteCfg, local_db_sync::LocalDbSyncCfg,
     metaboard::MetaboardCfg, remote_networks::RemoteNetworksCfg, remote_tokens::RemoteTokensCfg,
     sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, ChartCfg, DeploymentCfg,
-    GuiCfg, NetworkCfg, OrderCfg, OrderbookCfg, RainlangCfg, ScenarioCfg, TokenCfg,
+    NetworkCfg, OrderBuilderCfg, OrderCfg, RaindexCfg, RainlangCfg, ScenarioCfg, TokenCfg,
 };
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::{strict_yaml::Hash, StrictYaml, StrictYamlEmitter};
@@ -19,12 +19,12 @@ const CANONICAL_ROOT_KEYS: &[&str] = &[
     "metaboards",
     "tokens",
     "rainlangs",
-    "orderbooks",
+    "raindexes",
     "orders",
     "scenarios",
     "deployments",
     "charts",
-    "gui",
+    "builder",
     "accounts",
     "remote-networks",
     "remote-tokens",
@@ -43,7 +43,7 @@ pub fn validate_and_emit_documents(
     validate_hash_section::<SubgraphCfg>(documents, context)?;
     validate_hash_section::<MetaboardCfg>(documents, context)?;
     validate_hash_section::<TokenCfg>(documents, context)?;
-    validate_hash_section::<OrderbookCfg>(documents, context)?;
+    validate_hash_section::<RaindexCfg>(documents, context)?;
     validate_hash_section::<RainlangCfg>(documents, context)?;
 
     ChartCfg::parse_all_from_yaml(documents.to_vec(), context)?;
@@ -52,7 +52,7 @@ pub fn validate_and_emit_documents(
     LocalDbRemoteCfg::parse_all_from_yaml(documents.to_vec(), context)?;
     LocalDbSyncCfg::parse_all_from_yaml(documents.to_vec(), context)?;
 
-    GuiCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
+    OrderBuilderCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
     RemoteTokensCfg::parse_from_yaml_optional(documents.to_vec(), context)?;
 
     validate_string_field::<SpecVersion>(documents)?;
@@ -267,7 +267,7 @@ rainlangs:
         address: 0x0000000000000000000000000000000000000001
 subgraphs:
     sg1: https://api.thegraph.com/subgraphs
-orderbooks:
+raindexes:
     ob1:
         network: mainnet
         address: 0x0000000000000000000000000000000000000002
@@ -276,7 +276,7 @@ orderbooks:
 orders:
     order1:
         rainlang: registry1
-        orderbook: ob1
+        raindex: ob1
         inputs:
             - token: weth
         outputs:

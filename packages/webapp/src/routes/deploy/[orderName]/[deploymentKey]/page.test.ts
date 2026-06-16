@@ -49,13 +49,13 @@ vi.mock('$lib/services/handleAddOrder', () => ({
 
 describe('DeployPage', () => {
 	const mockRegistry = {
-		getGui: vi.fn()
+		getOrderBuilder: vi.fn()
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockPageStore.reset();
-		mockRegistry.getGui.mockReset();
+		mockRegistry.getOrderBuilder.mockReset();
 
 		vi.mocked(useAccount).mockReturnValue({
 			account: writable('0x123'),
@@ -72,14 +72,14 @@ describe('DeployPage', () => {
 			manager: writable({}),
 			transactions: readable()
 		});
-		mockRegistry.getGui.mockResolvedValue({ value: {} });
+		mockRegistry.getOrderBuilder.mockResolvedValue({ value: {} });
 	});
 
 	afterEach(() => {
 		vi.resetAllMocks();
 	});
 
-	it('should call registry.getGui with correct parameters when data exists', async () => {
+	it('should call registry.getOrderBuilder with correct parameters when data exists', async () => {
 		const mockDeploymentKey = 'test-key';
 		const mockStateFromUrl = 'some-state';
 
@@ -96,7 +96,7 @@ describe('DeployPage', () => {
 		render(DeployPage);
 
 		await vi.waitFor(() => {
-			expect(mockRegistry.getGui).toHaveBeenCalledWith(
+			expect(mockRegistry.getOrderBuilder).toHaveBeenCalledWith(
 				'order-one',
 				mockDeploymentKey,
 				mockStateFromUrl,
@@ -131,10 +131,10 @@ describe('DeployPage', () => {
 		vi.useRealTimers();
 	});
 
-	it('should show error message when GUI initialization fails', async () => {
-		const errorMessage = 'Failed to initialize GUI';
+	it('should show error message when builder initialization fails', async () => {
+		const errorMessage = 'Failed to initialize builder';
 
-		mockRegistry.getGui.mockResolvedValue({
+		mockRegistry.getOrderBuilder.mockResolvedValue({
 			error: { readableMsg: errorMessage }
 		});
 

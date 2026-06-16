@@ -15,7 +15,7 @@ export function createTradeEntity(
   outputVaultBalanceChange: TradeVaultBalanceChange
 ): void {
   let trade = new Trade(makeTradeId(event, orderHash));
-  trade.orderbook = event.address;
+  trade.raindex = event.address;
   trade.order = makeOrderId(event.address, orderHash);
   trade.inputVaultBalanceChange = inputVaultBalanceChange.id;
   trade.outputVaultBalanceChange = outputVaultBalanceChange.id;

@@ -19,6 +19,20 @@ on:
   push:
     branches-ignore:
       - main
+    # Only build/deploy a preview when something webapp-relevant changed. The
+    # webapp build pulls the wasm bindings (crates/**, incl. committed abis),
+    # the JS workspaces (packages/**), deps, the nix toolchain, and the build
+    # script — sol-only / CI / docs / audit pushes can't change it, so skip the
+    # ~30-min build for them. (Not a required check, so skipping is safe.)
+    paths:
+      - 'packages/**'
+      - 'crates/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'flake.nix'
+      - 'flake.lock'
+      - 'script/vercel-build.sh'
+      - '.github/workflows/vercel-preview.yaml'
 concurrency:
   group: ${{ format('{0}-vercel-preview', github.ref) }}
   cancel-in-progress: true
@@ -33,18 +47,19 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
@@ -56,32 +71,33 @@ jobs:
           # before trying to save a new cache
           # 1G = 1073741824
           gc-max-store-size-linux: 1G
-
-      - run: ./prep-webapp.sh
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Stable shared-key (same in vercel-prod.yaml) so preview + prod share
+          # one warm wasm/cargo cache instead of a separate per-workflow one.
+          shared-key: vercel-webapp
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: ./script/vercel-build.sh
         env:
           PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-
-      - run: nix develop .#webapp-shell -c npm run build
-        working-directory: packages/webapp
-        env:
-          PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-
       # check for npm package blacklists pkgs across all packages
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
-
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
-          working-directory: packages/orderbook
-
+          working-directory: packages/raindex
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/ui-components
-
       - name: Install Vercel CLI (local, pinned)
         shell: bash --noprofile --norc -euo pipefail {0}
         run: |
           VERCEL_DIR="$(mktemp -d)"
-          npm install --no-audit --no-fund --no-save --prefix "$VERCEL_DIR" vercel@33.4.1
+          npm install --no-audit --no-fund --no-save --prefix "$VERCEL_DIR" vercel@51.8.0
           echo "VERCEL_BIN=$VERCEL_DIR/node_modules/.bin/vercel" >> "$GITHUB_ENV"
       - name: Pull Vercel Environment Information
         shell: bash --noprofile --norc -euo pipefail {0}
@@ -99,7 +115,6 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           "$VERCEL_BIN" deploy --prebuilt --token="$VERCEL_TOKEN" packages/webapp
-
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

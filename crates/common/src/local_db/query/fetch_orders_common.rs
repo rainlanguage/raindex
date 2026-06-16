@@ -1,6 +1,6 @@
 use super::fetch_orders::FetchOrdersArgs;
 use crate::local_db::query::{SqlBuildError, SqlStatement, SqlValue};
-use alloy::primitives::Address;
+use alloy::primitives::{Address, U256};
 
 use super::fetch_orders::FetchOrdersActiveFilter;
 
@@ -15,7 +15,7 @@ pub(crate) const INPUT_TOKENS_CLAUSE: &str = "/*INPUT_TOKENS_CLAUSE*/";
 pub(crate) const INPUT_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
       SELECT 1 FROM order_ios io2
       WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
+        AND io2.raindex_address = l.raindex_address
         AND io2.transaction_hash = la.transaction_hash
         AND io2.log_index = la.log_index
         AND lower(io2.io_type) = 'input'
@@ -26,7 +26,7 @@ pub(crate) const OUTPUT_TOKENS_CLAUSE: &str = "/*OUTPUT_TOKENS_CLAUSE*/";
 pub(crate) const OUTPUT_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
       SELECT 1 FROM order_ios io2
       WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
+        AND io2.raindex_address = l.raindex_address
         AND io2.transaction_hash = la.transaction_hash
         AND io2.log_index = la.log_index
         AND lower(io2.io_type) = 'output'
@@ -36,7 +36,7 @@ pub(crate) const OUTPUT_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
 pub(crate) const COMBINED_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
       SELECT 1 FROM order_ios io2
       WHERE io2.chain_id = l.chain_id
-        AND io2.orderbook_address = l.orderbook_address
+        AND io2.raindex_address = l.raindex_address
         AND io2.transaction_hash = la.transaction_hash
         AND io2.log_index = la.log_index
         AND (
@@ -46,19 +46,38 @@ pub(crate) const COMBINED_TOKENS_CLAUSE_BODY: &str = "AND EXISTS (
         )
     )";
 
+pub(crate) const POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE: &str =
+    "/*POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE*/";
+const POSITIVE_OUTPUT_VAULT_BALANCE_EXISTS_BODY: &str = "EXISTS (
+      SELECT 1 FROM order_ios io_balance
+      JOIN running_vault_balances vb_balance
+        ON vb_balance.chain_id = io_balance.chain_id
+       AND vb_balance.raindex_address = io_balance.raindex_address
+       AND vb_balance.owner = l.order_owner
+       AND vb_balance.token = io_balance.token
+       AND vb_balance.vault_id = io_balance.vault_id
+      WHERE io_balance.chain_id = l.chain_id
+        AND io_balance.raindex_address = l.raindex_address
+        AND io_balance.transaction_hash = la.transaction_hash
+        AND io_balance.log_index = la.log_index
+        AND lower(io_balance.io_type) = 'output'
+        AND io_balance.vault_id != {zero_vault_id}
+        AND FLOAT_GT_ZERO(vb_balance.balance)
+    )";
+
 pub(crate) const MAIN_CHAIN_IDS_CLAUSE: &str = "/*MAIN_CHAIN_IDS_CLAUSE*/";
 pub(crate) const MAIN_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
-pub(crate) const MAIN_ORDERBOOKS_CLAUSE: &str = "/*MAIN_ORDERBOOKS_CLAUSE*/";
-pub(crate) const MAIN_ORDERBOOKS_CLAUSE_BODY: &str = "AND oe.orderbook_address IN ({list})";
+pub(crate) const MAIN_RAINDEXES_CLAUSE: &str = "/*MAIN_RAINDEXES_CLAUSE*/";
+pub(crate) const MAIN_RAINDEXES_CLAUSE_BODY: &str = "AND oe.raindex_address IN ({list})";
 
 pub(crate) const LATEST_ADD_CHAIN_IDS_CLAUSE: &str = "/*LATEST_ADD_CHAIN_IDS_CLAUSE*/";
 pub(crate) const LATEST_ADD_CHAIN_IDS_CLAUSE_BODY: &str = "AND oe.chain_id IN ({list})";
-pub(crate) const LATEST_ADD_ORDERBOOKS_CLAUSE: &str = "/*LATEST_ADD_ORDERBOOKS_CLAUSE*/";
-pub(crate) const LATEST_ADD_ORDERBOOKS_CLAUSE_BODY: &str = "AND oe.orderbook_address IN ({list})";
+pub(crate) const LATEST_ADD_RAINDEXES_CLAUSE: &str = "/*LATEST_ADD_RAINDEXES_CLAUSE*/";
+pub(crate) const LATEST_ADD_RAINDEXES_CLAUSE_BODY: &str = "AND oe.raindex_address IN ({list})";
 
 pub(crate) struct PreparedFilters {
     pub chain_ids: Vec<u32>,
-    pub orderbooks: Vec<Address>,
+    pub raindexes: Vec<Address>,
 }
 
 pub(crate) fn bind_common_order_filters(
@@ -76,12 +95,12 @@ pub(crate) fn bind_common_order_filters(
     chain_ids.sort_unstable();
     chain_ids.dedup();
 
-    let mut orderbooks = args.orderbook_addresses.clone();
-    orderbooks.sort();
-    orderbooks.dedup();
+    let mut raindexes = args.raindex_addresses.clone();
+    raindexes.sort();
+    raindexes.dedup();
 
     let chain_ids_iter = || chain_ids.iter().cloned().map(SqlValue::from);
-    let orderbooks_iter = || orderbooks.iter().cloned().map(SqlValue::from);
+    let raindexes_iter = || raindexes.iter().cloned().map(SqlValue::from);
 
     stmt.bind_list_clause(
         MAIN_CHAIN_IDS_CLAUSE,
@@ -95,14 +114,14 @@ pub(crate) fn bind_common_order_filters(
     )?;
 
     stmt.bind_list_clause(
-        MAIN_ORDERBOOKS_CLAUSE,
-        MAIN_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        MAIN_RAINDEXES_CLAUSE,
+        MAIN_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
     stmt.bind_list_clause(
-        LATEST_ADD_ORDERBOOKS_CLAUSE,
-        LATEST_ADD_ORDERBOOKS_CLAUSE_BODY,
-        orderbooks_iter(),
+        LATEST_ADD_RAINDEXES_CLAUSE,
+        LATEST_ADD_RAINDEXES_CLAUSE_BODY,
+        raindexes_iter(),
     )?;
 
     let mut owners = args.owners.clone();
@@ -170,8 +189,18 @@ pub(crate) fn bind_common_order_filters(
         )?;
     }
 
+    if args.has_positive_output_vault_balance == Some(true) {
+        let zero_vault_id = stmt.push(SqlValue::from(U256::ZERO));
+        let exists =
+            POSITIVE_OUTPUT_VAULT_BALANCE_EXISTS_BODY.replace("{zero_vault_id}", &zero_vault_id);
+        let clause = format!("AND {exists}");
+        stmt.replace(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE, &clause)?;
+    } else {
+        stmt.replace(POSITIVE_OUTPUT_VAULT_BALANCE_CLAUSE, "")?;
+    }
+
     Ok(PreparedFilters {
         chain_ids,
-        orderbooks,
+        raindexes,
     })
 }

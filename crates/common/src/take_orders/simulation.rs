@@ -1,10 +1,26 @@
 use super::candidates::TakeOrderCandidate;
 use crate::raindex_client::RaindexError;
 use crate::utils::float::cmp_float;
+use crate::utils::timing::Timing;
+use alloy::primitives::{keccak256, B256};
+use alloy::sol_types::SolValue;
 use rain_math_float::Float;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::ops::{Add, Div, Mul, Sub};
+use tracing::{debug, info, Level};
+
+const MAX_INFO_PRICE_CAP_REJECTION_LOGS: usize = 100;
+
+fn format_float(value: Float) -> String {
+    value
+        .format()
+        .unwrap_or_else(|_| "<format_error>".to_string())
+}
+
+fn order_hash(candidate: &TakeOrderCandidate) -> B256 {
+    B256::from(keccak256(candidate.order.abi_encode()))
+}
 
 #[derive(Clone, Debug)]
 pub struct SelectedTakeOrderLeg {
@@ -143,22 +159,42 @@ fn filter_candidates_by_price_cap(
     candidates: Vec<TakeOrderCandidate>,
     price_cap: Float,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    Ok(candidates
-        .into_iter()
-        .filter_map(|candidate| {
-            let ratio = candidate.ratio;
-            match ratio.lte(price_cap) {
-                Ok(is_below_cap) => {
-                    if is_below_cap {
-                        Some(Ok(candidate))
-                    } else {
-                        None
-                    }
-                }
-                Err(e) => Some(Err(e)),
-            }
-        })
-        .collect::<Result<Vec<_>, _>>()?)
+    let log_rejections = tracing::enabled!(Level::DEBUG);
+    let mut filtered = Vec::new();
+    let mut logged_rejections = 0usize;
+    let mut omitted_rejections = 0usize;
+
+    for candidate in candidates {
+        let ratio = candidate.ratio;
+        if ratio.lte(price_cap)? {
+            filtered.push(candidate);
+        } else if log_rejections && logged_rejections < MAX_INFO_PRICE_CAP_REJECTION_LOGS {
+            debug!(
+                raindex = %candidate.raindex,
+                order_hash = %order_hash(&candidate),
+                input_io_index = candidate.input_io_index,
+                output_io_index = candidate.output_io_index,
+                max_output = %format_float(candidate.max_output),
+                ratio = %format_float(candidate.ratio),
+                price_cap = %format_float(price_cap),
+                decision = "rejected",
+                reason = "above_price_cap",
+                "take-order candidate decision"
+            );
+            logged_rejections += 1;
+        } else {
+            omitted_rejections += 1;
+        }
+    }
+
+    if omitted_rejections > 0 {
+        info!(
+            logged_rejections,
+            omitted_rejections, "omitted additional price-cap candidate rejection logs"
+        );
+    }
+
+    Ok(filtered)
 }
 
 pub fn simulate_buy_over_candidates(
@@ -166,7 +202,10 @@ pub fn simulate_buy_over_candidates(
     buy_target: Float,
     price_cap: Float,
 ) -> Result<SimulationResult, RaindexError> {
+    let started_at = Timing::now();
+    let initial_candidate_count = candidates.len();
     let mut filtered = filter_candidates_by_price_cap(candidates, price_cap)?;
+    let filtered_candidate_count = filtered.len();
     sort_candidates_by_price(&mut filtered)?;
 
     let zero = Float::zero()?;
@@ -188,11 +227,28 @@ pub fn simulate_buy_over_candidates(
         }
     }
 
-    Ok(SimulationResult {
+    let result = SimulationResult {
         legs,
         total_input: totals.total_input,
         total_output: totals.total_output,
-    })
+    };
+    info!(
+        mode = "buy",
+        initial_candidate_count,
+        candidates_after_price_cap = filtered_candidate_count,
+        selected_legs_count = result.legs.len(),
+        total_input = %format_float(result.total_input),
+        total_output = %format_float(result.total_output),
+        fully_filled = result.total_output.eq(buy_target).unwrap_or(false),
+        worst_selected_ratio = %result
+            .legs
+            .last()
+            .map(|leg| format_float(leg.candidate.ratio))
+            .unwrap_or_else(|| "none".to_string()),
+        duration_ms = started_at.elapsed_ms(),
+        "simulated buy over candidates"
+    );
+    Ok(result)
 }
 
 pub fn simulate_spend_over_candidates(
@@ -200,7 +256,10 @@ pub fn simulate_spend_over_candidates(
     spend_budget: Float,
     price_cap: Float,
 ) -> Result<SimulationResult, RaindexError> {
+    let started_at = Timing::now();
+    let initial_candidate_count = candidates.len();
     let mut filtered = filter_candidates_by_price_cap(candidates, price_cap)?;
+    let filtered_candidate_count = filtered.len();
     sort_candidates_by_price(&mut filtered)?;
 
     let zero = Float::zero()?;
@@ -222,11 +281,28 @@ pub fn simulate_spend_over_candidates(
         }
     }
 
-    Ok(SimulationResult {
+    let result = SimulationResult {
         legs,
         total_input: totals.total_input,
         total_output: totals.total_output,
-    })
+    };
+    info!(
+        mode = "spend",
+        initial_candidate_count,
+        candidates_after_price_cap = filtered_candidate_count,
+        selected_legs_count = result.legs.len(),
+        total_input = %format_float(result.total_input),
+        total_output = %format_float(result.total_output),
+        fully_filled = result.total_input.eq(spend_budget).unwrap_or(false),
+        worst_selected_ratio = %result
+            .legs
+            .last()
+            .map(|leg| format_float(leg.candidate.ratio))
+            .unwrap_or_else(|| "none".to_string()),
+        duration_ms = started_at.elapsed_ms(),
+        "simulated spend over candidates"
+    );
+    Ok(result)
 }
 
 #[cfg(test)]

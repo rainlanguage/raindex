@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DotrainRegistry } from '@rainlanguage/orderbook';
+	import type { DotrainRegistry } from '@rainlanguage/raindex';
 	import type { RegistryManager } from '../registry/RegistryManager';
 	import { setDotrainRegistryContext } from './context';
 

@@ -1,3 +1,6 @@
+use crate::transaction::read_call;
+#[cfg(not(target_family = "wasm"))]
+use crate::write_tx::{execute_write_tx, WriteTransactionStatus};
 use crate::{
     dotrain_order::DotrainOrderError,
     rainlang::compose_to_rainlang,
@@ -6,14 +9,8 @@ use crate::{
 use alloy::primitives::{hex::FromHexError, Address, Bytes, B256};
 #[cfg(not(target_family = "wasm"))]
 use alloy::primitives::{FixedBytes, U256};
+use alloy::rpc::types::TransactionRequest;
 use alloy::sol_types::SolCall;
-use alloy_ethers_typecast::ReadContractParametersBuilder;
-use alloy_ethers_typecast::{
-    ReadContractParametersBuilderError, ReadableClient, ReadableClientError, WritableClientError,
-    WriteContractParameters,
-};
-#[cfg(not(target_family = "wasm"))]
-use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use dotrain::error::ComposeError;
 use rain_interpreter_bindings::IParserV2::parse2Return;
 use rain_interpreter_bindings::Rainlang::{
@@ -27,37 +24,33 @@ use rain_interpreter_eval::{
 };
 use rain_interpreter_parser::{Parser2, ParserError, ParserV2};
 use rain_metadata::{
-    types::dotrain::gui_state_v1::DotrainGuiStateV1,
+    types::dotrain::order_builder_state_v1::OrderBuilderStateV1,
     types::raindex_signed_context_oracle::RaindexSignedContextOracleV1, ContentEncoding,
     ContentLanguage, ContentType, Error as RainMetaError, KnownMagic, RainMetaDocumentV1Item,
 };
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
-use rain_orderbook_app_settings::deployment::DeploymentCfg;
-use rain_orderbook_bindings::IRaindexV6::{
-    addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2,
-};
+use raindex_app_settings::deployment::DeploymentCfg;
+use raindex_bindings::provider::{mk_read_provider, ReadProviderError};
+use raindex_bindings::IRaindexV6::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::collections::HashMap;
 use thiserror::Error;
+use url::Url;
 
-pub static ORDERBOOK_ORDER_ENTRYPOINTS: [&str; 2] = ["calculate-io", "handle-io"];
-pub static ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS: [&str; 1] = ["handle-add-order"];
+pub static RAINDEX_ORDER_ENTRYPOINTS: [&str; 2] = ["calculate-io", "handle-io"];
+pub static RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS: [&str; 1] = ["handle-add-order"];
 
 #[derive(Error, Debug)]
 pub enum AddOrderArgsError {
     #[error("Empty Front Matter")]
     EmptyFrontmatter,
     #[error(transparent)]
-    ReadableClientError(#[from] ReadableClientError),
-    #[error(transparent)]
-    ReadContractParametersBuilderError(#[from] ReadContractParametersBuilderError),
+    ReadProviderError(#[from] ReadProviderError),
     #[error(transparent)]
     ParserError(#[from] ParserError),
     #[error(transparent)]
     FromHexError(#[from] FromHexError),
-    #[error(transparent)]
-    WritableClientError(#[from] WritableClientError),
     #[error(transparent)]
     TransactionArgs(#[from] TransactionArgsError),
     #[error(transparent)]
@@ -69,6 +62,9 @@ pub enum AddOrderArgsError {
     #[cfg(not(target_family = "wasm"))]
     #[error(transparent)]
     ForkCallError(Box<ForkCallError>),
+    #[cfg(not(target_family = "wasm"))]
+    #[error(transparent)]
+    WriteTransactionError(#[from] crate::write_tx::WriteTransactionError),
     #[error("Input token not found for index: {0}")]
     InputTokenNotFound(String),
     #[error("Output token not found for index: {0}")]
@@ -171,39 +167,13 @@ impl AddOrderArgs {
     }
 
     /// Read DISPaiR addresses from the rainlang contract.
-    async fn read_dispair(&self, client: &ReadableClient) -> Result<DISPaiR, AddOrderArgsError> {
-        let deployer: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(expressionDeployerAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let interpreter: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(interpreterAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let store: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(storeAddressCall {})
-                    .build()?,
-            )
-            .await?;
-        let parser: Address = client
-            .read(
-                ReadContractParametersBuilder::default()
-                    .address(self.rainlang)
-                    .call(parserAddressCall {})
-                    .build()?,
-            )
-            .await?;
+    async fn read_dispair(&self, rpcs: &[String]) -> Result<DISPaiR, AddOrderArgsError> {
+        let deployer: Address =
+            read_call(rpcs, self.rainlang, expressionDeployerAddressCall {}).await?;
+        let interpreter: Address =
+            read_call(rpcs, self.rainlang, interpreterAddressCall {}).await?;
+        let store: Address = read_call(rpcs, self.rainlang, storeAddressCall {}).await?;
+        let parser: Address = read_call(rpcs, self.rainlang, parserAddressCall {}).await?;
         Ok(DISPaiR::new(deployer, interpreter, store, parser))
     }
 
@@ -213,13 +183,17 @@ impl AddOrderArgs {
         rpcs: Vec<String>,
         rainlang: String,
     ) -> Result<Vec<u8>, AddOrderArgsError> {
-        let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-        let dispair = self.read_dispair(&client).await?;
+        let dispair = self.read_dispair(&rpcs).await?;
 
-        let client = ReadableClient::new_from_http_urls(rpcs)?;
+        let urls = rpcs
+            .iter()
+            .map(|rpc| rpc.parse::<Url>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(TransactionArgsError::Url)?;
+        let provider = mk_read_provider(&urls)?;
         let parser: ParserV2 = dispair.into();
         let rainlang_parsed: parse2Return = parser
-            .parse_text(rainlang.as_str(), client)
+            .parse_text(rainlang.as_str(), &provider)
             .await
             .map_err(AddOrderArgsError::ParserError)?;
 
@@ -258,7 +232,7 @@ impl AddOrderArgs {
         let res = compose_to_rainlang(
             self.dotrain.clone(),
             self.bindings.clone(),
-            &ORDERBOOK_ORDER_ENTRYPOINTS,
+            &RAINDEX_ORDER_ENTRYPOINTS,
         )?;
         Ok(res)
     }
@@ -268,7 +242,7 @@ impl AddOrderArgs {
         let res = compose_to_rainlang(
             self.dotrain.clone(),
             self.bindings.clone(),
-            &ORDERBOOK_ADDORDER_POST_TASK_ENTRYPOINTS,
+            &RAINDEX_ADDORDER_POST_TASK_ENTRYPOINTS,
         )?;
         Ok(res)
     }
@@ -285,8 +259,7 @@ impl AddOrderArgs {
 
         let meta = self.try_generate_meta(rainlang)?;
 
-        let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-        let dispair = self.read_dispair(&client).await?;
+        let dispair = self.read_dispair(&rpcs).await?;
 
         // get the evaluable for the post action
         let post_rainlang = self.compose_addorder_post_task()?;
@@ -327,11 +300,11 @@ impl AddOrderArgs {
             Some(meta_docs) => {
                 match meta_docs
                     .iter()
-                    .find(|document| document.magic == KnownMagic::DotrainGuiStateV1)
+                    .find(|document| document.magic == KnownMagic::OrderBuilderStateV1)
                 {
                     Some(doc) => {
-                        let gui_state = DotrainGuiStateV1::try_from(doc.clone())?;
-                        let subject_hash = gui_state.dotrain_hash();
+                        let builder_state = OrderBuilderStateV1::try_from(doc.clone())?;
+                        let subject_hash = builder_state.dotrain_hash();
                         let meta_document = RainMetaDocumentV1Item {
                             payload: ByteBuf::from(self.dotrain.as_bytes()),
                             magic: KnownMagic::DotrainSourceV1,
@@ -358,28 +331,24 @@ impl AddOrderArgs {
     pub async fn get_add_order_call_parameters(
         &self,
         transaction_args: TransactionArgs,
-    ) -> Result<WriteContractParameters<addOrder4Call>, AddOrderArgsError> {
+    ) -> Result<TransactionRequest, AddOrderArgsError> {
         let add_order_call = self.try_into_call(transaction_args.clone().rpcs).await?;
-        let params = transaction_args.try_into_write_contract_parameters(
-            add_order_call,
-            transaction_args.orderbook_address,
-        )?;
-        Ok(params)
+        let tx_request = transaction_args
+            .try_into_transaction_request(add_order_call, transaction_args.raindex_address)?;
+        Ok(tx_request)
     }
 
     #[cfg(not(target_family = "wasm"))]
-    pub async fn execute<S: Fn(WriteTransactionStatus<addOrder4Call>)>(
+    pub async fn execute<S: Fn(WriteTransactionStatus)>(
         &self,
         transaction_args: TransactionArgs,
         transaction_status_changed: S,
     ) -> Result<(), AddOrderArgsError> {
         let (ledger_client, _) = transaction_args.clone().try_into_ledger_client().await?;
 
-        let params = self.get_add_order_call_parameters(transaction_args).await?;
+        let tx_request = self.get_add_order_call_parameters(transaction_args).await?;
 
-        WriteTransaction::new(ledger_client, params, 4, transaction_status_changed)
-            .execute()
-            .await?;
+        execute_write_tx(ledger_client, tx_request, 4, transaction_status_changed).await?;
 
         Ok(())
     }
@@ -437,7 +406,7 @@ impl AddOrderArgs {
                     match forker
                         .alloy_call_committing(
                             Address::from(from_address),
-                            transaction_args.orderbook_address,
+                            transaction_args.raindex_address,
                             call,
                             U256::ZERO,
                             true,
@@ -472,7 +441,7 @@ mod tests {
     use rain_metadata::{
         types::dotrain::source_v1::DotrainSourceV1, Error as RainMetaError, KnownMagic,
     };
-    use rain_orderbook_app_settings::{
+    use raindex_app_settings::{
         network::NetworkCfg,
         order::{OrderCfg, OrderIOCfg},
         rainlang::RainlangCfg,
@@ -481,7 +450,7 @@ mod tests {
         token::TokenCfg,
         yaml::{default_document, default_documents},
     };
-    use rain_orderbook_test_fixtures::LocalEvm;
+    use raindex_test_fixtures::LocalEvm;
     use std::{
         collections::BTreeMap,
         str::FromStr,
@@ -532,7 +501,7 @@ price: 2e18;
     fn test_try_generate_meta_with_additional_meta_filters_reserved() {
         let dotrain_body = "/* test */".to_string();
         let dotrain_hash = DotrainSourceV1(dotrain_body.clone()).hash();
-        let gui_state = DotrainGuiStateV1 {
+        let builder_state = OrderBuilderStateV1 {
             dotrain_hash,
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
@@ -552,7 +521,7 @@ price: 2e18;
             // Should be filtered out
             RainMetaDocumentV1Item::from(DotrainSourceV1("ignored-dotrain".to_string())),
             // Should be retained
-            RainMetaDocumentV1Item::try_from(gui_state.clone()).unwrap(),
+            RainMetaDocumentV1Item::try_from(builder_state.clone()).unwrap(),
         ];
 
         let args = AddOrderArgs {
@@ -570,23 +539,23 @@ price: 2e18;
         // Rainlang meta is always present and should match the composed rainlang payload
         assert_eq!(decoded[0].magic, KnownMagic::RainlangSourceV1);
         assert_eq!(decoded[0].payload.as_ref(), "rainlang-body".as_bytes());
-        // Only the GUI state from additional meta should remain (reserved magics filtered)
+        // Only the builder state from additional meta should remain (reserved magics filtered)
         assert_eq!(decoded.len(), 2);
-        let gui_meta = decoded
+        let builder_meta = decoded
             .iter()
-            .find(|item| item.magic == KnownMagic::DotrainGuiStateV1)
-            .expect("gui state meta not found");
+            .find(|item| item.magic == KnownMagic::OrderBuilderStateV1)
+            .expect("builder state meta not found");
         assert_eq!(
-            DotrainGuiStateV1::try_from(gui_meta.clone()).unwrap(),
-            gui_state
+            OrderBuilderStateV1::try_from(builder_meta.clone()).unwrap(),
+            builder_state
         );
     }
 
     #[test]
-    fn test_try_into_emit_meta_call_with_gui_state() {
+    fn test_try_into_emit_meta_call_with_builder_state() {
         let dotrain_body = "/* dotrain template */".to_string();
         let dotrain_source = DotrainSourceV1(dotrain_body.clone());
-        let gui_state = DotrainGuiStateV1 {
+        let builder_state = OrderBuilderStateV1 {
             dotrain_hash: dotrain_source.hash(),
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
@@ -600,7 +569,9 @@ price: 2e18;
             outputs: vec![],
             bindings: HashMap::new(),
             rainlang: Address::default(),
-            additional_meta: Some(vec![RainMetaDocumentV1Item::try_from(gui_state).unwrap()]),
+            additional_meta: Some(vec![
+                RainMetaDocumentV1Item::try_from(builder_state).unwrap()
+            ]),
         };
 
         let emit_call = args
@@ -616,10 +587,10 @@ price: 2e18;
     }
 
     #[test]
-    fn test_try_into_emit_meta_call_invalid_gui_state_payload() {
-        let invalid_gui_state = RainMetaDocumentV1Item {
+    fn test_try_into_emit_meta_call_invalid_builder_state_payload() {
+        let invalid_builder_state = RainMetaDocumentV1Item {
             payload: ByteBuf::from(vec![1, 2, 3]),
-            magic: KnownMagic::DotrainGuiStateV1,
+            magic: KnownMagic::OrderBuilderStateV1,
             content_type: ContentType::OctetStream,
             content_encoding: ContentEncoding::None,
             content_language: ContentLanguage::None,
@@ -630,7 +601,7 @@ price: 2e18;
             outputs: vec![],
             bindings: HashMap::new(),
             rainlang: Address::default(),
-            additional_meta: Some(vec![invalid_gui_state]),
+            additional_meta: Some(vec![invalid_builder_state]),
         };
 
         let err = args.try_into_emit_meta_call().unwrap_err();
@@ -748,7 +719,7 @@ price: 2e18;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -872,7 +843,7 @@ _ _: 0 0;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -1039,7 +1010,7 @@ _ _: 0 0;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         let deployment = DeploymentCfg {
@@ -1120,7 +1091,7 @@ _ _: 0 key1;
     async fn test_simulate_execute_ok() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
 
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
         let token1_holder = local_evm.signer_wallets[0].default_signer().address();
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
@@ -1151,9 +1122,9 @@ tokens:
         decimals: 18
         label: Token1
         symbol: token1
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -1180,7 +1151,7 @@ _ _: 16 52;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -1197,7 +1168,7 @@ _ _: 16 52;
             .unwrap()
             .simulate_execute(
                 TransactionArgs {
-                    orderbook_address: *orderbook.address(),
+                    raindex_address: *raindex.address(),
                     rpcs: vec![local_evm.url()],
                     ..Default::default()
                 },
@@ -1211,7 +1182,7 @@ _ _: 16 52;
     async fn test_simulate_execute_err() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
 
-        let orderbook = &local_evm.orderbook;
+        let raindex = &local_evm.raindex;
         let token1_holder = local_evm.signer_wallets[0].default_signer().address();
         let token1 = local_evm.tokens[0].clone();
         let token2 = local_evm.tokens[1].clone();
@@ -1242,9 +1213,9 @@ tokens:
         decimals: 18
         label: Token1
         symbol: token1
-orderbook:
+raindex:
     some-key:
-        address: {orderbook}
+        address: {raindex}
 orders:
     some-key:
         inputs:
@@ -1271,7 +1242,7 @@ _ _: 16 52;
 :;
 "#,
             rpc_url = local_evm.url(),
-            orderbook = orderbook.address(),
+            raindex = raindex.address(),
             rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
@@ -1289,7 +1260,7 @@ _ _: 16 52;
             .simulate_execute(
                 TransactionArgs {
                     // send the tx to random address
-                    orderbook_address: Address::random(),
+                    raindex_address: Address::random(),
                     rpcs: vec![local_evm.url()],
                     ..Default::default()
                 },
@@ -1384,7 +1355,7 @@ _ _: 16 52;
             }],
             network: network_arc.clone(),
             rainlang: None,
-            orderbook: None,
+            raindex: None,
             oracle_url: None,
         };
         DeploymentCfg {
@@ -1459,7 +1430,10 @@ _ _: 0 0;
             .try_parse_rainlang(vec!["invalid-url".to_string()], rainlang)
             .await
             .unwrap_err();
-        assert!(matches!(err, AddOrderArgsError::ReadableClientError(_)));
+        assert!(matches!(
+            err,
+            AddOrderArgsError::TransactionArgs(TransactionArgsError::Url(_))
+        ));
     }
 
     #[tokio::test]
@@ -1491,14 +1465,7 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::ReadableClientError(
-                    ReadableClientError::AllProvidersFailed(ref msg)
-                )
-                if msg.get(&rpc_url).is_some()
-                    && matches!(
-                        msg.get(&rpc_url).unwrap(),
-                        ReadableClientError::RpcTransportKindError(_)
-                    )
+                AddOrderArgsError::TransactionArgs(TransactionArgsError::Transport(_))
             ),
             "unexpected error variant: {err:?}"
         );
@@ -1726,7 +1693,7 @@ _ _: 0 0;
         let res = add_order_args
             .get_add_order_call_parameters(TransactionArgs {
                 rpcs: vec![local_evm.url().to_string()],
-                orderbook_address: *local_evm.orderbook.address(),
+                raindex_address: *local_evm.raindex.address(),
                 max_priority_fee_per_gas: Some(100),
                 max_fee_per_gas: Some(200),
                 ..Default::default()
@@ -1734,18 +1701,21 @@ _ _: 0 0;
             .await
             .unwrap();
 
-        assert_eq!(res.call.config.evaluable, add_order_call.config.evaluable);
+        let input = res.input.input.expect("tx request has no input");
+        let decoded = addOrder4Call::abi_decode(&input).unwrap();
+
+        assert_eq!(decoded.config.evaluable, add_order_call.config.evaluable);
         assert_eq!(
-            res.call.config.validInputs,
+            decoded.config.validInputs,
             add_order_call.config.validInputs
         );
         assert_eq!(
-            res.call.config.validOutputs,
+            decoded.config.validOutputs,
             add_order_call.config.validOutputs
         );
-        assert_eq!(res.call.config.meta, add_order_call.config.meta);
-        assert_eq!(res.call.tasks, add_order_call.tasks);
-        assert_eq!(res.address, *local_evm.orderbook.address());
+        assert_eq!(decoded.config.meta, add_order_call.config.meta);
+        assert_eq!(decoded.tasks, add_order_call.tasks);
+        assert_eq!(res.to, Some((*local_evm.raindex.address()).into()));
         assert_eq!(res.max_priority_fee_per_gas, Some(100));
         assert_eq!(res.max_fee_per_gas, Some(200));
     }
@@ -1853,14 +1823,7 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::ReadableClientError(
-                    ReadableClientError::AllProvidersFailed(msg)
-                )
-                if msg.get(&rpc_url).is_some()
-                    && matches!(
-                        msg.get(&rpc_url).unwrap(),
-                        ReadableClientError::RpcTransportKindError(_)
-                    )
+                AddOrderArgsError::TransactionArgs(TransactionArgsError::Transport(_))
             ),
             "unexpected error variant: {err:?}"
         );

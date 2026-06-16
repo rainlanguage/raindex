@@ -1,16 +1,25 @@
 <script lang="ts">
 	import { InputAddon, Button } from 'flowbite-svelte';
-	import { Float } from '@rainlanguage/orderbook';
+	import { Float } from '@rainlanguage/raindex';
+	import { validateAmount } from '../../services/validateAmount';
 
 	export let symbol: string | undefined = undefined;
 	export let maxValue: Float | undefined = undefined;
 	export let value: Float = Float.parse('0').value as Float;
 
 	let inputValue: string = '';
+	let decimalsError: string | null = null;
 
 	function handleInput(event: Event) {
 		const input = event.target as HTMLInputElement;
 		inputValue = input.value;
+
+		const decimalsValidation = validateAmount(inputValue);
+		decimalsError = decimalsValidation.errorMessage;
+		if (!decimalsValidation.isValid) {
+			value = Float.parse('0').value as Float;
+			return;
+		}
 
 		if (inputValue === '') {
 			value = Float.parse('0').value as Float;
@@ -27,6 +36,7 @@
 	function fillMaxValue() {
 		if (!maxValue) return;
 		value = maxValue;
+		decimalsError = null;
 
 		let formattedValue = value.format().value;
 		if (!formattedValue) {
@@ -63,4 +73,10 @@
 			</InputAddon>
 		{/if}
 	</div>
+
+	{#if decimalsError}
+		<p class="mt-1 text-sm text-red-500" data-testid="decimals-error">
+			{decimalsError}
+		</p>
+	{/if}
 </div>

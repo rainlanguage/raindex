@@ -1,52 +1,54 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
-import { handleShareChoices } from '../lib/services/handleShareChoices';
-import { DotrainOrderGui } from '@rainlanguage/orderbook';
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { handleShareChoices } from "../lib/services/handleShareChoices";
+import { RaindexOrderBuilder } from "@rainlanguage/raindex";
 
-vi.mock('@rainlanguage/orderbook', () => ({
-	DotrainOrderGui: vi.fn()
+vi.mock("@rainlanguage/raindex", () => ({
+  RaindexOrderBuilder: vi.fn(),
 }));
 
-describe('handleShareChoices', () => {
-	let guiInstance: DotrainOrderGui;
-	const mockRegistryUrl = 'https://example.com/registry';
+describe("handleShareChoices", () => {
+  let builderInstance: RaindexOrderBuilder;
+  const mockRegistryUrl = "https://example.com/registry";
 
-	beforeEach(() => {
-		guiInstance = {
-			serializeState: vi.fn()
-		} as unknown as DotrainOrderGui;
+  beforeEach(() => {
+    builderInstance = {
+      serializeState: vi.fn(),
+    } as unknown as RaindexOrderBuilder;
 
-		Object.assign(navigator, {
-			clipboard: {
-				writeText: vi.fn()
-			}
-		});
-		vi.mock('$app/stores', () => ({
-			page: {
-				subscribe: vi.fn((fn) => {
-					fn({ url: new URL('http://example.com') });
-					return () => {};
-				})
-			}
-		}));
-	});
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn(),
+      },
+    });
+    vi.mock("$app/stores", () => ({
+      page: {
+        subscribe: vi.fn((fn) => {
+          fn({ url: new URL("http://example.com") });
+          return () => {};
+        }),
+      },
+    }));
+  });
 
-	it('should share the choices with state and registry', async () => {
-		(guiInstance.serializeState as Mock).mockReturnValue({ value: 'mockState123' });
+  it("should share the choices with state and registry", async () => {
+    (builderInstance.serializeState as Mock).mockReturnValue({
+      value: "mockState123",
+    });
 
-		await handleShareChoices(guiInstance, mockRegistryUrl);
+    await handleShareChoices(builderInstance, mockRegistryUrl);
 
-		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-			'http://example.com/?state=mockState123&registry=https%3A%2F%2Fexample.com%2Fregistry'
-		);
-	});
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "http://example.com/?state=mockState123&registry=https%3A%2F%2Fexample.com%2Fregistry",
+    );
+  });
 
-	it('should handle null state', async () => {
-		(guiInstance.serializeState as Mock).mockReturnValue({ value: null });
+  it("should handle null state", async () => {
+    (builderInstance.serializeState as Mock).mockReturnValue({ value: null });
 
-		await handleShareChoices(guiInstance, mockRegistryUrl);
+    await handleShareChoices(builderInstance, mockRegistryUrl);
 
-		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-			'http://example.com/?state=&registry=https%3A%2F%2Fexample.com%2Fregistry'
-		);
-	});
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      "http://example.com/?state=&registry=https%3A%2F%2Fexample.com%2Fregistry",
+    );
+  });
 });

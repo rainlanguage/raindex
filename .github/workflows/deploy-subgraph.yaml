@@ -1,7 +1,6 @@
 name: Deploy subgraph
 on:
   workflow_dispatch:
-
 jobs:
   deploy:
     permissions:
@@ -10,30 +9,31 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOLDSKY_TOKEN: ${{ secrets.CI_GOLDSKY_TOKEN }}
-      GOLDSKY_SUBGRAPH_NAME: ob4
+      GOLDSKY_SUBGRAPH_NAME: raindex
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
+      - uses: cachix/cachix-action@v15
+        continue-on-error: true
+        with:
+          name: rainlanguage
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          useDaemon: false
       - name: Restore and save Nix store
         uses: nix-community/cache-nix-action@v6
         with:
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 1G
-
-      - run: nix develop -c subgraph-deploy
-
+      # subgraph-deploy builds from the committed subgraph/abis + subgraph/generated,
+      # so it needs no forge build and runs on the slim subgraph shell.
+      - run: nix develop github:rainlanguage/rainix#subgraph-shell -c subgraph-deploy
       # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
       - name: Forward CI Status
         if: always()

@@ -39,7 +39,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -51,6 +51,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
     order {
       id
       orderHash
+      owner
     }
     inputVaultBalanceChange {
       id
@@ -76,7 +77,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
         blockNumber
         timestamp
       }
-      orderbook {
+      raindex {
         id
       }
       trade {
@@ -86,7 +87,7 @@ query SgOrderTradeDetailQuery($id: ID!) {
       }
     }
     timestamp
-    orderbook {
+    raindex {
       id
     }
   }

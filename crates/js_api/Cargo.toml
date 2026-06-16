@@ -1,5 +1,5 @@
 [package]
-name = "rain_orderbook_js_api"
+name = "raindex_js_api"
 description = "Javascript bindings for common functions accross the app."
 version.workspace = true
 edition.workspace = true
@@ -16,19 +16,19 @@ cynic = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
-rain_orderbook_common = { workspace = true }
-rain_orderbook_app_settings = { workspace = true }
-rain_orderbook_subgraph_client = { workspace = true }
-rain_orderbook_bindings = { workspace = true }
-rain_orderbook_quote = { workspace = true }
-alloy-ethers-typecast = { workspace = true }
+raindex_common = { workspace = true }
+raindex_app_settings = { workspace = true }
+raindex_subgraph_client = { workspace = true }
+raindex_bindings = { workspace = true }
+raindex_quote = { workspace = true }
+wasm-bindgen = { workspace = true }
 wasm-bindgen-utils = { workspace = true }
 tokio = { workspace = true, features = [
-    "sync",
-    "macros",
-    "io-util",
-    "rt",
-    "time",
+  "sync",
+  "macros",
+  "io-util",
+  "rt",
+  "time",
 ] }
 alloy = { workspace = true, features = ["dyn-abi"] }
 flate2 = "1.0.34"
@@ -41,6 +41,13 @@ rain-math-float.workspace = true
 getrandom = { workspace = true }
 rain-metadata = { workspace = true }
 rain-metaboard-subgraph = { workspace = true }
+
+[target.wasm32-unknown-unknown.dependencies]
+# Enables getrandom 0.4's wasm_js backend feature (pulled transitively by
+# alloy-primitives); the .cargo/config getrandom_backend cfg only covers 0.2/0.3.
+getrandom_v04 = { package = "getrandom", version = "0.4", features = [
+  "wasm_js",
+] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

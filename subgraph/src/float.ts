@@ -1,5 +1,5 @@
 import { Address, Bytes, dataSource } from "@graphprotocol/graph-ts";
-import { DecimalFloat } from "../generated/OrderBook/DecimalFloat";
+import { DecimalFloat } from "../generated/Raindex/DecimalFloat";
 
 export type Float = Bytes;
 

@@ -3,9 +3,9 @@ import { handleAddOrder } from '../lib/services/handleAddOrder';
 import type { HandleAddOrderDependencies } from '../lib/services/handleAddOrder';
 import type {
 	DeploymentTransactionArgs,
-	DotrainOrderGui,
+	RaindexOrderBuilder,
 	RaindexClient
-} from '@rainlanguage/orderbook';
+} from '@rainlanguage/raindex';
 import type { TransactionManager } from '@rainlanguage/ui-components';
 import { QKEY_ORDERS } from '@rainlanguage/ui-components';
 import type { Hex } from 'viem';
@@ -23,14 +23,14 @@ const mockManager = {
 	createMetaTransaction: mockCreateMetaTransaction
 } as unknown as TransactionManager;
 
-// New Mocks for gui
+// New Mocks for builder
 const mockGetDeploymentTransactionArgs = vi.fn();
 
 const MOCKED_ACCOUNT = '0xmockAccount' as Hex;
 
-const mockGui = {
+const mockBuilder = {
 	getDeploymentTransactionArgs: mockGetDeploymentTransactionArgs
-} as unknown as DotrainOrderGui;
+} as unknown as RaindexOrderBuilder;
 
 const mockRaindexClient = {} as unknown as RaindexClient;
 
@@ -38,7 +38,7 @@ const mockDeps: HandleAddOrderDependencies = {
 	handleTransactionConfirmationModal: mockHandleTransactionConfirmationModal,
 	errToast: mockErrToast,
 	manager: mockManager,
-	gui: mockGui,
+	builder: mockBuilder,
 	account: MOCKED_ACCOUNT,
 	raindexClient: mockRaindexClient
 };
@@ -51,7 +51,7 @@ const mockMetaCall = {
 const mockDeploymentArgs: DeploymentTransactionArgs = {
 	approvals: [],
 	deploymentCalldata: '0xdeploymentCalldata' as Hex,
-	orderbookAddress: '0xorderbookAddressFromArgs' as Hex,
+	raindexAddress: '0xraindexAddressFromArgs' as Hex,
 	chainId: 1,
 	emitMetaCall: undefined
 };
@@ -101,7 +101,7 @@ describe('handleAddOrder', () => {
 				open: true,
 				modalTitle: 'Deploying your order',
 				args: expect.objectContaining({
-					toAddress: currentTestSpecificArgs.orderbookAddress,
+					toAddress: currentTestSpecificArgs.raindexAddress,
 					chainId: currentTestSpecificArgs.chainId,
 					calldata: currentTestSpecificArgs.deploymentCalldata,
 					onConfirm: expect.any(Function)
@@ -202,7 +202,7 @@ describe('handleAddOrder', () => {
 				open: true,
 				modalTitle: 'Deploying your order',
 				args: expect.objectContaining({
-					toAddress: currentTestSpecificArgs.orderbookAddress,
+					toAddress: currentTestSpecificArgs.raindexAddress,
 					chainId: currentTestSpecificArgs.chainId,
 					calldata: currentTestSpecificArgs.deploymentCalldata,
 					onConfirm: expect.any(Function)
@@ -313,7 +313,7 @@ describe('handleAddOrder', () => {
 			4,
 			expect.objectContaining({
 				modalTitle: 'Deploying your order',
-				args: expect.objectContaining({ toAddress: currentTestSpecificArgs.orderbookAddress })
+				args: expect.objectContaining({ toAddress: currentTestSpecificArgs.raindexAddress })
 			})
 		);
 
@@ -488,7 +488,7 @@ describe('handleAddOrder', () => {
 	});
 
 	it('should call errToast if getDeploymentTransactionArgs returns an error', async () => {
-		const customErrorMsg = 'Custom error from gui';
+		const customErrorMsg = 'Custom error from builder';
 		mockGetDeploymentTransactionArgs.mockResolvedValue({
 			value: null,
 			error: { msg: customErrorMsg }

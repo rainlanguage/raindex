@@ -3,15 +3,15 @@
 	import { RainlangLR } from 'codemirror-rainlang';
 	import { lightCodeMirrorTheme } from '../../utils/codeMirrorThemes';
 	import { Button, Modal } from 'flowbite-svelte';
-	import { useGui } from '$lib/hooks/useGui';
+	import { useRaindexOrderBuilder } from '$lib/hooks/useRaindexOrderBuilder';
 
-	const gui = useGui();
+	const builder = useRaindexOrderBuilder();
 
 	let rainlangText: string | null = null;
 	let open = false;
 
 	async function generateRainlang() {
-		let result = await gui.getComposedRainlang();
+		let result = await builder.getComposedRainlang();
 		if (result.error) {
 			throw new Error(result.error.msg);
 		}
