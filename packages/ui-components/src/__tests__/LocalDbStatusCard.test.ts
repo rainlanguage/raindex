@@ -29,10 +29,24 @@ describe("LocalDbStatusCard", () => {
     expect(screen.getByTestId("local-db-status")).toBeInTheDocument();
   });
 
-  it("shows active status when no networks have failures", () => {
+  it("shows syncing status when a network is syncing and none are failing", () => {
     const networkStatuses = new Map<number, NetworkSyncStatus>([
       [1, { chainId: 1, status: "active", schedulerState: "leader" }],
       [137, { chainId: 137, status: "syncing", schedulerState: "leader" }],
+    ]);
+
+    render(LocalDbStatusCard, {
+      props: { networkStatuses },
+    });
+
+    expect(screen.getByText("LocalDB")).toBeInTheDocument();
+    expect(screen.getByText("Syncing")).toBeInTheDocument();
+  });
+
+  it("shows active status when all networks are active", () => {
+    const networkStatuses = new Map<number, NetworkSyncStatus>([
+      [1, { chainId: 1, status: "active", schedulerState: "leader" }],
+      [137, { chainId: 137, status: "active", schedulerState: "leader" }],
     ]);
 
     render(LocalDbStatusCard, {
@@ -77,7 +91,7 @@ describe("LocalDbStatusCard", () => {
     expect(screen.getByTestId("local-db-status-header")).toBeInTheDocument();
   });
 
-  it("shows active status when all networks are syncing but none failing", () => {
+  it("shows syncing status when all networks are syncing but none failing", () => {
     const networkStatuses = new Map<number, NetworkSyncStatus>([
       [137, { chainId: 137, status: "syncing", schedulerState: "leader" }],
       [42161, { chainId: 42161, status: "syncing", schedulerState: "leader" }],
@@ -87,7 +101,79 @@ describe("LocalDbStatusCard", () => {
       props: { networkStatuses },
     });
 
-    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(screen.getByText("Syncing")).toBeInTheDocument();
+  });
+
+  it("shows syncing status when only a raindex is syncing", () => {
+    const networkStatuses = new Map<number, NetworkSyncStatus>([
+      [137, { chainId: 137, status: "active", schedulerState: "leader" }],
+    ]);
+    const raindexStatuses = new Map<string, RaindexSyncStatus>([
+      [
+        "137:0x1234567890123456789012345678901234567890",
+        {
+          raindexId: {
+            chainId: 137,
+            raindexAddress: "0x1234567890123456789012345678901234567890",
+          },
+          status: "syncing",
+          schedulerState: "leader",
+        },
+      ],
+    ]);
+
+    render(LocalDbStatusCard, {
+      props: { networkStatuses, raindexStatuses },
+    });
+
+    expect(screen.getByText("Syncing")).toBeInTheDocument();
+  });
+
+  it("shows failure when a network fails even while another is syncing", () => {
+    const networkStatuses = new Map<number, NetworkSyncStatus>([
+      [137, { chainId: 137, status: "syncing", schedulerState: "leader" }],
+      [
+        42161,
+        {
+          chainId: 42161,
+          status: "failure",
+          schedulerState: "leader",
+          error: "RPC error",
+        },
+      ],
+    ]);
+
+    render(LocalDbStatusCard, {
+      props: { networkStatuses },
+    });
+
+    expect(screen.getByText("Failure")).toBeInTheDocument();
+  });
+
+  it("shows failure when a raindex fails even while a network is syncing", () => {
+    const networkStatuses = new Map<number, NetworkSyncStatus>([
+      [137, { chainId: 137, status: "syncing", schedulerState: "leader" }],
+    ]);
+    const raindexStatuses = new Map<string, RaindexSyncStatus>([
+      [
+        "137:0x1234567890123456789012345678901234567890",
+        {
+          raindexId: {
+            chainId: 137,
+            raindexAddress: "0x1234567890123456789012345678901234567890",
+          },
+          status: "failure",
+          schedulerState: "leader",
+          error: "Decode error",
+        },
+      ],
+    ]);
+
+    render(LocalDbStatusCard, {
+      props: { networkStatuses, raindexStatuses },
+    });
+
+    expect(screen.getByText("Failure")).toBeInTheDocument();
   });
 
   it("shows active status when empty maps are provided", () => {
