@@ -41,6 +41,7 @@ pub mod remove_orders;
 pub mod take_orders;
 pub mod trades;
 pub mod transactions;
+pub mod types;
 pub mod vaults;
 pub mod vaults_list;
 

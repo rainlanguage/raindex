@@ -16,7 +16,6 @@ pub mod executor;
 pub mod orders;
 pub mod pipeline;
 pub mod query;
-pub mod trades;
 pub mod transactions;
 pub mod vaults;
 

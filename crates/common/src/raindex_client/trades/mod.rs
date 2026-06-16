@@ -1,4 +1,9 @@
+mod get_by_owner;
 mod get_by_tx;
+mod local_db;
+mod subgraph;
+pub(crate) use local_db::LocalDbTrades;
+pub(crate) use subgraph::SubgraphTrades;
 
 use super::local_db::orders::LocalDbOrders;
 use super::orders::{OrdersDataSource, SubgraphOrders};
@@ -84,6 +89,41 @@ impl RaindexTrade {
     }
     pub fn orderbook(&self) -> Address {
         self.orderbook
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexTradesListResult {
+    trades: Vec<RaindexTrade>,
+    total_count: u64,
+}
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexTradesListResult {
+    #[wasm_bindgen(getter)]
+    pub fn trades(&self) -> Vec<RaindexTrade> {
+        self.trades.clone()
+    }
+    #[wasm_bindgen(getter = totalCount)]
+    pub fn total_count(&self) -> u64 {
+        self.total_count
+    }
+}
+#[cfg(not(target_family = "wasm"))]
+impl RaindexTradesListResult {
+    pub fn new(trades: Vec<RaindexTrade>, total_count: u64) -> Self {
+        Self {
+            trades,
+            total_count,
+        }
+    }
+    pub fn trades(&self) -> Vec<RaindexTrade> {
+        self.trades.clone()
+    }
+    pub fn total_count(&self) -> u64 {
+        self.total_count
     }
 }
 

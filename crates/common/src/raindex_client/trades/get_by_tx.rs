@@ -1,12 +1,11 @@
-use super::RaindexTrade;
+use super::LocalDbTrades;
+use super::SubgraphTrades;
 use super::*;
 use crate::local_db::is_chain_supported_local_db;
 use crate::local_db::OrderbookIdentifier;
-use crate::raindex_client::local_db::trades::LocalDbTrades;
 use alloy::primitives::{Address, B256};
 #[cfg(target_family = "wasm")]
 use gloo_timers::future::TimeoutFuture;
-use rain_orderbook_subgraph_client::types::Id;
 use rain_orderbook_subgraph_client::OrderbookSubgraphClientError;
 use std::str::FromStr;
 #[cfg(not(target_family = "wasm"))]
@@ -105,25 +104,19 @@ impl RaindexClient {
             }
         }
 
-        let client = self.get_orderbook_client(orderbook_address)?;
+        let sg_source = SubgraphTrades::new(self);
         for attempt in 1..=attempts {
-            match client
-                .transaction_trades(Id::new(tx_hash.to_string()))
-                .await
-            {
-                Ok(sg_trades) => {
-                    return sg_trades
-                        .into_iter()
-                        .map(|t| RaindexTrade::try_from_sg_trade(chain_id, t))
-                        .collect();
-                }
-                Err(OrderbookSubgraphClientError::Empty) => {
+            match sg_source.get_by_tx_hash(&ob_id, tx_hash).await {
+                Ok(trades) => return Ok(trades),
+                Err(RaindexError::OrderbookSubgraphClientError(
+                    OrderbookSubgraphClientError::Empty,
+                )) => {
                     if attempt < attempts {
                         sleep_ms(interval_ms).await;
                         continue;
                     }
                 }
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             }
         }
 
