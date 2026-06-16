@@ -158,6 +158,8 @@
 
 				<Refresh
 					testId="top-refresh"
+					title="Refresh order"
+					ariaLabel="Refresh order"
 					on:click={handleRefresh}
 					spin={$orderDetailQuery.isLoading || $orderDetailQuery.isFetching}
 				/>
