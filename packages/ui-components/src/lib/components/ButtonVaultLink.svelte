@@ -19,6 +19,7 @@
 		<a
 			href={`/vaults/${chainId}-${raindexAddress}-${tokenVault.id}`}
 			id={`token-info-${tokenVault.vaultId}`}
+			class="text-blue-500 hover:underline"
 		>
 			{tokenVault.token.name} ({tokenVault.token.symbol})
 		</a>

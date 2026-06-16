@@ -1,7 +1,8 @@
 <script lang="ts">
-	import type { LocalDbStatus, NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
+	import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
 	import LocalDbStatusBadge from './LocalDbStatusBadge.svelte';
 	import LocalDbStatusModal from './LocalDbStatusModal.svelte';
+	import { aggregateLocalDbStatus } from '../utils/localDbStatus';
 	import { ChevronRightOutline } from 'flowbite-svelte-icons';
 
 	export let networkStatuses: Map<number, NetworkSyncStatus> = new Map();
@@ -11,8 +12,10 @@
 
 	$: networkList = Array.from(networkStatuses.values());
 	$: hasNetworks = networkList.length > 0;
-	$: hasFailure = networkList.some((s) => s.status === 'failure');
-	$: displayStatus = (hasFailure ? 'failure' : 'active') as LocalDbStatus;
+	$: displayStatus = aggregateLocalDbStatus([
+		...networkList,
+		...Array.from(raindexStatuses.values())
+	]).status;
 
 	function openModal() {
 		modalOpen = true;
