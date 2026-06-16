@@ -33,10 +33,12 @@ import {
  */
 export type AddToastFunction = (toast: Omit<ToastProps, "id">) => void;
 
+const ADD_ORDER_INDEXING_MAX_ATTEMPTS = 12;
+const ADD_ORDER_INDEXING_INTERVAL_MS = 5_000;
+
 /**
  * Creates an indexing function that wraps SDK-based polling logic.
- * The SDK handles local-DB-first polling followed by subgraph fallback internally,
- * so we only need to call it once.
+ * The SDK handles the retry loop internally, so we only need to call it once.
  *
  * @param options Configuration for SDK-based indexing
  * @param options.call Function that calls the SDK method (e.g. getAddOrdersForTransaction)
@@ -496,11 +498,16 @@ export class TransactionManager {
       },
     ];
 
-    // SDK-based indexing - the SDK's getAddOrdersForTransaction handles
-    // local-DB-first polling followed by subgraph fallback internally
+    // SDK-based indexing - getAddOrdersForTransaction handles the retry loop.
     const awaitIndexingFn = createSdkIndexingFn({
       call: () =>
-        raindexClient.getAddOrdersForTransaction(chainId, raindex, txHash),
+        raindexClient.getAddOrdersForTransaction(
+          chainId,
+          raindex,
+          txHash,
+          ADD_ORDER_INDEXING_MAX_ATTEMPTS,
+          ADD_ORDER_INDEXING_INTERVAL_MS,
+        ),
       isSuccess: (orders) => Array.isArray(orders) && orders.length > 0,
       buildLinks: (orders) => {
         if (!Array.isArray(orders) || orders.length === 0) return [];
