@@ -26,6 +26,14 @@ describe("ButtonDarkMode.svelte", () => {
     expect(screen.getByTestId("mock-component")).toBeInTheDocument();
   });
 
+  it("shows hover title and aria-label on the dark mode toggle button", () => {
+    render(ButtonDarkMode, { props: { colorTheme: mockColorThemeStore } });
+
+    const button = screen.getByTestId("dark-mode-toggle");
+    expect(button).toHaveAttribute("title", "Toggle dark mode");
+    expect(button).toHaveAttribute("aria-label", "Toggle dark mode");
+  });
+
   it('sets colorTheme to "light" when toggled in light mode', async () => {
     render(ButtonDarkMode, { props: { colorTheme: mockColorThemeStore } });
     const button = screen.getByRole("button");

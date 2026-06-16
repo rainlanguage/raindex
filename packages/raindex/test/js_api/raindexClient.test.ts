@@ -1010,6 +1010,59 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       ]);
     });
 
+    it("should express the order quote max output as a percentage of its output vault balance when the vault matches", async () => {
+      // order1's decoded on-chain validOutputs[0] references vaultId 0x12, but
+      // its subgraph output vault carries a different vaultId, so the "should
+      // get order quote" test above sees no match and the percentage field is
+      // absent. Here we point the subgraph output vault at the on-chain vaultId
+      // so the percentage is populated from the already-fetched balance.
+      const onchainVaultId = "0x12";
+      const matchingOrder = JSON.parse(JSON.stringify(order1)) as SgOrder;
+      matchingOrder.outputs[0].vaultId = onchainVaultId;
+
+      await mockServer
+        .forPost("/sg1")
+        .thenReply(200, JSON.stringify({ data: { orders: [matchingOrder] } }));
+      await mockServer.forPost("/rpc1").once().thenSendJsonRpcResult("0x01");
+      await mockServer
+        .forPost("/rpc1")
+        .thenSendJsonRpcResult(
+          "0x0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000020" +
+            "0000000000000000000000000000000000000000000000000000000000000060" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000001" +
+            "0000000000000000000000000000000000000000000000000000000000000002",
+        );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const order = extractWasmEncodedData(
+        await raindexClient.getOrderByHash(
+          1,
+          CHAIN_ID_1_RAINDEX_ADDRESS,
+          BYTES32_0123,
+        ),
+      );
+
+      const result = extractWasmEncodedData(await order.getQuotes());
+      assert.equal(result.length, 1);
+      // maxOutput 1 / output vault balance 10 * 100 = 10%. Asserting the exact
+      // value (not just a non-empty string) proves the computed percentage
+      // survives the wasm/serde boundary and reaches JS under the camelCase key
+      // the UI reads.
+      assert.equal(result[0].data?.formattedMaxOutput, "1");
+      assert.equal(result[0].data?.formattedMaxOutputAsPercentOfVault, "10");
+      // The input side is deliberately not computed (drawdown is an output-side
+      // concept), so the field never exists on the wasm boundary.
+      assert.equal(
+        "formattedMaxInputAsPercentOfVault" in (result[0].data ?? {}),
+        false,
+      );
+    });
+
     it("should get order quotes batch", async () => {
       await mockServer
         .forPost("/sg1")
