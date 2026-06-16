@@ -94,7 +94,7 @@ pub struct ApprovalCalldata {
     pub calldata: Bytes,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VaultAndDeposit {
     pub order_io: OrderIOCfg,
     pub deposit_amount: Float,
@@ -169,6 +169,38 @@ impl RaindexOrderBuilder {
         Ok(results)
     }
 
+    async fn get_vault_backed_vaults_and_deposits(
+        &self,
+        deployment: &OrderBuilderDeploymentCfg,
+    ) -> Result<Vec<VaultAndDeposit>, RaindexOrderBuilderError> {
+        self.get_vaults_and_deposits(deployment)
+            .await
+            .map(|vaults_and_deposits| {
+                vaults_and_deposits
+                    .into_iter()
+                    .filter(|vault_and_deposit| !vault_and_deposit.order_io.vaultless)
+                    .collect()
+            })
+    }
+
+    async fn get_output_deposits_by_token(
+        &self,
+        deployment: &OrderBuilderDeploymentCfg,
+    ) -> Result<HashMap<Address, VaultAndDeposit>, RaindexOrderBuilderError> {
+        self.get_vaults_and_deposits(deployment)
+            .await?
+            .into_iter()
+            .map(|vault_and_deposit| {
+                vault_and_deposit
+                    .order_io
+                    .token
+                    .as_ref()
+                    .map(|token| (token.address, vault_and_deposit.clone()))
+                    .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)
+            })
+            .collect()
+    }
+
     pub fn prepare_calldata_generation(
         &mut self,
         calldata_function: CalldataFunction,
@@ -232,8 +264,9 @@ impl RaindexOrderBuilder {
         &mut self,
         owner: String,
     ) -> Result<ApprovalCalldataResult, RaindexOrderBuilderError> {
-        let deposits_map = self.get_deposits_as_map().await?;
-        if deposits_map.is_empty() {
+        let deployment = self.prepare_calldata_generation(CalldataFunction::Allowance)?;
+        let output_deposits = self.get_output_deposits_by_token(&deployment).await?;
+        if output_deposits.is_empty() {
             return Ok(ApprovalCalldataResult::NoDeposits);
         }
 
@@ -241,29 +274,34 @@ impl RaindexOrderBuilder {
 
         let mut calldatas = Vec::new();
 
-        for (token_address, deposit_amount) in &deposits_map {
+        for VaultAndDeposit {
+            order_io,
+            deposit_amount,
+            index: _,
+        } in output_deposits.into_values()
+        {
             let tx_args = self.get_transaction_args()?;
             let rpcs = tx_args
                 .rpcs
                 .iter()
                 .map(|rpc| Url::parse(rpc))
                 .collect::<Result<Vec<_>, _>>()?;
+            let token = order_io
+                .token
+                .as_ref()
+                .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)?;
 
-            let erc20 = ERC20::new(rpcs, *token_address);
+            let erc20 = ERC20::new(rpcs, token.address);
             let decimals = erc20.decimals().await?;
 
             // An allowance read needs only the token, owner and raindex spender -
             // no deposit context.
-            let allowance = read_allowance(
-                &tx_args.rpcs,
-                *token_address,
-                owner,
-                tx_args.raindex_address,
-            )
-            .await?;
+            let allowance =
+                read_allowance(&tx_args.rpcs, token.address, owner, tx_args.raindex_address)
+                    .await?;
             let allowance_float = Float::from_fixed_decimal(allowance, decimals)?;
 
-            if !allowance_float.eq(*deposit_amount)? {
+            if !allowance_float.eq(deposit_amount)? {
                 let calldata = approveCall {
                     spender: tx_args.raindex_address,
                     amount: deposit_amount.to_fixed_decimal(decimals)?,
@@ -271,7 +309,7 @@ impl RaindexOrderBuilder {
                 .abi_encode();
 
                 calldatas.push(ApprovalCalldata {
-                    token: *token_address,
+                    token: token.address,
                     calldata: Bytes::copy_from_slice(&calldata),
                 });
             }
@@ -335,7 +373,9 @@ impl RaindexOrderBuilder {
     ) -> Result<DepositCalldataResult, RaindexOrderBuilderError> {
         let deployment = self.prepare_calldata_generation(CalldataFunction::Deposit)?;
 
-        let vaults_and_deposits = self.get_vaults_and_deposits(&deployment).await?;
+        let vaults_and_deposits = self
+            .get_vault_backed_vaults_and_deposits(&deployment)
+            .await?;
         if vaults_and_deposits.is_empty() {
             return Ok(DepositCalldataResult::NoDeposits);
         }
@@ -657,7 +697,7 @@ impl RaindexOrderBuilder {
 mod tests {
     use super::*;
     use crate::raindex_order_builder::tests::{
-        initialize_builder, initialize_builder_with_select_tokens,
+        get_yaml, initialize_builder, initialize_builder_with_select_tokens,
     };
     use rain_metadata::{types::dotrain::source_v1::DotrainSourceV1, RainMetaDocumentV1Item};
 
@@ -703,6 +743,116 @@ mod tests {
                 panic!("should not be no deposits");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_generate_deposit_calldatas_skips_vaultless_output() {
+        let mut builder = initialize_builder(Some("other-deployment".to_string())).await;
+        builder
+            .set_vaultless(VaultType::Output, "token1".to_string(), true)
+            .unwrap();
+        builder
+            .set_deposit("token1".to_string(), "1200".to_string())
+            .await
+            .unwrap();
+
+        let res = builder.generate_deposit_calldatas().await.unwrap();
+        match res {
+            DepositCalldataResult::NoDeposits => {}
+            DepositCalldataResult::Calldatas(calldatas) => {
+                assert!(calldatas.is_empty());
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_generate_deposit_calldatas_keeps_mixed_vault_backed_outputs() {
+        let yaml = get_yaml()
+            .replace(
+                "      deposits:\n        - token: token1\n          min: 0\n          presets:\n            - \"0\"\n      fields:",
+                "      deposits:\n        - token: token1\n          min: 0\n          presets:\n            - \"0\"\n        - token: token2\n          min: 0\n          presets:\n            - \"0\"\n      fields:",
+            )
+            .replace(
+                "      outputs:\n        - token: token1\n      rainlang: some-deployer",
+                "      outputs:\n        - token: token1\n        - token: token2\n          vault-id: 2\n      rainlang: some-deployer",
+            );
+        let mut builder =
+            RaindexOrderBuilder::new_with_deployment(yaml, None, "other-deployment".to_string())
+                .await
+                .unwrap();
+        builder
+            .set_vaultless(VaultType::Output, "token1".to_string(), true)
+            .unwrap();
+        builder
+            .set_deposit("token1".to_string(), "1200".to_string())
+            .await
+            .unwrap();
+        builder
+            .set_deposit("token2".to_string(), "3400".to_string())
+            .await
+            .unwrap();
+
+        let res = builder.generate_deposit_calldatas().await.unwrap();
+        match res {
+            DepositCalldataResult::Calldatas(calldatas) => {
+                assert_eq!(calldatas.len(), 1);
+                assert_eq!(calldatas[0].len(), 164);
+            }
+            DepositCalldataResult::NoDeposits => {
+                panic!("should keep vault-backed output deposit");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_output_deposits_by_token_deduplicates_repeated_outputs() {
+        let yaml = get_yaml().replace(
+            "      outputs:\n        - token: token1\n      rainlang: some-deployer",
+            "      outputs:\n        - token: token1\n        - token: token1\n      rainlang: some-deployer",
+        );
+        let mut builder =
+            RaindexOrderBuilder::new_with_deployment(yaml, None, "other-deployment".to_string())
+                .await
+                .unwrap();
+        builder
+            .set_deposit("token1".to_string(), "1200".to_string())
+            .await
+            .unwrap();
+
+        let deployment = builder.get_current_deployment().unwrap();
+        let output_deposits = builder
+            .get_output_deposits_by_token(&deployment)
+            .await
+            .unwrap();
+
+        assert_eq!(output_deposits.len(), 1);
+        assert!(output_deposits.contains_key(
+            &Address::from_str("0xc2132d05d31c914a87c6611c10748aeb04b58e8f").unwrap()
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_output_deposits_by_token_ignores_input_only_deposits() {
+        let yaml = get_yaml().replace(
+            "      outputs:\n        - token: token1\n      rainlang: some-deployer",
+            "      outputs:\n        - token: token2\n      rainlang: some-deployer",
+        );
+        let mut builder =
+            RaindexOrderBuilder::new_with_deployment(yaml, None, "other-deployment".to_string())
+                .await
+                .unwrap();
+        builder
+            .set_deposit("token1".to_string(), "1200".to_string())
+            .await
+            .unwrap();
+
+        let deployment = builder.get_current_deployment().unwrap();
+        let output_deposits = builder
+            .get_output_deposits_by_token(&deployment)
+            .await
+            .unwrap();
+
+        assert!(output_deposits.is_empty());
     }
 
     #[tokio::test]
