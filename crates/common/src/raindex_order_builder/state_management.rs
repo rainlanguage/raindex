@@ -33,6 +33,32 @@ struct SerializedBuilderState {
     vault_ids: BTreeMap<(VaultType, String), Option<String>>,
     dotrain_hash: String,
     selected_deployment: String,
+    vaultless: BTreeMap<(VaultType, String), bool>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct LegacySerializedBuilderState {
+    field_values: BTreeMap<String, OrderBuilderPresetCfg>,
+    deposits: BTreeMap<String, OrderBuilderPresetCfg>,
+    select_tokens: BTreeMap<String, TokenCfg>,
+    vault_ids: BTreeMap<(VaultType, String), Option<String>>,
+    dotrain_hash: String,
+    selected_deployment: String,
+}
+
+impl From<LegacySerializedBuilderState> for SerializedBuilderState {
+    fn from(state: LegacySerializedBuilderState) -> Self {
+        Self {
+            field_values: state.field_values,
+            deposits: state.deposits,
+            select_tokens: state.select_tokens,
+            vault_ids: state.vault_ids,
+            dotrain_hash: state.dotrain_hash,
+            selected_deployment: state.selected_deployment,
+            vaultless: BTreeMap::new(),
+        }
+    }
 }
 
 impl RaindexOrderBuilder {
@@ -84,6 +110,22 @@ impl RaindexOrderBuilder {
             vault_ids.insert((r#type, token), vault_id.as_ref().map(|v| v.to_string()));
         }
         Ok(vault_ids)
+    }
+
+    fn parse_vaultless_for_order(
+        documents: Vec<Arc<RwLock<StrictYaml>>>,
+        order_key: &str,
+        is_input: bool,
+    ) -> Result<BTreeMap<(VaultType, String), bool>, RaindexOrderBuilderError> {
+        let r#type = if is_input {
+            VaultType::Input
+        } else {
+            VaultType::Output
+        };
+        Ok(OrderCfg::parse_vaultless(documents, order_key, r#type)?
+            .into_iter()
+            .map(|(token, value)| ((r#type, token), value))
+            .collect())
     }
 
     pub fn generate_dotrain_builder_state_instance_v1(
@@ -248,11 +290,24 @@ impl RaindexOrderBuilder {
             false,
         )?);
 
+        let mut vaultless = BTreeMap::new();
+        vaultless.extend(Self::parse_vaultless_for_order(
+            self.dotrain_order.dotrain_yaml().documents.clone(),
+            &order_key,
+            true,
+        )?);
+        vaultless.extend(Self::parse_vaultless_for_order(
+            self.dotrain_order.dotrain_yaml().documents.clone(),
+            &order_key,
+            false,
+        )?);
+
         let state = SerializedBuilderState {
             field_values: field_values.clone(),
             deposits: deposits.clone(),
             select_tokens: select_tokens.clone(),
             vault_ids: vault_ids.clone(),
+            vaultless: vaultless.clone(),
             dotrain_hash: self.dotrain_hash.clone(),
             selected_deployment: self.selected_deployment.clone(),
         };
@@ -275,7 +330,9 @@ impl RaindexOrderBuilder {
         let mut decoder = GzDecoder::new(&compressed[..]);
         let mut bytes = Vec::new();
         decoder.read_to_end(&mut bytes)?;
-        let state: SerializedBuilderState = bincode::deserialize(&bytes)?;
+        let state: SerializedBuilderState = bincode::deserialize(&bytes).or_else(|_| {
+            bincode::deserialize::<LegacySerializedBuilderState>(&bytes).map(Into::into)
+        })?;
 
         let dotrain_order = DotrainOrder::create_with_profile(
             dotrain.clone(),
@@ -341,6 +398,13 @@ impl RaindexOrderBuilder {
             builder.dotrain_order.dotrain_yaml().documents,
             &state.selected_deployment,
         )?;
+        for ((r#type, token), vaultless) in state.vaultless {
+            builder
+                .dotrain_order
+                .dotrain_yaml()
+                .get_order_for_builder_deployment(&order_key, &state.selected_deployment)
+                .and_then(|mut order| order.update_vaultless(r#type, token, vaultless))?;
+        }
         for ((is_input, index), vault_id) in state.vault_ids {
             builder
                 .dotrain_order
@@ -399,7 +463,8 @@ mod tests {
     use raindex_app_settings::{network::NetworkCfg, order::VaultType, yaml::YamlParsableHash};
     use std::str::FromStr;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByw0qROssIchgiIIStG-ahu0JE1Km1o__oQ_Was3FYv34Z5zc07uvUnDusYb4DKSYSRXmFomngApIXWTg-CAWBUz5AVQK85k61G3x8776h2qTMUMS6YLlXJz7wtwrXXStW2hgoVYq0x3O6TTttMkwHkqDqUDlRmZ0X1v8AG0-TvbHmsJNdEryF65w3cLPZt6ND6_pGHd4m5bWo2grovqqlOpjuv-APUp99NEFsNJO4udvD_ozcM8-s95T03Gnj_0pzHf0D1huPj7NH_BBAs0vjTFIUuE2sVM6hODT8eRygEAAA==";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_3VQXWvCMBRN3NgY7EkGexrsByw0qROssIchgjIQHGXr69aGWZImpU1XP_6EP1mrNxWr3od7zs09ufckLbSPO8DfWEWx-iMM2bgCZJQ2RS6GA4pqZskNoNGCq865aeeVx9U9VLlOOFHclDoT9t4T4MyYtO84Uoc_cqZz0-_RXtfJ0pAUmVxVClxlbFcP_dED0Pbr13zdSLiNb6HtVx6eO_ja1h-T7Uta6BBHblm9gnkebnbduut63gvQgIkgS1U5nnbzxC2Go8F3VMTvhRjo6cQPxsFnIv7ZknJSvj3av-CSh4bshpKIp1IvEq7MZVvo1AvaAGkw2IH4AQAA";
+    const LEGACY_SERIALIZED_STATE_WITHOUT_VAULTLESS: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByw0qROssIchgiIIStG-ahu0JE1Km1o__oQ_Was3FYv34Z5zc07uvUnDusYb4DKSYSRXmFomngApIXWTg-CAWBUz5AVQK85k61G3x8776h2qTMUMS6YLlXJz7wtwrXXStW2hgoVYq0x3O6TTttMkwHkqDqUDlRmZ0X1v8AG0-TvbHmsJNdEryF65w3cLPZt6ND6_pGHd4m5bWo2grovqqlOpjuv-APUp99NEFsNJO4udvD_ozcM8-s95T03Gnj_0pzHf0D1huPj7NH_BBAs0vjTFIUuE2sVM6hODT8eRygEAAA==";
 
     fn encode_state(state: &SerializedBuilderState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -547,6 +612,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_new_from_legacy_state_without_vaultless() {
+        let builder = RaindexOrderBuilder::new_from_state(
+            get_yaml(),
+            None,
+            LEGACY_SERIALIZED_STATE_WITHOUT_VAULTLESS.to_string(),
+        )
+        .await
+        .unwrap();
+
+        let vaultless = builder.get_vaultless().unwrap().0;
+        assert!(!vaultless.get("input").unwrap()["token1"]);
+        assert!(!vaultless.get("output").unwrap()["token2"]);
+    }
+
+    #[tokio::test]
+    async fn test_serialize_state_round_trips_vaultless() {
+        let mut builder = initialize_builder_with_select_tokens().await;
+        builder
+            .set_vaultless(VaultType::Output, "token2".to_string(), true)
+            .unwrap();
+
+        let state = builder.serialize_state().unwrap();
+        let restored = RaindexOrderBuilder::new_from_state(get_yaml(), None, state)
+            .await
+            .unwrap();
+
+        let vaultless = restored.get_vaultless().unwrap().0;
+        assert!(vaultless.get("output").unwrap()["token2"]);
+        assert_eq!(
+            restored.get_vault_ids().unwrap().0.get("output").unwrap()["token2"],
+            None
+        );
+        assert!(restored
+            .generate_dotrain_text()
+            .unwrap()
+            .contains("vaultless"));
+    }
+
+    #[tokio::test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
             version: 6
@@ -631,6 +735,7 @@ mod tests {
             deposits: BTreeMap::new(),
             select_tokens: BTreeMap::from([("token1".to_string(), token)]),
             vault_ids: BTreeMap::new(),
+            vaultless: BTreeMap::new(),
             dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),
         });
@@ -689,6 +794,7 @@ mod tests {
             deposits: BTreeMap::new(),
             select_tokens: BTreeMap::from([("token3".to_string(), replacement_token.clone())]),
             vault_ids: BTreeMap::new(),
+            vaultless: BTreeMap::new(),
             dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),
         });

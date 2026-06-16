@@ -1145,7 +1145,7 @@ describe("Rain Raindex JS API Package Bindgen Tests - Builder", async function (
 
   describe("state management tests", async () => {
     let serializedState =
-      "H4sIAAAAAAAA_21QsU7DMBCNAwIJMSDEioTEionrKEmpylBQVYZKIJFKdAyp20R17GC7BMRHMLLyAxVfwMrG9yA2iLBDo_YGv_O9d757BtZfbGtURCp4m7JRyiZA15C1tcjeR3RGbF3ZMAyfEtawTKxr9NCxX5PgSrKmsYEQWPUYrt_MgpJnBDKiCi6mpm9fY6JU3nIcyuOIJlyqVhM1PUfkMZwJ-lQqQHkCM7obXuzp9Ln9NT_8bM_fX7y37xsbn3y8xmAXbGo6LHc4wMDYDn992NZ_1L-hGuD7PljyVbGu6x7p9KzI6aB7FWZQBQMpewGO-kHnYdznBU2HdxMu8HnvujO-FMPTHd3DVUIEHJGc8seMMPUDQuHlHcsBAAA=";
+      "H4sIAAAAAAAA_3VQsU7DMBC1AwIJMSDEioTESojrKEmpylBQVYZKIJFKdAyp20R17GC7BMRHMLLyAxVfwMrG9yA2iLADUekNfud7d773DMFPbGpURCr7OmWjlE2griGw8Ze9jeiMWLqyZhg-JawBTKxq9NChX2vBVcuKxgZC8L_HcP1mBEqeEZsRVXAxNXO7GhOl8pbjUB5HNOFStZqo6Tkij-2ZoA9lByxPaFZ3w7MdnT62P-b77-3565P38nll4aO35xhuw3VNh6WGPQyN7fDbhwV-o_4N1QLf9-GCr4p1XfdApydFTgfdizCzVTCQshfgqB907sZ9XtB0eDPhAp_2LjvjczE83tIzXCVE2COSU36fEaaW6wGLIsAXbQ5sUfkBAAA=";
     let dotrain3: string;
     let builder: RaindexOrderBuilder;
     beforeAll(async () => {
@@ -2065,6 +2065,115 @@ ${dotrainWithoutVaultIds}`;
       expect(stateUpdateCallback).toHaveBeenCalledWith(
         extractWasmEncodedData(builder.serializeState()),
       );
+    });
+
+    it("should set and restore vaultless flags", async () => {
+      let stateUpdateCallback = vi.fn();
+      mockServer
+        .forPost("/rpc-url")
+        .withBodyIncluding("0x82ad56cb")
+        .thenSendJsonRpcResult(
+          "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000007546f6b656e203100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000025431000000000000000000000000000000000000000000000000000000000000",
+        );
+
+      let testDotrain = `
+          ${builderConfig2}
+
+          ${dotrainWithoutVaultIds}
+          `;
+      let builderResult = await RaindexOrderBuilder.newWithDeployment(
+        testDotrain,
+        undefined,
+        "other-deployment",
+        stateUpdateCallback,
+      );
+      const builder = extractWasmEncodedData(builderResult);
+
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, boolean>>>(
+          builder.getVaultless(),
+        )
+          .get("output")
+          ?.get("token2"),
+        false,
+      );
+
+      builder.setVaultless("output", "token2", true);
+
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, boolean>>>(
+          builder.getVaultless(),
+        )
+          .get("output")
+          ?.get("token2"),
+        true,
+      );
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, string | undefined>>>(
+          builder.getVaultIds(),
+        )
+          .get("output")
+          ?.get("token2"),
+        undefined,
+      );
+      assert.equal(
+        extractWasmEncodedData<OrderBuilderDeploymentCfg>(
+          builder.getCurrentDeployment(),
+        ).deployment.order.outputs[0].vaultless,
+        true,
+      );
+
+      const serialized = extractWasmEncodedData<string>(
+        builder.serializeState(),
+      );
+      builderResult = await RaindexOrderBuilder.newFromState(
+        testDotrain,
+        undefined,
+        serialized,
+      );
+      const restored = extractWasmEncodedData(builderResult);
+
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, boolean>>>(
+          restored.getVaultless(),
+        )
+          .get("output")
+          ?.get("token2"),
+        true,
+      );
+
+      restored.setVaultId("output", "token2", "0x234");
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, boolean>>>(
+          restored.getVaultless(),
+        )
+          .get("output")
+          ?.get("token2"),
+        false,
+      );
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, string | undefined>>>(
+          restored.getVaultIds(),
+        )
+          .get("output")
+          ?.get("token2"),
+        "0x234",
+      );
+
+      const result = restored.setVaultId("output", "token2", "0");
+      if (!result.error) expect.fail("Expected error");
+      expect(result.error.msg).toContain("vault-id must be nonzero");
+
+      restored.setVaultless("output", "token2", false);
+      assert.equal(
+        extractWasmEncodedData<Map<string, Map<string, boolean>>>(
+          restored.getVaultless(),
+        )
+          .get("output")
+          ?.get("token2"),
+        false,
+      );
+      assert.equal(stateUpdateCallback.mock.calls.length, 1);
     });
 
     it("should skip deposits with zero amount for deposit calldata", async () => {

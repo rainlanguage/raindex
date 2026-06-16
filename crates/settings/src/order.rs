@@ -79,7 +79,7 @@ impl OrderCfg {
             })
     }
 
-    fn parse_vaultless(value: &StrictYaml, location: &str) -> Result<bool, YamlError> {
+    fn parse_vaultless_flag(value: &StrictYaml, location: &str) -> Result<bool, YamlError> {
         let value = &value["vaultless"];
         if value.is_badvalue() {
             return Ok(false);
@@ -101,7 +101,7 @@ impl OrderCfg {
         value: &StrictYaml,
         location: &str,
     ) -> Result<(bool, Option<U256>), YamlError> {
-        let vaultless = Self::parse_vaultless(value, location)?;
+        let vaultless = Self::parse_vaultless_flag(value, location)?;
         let vault_id_value = &value["vault-id"];
         let vault_id = if vault_id_value.is_badvalue() {
             None
@@ -691,6 +691,67 @@ impl OrderCfg {
         }
 
         Ok(vault_ids)
+    }
+
+    pub fn parse_vaultless(
+        documents: Vec<Arc<RwLock<StrictYaml>>>,
+        order_key: &str,
+        r#type: VaultType,
+    ) -> Result<HashMap<String, bool>, YamlError> {
+        let mut vaultless = HashMap::new();
+
+        for document in documents {
+            let document_read = document.read().map_err(|_| YamlError::ReadLockError)?;
+
+            if let Ok(orders_hash) = require_hash(&document_read, Some("orders"), None) {
+                if let Some(order_yaml) =
+                    orders_hash.get(&StrictYaml::String(order_key.to_string()))
+                {
+                    let location = format!("order '{}'", order_key);
+
+                    let items = match r#type {
+                        VaultType::Input => {
+                            require_vec(order_yaml, "inputs", Some(location.clone()))?
+                        }
+                        VaultType::Output => {
+                            require_vec(order_yaml, "outputs", Some(location.clone()))?
+                        }
+                    };
+
+                    for (idx, item) in items.iter().enumerate() {
+                        let token = require_string(
+                            item,
+                            Some("token"),
+                            Some(format!(
+                                "{} index '{}' in order '{}'",
+                                if r#type == VaultType::Input {
+                                    "input"
+                                } else {
+                                    "output"
+                                },
+                                idx,
+                                order_key
+                            )),
+                        )?;
+                        let (is_vaultless, _) =
+                            Self::parse_io_vault_fields(item, &format!("order '{}'", order_key))?;
+                        vaultless.insert(token, is_vaultless);
+                    }
+                }
+            }
+        }
+
+        if vaultless.is_empty() {
+            return Err(YamlError::Field {
+                kind: FieldErrorKind::InvalidType {
+                    field: "orders".to_string(),
+                    expected: "a map".to_string(),
+                },
+                location: "root".to_string(),
+            });
+        }
+
+        Ok(vaultless)
     }
 
     pub fn parse_io_token_keys(

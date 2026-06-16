@@ -56,6 +56,12 @@ pub struct IOVaultIds(
 impl_wasm_traits!(IOVaultIds);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
+pub struct IOVaultless(
+    #[tsify(type = "Map<string, Map<string, boolean>>")] pub HashMap<String, HashMap<String, bool>>,
+);
+impl_wasm_traits!(IOVaultless);
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
 pub struct WithdrawCalldataResult(#[tsify(type = "string[]")] pub Vec<Bytes>);
 impl_wasm_traits!(WithdrawCalldataResult);
 
@@ -175,6 +181,27 @@ impl RaindexOrderBuilder {
     )]
     pub fn get_vault_ids(&self) -> Result<inner_ops::IOVaultIds, RaindexOrderBuilderWasmError> {
         Ok(self.inner.get_vault_ids()?)
+    }
+
+    #[wasm_export(js_name = "setVaultless", unchecked_return_type = "void")]
+    pub fn set_vaultless(
+        &mut self,
+        #[wasm_export(param_description = "Vault type (input or output)")] r#type: VaultType,
+        #[wasm_export(param_description = "Token key")] token: String,
+        #[wasm_export(param_description = "Whether this IO is vaultless")] vaultless: bool,
+    ) -> Result<(), RaindexOrderBuilderWasmError> {
+        self.inner.set_vaultless(r#type, token, vaultless)?;
+        self.execute_state_update_callback()?;
+        Ok(())
+    }
+
+    #[wasm_export(
+        js_name = "getVaultless",
+        unchecked_return_type = "IOVaultless",
+        return_description = "Map of input/output vaultless flags by token"
+    )]
+    pub fn get_vaultless(&self) -> Result<inner_ops::IOVaultless, RaindexOrderBuilderWasmError> {
+        Ok(self.inner.get_vaultless()?)
     }
 
     #[wasm_export(
