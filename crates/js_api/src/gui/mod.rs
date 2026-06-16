@@ -514,7 +514,7 @@ impl DotrainOrderGui {
     /// ## Format
     ///
     /// The output follows the standard dotrain format:
-    /// ```
+    /// ```text
     /// gui:
     ///   ...
     /// ---
@@ -596,7 +596,7 @@ impl DotrainOrderGui {
         dotrain: &str,
         settings: Option<Vec<String>>,
     ) -> Result<Vec<Arc<RwLock<StrictYaml>>>, GuiError> {
-        let frontmatter = RainDocument::get_front_matter(&dotrain)
+        let frontmatter = RainDocument::get_front_matter(dotrain)
             .unwrap_or("")
             .to_string();
         let mut sources = vec![frontmatter];
@@ -635,8 +635,8 @@ pub enum GuiError {
     DotrainMismatch,
     #[error("Vault id not found for output index: {0}")]
     VaultIdNotFound(String),
-    #[error("Deployer not found")]
-    DeployerNotFound,
+    #[error("Rainlang not found")]
+    RainlangNotFound,
     #[error("Token not found {0}")]
     TokenNotFound(String),
     #[error("Invalid preset")]
@@ -734,8 +734,8 @@ impl GuiError {
                 "There was a mismatch in the dotrain configuration. Please check your YAML configuration for consistency.".to_string(),
             GuiError::VaultIdNotFound(index) =>
                 format!("The vault ID for output index '{}' could not be found in the YAML configuration.", index),
-            GuiError::DeployerNotFound =>
-                "The deployer configuration could not be found. Please check your YAML configuration.".to_string(),
+            GuiError::RainlangNotFound =>
+                "The rainlang configuration could not be found. Please check your YAML configuration.".to_string(),
             GuiError::TokenNotFound(token) =>
                 format!("The token '{}' could not be found in the YAML configuration.", token),
             GuiError::InvalidPreset =>
@@ -931,9 +931,9 @@ networks:
 subgraphs:
     some-sg: https://www.some-sg.com
 metaboards:
-    test: https://metaboard.com
-deployers:
-    some-deployer:
+    some-network: https://metaboard.com
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 orderbooks:
@@ -958,7 +958,7 @@ tokens:
         symbol: T2
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
         scenarios:
@@ -973,14 +973,14 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
     other-order:
       inputs:
         - token: token1
       outputs:
         - token: token1
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 deployments:
     some-deployment:
@@ -1161,8 +1161,8 @@ networks:
         currency: ETH
 subgraphs:
     test-sg: https://test.subgraph.com
-deployers:
-    test-deployer:
+rainlangs:
+    test-rainlang:
         network: test-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 orderbooks:
@@ -1211,7 +1211,7 @@ tokens:
         symbol: T6
 scenarios:
     test-scenario:
-        deployer: test-deployer
+        rainlang: test-rainlang
         bindings:
             test: 1
 orders:
@@ -1222,7 +1222,7 @@ orders:
       outputs:
         - token: token1
           vault-id: 1
-      deployer: test-deployer
+      rainlang: test-rainlang
       orderbook: test-orderbook
 deployments:
     validation-deployment:
@@ -1993,9 +1993,9 @@ gui:
 subgraphs:
     some-sg: https://www.some-sg.com
 metaboards:
-    test: https://metaboard.com
-deployers:
-    some-deployer:
+    some-network: https://metaboard.com
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 orderbooks:
@@ -2006,7 +2006,7 @@ orderbooks:
         deployment-block: 12345
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
         scenarios:
@@ -2015,7 +2015,7 @@ scenarios:
                     another-binding: 300
 orders:
     some-order:
-        deployer: some-deployer
+        rainlang: some-rainlang
         inputs:
             - token: token3
         outputs:
@@ -2059,16 +2059,17 @@ networks:
             );
 
             server.mock(|when, then| {
-                        when.method("POST").path("/rpc").body_contains("0x82ad56cb");
+                        when.method("POST").path("/rpc").body_contains("252dba42");
                         then.json_body(json!({
                             "jsonrpc": "2.0",
                             "id": 1,
-                            "result": "0x00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000007546f6b656e203100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000025431000000000000000000000000000000000000000000000000000000000000",
+                            "result": "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000007546f6b656e2031000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000025431000000000000000000000000000000000000000000000000000000000000",
                         }));
                     });
 
             let mut gui = DotrainOrderGui::new_with_deployment(
                 yaml.to_string(),
+                None,
                 "some-deployment".to_string(),
                 None,
             )

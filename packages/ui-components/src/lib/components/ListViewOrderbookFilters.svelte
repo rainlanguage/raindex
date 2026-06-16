@@ -7,22 +7,17 @@
 	import { isEmpty } from 'lodash';
 	import { Alert } from 'flowbite-svelte';
 	import type { Address, RaindexVaultToken } from '@rainlanguage/orderbook';
-	import Tooltip from './Tooltip.svelte';
 	import CheckboxActiveOrders from './checkbox/CheckboxActiveOrders.svelte';
-	import DropdownOrderListAccounts from './dropdown/DropdownOrderListAccounts.svelte';
 	import DropdownTokensFilter from './dropdown/DropdownTokensFilter.svelte';
 	import DropdownOrderbooksFilter from './dropdown/DropdownOrderbooksFilter.svelte';
 	import InputOrderHash from './input/InputOrderHash.svelte';
+	import InputOwnerFilter from './input/InputOwnerFilter.svelte';
 	import CheckboxZeroBalanceVault from './CheckboxZeroBalanceVault.svelte';
 	import CheckboxInactiveOrdersVault from './CheckboxInactiveOrdersVault.svelte';
-	import CheckboxMyItemsOnly from '$lib/components/CheckboxMyItemsOnly.svelte';
-	import { useAccount } from '$lib/providers/wallet/useAccount';
 	import type { AppStoresInterface } from '$lib/types/appStores';
 
 	export let hideZeroBalanceVaults: AppStoresInterface['hideZeroBalanceVaults'];
 	export let hideInactiveOrdersVaults: AppStoresInterface['hideInactiveOrdersVaults'];
-	export let activeAccountsItems: AppStoresInterface['activeAccountsItems'];
-	export let showMyItemsOnly: AppStoresInterface['showMyItemsOnly'];
 	export let selectedChainIds: AppStoresInterface['selectedChainIds'];
 	export let showInactiveOrders: AppStoresInterface['showInactiveOrders'];
 	export let orderHash: AppStoresInterface['orderHash'];
@@ -31,15 +26,14 @@
 	export let tokensQuery: Readable<QueryObserverResult<RaindexVaultToken[], Error>>;
 	export let activeOrderbookAddresses: AppStoresInterface['activeOrderbookAddresses'];
 	export let selectedOrderbookAddresses: Address[];
+	export let ownerFilter: AppStoresInterface['ownerFilter'];
 
 	$: isVaultsPage = $page.url.pathname === '/vaults';
 	$: isOrdersPage = $page.url.pathname === '/orders';
 
-	const { account } = useAccount();
 	const raindexClient = useRaindexClient();
 
 	$: networks = raindexClient.getAllNetworks();
-	$: accounts = raindexClient.getAllAccounts();
 </script>
 
 <div
@@ -51,14 +45,6 @@
 			No networks added to <a class="underline" href="/settings">settings</a>
 		</Alert>
 	{:else}
-		{#if !accounts.error && accounts.value.size === 0}
-			<div class="mt-4 w-full lg:w-auto" data-testid="my-items-only">
-				<CheckboxMyItemsOnly context={isVaultsPage ? 'vaults' : 'orders'} {showMyItemsOnly} />
-				{#if !$account}
-					<Tooltip>Connect a wallet to filter by {isVaultsPage ? 'vault' : 'order'} owner</Tooltip>
-				{/if}
-			</div>
-		{/if}
 		{#if isVaultsPage}
 			<div class="mt-4 w-full lg:w-auto">
 				<CheckboxZeroBalanceVault {hideZeroBalanceVaults} />
@@ -74,9 +60,7 @@
 				<CheckboxActiveOrders {showInactiveOrders} />
 			</div>
 		{/if}
-		{#if !accounts.error && accounts.value.size > 0}
-			<DropdownOrderListAccounts {activeAccountsItems} />
-		{/if}
+		<InputOwnerFilter {ownerFilter} />
 		<DropdownTokensFilter {tokensQuery} {activeTokens} {selectedTokens} label="Tokens" />
 		<DropdownOrderbooksFilter
 			{activeOrderbookAddresses}

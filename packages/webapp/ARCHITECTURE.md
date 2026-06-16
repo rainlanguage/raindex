@@ -32,7 +32,7 @@ nix develop -c npm run dev
 ## Runtime & State
 
 - App bootstrap (`src/routes/+layout.ts`)
-  - Loads the dotrain registry (`REGISTRY_URL` or `?registry=` override) via the WASM `DotrainRegistry` and constructs a `RaindexClient` from the registry’s shared settings.
+  - Loads the dotrain registry (`REGISTRY_URL` or `?registry=` override) via the WASM `DotrainRegistry` and constructs a `RaindexClient` from the registry’s shared settings. Construction is a single async call that accepts optional local DB callbacks (`queryCallback`, `wipeCallback`, `statusCallback`); the scheduler starts automatically when `local-db-sync` is configured in the YAML.
   - Exposes a set of Svelte stores (selected chains, active accounts, filters, etc.) to child routes.
   - `export const ssr = false;` — the app renders client‑side only.
 - Layout shell (`src/routes/+layout.svelte`)

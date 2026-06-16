@@ -1,10 +1,7 @@
 #[cfg(target_family = "wasm")]
 pub mod bindings;
-#[cfg(target_family = "wasm")]
 pub mod gui;
-#[cfg(target_family = "wasm")]
-pub mod registry;
-#[cfg(target_family = "wasm")]
+pub mod rainlang;
 pub mod yaml;
 
 // re-export other crates to include their wasm bindings as single export point

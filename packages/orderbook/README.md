@@ -50,7 +50,7 @@ All of the code snippets below reuse the same fixed-limit dotrain/settings sourc
 
 ```ts
 const FIXED_LIMIT_SOURCE = `
-version: 4
+version: 5
 
 networks:
   base:
@@ -91,7 +91,7 @@ tokens:
     label: Wrapped Ether
     symbol: WETH
 
-deployers:
+rainlangs:
   base:
     network: base
     address: 0x6557778Db274f04B9E9f39F8Ff2D621c2036e978
@@ -105,7 +105,7 @@ orders:
     outputs:
       - token: weth
         vault-id: 1
-    deployer: base
+    rainlang: base
 
 scenarios:
   base:
@@ -190,17 +190,31 @@ const ORDERBOOK_SETTINGS = FIXED_LIMIT_SOURCE.split('---')[0];
 
 ### 1. Create a raindex client
 
-This first snippet does three things: (1) load one or more settings YAML strings (these describe networks, accounts, and subgraph URLs), (2) feed those sources into `RaindexClient.new` so the WASM layer can parse and validate them, and (3) unwrap the resulting `WasmEncodedResult` so downstream samples can call the client with standard JS error handling expectations.
+This first snippet does three things: (1) load one or more settings YAML strings (these describe networks, accounts, and subgraph URLs), (2) feed those sources into `RaindexClient.new` so the WASM layer can parse and validate them, and (3) unwrap the resulting `WasmEncodedResult` so downstream samples can call the client with standard JS error handling expectations. The constructor is **async** — use `await`.
 
 ```ts
 import { RaindexClient } from '@rainlanguage/orderbook';
 
-const clientResult = RaindexClient.new([ORDERBOOK_SETTINGS]);
+const clientResult = await RaindexClient.new([ORDERBOOK_SETTINGS]);
 if (clientResult.error) throw new Error(clientResult.error.readableMsg);
 const client = clientResult.value;
 ```
 
 Pass `true` as the second argument to `RaindexClient.new` when you want strict schema validation.
+
+When the YAML includes `local-db-sync` sections, pass optional callbacks to wire up a local SQLite cache:
+
+```ts
+const clientResult = await RaindexClient.new(
+  [ORDERBOOK_SETTINGS],
+  undefined,
+  localDb.query.bind(localDb),
+  localDb.wipeAndRecreate.bind(localDb),
+  updateStatusCallback,
+);
+```
+
+The client will automatically start the sync scheduler and route queries to the local DB for configured chains once the first sync cycle completes.
 
 ### 2. Query orders with filters & pagination
 
@@ -530,9 +544,22 @@ if (tokensResult.error) throw new Error(tokensResult.error.readableMsg);
 const tokens = tokensResult.value; // TokenInfo[] with chain_id, address, decimals, symbol, name
 ```
 
+#### Get a RaindexClient from registry settings
+
+Use `getRaindexClient()` to create a `RaindexClient` directly from the registry's shared settings, without manually bridging through `OrderbookYaml`:
+
+```ts
+const clientResult = registry.getRaindexClient();
+if (clientResult.error) throw new Error(clientResult.error.readableMsg);
+const client = clientResult.value;
+
+// Use the client to query orders, vaults, etc.
+const ordersResult = await client.getOrders([8453]);
+```
+
 ### Build a deployment GUI
 
-Any dotrain file that includes a `gui:` block plus the usual settings YAML is enough to drive `DotrainOrderGui`. The `FIXED_LIMIT_SOURCE` constant declared earlier already includes the required networks/tokens/deployers plus a full `gui` definition, so you can reference it directly (or trim it to your own bindings) instead of copying pieces of `settings.yaml` inline in this guide. Always cross-check the source you feed in with the latest definitions in [rainlanguage/rain.strategies](https://github.com/rainlanguage/rain.strategies); that repository tracks the real configurations our UI ships with.
+Any dotrain file that includes a `gui:` block plus the usual settings YAML is enough to drive `DotrainOrderGui`. The `FIXED_LIMIT_SOURCE` constant declared earlier already includes the required networks/tokens/rainlangs plus a full `gui` definition, so you can reference it directly (or trim it to your own bindings) instead of copying pieces of `settings.yaml` inline in this guide. Always cross-check the source you feed in with the latest definitions in [rainlanguage/rain.strategies](https://github.com/rainlanguage/rain.strategies); that repository tracks the real configurations our UI ships with.
 
 With that single source string (read from disk or built dynamically) you can drive the full GUI workflow:
 
@@ -542,8 +569,8 @@ import { DotrainOrderGui } from '@rainlanguage/orderbook';
 const dotrainWithGui = FIXED_LIMIT_SOURCE;
 const SAMPLE_YAML = `
 ...
-deployers:
-    deployer1:
+rainlangs:
+    rainlang1:
         network: mainnet
         address: 0x...
 orderbooks:
@@ -700,7 +727,7 @@ if (!postTaskResult.error) console.log(postTaskResult.value);
 - `Float` – arbitrary-precision arithmetic with parsing, formatting, comparisons, math ops, fixed-decimal conversions, and helpers like `Float.zero()` or `.formatWithRange(...)`.
 - `OrderbookYaml.getTokens()` – async method returning all tokens from YAML configuration with `chain_id`, `address`, `decimals`, `symbol`, and `name`. Automatically fetches remote tokens from `using-tokens-from` URLs.
 - `RaindexClient.getAllAccounts()` / `getAllVaultTokens()` – introspect accounts and ERC20 metadata defined in your YAML or discovered via subgraphs.
-- `clearTables`, `getSyncStatus`, `RaindexClient.syncLocalDatabase`, `RaindexClient.setDbCallback` – plug in a persistent cache for offline apps.
+- Local DB sync – pass `queryCallback`, `wipeCallback`, and `statusCallback` to `RaindexClient.new()` when YAML has `local-db-sync` sections to enable an offline-capable persistent cache. The scheduler starts automatically and queries route to the local DB once the first sync cycle completes.
 - `RaindexVaultsList.getWithdrawCalldata()` – multicall builder that withdraws every vault with a balance.
 - `RaindexOrder.convertToSgOrder()` – convert WASM order representations back into the raw subgraph schema when you need to interop with other tooling.
 - `TakeOrdersRequest`, `TakeOrdersCalldataResult`, `TakeOrderEstimate` – types for the take orders API.

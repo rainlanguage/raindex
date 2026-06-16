@@ -8,26 +8,38 @@ use alloy::{
     primitives::Address,
 };
 use rain_error_decoding::{AbiDecodedErrorType, ErrorRegistry};
-use rain_orderbook_bindings::provider::mk_read_provider;
-use rain_orderbook_bindings::IOrderBookV6::{quote2Call, quote2Return, IOrderBookV6Instance};
+use rain_orderbook_bindings::provider::{mk_read_provider, ReadProvider};
+use rain_orderbook_bindings::IRaindexV6::{quote2Call, quote2Return, IRaindexV6Instance};
 use url::Url;
 
-/// Quotes array of given quote targets using the given rpc url
-pub async fn batch_quote(
+const DEFAULT_QUOTE_CHUNK_SIZE: usize = 16;
+
+fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
+    chunk_size.unwrap_or(DEFAULT_QUOTE_CHUNK_SIZE).max(1)
+}
+
+fn single_quote_failure(err: &Error) -> QuoteResult {
+    Err(FailedQuote::CorruptReturnData(format!(
+        "Single quote failed after chunk split: {err}"
+    )))
+}
+
+fn probe_indexes(len: usize) -> Vec<usize> {
+    let mut indexes = vec![0usize];
+    let middle = len / 2;
+    if middle != 0 {
+        indexes.push(middle);
+    }
+    indexes
+}
+
+async fn quote_chunk_once(
     quote_targets: &[QuoteTarget],
-    rpcs: Vec<String>,
+    provider: &ReadProvider,
     block_number: Option<u64>,
-    _gas: Option<u64>, // TODO: remove or use
     multicall_address: Option<Address>,
     registry: Option<&dyn ErrorRegistry>,
 ) -> Result<Vec<QuoteResult>, Error> {
-    let rpcs = rpcs
-        .into_iter()
-        .map(|rpc| rpc.parse::<Url>())
-        .collect::<Result<Vec<Url>, _>>()?;
-
-    let provider = mk_read_provider(&rpcs)?;
-
     let mut multicall = if let Some(addr) = multicall_address {
         provider.multicall().address(addr).dynamic::<quote2Call>()
     } else {
@@ -39,7 +51,7 @@ pub async fn batch_quote(
     }
 
     for quote_target in quote_targets {
-        let ob_instance = IOrderBookV6Instance::new(quote_target.orderbook, provider.clone());
+        let ob_instance = IRaindexV6Instance::new(quote_target.orderbook, provider.clone());
         let call = ob_instance
             .quote2(quote_target.quote_config.clone())
             .into_call(true);
@@ -100,6 +112,132 @@ pub async fn batch_quote(
     Ok(results)
 }
 
+async fn rpc_probe_succeeds(
+    quote_targets: &[QuoteTarget],
+    provider: &ReadProvider,
+    block_number: Option<u64>,
+    multicall_address: Option<Address>,
+    registry: Option<&dyn ErrorRegistry>,
+) -> bool {
+    for idx in probe_indexes(quote_targets.len()) {
+        if quote_chunk_once(
+            &quote_targets[idx..idx + 1],
+            provider,
+            block_number,
+            multicall_address,
+            registry,
+        )
+        .await
+        .is_ok()
+        {
+            return true;
+        }
+    }
+
+    false
+}
+
+async fn quote_chunk_with_probe_and_split(
+    quote_targets: &[QuoteTarget],
+    provider: &ReadProvider,
+    block_number: Option<u64>,
+    multicall_address: Option<Address>,
+    registry: Option<&dyn ErrorRegistry>,
+) -> Result<Vec<QuoteResult>, Error> {
+    let initial_err = match quote_chunk_once(
+        quote_targets,
+        provider,
+        block_number,
+        multicall_address,
+        registry,
+    )
+    .await
+    {
+        Ok(results) => return Ok(results),
+        Err(err) => err,
+    };
+
+    if quote_targets.len() <= 1 {
+        return Err(initial_err);
+    }
+
+    if !rpc_probe_succeeds(
+        quote_targets,
+        provider,
+        block_number,
+        multicall_address,
+        registry,
+    )
+    .await
+    {
+        return Err(initial_err);
+    }
+
+    let mut resolved: Vec<Option<QuoteResult>> = Vec::with_capacity(quote_targets.len());
+    resolved.resize_with(quote_targets.len(), || None);
+    let mut pending = vec![(0usize, quote_targets.len())];
+
+    while let Some((start, end)) = pending.pop() {
+        let chunk = &quote_targets[start..end];
+        match quote_chunk_once(chunk, provider, block_number, multicall_address, registry).await {
+            Ok(results) => {
+                for (offset, result) in results.into_iter().enumerate() {
+                    resolved[start + offset] = Some(result);
+                }
+            }
+            Err(err) => {
+                if chunk.len() == 1 {
+                    resolved[start] = Some(single_quote_failure(&err));
+                } else {
+                    let mid = start + (chunk.len() / 2);
+                    pending.push((mid, end));
+                    pending.push((start, mid));
+                }
+            }
+        }
+    }
+
+    Ok(resolved
+        .into_iter()
+        .map(|v| v.unwrap_or_else(|| single_quote_failure(&initial_err)))
+        .collect())
+}
+
+/// Quotes array of given quote targets using the given rpc url
+pub async fn batch_quote(
+    quote_targets: &[QuoteTarget],
+    rpcs: Vec<String>,
+    block_number: Option<u64>,
+    multicall_address: Option<Address>,
+    registry: Option<&dyn ErrorRegistry>,
+    chunk_size: Option<usize>,
+) -> Result<Vec<QuoteResult>, Error> {
+    let rpcs = rpcs
+        .into_iter()
+        .map(|rpc| rpc.parse::<Url>())
+        .collect::<Result<Vec<Url>, _>>()?;
+    let provider = mk_read_provider(&rpcs)?;
+    if quote_targets.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let mut results = Vec::with_capacity(quote_targets.len());
+    let chunk_size = normalize_chunk_size(chunk_size);
+    for quote_chunk in quote_targets.chunks(chunk_size) {
+        let chunk_results = quote_chunk_with_probe_and_split(
+            quote_chunk,
+            &provider,
+            block_number,
+            multicall_address,
+            registry,
+        )
+        .await?;
+        results.extend(chunk_results);
+    }
+
+    Ok(results)
+}
+
 #[cfg(not(target_family = "wasm"))]
 #[cfg(test)]
 mod tests {
@@ -113,8 +251,28 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::ErrorRegistry;
     use rain_math_float::Float;
-    use rain_orderbook_bindings::IOrderBookV6::{quote2Call, quote2Return};
+    use rain_orderbook_bindings::IRaindexV6::{quote2Call, quote2Return};
     use serde_json::json;
+
+    #[test]
+    fn test_normalize_chunk_size_defaults_to_16() {
+        assert_eq!(normalize_chunk_size(None), 16);
+    }
+
+    #[test]
+    fn test_normalize_chunk_size_coerces_zero_to_one() {
+        assert_eq!(normalize_chunk_size(Some(0)), 1);
+    }
+
+    #[test]
+    fn test_probe_indexes_singleton_only_first() {
+        assert_eq!(probe_indexes(1), vec![0]);
+    }
+
+    #[test]
+    fn test_probe_indexes_uses_first_and_middle() {
+        assert_eq!(probe_indexes(6), vec![0, 3]);
+    }
 
     #[tokio::test]
     async fn test_batch_quote_ok() {
@@ -295,8 +453,8 @@ mod tests {
             vec![rpc_server.url("/rpc").to_string()],
             None,
             None,
-            None,
             Some(&FakeRegistry),
+            None,
         )
         .await
         .unwrap();
@@ -315,5 +473,47 @@ mod tests {
                 rain_error_decoding::AbiDecodedErrorType::Unknown(_)
             ))
         ));
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_respects_chunk_size_override() {
+        let rpc_server = MockServer::start_async().await;
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+        let quote_targets = vec![QuoteTarget::default(), QuoteTarget::default()];
+
+        let single_response_data = vec![MulticallResult {
+            success: true,
+            returnData: quote2Call::abi_encode_returns(&quote2Return {
+                exists: true,
+                outputMax: one.get_inner(),
+                ioRatio: two.get_inner(),
+            })
+            .into(),
+        }]
+        .abi_encode();
+
+        rpc_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": alloy::hex::encode_prefixed(single_response_data),
+            }));
+        });
+
+        let results = batch_quote(
+            &quote_targets,
+            vec![rpc_server.url("/rpc").to_string()],
+            None,
+            None,
+            None,
+            Some(1),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.is_ok()));
     }
 }

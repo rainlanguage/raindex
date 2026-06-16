@@ -3,13 +3,8 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {
-    OrderConfigV4,
-    EvaluableV4,
-    TaskV2,
-    SignedContextV1
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
-import {IERC20} from "forge-std/interfaces/IERC20.sol";
+import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
@@ -133,6 +128,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
@@ -147,6 +143,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 
@@ -165,6 +162,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 
@@ -184,6 +182,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 
@@ -208,6 +207,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 
@@ -285,6 +285,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
     function testOrderBookWithdrawalEvalZeroAmountEvalNoop(address alice, bytes32 vaultId, uint256 withdrawAmount18)
         external
     {
+        vm.assume(vaultId != bytes32(0));
         withdrawAmount18 = bound(withdrawAmount18, 1, type(uint128).max);
         bytes[] memory evals = new bytes[](1);
         evals[0] = bytes(":ensure(0 \"always fails\");");
@@ -300,6 +301,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
         uint256 depositAmount18,
         uint256 withdrawAmount18
     ) external {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint128).max);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18);
 
@@ -336,6 +338,7 @@ contract OrderBookV6WithdrawEvalTest is OrderBookV6ExternalRealTest {
     function testOrderWithdrawContext(address alice, bytes32 vaultId, uint256 depositAmount18, uint256 targetAmount18)
         external
     {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, uint256(int256(type(int128).max)));
         targetAmount18 = bound(targetAmount18, 1, uint256(int256(type(int128).max)));
         uint256 withdrawAmount18 = depositAmount18 > targetAmount18 ? targetAmount18 : depositAmount18;

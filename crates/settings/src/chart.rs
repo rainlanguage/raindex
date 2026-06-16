@@ -959,13 +959,13 @@ networks:
         rpcs:
             - https://rpc.com
         chain-id: 1
-deployers:
+rainlangs:
     mainnet:
         address: 0x1234567890123456789012345678901234567890
         network: mainnet
 scenarios:
     chart1:
-        deployer: mainnet
+        rainlang: mainnet
         bindings:
             key1: binding1
 "#;

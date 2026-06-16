@@ -67,7 +67,7 @@ mod tests {
     use url::Url;
 
     fn sample_target(chain_id: u32) -> RunnerTarget {
-        let fetch = FetchConfig::new(1, 1, 1, 1).expect("fetch config");
+        let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         RunnerTarget {
             orderbook_key: "test-book".to_string(),
             manifest_url: Url::parse("https://manifests.example/default.yaml").unwrap(),

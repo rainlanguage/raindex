@@ -19,10 +19,15 @@ keep=(
   -k CI_DEPLOY_SEPOLIA_RPC_URL
   -k CI_FORK_SEPOLIA_DEPLOYER_ADDRESS
   -k CI_FORK_SEPOLIA_BLOCK_NUMBER
+  -k CI_DEPLOY_ARBITRUM_RPC_URL
+  -k CI_DEPLOY_BASE_RPC_URL
+  -k CI_DEPLOY_BASE_SEPOLIA_RPC_URL
+  -k CI_DEPLOY_FLARE_RPC_URL
   -k CI_DEPLOY_POLYGON_RPC_URL
   -k CI_SEPOLIA_METABOARD_URL
   -k RPC_URL_ETHEREUM_FORK
   -k COMMIT_SHA
+  -k DEPLOYMENT_KEY
   -k PUBLIC_WALLETCONNECT_PROJECT_ID
 )
 
@@ -36,7 +41,7 @@ nix develop -i ${keep[@]} -c bash \
   -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-rs-prelude)'
 
 echo "Setting up rain.tofu.erc20-decimals..."
-(cd lib/rain.tofu.erc20-decimals && nix develop -c forge build)
+(cd lib/rain.interpreter/lib/rain.tofu.erc20-decimals && nix develop -c forge build)
 
 echo "Setting up rain.interpreter..."
 nix develop -i ${keep[@]} -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude)'
@@ -51,6 +56,9 @@ echo "Setting up main project dependencies..."
 nix develop -i ${keep[@]} -c rainix-sol-prelude
 nix develop -i ${keep[@]} -c rainix-rs-prelude
 nix develop -i ${keep[@]} -c raindex-prelude
+
+echo "Building Solidity contracts..."
+nix develop -i ${keep[@]} -c forge build
 
 # Temporarily disable command echoing
 set +x

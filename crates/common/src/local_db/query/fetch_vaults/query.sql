@@ -5,6 +5,32 @@ WITH filtered_vault_balances AS (
     /*INNER_CHAIN_IDS_CLAUSE*/
     /*INNER_ORDERBOOKS_CLAUSE*/
 ),
+order_io_vaults AS (
+  SELECT DISTINCT
+    io.chain_id,
+    io.orderbook_address,
+    oe.order_owner AS owner,
+    io.token,
+    io.vault_id,
+    FLOAT_ZERO_HEX() AS balance
+  FROM order_ios io
+  JOIN order_events oe
+    ON oe.chain_id = io.chain_id
+   AND oe.orderbook_address = io.orderbook_address
+   AND oe.transaction_hash = io.transaction_hash
+   AND oe.log_index = io.log_index
+  WHERE 1 = 1
+    /*OIO_CHAIN_IDS_CLAUSE*/
+    /*OIO_ORDERBOOKS_CLAUSE*/
+    AND NOT EXISTS (
+      SELECT 1 FROM filtered_vault_balances fvb
+      WHERE fvb.chain_id = io.chain_id
+       AND fvb.orderbook_address = io.orderbook_address
+       AND fvb.owner = oe.order_owner
+       AND fvb.token = io.token
+       AND fvb.vault_id = io.vault_id
+    )
+),
 vault_balances AS (
   SELECT
     rvb.chain_id,
@@ -17,6 +43,9 @@ vault_balances AS (
   WHERE 1 = 1
     /*CHAIN_IDS_CLAUSE*/
     /*ORDERBOOKS_CLAUSE*/
+  UNION ALL
+  SELECT chain_id, orderbook_address, owner, token, vault_id, balance
+  FROM order_io_vaults
 ),
 relevant_vaults AS (
   SELECT DISTINCT chain_id, orderbook_address, owner, token, vault_id

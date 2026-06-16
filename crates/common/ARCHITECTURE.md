@@ -20,7 +20,7 @@ The library is built as `rlib` and `cdylib`. A Git commit identifier is embedded
 - `transaction` — Shared tx args (RPCs, chain ID, fees), Ledger provider creation (native), and `WriteContractParameters` helpers.
 - `erc20` — Typed ERC20 reads (decimals/name/symbol/allowance/balance), multicall token info, and robust revert decoding.
 - `subgraph` — Thin wrapper to instantiate an orderbook subgraph client from a URL.
-- `raindex_client/*` — High‑level client over orderbook YAML config: find networks/orderbooks, fetch orders, vaults, trades, transactions; quote orders; prepare batch withdraw calldata; expose WASM‑friendly structs.
+- `raindex_client/*` — High‑level client over orderbook YAML config: find networks/orderbooks, fetch orders, vaults, trades, transactions; quote orders; prepare batch withdraw calldata; expose WASM‑friendly structs. The `local_db/` subtree is split into `state.rs` (runtime state, query routing via `LocalDbState`/`QuerySource`/`SyncReadiness`) and `status.rs` (UI status‑reporting types).
 - `dotrain_order` — Parse and validate a DOTRAIN config; compose scenarios/deployments to Rainlang; fetch authoring metadata and pragma words; merge additional settings.
 - `rainlang` — Compose Rainlang from a DOTRAIN string + bindings; optional fork‑based parser that returns encoded bytecode.
 - `dotrain_add_order_lsp` — Language‑services integration for Rainlang/DOTRAIN (hover, completion, diagnostics, and fork‑parse problems).
@@ -78,7 +78,8 @@ Target gating is used extensively:
 - `SubgraphArgs::to_subgraph_client` parses the URL and returns an `OrderbookSubgraphClient` bound to that endpoint.
 
 ### 8) Raindex Client (orderbook YAML–driven API)
-- `RaindexClient::new` parses one or more orderbook YAML strings using `OrderbookYaml`, optionally with full validation.
+- `RaindexClient::create` (async on WASM, aliased to `new` in JS) parses one or more orderbook YAML strings using `OrderbookYaml`, optionally with full validation. When the YAML declares `local-db-sync` sections and DB callbacks are provided, the constructor automatically sets up the local DB and starts the sync scheduler.
+- `LocalDbState` encapsulates the local DB handle, scheduler, `SyncReadiness` (tracks which chains have completed a sync cycle), and the set of configured chain IDs. Query routing uses `QuerySource::LocalDb` vs `QuerySource::Subgraph` — each chain is routed to exactly one source based on configuration and readiness.
 - Derives a map of networks and orderbooks to build `MultiSubgraphArgs` groupings for cross‑network queries.
 - Exposed operations (with WASM bindings):
   - YAML accessors: get unique chain IDs, networks, orderbooks by address, accounts, and RPC URLs.
@@ -255,6 +256,8 @@ Where functionality cannot run in WASM, equivalent calldata generation methods a
   - `src/dotrain_order.rs`, `src/rainlang.rs`, `src/dotrain_add_order_lsp.rs`
 - Client & data access
   - `src/raindex_client/` (orders, quotes, vaults, trades, transactions, YAML)
+  - `src/raindex_client/local_db/state.rs` (runtime state: `LocalDbState`, `QuerySource`, `SyncReadiness`, `ClassifiedChains`)
+  - `src/raindex_client/local_db/status.rs` (UI status types: `LocalDbStatus`, `SchedulerState`, `NetworkSyncStatus`, etc.)
   - `src/subgraph.rs`
 - Data views & export
   - `src/types/` (flattened rows + errors), `src/csv.rs`, `src/utils/*`
@@ -266,4 +269,4 @@ Where functionality cannot run in WASM, equivalent calldata generation methods a
 This document covers all publicly exposed modules and their roles so new contributors and integrators can navigate the crate quickly and correctly wire native/WASM consumers.
 
 
-Last Updated: 2025-09-14 — Verified against current code; doc remains accurate. Added last-updated footer.
+Last Updated: 2026-03-03 — Updated for RaindexClient local DB refactor (single-step async construction, deterministic query routing, state.rs/status.rs split).

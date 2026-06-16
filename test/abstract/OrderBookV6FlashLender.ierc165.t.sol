@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std/Test.sol";
 import {IERC165} from "openzeppelin-contracts/contracts/utils/introspection/IERC165.sol";
-import {OrderBookV6FlashLender, IERC3156FlashLender} from "src/abstract/OrderBookV6FlashLender.sol";
+import {OrderBookV6FlashLender, IERC3156FlashLender} from "../../src/abstract/OrderBookV6FlashLender.sol";
 
 /// @dev We need a contract that is deployable in order to test the abstract
 /// base contract.

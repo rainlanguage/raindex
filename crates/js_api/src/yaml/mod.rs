@@ -35,7 +35,7 @@ impl OrderbookYaml {
     /// ```javascript
     /// // Basic usage with single YAML source
     /// const yamlConfig = `
-    /// version: "4"
+    /// version: "5"
     /// networks:
     ///   mainnet:
     ///     rpc: https://mainnet.infura.io
@@ -210,7 +210,7 @@ impl From<OrderbookYamlError> for WasmEncodedError {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use rain_orderbook_app_settings::spec_version::SpecVersion;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -248,7 +248,7 @@ mod tests {
             decimals: 18
             label: Wrapped Ether
             symbol: WETH
-    deployers:
+    rainlangs:
         deployer1:
             address: 0x0000000000000000000000000000000000000002
             network: mainnet
@@ -289,7 +289,7 @@ mod tests {
         let orderbook_yaml = OrderbookYaml::new(vec![get_yaml()], None).unwrap();
         let orderbook = orderbook_yaml.get_orderbook_by_address("invalid-address");
 
-        assert_eq!(orderbook.is_err(), true);
+        assert!(orderbook.is_err());
         assert_eq!(
             orderbook.as_ref().err().unwrap().to_string(),
             "Invalid address: odd number of digits"
@@ -301,7 +301,7 @@ mod tests {
 
         let orderbook =
             orderbook_yaml.get_orderbook_by_address("0x0000000000000000000000000000000000000000");
-        assert_eq!(orderbook.is_err(), true);
+        assert!(orderbook.is_err());
         assert_eq!(
             orderbook.as_ref().err().unwrap().to_string(),
             "Orderbook yaml error: orderbook with address: 0x0000000000000000000000000000000000000000 not found"
@@ -475,6 +475,8 @@ mod non_wasm_tests {
             "name": "Remote Tokens",
             "timestamp": "2021-01-01T00:00:00.000Z",
             "version": { "major": 1, "minor": 0, "patch": 0 },
+            "keywords": [],
+            "logoURI": "",
             "tokens": [
                 {
                     "chainId": 1,
@@ -526,6 +528,8 @@ mod non_wasm_tests {
             "name": "Remote",
             "timestamp": "2021-01-01T00:00:00.000Z",
             "version": { "major": 1, "minor": 0, "patch": 0 },
+            "keywords": [],
+            "logoURI": "",
             "tokens": [
                 {
                     "chainId": 1,
@@ -582,6 +586,8 @@ mod non_wasm_tests {
             "name": "Multi-chain",
             "timestamp": "2021-01-01T00:00:00.000Z",
             "version": { "major": 1, "minor": 0, "patch": 0 },
+            "keywords": [],
+            "logoURI": "",
             "tokens": [
                 { "chainId": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "name": "USDC", "symbol": "USDC", "decimals": 6 },
                 { "chainId": 137, "address": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174", "name": "USDC PoS", "symbol": "USDC", "decimals": 6 }
@@ -660,6 +666,8 @@ mod non_wasm_tests {
             "name": "Source 1",
             "timestamp": "2021-01-01T00:00:00.000Z",
             "version": { "major": 1, "minor": 0, "patch": 0 },
+            "keywords": [],
+            "logoURI": "",
             "tokens": [
                 { "chainId": 1, "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", "name": "USDC", "symbol": "USDC", "decimals": 6 }
             ]
@@ -668,6 +676,8 @@ mod non_wasm_tests {
             "name": "Source 2",
             "timestamp": "2021-01-01T00:00:00.000Z",
             "version": { "major": 1, "minor": 0, "patch": 0 },
+            "keywords": [],
+            "logoURI": "",
             "tokens": [
                 { "chainId": 1, "address": "0xdAC17F958D2ee523a2206206994597C13D831ec7", "name": "USDT", "symbol": "USDT", "decimals": 6 }
             ]

@@ -6,19 +6,16 @@ use alloy::primitives::Address;
 use alloy_ethers_typecast::{ReadableClient, ReadableClientError};
 use dotrain::{error::ComposeError, types::patterns::FRONTMATTER_SEPARATOR, RainDocument};
 use futures::future::join_all;
-use rain_interpreter_parser::{ParserError, ParserV2};
+use rain_interpreter_parser::{Parser2, ParserError, ParserV2};
 pub use rain_metadata::types::authoring::v2::*;
 use rain_orderbook_app_settings::yaml::{
     clone_section_entry, context::ContextProfile, dotrain::DotrainYaml, orderbook::OrderbookYaml,
     FieldErrorKind, YamlError, YamlParsable,
 };
 use rain_orderbook_app_settings::{
-    remote_networks::{ParseRemoteNetworksError, RemoteNetworksCfg},
-    yaml::dotrain::DotrainYamlValidation,
-};
-use rain_orderbook_app_settings::{
-    remote_tokens::{ParseRemoteTokensError, RemoteTokensCfg},
-    yaml::orderbook::OrderbookYamlValidation,
+    remote_networks::ParseRemoteNetworksError,
+    remote_tokens::ParseRemoteTokensError,
+    yaml::{dotrain::DotrainYamlValidation, orderbook::OrderbookYamlValidation},
 };
 use rain_orderbook_app_settings::{scenario::ScenarioCfg, spec_version::SpecVersion};
 use serde::{Deserialize, Serialize};
@@ -241,7 +238,7 @@ impl From<Result<AuthoringMetaV2, DotrainOrderError>> for WordsResult {
 pub struct ScenarioWords {
     pub scenario: String,
     pub pragma_words: Vec<ContractWords>,
-    pub deployer_words: ContractWords,
+    pub rainlang_words: ContractWords,
 }
 
 impl DotrainOrder {
@@ -325,24 +322,16 @@ impl DotrainOrder {
             profile,
         )?;
 
-        let remote_networks =
-            RemoteNetworksCfg::fetch_networks(orderbook_yaml.get_remote_networks()?).await?;
-        if !remote_networks.is_empty() {
-            orderbook_yaml
-                .cache
-                .update_remote_networks(remote_networks.clone());
+        let remote_data = orderbook_yaml.fetch_remote_data().await?;
+        if !remote_data.remote_networks.is_empty() {
             dotrain_yaml
                 .cache
-                .update_remote_networks(remote_networks.clone());
+                .update_remote_networks(remote_data.remote_networks);
         }
-
-        if let Some(remote_tokens_cfg) = orderbook_yaml.get_remote_tokens()? {
-            let networks = orderbook_yaml.get_networks()?;
-            let remote_tokens = RemoteTokensCfg::fetch_tokens(&networks, remote_tokens_cfg).await?;
-            orderbook_yaml
+        if !remote_data.remote_tokens.is_empty() {
+            dotrain_yaml
                 .cache
-                .update_remote_tokens(remote_tokens.clone());
-            dotrain_yaml.cache.update_remote_tokens(remote_tokens);
+                .update_remote_tokens(remote_data.remote_tokens);
         }
 
         Ok(DotrainOrder {
@@ -501,13 +490,13 @@ impl DotrainOrder {
         &self,
         scenario: &str,
     ) -> Result<Vec<Address>, DotrainOrderError> {
-        let deployer = self.dotrain_yaml.get_scenario(scenario)?.deployer;
-        let parser: ParserV2 = deployer.address.into();
+        let rainlang_cfg = self.dotrain_yaml.get_scenario(scenario)?.rainlang;
+        let parser: ParserV2 = rainlang_cfg.address.into();
         let rainlang = self
             .compose_scenario_to_rainlang(scenario.to_string())
             .await?;
 
-        let rpcs = deployer
+        let rpcs = rainlang_cfg
             .network
             .rpcs
             .iter()
@@ -523,7 +512,7 @@ impl DotrainOrder {
         scenario: &str,
         address: Address,
     ) -> Result<AuthoringMetaV2, DotrainOrderError> {
-        let network = &self.dotrain_yaml.get_scenario(scenario)?.deployer.network;
+        let network = &self.dotrain_yaml.get_scenario(scenario)?.rainlang.network;
 
         let rpcs = network
             .rpcs
@@ -534,16 +523,16 @@ impl DotrainOrder {
         Ok(AuthoringMetaV2::fetch_for_contract(address, rpcs, metaboard.to_string()).await?)
     }
 
-    pub async fn get_deployer_words_for_scenario(
+    pub async fn get_rainlang_words_for_scenario(
         &self,
         scenario: &str,
     ) -> Result<ContractWords, DotrainOrderError> {
-        let deployer = &self.dotrain_yaml.get_scenario(scenario)?.deployer.address;
+        let rainlang = &self.dotrain_yaml.get_scenario(scenario)?.rainlang.address;
 
         Ok(ContractWords {
-            address: *deployer,
+            address: *rainlang,
             words: self
-                .get_contract_authoring_meta_v2_for_scenario(scenario, *deployer)
+                .get_contract_authoring_meta_v2_for_scenario(scenario, *rainlang)
                 .await
                 .into(),
         })
@@ -574,8 +563,8 @@ impl DotrainOrder {
         &self,
         scenario: &str,
     ) -> Result<ScenarioWords, DotrainOrderError> {
-        let deployer = &self.dotrain_yaml.get_scenario(scenario)?.deployer.address;
-        let mut addresses = vec![*deployer];
+        let rainlang = &self.dotrain_yaml.get_scenario(scenario)?.rainlang.address;
+        let mut addresses = vec![*rainlang];
         addresses.extend(self.get_pragmas_for_scenario(scenario).await?);
 
         let mut futures = vec![];
@@ -584,8 +573,8 @@ impl DotrainOrder {
         }
         let mut results = join_all(futures).await;
 
-        let deployer_words = ContractWords {
-            address: *deployer,
+        let rainlang_words = ContractWords {
+            address: *rainlang,
             words: results.drain(0..1).nth(0).unwrap().into(),
         };
         let pragma_words = results
@@ -600,7 +589,7 @@ impl DotrainOrder {
         Ok(ScenarioWords {
             scenario: scenario.to_string(),
             pragma_words,
-            deployer_words,
+            rainlang_words,
         })
     }
 
@@ -635,10 +624,10 @@ impl DotrainOrder {
         let deployment = dotrain_yaml.get_deployment(deployment_key)?;
         let order_cfg = deployment.order.clone();
         let scenario_cfg = deployment.scenario.clone();
-        let deployer_cfg = scenario_cfg.deployer.clone();
+        let rainlang_cfg = scenario_cfg.rainlang.clone();
 
         let network_key = order_cfg.network.key.clone();
-        let deployer_key = deployer_cfg.key.clone();
+        let rainlang_key = rainlang_cfg.key.clone();
         let orderbook_key = order_cfg.orderbook.as_ref().map(|ob| ob.key.clone());
         let subgraph_key = order_cfg
             .orderbook
@@ -677,13 +666,13 @@ impl DotrainOrder {
             StrictYaml::Hash(networks_hash),
         );
 
-        let deployer_value = clone_section_entry(&documents, "deployers", &deployer_key)
+        let rainlang_value = clone_section_entry(&documents, "rainlangs", &rainlang_key)
             .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
-        let mut deployers_hash = StrictYamlHash::new();
-        deployers_hash.insert(StrictYaml::String(deployer_key.clone()), deployer_value);
+        let mut rainlangs_hash = StrictYamlHash::new();
+        rainlangs_hash.insert(StrictYaml::String(rainlang_key.clone()), rainlang_value);
         root_hash.insert(
-            StrictYaml::String("deployers".to_string()),
-            StrictYaml::Hash(deployers_hash),
+            StrictYaml::String("rainlangs".to_string()),
+            StrictYaml::Hash(rainlangs_hash),
         );
 
         if let Some(orderbook_key) = orderbook_key {
@@ -841,8 +830,8 @@ impl DotrainOrder {
     fn scenario_to_yaml(scenario: &ScenarioCfg) -> Result<StrictYaml, DotrainOrderError> {
         let mut scenario_hash = StrictYamlHash::new();
         scenario_hash.insert(
-            StrictYaml::String("deployer".to_string()),
-            StrictYaml::String(scenario.deployer.key.clone()),
+            StrictYaml::String("rainlang".to_string()),
+            StrictYaml::String(scenario.rainlang.key.clone()),
         );
 
         if let Some(runs) = scenario.runs {
@@ -915,12 +904,12 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     polygon:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
     polygon:
-        deployer: polygon
+        rainlang: polygon
         bindings:
             key1: 10
 ---
@@ -966,14 +955,14 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     polygon:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
     polygon:
         bindings:
             key1: 10
-        deployer: polygon
+        rainlang: polygon
 ---
 #key1 !Test binding
 #calculate-io
@@ -1044,7 +1033,7 @@ networks:
     chain-id: 137
     network-id: 137
     currency: MATIC
-deployers:
+rainlangs:
   polygon:
     address: 0x1234567890123456789012345678901234567890
 tokens:
@@ -1069,7 +1058,7 @@ deployments:
     order: polygon-order
 scenarios:
   polygon:
-    deployer: polygon
+    rainlang: polygon
 ---
 #calculate-io
 _ _: 0 0;
@@ -1149,7 +1138,7 @@ networks:
     chain-id: 137
     network-id: 137
     currency: MATIC
-deployers:
+rainlangs:
   polygon:
     address: 0x1234567890123456789012345678901234567890
     network: polygon
@@ -1187,7 +1176,7 @@ deployments:
     order: polygon-order
 scenarios:
   polygon:
-    deployer: polygon
+    rainlang: polygon
 gui:
   deployments:
     polygon-deployment:
@@ -1263,12 +1252,12 @@ networks:
     rpcs:
       - http://example.com
     chain-id: 137
-deployers:
+rainlangs:
   polygon:
     address: 0x1234567890123456789012345678901234567890
 scenarios:
   polygon:
-    deployer: polygon
+    rainlang: polygon
 orders:
   polygon:
     network: polygon
@@ -1317,12 +1306,12 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     polygon:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
     polygon:
-        deployer: polygon
+        rainlang: polygon
         bindings:
             key1: 10
 ---
@@ -1426,12 +1415,12 @@ networks:
         rpcs:
             - {rpc_url}
         chain-id: 0
-deployers:
+rainlangs:
     sepolia:
         address: 0x017F5651eB8fa4048BBc17433149c6c035d391A6
 scenarios:
     sepolia:
-        deployer: sepolia
+        rainlang: sepolia
         bindings:
             key1: 10
 ---
@@ -1470,12 +1459,12 @@ _ _: 0 0;
             rpcs:
                 - {rpc_url}
             chain-id: 0
-    deployers:
+    rainlangs:
         sepolia:
             address: 0x3131baC3E2Ec97b0ee93C74B16180b1e93FABd59
     scenarios:
         sepolia:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 10
     metaboards:
@@ -1521,12 +1510,12 @@ _ _: 0 0;
             rpcs:
                 - {rpc_url}
             chain-id: 0
-    deployers:
+    rainlangs:
         sepolia:
             address: 0x3131baC3E2Ec97b0ee93C74B16180b1e93FABd59
     scenarios:
         sepolia:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 10
     metaboards:
@@ -1566,9 +1555,9 @@ _ _: 0 0;
     }
 
     #[tokio::test]
-    async fn test_get_deployer_words_for_scenario() {
+    async fn test_get_rainlang_words_for_scenario() {
         let server = mock_server(vec![]);
-        let deployer = Address::random();
+        let rainlang_addr = Address::random();
         let dotrain = format!(
             r#"
     version: {spec_version}
@@ -1577,12 +1566,12 @@ _ _: 0 0;
             rpcs:
                 - {rpc_url}
             chain-id: 0
-    deployers:
+    rainlangs:
         sepolia:
-            address: {deployer_address}
+            address: {rainlang_address}
     scenarios:
         sepolia:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 10
     metaboards:
@@ -1596,7 +1585,7 @@ _ _: 0 0;
     :;"#,
             rpc_url = server.url("/rpc"),
             metaboard_url = server.url("/sg"),
-            deployer_address = encode_prefixed(deployer),
+            rainlang_address = encode_prefixed(rainlang_addr),
             spec_version = SpecVersion::current()
         );
 
@@ -1605,11 +1594,11 @@ _ _: 0 0;
             .unwrap();
 
         let result = dotrain_order
-            .get_deployer_words_for_scenario("sepolia")
+            .get_rainlang_words_for_scenario("sepolia")
             .await
             .unwrap();
 
-        assert_eq!(result.address, deployer);
+        assert_eq!(result.address, rainlang_addr);
         assert!(matches!(result.words, WordsResult::Success(_)));
         if let WordsResult::Success(authoring_meta) = &result.words {
             assert_eq!(&authoring_meta.words[0].word, "some-word");
@@ -1622,7 +1611,7 @@ _ _: 0 0;
 
     #[tokio::test]
     async fn test_get_all_words_for_scenario() {
-        let deployer = Address::random();
+        let rainlang_addr = Address::random();
         let pragma_addresses = vec![Address::random()];
         let server = mock_server(pragma_addresses.clone());
         let dotrain = format!(
@@ -1633,12 +1622,12 @@ _ _: 0 0;
             rpcs:
                 - {rpc_url}
             chain-id: 0
-    deployers:
+    rainlangs:
         sepolia:
-            address: {deployer_address}
+            address: {rainlang_address}
     scenarios:
         sepolia:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 10
     metaboards:
@@ -1653,7 +1642,7 @@ _ _: 0 0;
     :;"#,
             rpc_url = server.url("/rpc"),
             metaboard_url = server.url("/sg"),
-            deployer_address = encode_prefixed(deployer),
+            rainlang_address = encode_prefixed(rainlang_addr),
             spec_version = SpecVersion::current()
         );
 
@@ -1668,12 +1657,12 @@ _ _: 0 0;
 
         assert_eq!(&result.scenario, "sepolia");
 
-        assert_eq!(result.deployer_words.address, deployer);
+        assert_eq!(result.rainlang_words.address, rainlang_addr);
         assert!(matches!(
-            result.deployer_words.words,
+            result.rainlang_words.words,
             WordsResult::Success(_)
         ));
-        if let WordsResult::Success(authoring_meta) = &result.deployer_words.words {
+        if let WordsResult::Success(authoring_meta) = &result.rainlang_words.words {
             assert_eq!(&authoring_meta.words[0].word, "some-word");
             assert_eq!(&authoring_meta.words[0].description, "some-desc");
 
@@ -1698,7 +1687,7 @@ _ _: 0 0;
 
     #[tokio::test]
     async fn test_get_all_scenarios_all_words() {
-        let deployer = Address::random();
+        let rainlang_addr = Address::random();
         let pragma_addresses = vec![Address::random()];
         let server = mock_server(pragma_addresses.clone());
         let dotrain = format!(
@@ -1709,16 +1698,16 @@ _ _: 0 0;
             rpcs:
                 - {rpc_url}
             chain-id: 0
-    deployers:
+    rainlangs:
         sepolia:
-            address: {deployer_address}
+            address: {rainlang_address}
     scenarios:
         sepolia:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 10
         other-scenario:
-            deployer: sepolia
+            rainlang: sepolia
             bindings:
                 key1: 40
     metaboards:
@@ -1733,7 +1722,7 @@ _ _: 0 0;
     :;"#,
             rpc_url = server.url("/rpc"),
             metaboard_url = server.url("/sg"),
-            deployer_address = encode_prefixed(deployer),
+            rainlang_address = encode_prefixed(rainlang_addr),
             spec_version = SpecVersion::current()
         );
         let dotrain_order = DotrainOrder::create(dotrain.to_string(), None)
@@ -1749,12 +1738,12 @@ _ _: 0 0;
             .find(|r| r.scenario == "other-scenario")
             .expect("Did not find results for 'other-scenario'");
 
-        assert_eq!(other_scenario_result.deployer_words.address, deployer);
+        assert_eq!(other_scenario_result.rainlang_words.address, rainlang_addr);
         assert!(matches!(
-            other_scenario_result.deployer_words.words,
+            other_scenario_result.rainlang_words.words,
             WordsResult::Success(_)
         ));
-        if let WordsResult::Success(authoring_meta) = &other_scenario_result.deployer_words.words {
+        if let WordsResult::Success(authoring_meta) = &other_scenario_result.rainlang_words.words {
             assert_eq!(&authoring_meta.words[0].word, "some-word");
             assert_eq!(&authoring_meta.words[0].description, "some-desc");
 
@@ -1783,12 +1772,12 @@ _ _: 0 0;
             .find(|r| r.scenario == "sepolia")
             .expect("Did not find results for 'sepolia'");
 
-        assert_eq!(sepolia_result.deployer_words.address, deployer);
+        assert_eq!(sepolia_result.rainlang_words.address, rainlang_addr);
         assert!(matches!(
-            sepolia_result.deployer_words.words,
+            sepolia_result.rainlang_words.words,
             WordsResult::Success(_)
         ));
-        if let WordsResult::Success(authoring_meta) = &sepolia_result.deployer_words.words {
+        if let WordsResult::Success(authoring_meta) = &sepolia_result.rainlang_words.words {
             assert_eq!(&authoring_meta.words[0].word, "some-word");
             assert_eq!(&authoring_meta.words[0].description, "some-desc");
 
@@ -1904,7 +1893,7 @@ _ _: 0 0;
                         rpcs:
                             - http://example.com
                         chain-id: 0
-                deployers:
+                rainlangs:
                     sepolia:
                         address: 0x3131baC3E2Ec97b0ee93C74B16180b1e93FABd59
                 ---
@@ -1930,7 +1919,7 @@ _ _: 0 0;
                         rpcs:
                             - http://example.com
                         chain-id: 0
-                deployers:
+                rainlangs:
                     sepolia:
                         address: 0x3131baC3E2Ec97b0ee93C74B16180b1e93FABd59
                 ---
@@ -1960,7 +1949,7 @@ _ _: 0 0;
                     sepolia:
                         rpc: http://example.com
                         chain-id: 0
-                deployers:
+                rainlangs:
                     sepolia:
                         address: 0x3131baC3E2Ec97b0ee93C74B16180b1e93FABd59
                 ---
@@ -1994,12 +1983,12 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     polygon:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
     polygon:
-        deployer: polygon
+        rainlang: polygon
         bindings:
             key1: 10
 tokens:

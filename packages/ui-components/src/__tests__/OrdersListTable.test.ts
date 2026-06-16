@@ -3,9 +3,9 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, type Mock } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import OrdersListTable from '../lib/components/tables/OrdersListTable.svelte';
-import { readable } from 'svelte/store';
 import { RaindexOrder } from '@rainlanguage/orderbook';
 import type { ComponentProps } from 'svelte';
+import { readable } from 'svelte/store';
 import { useAccount } from '$lib/providers/wallet/useAccount';
 
 vi.mock('../lib/components/ListViewOrderbookFilters.svelte', async () => {
@@ -26,6 +26,7 @@ vi.mock('$lib/hooks/useRaindexClient', () => ({
 import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 
 const mockAccountStore = readable('0xabcdef1234567890abcdef1234567890abcdef12');
+const mockMatchesAccount = vi.fn();
 
 const mockVaultsList = () => ({
 	items: [],
@@ -91,34 +92,28 @@ vi.mock('@tanstack/svelte-query');
 
 // Hoisted mock stores
 const {
-	mockActiveNetworkRefStore,
-	mockActiveOrderbookRefStore,
 	mockHideZeroBalanceVaultsStore,
+	mockHideInactiveOrdersVaultsStore,
 	mockOrderHashStore,
-	mockActiveAccountsItemsStore,
 	mockShowInactiveOrdersStore,
-	mockShowMyItemsOnlyStore,
 	mockSelectedChainIdsStore,
 	mockActiveTokensStore,
-	mockActiveOrderbookAddressesStore
+	mockActiveOrderbookAddressesStore,
+	mockOwnerFilterStore
 } = await vi.hoisted(() => import('../lib/__mocks__/stores'));
 
 type OrdersListTableProps = ComponentProps<OrdersListTable>;
 
 const defaultProps: OrdersListTableProps = {
-	activeAccountsItems: mockActiveAccountsItemsStore,
 	showInactiveOrders: mockShowInactiveOrdersStore,
 	orderHash: mockOrderHashStore,
 	hideZeroBalanceVaults: mockHideZeroBalanceVaultsStore,
-	showMyItemsOnly: mockShowMyItemsOnlyStore,
-	activeNetworkRef: mockActiveNetworkRefStore,
-	activeOrderbookRef: mockActiveOrderbookRefStore,
+	hideInactiveOrdersVaults: mockHideInactiveOrdersVaultsStore,
 	selectedChainIds: mockSelectedChainIdsStore,
 	activeTokens: mockActiveTokensStore,
-	activeOrderbookAddresses: mockActiveOrderbookAddressesStore
+	activeOrderbookAddresses: mockActiveOrderbookAddressesStore,
+	ownerFilter: mockOwnerFilterStore
 } as unknown as OrdersListTableProps;
-
-const mockMatchesAccount = vi.fn();
 
 const mockGetOrders = vi.fn();
 const mockGetTokens = vi.fn();
@@ -148,7 +143,7 @@ describe('OrdersListTable', () => {
 				error: undefined
 			})
 		});
-		mockGetOrders.mockResolvedValue({ value: [], error: undefined });
+		mockGetOrders.mockResolvedValue({ value: { orders: [], totalCount: 0 }, error: undefined });
 		mockGetTokens.mockResolvedValue({ value: [], error: undefined });
 	});
 
@@ -158,7 +153,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[mockOrder]] },
+					data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -196,7 +191,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[mockOrder]] },
+					data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -276,7 +271,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[orderWithMultipleTokens]] },
+					data: { pages: [{ orders: [orderWithMultipleTokens], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -359,7 +354,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[orderWithMultipleTokens]] },
+					data: { pages: [{ orders: [orderWithMultipleTokens], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -387,7 +382,6 @@ describe('OrdersListTable', () => {
 	});
 
 	it('shows inactive badge for inactive orders', async () => {
-		mockMatchesAccount.mockReturnValue(true);
 		const inactiveOrder = {
 			...mockOrder,
 			active: false
@@ -397,7 +391,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[inactiveOrder]] },
+					data: { pages: [{ orders: [inactiveOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -417,7 +411,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[]] },
+					data: { pages: [{ orders: [], totalCount: 0 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -436,13 +430,12 @@ describe('OrdersListTable', () => {
 		}));
 
 		const gotoMock = await import('$app/navigation');
-		mockMatchesAccount.mockReturnValue(true);
 		const mockQuery = vi.mocked(await import('@tanstack/svelte-query'));
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[mockOrder]] },
+					data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -471,8 +464,6 @@ describe('OrdersListTable', () => {
 	});
 
 	it('handles large number of trades display', async () => {
-		mockMatchesAccount.mockReturnValue(true);
-
 		const orderWithManyTrades = {
 			...mockOrder,
 			tradesCount: 100
@@ -483,7 +474,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[orderWithManyTrades]] },
+					data: { pages: [{ orders: [orderWithManyTrades], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -502,7 +493,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[mockOrder]] },
+					data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -530,7 +521,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[inactiveOrder]] },
+					data: { pages: [{ orders: [inactiveOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true
@@ -554,7 +545,7 @@ describe('OrdersListTable', () => {
 		mockQuery.createInfiniteQuery = vi.fn((__options, _queryClient) => ({
 			subscribe: (fn: (value: any) => void) => {
 				fn({
-					data: { pages: [[mockOrder]] },
+					data: { pages: [{ orders: [mockOrder], totalCount: 1 }] },
 					status: 'success',
 					isFetching: false,
 					isFetched: true,
@@ -591,7 +582,7 @@ describe('OrdersListTable', () => {
 			return {
 				subscribe: (fn: (value: any) => void) => {
 					fn({
-						data: { pages: [[]] },
+						data: { pages: [{ orders: [], totalCount: 0 }] },
 						status: 'success',
 						isFetching: false,
 						isFetched: true
@@ -626,7 +617,7 @@ describe('OrdersListTable', () => {
 			return {
 				subscribe: (fn: (value: any) => void) => {
 					fn({
-						data: { pages: [[]] },
+						data: { pages: [{ orders: [], totalCount: 0 }] },
 						status: 'success',
 						isFetching: false,
 						isFetched: true

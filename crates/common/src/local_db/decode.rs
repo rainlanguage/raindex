@@ -7,7 +7,7 @@ use alloy::{
 use core::convert::TryFrom;
 use rain_orderbook_bindings::{
     IInterpreterStoreV3::Set,
-    IOrderBookV6::{
+    IRaindexV6::{
         AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
     },
     OrderBook::MetaV1_2,
@@ -210,11 +210,11 @@ mod test_helpers {
     use alloy::hex;
     use alloy::primitives::{address, b256, Address, Bytes, FixedBytes, B256, U256};
     use rain_orderbook_bindings::{
-        IOrderBookV6::{
+        IRaindexV6::{
             AddOrderV3, AfterClearV2, ClearConfigV2, ClearStateChangeV2, ClearV3, DepositV2,
             RemoveOrderV3, SignedContextV1, TakeOrderConfigV4, TakeOrderV3, WithdrawV2,
         },
-        IOrderBookV6::{EvaluableV4, OrderV4, IOV2},
+        IRaindexV6::{EvaluableV4, OrderV4, IOV2},
         OrderBook::MetaV1_2,
     };
     use serde_json::Value;

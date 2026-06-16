@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { DotsVerticalOutline } from 'flowbite-svelte-icons';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
-	import { RaindexOrder, type OrderbookCfg } from '@rainlanguage/orderbook';
+	import { RaindexOrder, type OrderbookCfg, type Address } from '@rainlanguage/orderbook';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
 	import ListViewOrderbookFilters from '../ListViewOrderbookFilters.svelte';
@@ -32,24 +32,19 @@
 	export let handleTakeOrderModal: any = undefined;
 
 	export let selectedChainIds: AppStoresInterface['selectedChainIds'];
-	export let activeAccountsItems: AppStoresInterface['activeAccountsItems'] | undefined;
 	export let showInactiveOrders: AppStoresInterface['showInactiveOrders'];
 	export let orderHash: AppStoresInterface['orderHash'];
 	export let hideZeroBalanceVaults: AppStoresInterface['hideZeroBalanceVaults'];
 	export let hideInactiveOrdersVaults: AppStoresInterface['hideInactiveOrdersVaults'];
-	export let showMyItemsOnly: AppStoresInterface['showMyItemsOnly'];
 	export let activeTokens: AppStoresInterface['activeTokens'];
 	export let activeOrderbookAddresses: AppStoresInterface['activeOrderbookAddresses'];
+	export let ownerFilter: AppStoresInterface['ownerFilter'];
 
 	const { matchesAccount, account } = useAccount();
 	const raindexClient = useRaindexClient();
 
-	$: owners =
-		$activeAccountsItems && Object.values($activeAccountsItems).length > 0
-			? Object.values($activeAccountsItems)
-			: $showMyItemsOnly && $account
-				? [$account]
-				: [];
+	$: ownerAddress = $ownerFilter?.trim() || '';
+	$: owners = ownerAddress ? [ownerAddress as Address] : ([] as Address[]);
 
 	$: tokensQuery = createQuery({
 		queryKey: [QKEY_TOKENS, $selectedChainIds],
@@ -85,7 +80,7 @@
 		queryKey: [
 			QKEY_ORDERS,
 			$selectedChainIds,
-			owners,
+			ownerAddress,
 			$showInactiveOrders,
 			$orderHash,
 			selectedTokens,
@@ -112,19 +107,18 @@
 		},
 		initialPageParam: 0,
 		getNextPageParam(lastPage, _allPages, lastPageParam) {
-			return lastPage.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
+			return lastPage.orders.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
 		},
 		refetchInterval: DEFAULT_REFRESH_INTERVAL,
 		enabled: true
 	});
 
-	const AppTable = TanstackAppTable<RaindexOrder>;
+	type OrdersListResult = { orders: RaindexOrder[]; totalCount: number };
+	const AppTable = TanstackAppTable<RaindexOrder, OrdersListResult>;
 </script>
 
 <ListViewOrderbookFilters
 	{selectedChainIds}
-	{activeAccountsItems}
-	{showMyItemsOnly}
 	{showInactiveOrders}
 	{orderHash}
 	{hideZeroBalanceVaults}
@@ -134,12 +128,14 @@
 	{selectedTokens}
 	{activeOrderbookAddresses}
 	{selectedOrderbookAddresses}
+	{ownerFilter}
 />
 
 <AppTable
 	{query}
 	queryKey={QKEY_ORDERS}
 	emptyMessage="No Orders Found"
+	dataSelector={(page) => page.orders}
 	on:clickRow={(e) => {
 		goto(`/orders/${e.detail.item.chainId}-${e.detail.item.orderbook}-${e.detail.item.orderHash}`);
 	}}

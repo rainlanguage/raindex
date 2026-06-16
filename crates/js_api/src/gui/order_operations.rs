@@ -14,7 +14,7 @@ use rain_orderbook_app_settings::{
     orderbook::OrderbookCfg,
 };
 use rain_orderbook_bindings::{
-    IOrderBookV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
+    IRaindexV6::deposit4Call, OrderBook::multicallCall, IERC20::approveCall,
 };
 use rain_orderbook_common::{
     add_order::AddOrderArgs, deposit::DepositArgs, erc20::ERC20, transaction::TransactionArgs,
@@ -201,10 +201,10 @@ impl DotrainOrderGui {
         let allowance = deposit_args
             .read_allowance(Address::from_str(owner)?, self.get_transaction_args()?)
             .await?;
-        return Ok(TokenAllowance {
+        Ok(TokenAllowance {
             token: deposit_args.token,
             allowance,
-        });
+        })
     }
 
     fn prepare_calldata_generation(
@@ -529,9 +529,9 @@ impl DotrainOrderGui {
             .try_into_call(transaction_args.rpcs.clone())
             .await?;
 
-        return Ok(AddOrderCalldataResult(Bytes::copy_from_slice(
+        Ok(AddOrderCalldataResult(Bytes::copy_from_slice(
             &add_order_call.abi_encode(),
-        )));
+        )))
     }
 
     /// Generates a multicall combining all deposits and add order in one calldata.
@@ -829,13 +829,10 @@ impl DotrainOrderGui {
                 .ok_or_else(|| GuiError::NoAddressInMetaboardSubgraph)?;
 
             let calldata = add_order_args.try_into_emit_meta_call()?;
-            match calldata {
-                Some(calldata) => Some(ExternalCall {
-                    to: *metaboard_address,
-                    calldata: Bytes::copy_from_slice(&calldata.abi_encode()),
-                }),
-                None => None,
-            }
+            calldata.map(|calldata| ExternalCall {
+                to: *metaboard_address,
+                calldata: Bytes::copy_from_slice(&calldata.abi_encode()),
+            })
         } else {
             None
         };
@@ -1060,8 +1057,8 @@ mod tests {
 
     #[cfg(all(test, not(target_family = "wasm")))]
     async fn initialize_gui_with_metaboard_url(url: &str) -> DotrainOrderGui {
-        let yaml = get_yaml().replace("https://metaboard.com", url);
-        DotrainOrderGui::new_with_deployment(yaml, "some-deployment".to_string(), None)
+        let yaml = crate::gui::tests::get_yaml().replace("https://metaboard.com", url);
+        DotrainOrderGui::new_with_deployment(yaml, None, "some-deployment".to_string(), None)
             .await
             .unwrap()
     }

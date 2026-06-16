@@ -31,6 +31,8 @@ pub struct FetchConfig {
     max_concurrent_requests: usize,
     max_concurrent_blocks: usize,
     max_retry_attempts: usize,
+    retry_delay_ms: u64,
+    rate_limit_delay_ms: u64,
 }
 
 impl FetchConfig {
@@ -38,12 +40,16 @@ impl FetchConfig {
     pub const DEFAULT_MAX_CONCURRENT_REQUESTS: usize = 10;
     pub const DEFAULT_MAX_CONCURRENT_BLOCKS: usize = 14;
     pub const DEFAULT_MAX_RETRY_ATTEMPTS: usize = 3;
+    pub const DEFAULT_RETRY_DELAY_MS: u64 = 500;
+    pub const DEFAULT_RATE_LIMIT_DELAY_MS: u64 = 0;
 
     pub fn new(
         chunk_size: u64,
         max_concurrent_requests: usize,
         max_concurrent_blocks: usize,
         max_retry_attempts: usize,
+        retry_delay_ms: u64,
+        rate_limit_delay_ms: u64,
     ) -> Result<Self, FetchConfigError> {
         if chunk_size == 0 {
             return Err(FetchConfigError::ChunkSizeZero(chunk_size));
@@ -67,6 +73,8 @@ impl FetchConfig {
             max_concurrent_requests,
             max_concurrent_blocks,
             max_retry_attempts,
+            retry_delay_ms,
+            rate_limit_delay_ms,
         })
     }
 
@@ -85,6 +93,14 @@ impl FetchConfig {
     pub fn max_retry_attempts(&self) -> usize {
         self.max_retry_attempts
     }
+
+    pub fn retry_delay_ms(&self) -> u64 {
+        self.retry_delay_ms
+    }
+
+    pub fn rate_limit_delay_ms(&self) -> u64 {
+        self.rate_limit_delay_ms
+    }
 }
 
 impl Default for FetchConfig {
@@ -94,6 +110,8 @@ impl Default for FetchConfig {
             max_concurrent_requests: Self::DEFAULT_MAX_CONCURRENT_REQUESTS,
             max_concurrent_blocks: Self::DEFAULT_MAX_CONCURRENT_BLOCKS,
             max_retry_attempts: Self::DEFAULT_MAX_RETRY_ATTEMPTS,
+            retry_delay_ms: Self::DEFAULT_RETRY_DELAY_MS,
+            rate_limit_delay_ms: Self::DEFAULT_RATE_LIMIT_DELAY_MS,
         }
     }
 }
@@ -162,6 +180,8 @@ async fn fetch_block_timestamps(
     }
 
     let concurrency = config.max_concurrent_blocks();
+    let retry_delay = config.retry_delay_ms();
+    let rate_limit_delay = config.rate_limit_delay_ms();
     let results: Vec<Result<(u64, U256), LocalDbError>> = futures::stream::iter(block_numbers)
         .map(|block_number| {
             let client = rpc_client.clone();
@@ -178,7 +198,10 @@ async fn fetch_block_timestamps(
                         }
                     },
                     max_attempts,
+                    retry_delay,
+                    rate_limit_delay,
                     should_retry_local_db_error,
+                    is_rate_limited_local_db_error,
                 )
                 .await?;
 
@@ -290,6 +313,8 @@ async fn fetch_logs_for_filters(
     }
 
     let concurrency = config.max_concurrent_requests();
+    let retry_delay = config.retry_delay_ms();
+    let rate_limit_delay = config.rate_limit_delay_ms();
     let results: Vec<Vec<LogEntryResponse>> = futures::stream::iter(filters)
         .map(|filter| {
             let client = rpc_client.clone();
@@ -303,7 +328,10 @@ async fn fetch_logs_for_filters(
                         async move { client.get_logs(&filter).await.map_err(map_rpc_error) }
                     },
                     max_attempts,
+                    retry_delay,
+                    rate_limit_delay,
                     should_retry_local_db_error,
+                    is_rate_limited_local_db_error,
                 )
                 .await?;
 
@@ -338,6 +366,10 @@ fn should_retry_local_db_error(error: &LocalDbError) -> bool {
     matches!(error, LocalDbError::Rpc(_))
 }
 
+fn is_rate_limited_local_db_error(error: &LocalDbError) -> bool {
+    matches!(error, LocalDbError::Rpc(RpcClientError::RateLimited { .. }))
+}
+
 #[cfg(test)]
 mod tests {
     #[cfg(not(target_family = "wasm"))]
@@ -347,21 +379,41 @@ mod tests {
     #[test]
     fn fetch_config_new_rejects_zero_values() {
         assert!(matches!(
-            FetchConfig::new(0, 1, 1, 1),
+            FetchConfig::new(0, 1, 1, 1, 0, 0),
             Err(FetchConfigError::ChunkSizeZero(0))
         ));
         assert!(matches!(
-            FetchConfig::new(1, 0, 1, 1),
+            FetchConfig::new(1, 0, 1, 1, 0, 0),
             Err(FetchConfigError::MaxConcurrentRequestsZero(0))
         ));
         assert!(matches!(
-            FetchConfig::new(1, 1, 0, 1),
+            FetchConfig::new(1, 1, 0, 1, 0, 0),
             Err(FetchConfigError::MaxConcurrentBlocksZero(0))
         ));
         assert!(matches!(
-            FetchConfig::new(1, 1, 1, 0),
+            FetchConfig::new(1, 1, 1, 0, 0, 0),
             Err(FetchConfigError::MaxRetryAttemptsZero(0))
         ));
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn is_rate_limited_detects_rate_limited_error() {
+        assert!(is_rate_limited_local_db_error(&LocalDbError::Rpc(
+            RpcClientError::RateLimited {
+                message: "rate limited".to_string(),
+            }
+        )));
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn is_rate_limited_rejects_non_rate_limited_error() {
+        assert!(!is_rate_limited_local_db_error(&LocalDbError::Rpc(
+            RpcClientError::RpcError {
+                message: "some error".to_string(),
+            }
+        )));
     }
 
     #[cfg(not(target_family = "wasm"))]
@@ -391,7 +443,7 @@ mod tests {
         use alloy::rpc::types::FilterBlockError;
         use alloy::sol_types::SolEvent;
         use httpmock::prelude::*;
-        use rain_orderbook_bindings::{IInterpreterStoreV3::Set, IOrderBookV6::AddOrderV3};
+        use rain_orderbook_bindings::{IInterpreterStoreV3::Set, IRaindexV6::AddOrderV3};
         use serde_json::json;
         use std::str::FromStr;
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -548,6 +600,8 @@ mod tests {
                     max_concurrent_requests: 1,
                     max_concurrent_blocks: 1,
                     max_retry_attempts: 1,
+                    retry_delay_ms: 0,
+                    rate_limit_delay_ms: 0,
                 },
             )
             .await
@@ -633,6 +687,8 @@ mod tests {
                     max_concurrent_requests: 1,
                     max_concurrent_blocks: 1,
                     max_retry_attempts: 1,
+                    retry_delay_ms: 0,
+                    rate_limit_delay_ms: 0,
                 },
             )
             .await
@@ -800,6 +856,8 @@ mod tests {
                     max_concurrent_requests: 1,
                     max_concurrent_blocks: 1,
                     max_retry_attempts: 1,
+                    retry_delay_ms: 0,
+                    rate_limit_delay_ms: 0,
                 },
             )
             .await
@@ -824,7 +882,10 @@ mod tests {
                     }))
                 },
                 2,
+                0,
+                0,
                 should_retry_local_db_error,
+                is_rate_limited_local_db_error,
             )
             .await
             .unwrap_err();
@@ -921,6 +982,8 @@ mod tests {
                     FetchConfig::DEFAULT_MAX_CONCURRENT_REQUESTS,
                     FetchConfig::DEFAULT_MAX_CONCURRENT_BLOCKS,
                     1,
+                    0,
+                    0,
                 )
                 .expect("fetch config parameters to be valid"),
             )
@@ -956,6 +1019,8 @@ mod tests {
                     FetchConfig::DEFAULT_MAX_CONCURRENT_REQUESTS,
                     FetchConfig::DEFAULT_MAX_CONCURRENT_BLOCKS,
                     1,
+                    0,
+                    0,
                 )
                 .expect("fetch config parameters to be valid"),
             )
@@ -1040,10 +1105,12 @@ mod tests {
                 1,
                 2,
                 &FetchConfig {
-                    chunk_size: 1, // forces per-block filters
+                    chunk_size: 1,
                     max_concurrent_requests: 2,
                     max_concurrent_blocks: 1,
                     max_retry_attempts: 1,
+                    retry_delay_ms: 0,
+                    rate_limit_delay_ms: 0,
                 },
             )
             .await

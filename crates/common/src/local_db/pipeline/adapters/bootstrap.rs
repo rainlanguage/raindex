@@ -228,7 +228,8 @@ mod tests {
         }
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for RecordingTextExecutor {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             let mut captured = self.captured_sql.lock().unwrap();
@@ -292,7 +293,8 @@ mod tests {
     #[async_trait(?Send)]
     impl BootstrapPipeline for TestBootstrapPipeline {}
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for MockDb {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             for stmt in batch {

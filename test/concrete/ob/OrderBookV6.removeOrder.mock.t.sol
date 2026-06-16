@@ -3,11 +3,9 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalMockTest} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
-import {
-    OrderConfigV4, OrderV4, EvaluableV4, TaskV2
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {NotOrderOwner} from "src/concrete/ob/OrderBookV6.sol";
+import {NotOrderOwner} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 /// @title OrderBookV6RemoveOrderMockTest
 /// @notice A contract to test the OrderBook removeOrder function.
@@ -23,7 +21,7 @@ contract OrderBookV6RemoveOrderMockTest is OrderBookV6ExternalMockTest {
         (OrderV4 memory expectedOrder, bytes32 expectedOrderHash) = LibTestAddOrder.expectedOrder(alice, config);
 
         // It will revert even if the order has not been added yet.
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(expectedOrder, new TaskV2[](0));
 
@@ -31,7 +29,7 @@ contract OrderBookV6RemoveOrderMockTest is OrderBookV6ExternalMockTest {
         (OrderV4 memory order, bytes32 orderHash) = addOrderWithChecks(alice, config, expression);
         assertEq(orderHash, expectedOrderHash);
 
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(order, new TaskV2[](0));
 
@@ -39,7 +37,7 @@ contract OrderBookV6RemoveOrderMockTest is OrderBookV6ExternalMockTest {
         removeOrderWithChecks(alice, order);
 
         // It will revert even after the order has been removed.
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(order, new TaskV2[](0));
     }
@@ -126,11 +124,11 @@ contract OrderBookV6RemoveOrderMockTest is OrderBookV6ExternalMockTest {
         assertTrue(orderHashAlice != orderHashBob);
 
         // Owners can't interfere with each other.
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice, bob));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
         iOrderbook.removeOrder3(orderBob, new TaskV2[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(orderAlice, new TaskV2[](0));
 
@@ -186,17 +184,17 @@ contract OrderBookV6RemoveOrderMockTest is OrderBookV6ExternalMockTest {
         }
 
         // Owners can't interfere with each other.
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice, bob));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
         iOrderbook.removeOrder3(orderBobOne, new TaskV2[](0));
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice, bob));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
         iOrderbook.removeOrder3(orderBobTwo, new TaskV2[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(orderAliceOne, new TaskV2[](0));
-        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob, alice));
+        vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
         iOrderbook.removeOrder3(orderAliceTwo, new TaskV2[](0));
 

@@ -206,7 +206,7 @@ mod tests {
             chain_id,
             address!("0000000000000000000000000000000000000a11"),
         );
-        let fetch = FetchConfig::new(10, 5, 2, 1).unwrap();
+        let fetch = FetchConfig::new(10, 5, 2, 1, 0, 0).unwrap();
         let sync_config = SyncConfig {
             deployment_block: 100,
             fetch,

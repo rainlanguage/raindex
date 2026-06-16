@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 
-import {OrderBookV6} from "src/concrete/ob/OrderBookV6.sol";
+import {OrderBookV6} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 /// @title OrderBookV6SelfTest
 /// Abstract contract that is an `OrderBookV6` and can be used to test itself.

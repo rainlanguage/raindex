@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import type { Address } from '@rainlanguage/orderbook';
 import { type Config } from '@wagmi/core';
 import { mockWeb3Config } from './mockWeb3Config';
 
@@ -42,7 +43,6 @@ const initialPageState: MockPageState = {
 };
 
 const mockPageWritable = writable<MockPageState>(initialPageState);
-const mockActiveAccountsItemsWritable = writable<Record<string, string>>({});
 const mockShowInactiveOrdersWritable = writable<boolean>(true);
 const mockOrderHashWritable = writable<string>('');
 const mockHideZeroBalanceVaultsWritable = writable<boolean>(false);
@@ -54,17 +54,10 @@ const mockSubgraphUrlWritable = writable<string>('');
 const mockChainIdWritable = writable<number>(0);
 const mockConnectedWritable = writable<boolean>(true);
 const mockWagmiConfigWritable = writable<Config>(mockWeb3Config);
-const mockShowMyItemsOnlyWritable = writable<boolean>(false);
 const mockSelectedChainIdsWritable = writable<number[]>([]);
 const mockActiveTokensWritable = writable<string[]>([]);
 const mockActiveOrderbookAddressesWritable = writable<string[]>([]);
-
-export const mockActiveAccountsItemsStore = {
-	subscribe: mockActiveAccountsItemsWritable.subscribe,
-	set: mockActiveAccountsItemsWritable.set,
-	mockSetSubscribeValue: (value: Record<string, string>): void =>
-		mockActiveAccountsItemsWritable.set(value)
-};
+const mockOwnerFilterWritable = writable<Address>('' as Address);
 
 export const mockShowInactiveOrdersStore = {
 	subscribe: mockShowInactiveOrdersWritable.subscribe,
@@ -135,12 +128,6 @@ export const mockWagmiConfigStore = {
 	mockSetSubscribeValue: (value: Config): void => mockWagmiConfigWritable.set(value)
 };
 
-export const mockShowMyItemsOnlyStore = {
-	subscribe: mockShowMyItemsOnlyWritable.subscribe,
-	set: mockShowMyItemsOnlyWritable.set,
-	mockSetSubscribeValue: (value: boolean): void => mockShowMyItemsOnlyWritable.set(value)
-};
-
 export const mockSelectedChainIdsStore = {
 	subscribe: mockSelectedChainIdsWritable.subscribe,
 	set: mockSelectedChainIdsWritable.set,
@@ -169,4 +156,10 @@ export const mockActiveOrderbookAddressesStore = {
 	subscribe: mockActiveOrderbookAddressesWritable.subscribe,
 	set: mockActiveOrderbookAddressesWritable.set,
 	mockSetSubscribeValue: (value: string[]): void => mockActiveOrderbookAddressesWritable.set(value)
+};
+
+export const mockOwnerFilterStore = {
+	subscribe: mockOwnerFilterWritable.subscribe,
+	set: mockOwnerFilterWritable.set,
+	mockSetSubscribeValue: (value: Address): void => mockOwnerFilterWritable.set(value)
 };

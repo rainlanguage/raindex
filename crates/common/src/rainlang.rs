@@ -192,7 +192,7 @@ mod fork_parse {
         ForkCallReverted(#[from] AbiDecodedErrorType),
         #[error(transparent)]
         ReadableClientError(#[from] ReadableClientError),
-        #[error("Failed to read Parser address from deployer")]
+        #[error("Failed to read Parser address from rainlang")]
         ReadParserAddressFailed,
         #[error("Invalid input args: {0}")]
         InvalidArgs(String),
@@ -208,13 +208,13 @@ mod fork_parse {
     }
 
     /// checks the front matter validity and parses the given rainlang string
-    /// with the deployer parsed from the front matter
+    /// with the rainlang address parsed from the front matter
     /// returns abi encoded expression config on Ok variant
     pub async fn parse_rainlang_on_fork(
         rainlang: &str,
         rpcs: &Vec<String>,
         block_number: Option<u64>,
-        deployer: Address,
+        rainlang_address: Address,
     ) -> Result<Bytes, ForkParseError> {
         // Prepare evm fork
         let block_number_val = match block_number {
@@ -263,7 +263,7 @@ mod fork_parse {
 
         let parse_args = ForkParseArgs {
             rainlang_string: rainlang.to_owned(),
-            deployer,
+            rainlang: rainlang_address,
             decode_errors: true,
         };
         let result = forker.fork_parse(parse_args).await?;
@@ -284,7 +284,7 @@ mod fork_parse {
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_parse_rainlang_on_fork_ok() {
             let local_evm = LocalEvm::new().await;
-            let deployer = *local_evm.deployer.address();
+            let rainlang_addr = local_evm.rainlang;
             let rpc_url = local_evm.url();
 
             let dotrain = r"
@@ -307,7 +307,7 @@ _ _: 1 2;
             )
             .unwrap();
 
-            let bytes = parse_rainlang_on_fork(&rainlang, &vec![rpc_url], None, deployer)
+            let bytes = parse_rainlang_on_fork(&rainlang, &vec![rpc_url], None, rainlang_addr)
                 .await
                 .unwrap();
 
@@ -319,7 +319,7 @@ _ _: 1 2;
         #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
         async fn test_parse_rainlang_on_fork_err_parsing_dotrain_instead_of_rainlang() {
             let local_evm = LocalEvm::new().await;
-            let deployer = *local_evm.deployer.address();
+            let rainlang_addr = local_evm.rainlang;
             let rpc_url = local_evm.url();
 
             let dotrain = r"
@@ -334,7 +334,7 @@ _ _: 0 0;
 _ _: 1 2;
 ";
 
-            let err = parse_rainlang_on_fork(dotrain, &vec![rpc_url], None, deployer)
+            let err = parse_rainlang_on_fork(dotrain, &vec![rpc_url], None, rainlang_addr)
                 .await
                 .unwrap_err();
 
@@ -354,7 +354,7 @@ _ _: 1 2;
             });
 
             let rpc_url = server.url("/rpc");
-            let deployer = Address::ZERO;
+            let rainlang_addr = Address::ZERO;
 
             let dotrain = r"
 some front matter
@@ -376,9 +376,10 @@ _ _: 1 2;
             )
             .unwrap();
 
-            let err = parse_rainlang_on_fork(&rainlang, &vec![rpc_url.clone()], None, deployer)
-                .await
-                .unwrap_err();
+            let err =
+                parse_rainlang_on_fork(&rainlang, &vec![rpc_url.clone()], None, rainlang_addr)
+                    .await
+                    .unwrap_err();
 
             assert!(
                 matches!(&err,

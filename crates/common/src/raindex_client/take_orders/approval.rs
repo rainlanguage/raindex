@@ -25,7 +25,7 @@ pub async fn check_approval_needed(
 
     let erc20 = ERC20::new(params.rpc_urls.clone(), params.sell_token);
     let decimals = erc20.decimals().await?;
-    let required_u256 = max_sell_cap.to_fixed_decimal(decimals)?;
+    let required_u256 = max_sell_cap.to_fixed_decimal_lossy(decimals)?.0;
 
     let allowance_result =
         check_taker_allowance(&erc20, params.taker, params.orderbook, required_u256)
@@ -285,6 +285,48 @@ mod local_evm_tests {
         assert!(
             result.is_none(),
             "Should return None when allowance is sufficient"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_check_approval_needed_excess_decimal_precision() {
+        let mut local_evm = LocalEvm::new().await;
+        let owner = local_evm.signer_wallets[0].default_signer().address();
+        let taker = local_evm.signer_wallets[1].default_signer().address();
+        let token = local_evm
+            .deploy_new_token("USDC", "USDC", 6, U256::MAX, owner)
+            .await;
+        let orderbook = *local_evm.orderbook.address();
+
+        token
+            .transfer(
+                taker,
+                U256::from(1000u64) * U256::from(10).pow(U256::from(6)),
+            )
+            .from(owner)
+            .send()
+            .await
+            .unwrap()
+            .get_receipt()
+            .await
+            .unwrap();
+
+        let rpc_url = Url::parse(&local_evm.url().to_string()).unwrap();
+
+        let params = ApprovalCheckParams {
+            rpc_urls: vec![rpc_url],
+            sell_token: *token.address(),
+            taker,
+            orderbook,
+            mode: make_mode(TakeOrdersMode::SpendUpTo, "1.57126799999999998"),
+            price_cap: Float::parse("1".to_string()).unwrap(),
+        };
+
+        let result = check_approval_needed(&params).await;
+        assert!(
+            result.is_ok(),
+            "Should not error on excess decimal precision: {:?}",
+            result.err()
         );
     }
 

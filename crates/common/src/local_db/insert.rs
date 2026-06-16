@@ -10,7 +10,7 @@ use alloy::{
 };
 use itertools::Itertools;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::{
+use rain_orderbook_bindings::IRaindexV6::{
     AddOrderV3, AfterClearV2, ClearV3, DepositV2, OrderV4, RemoveOrderV3, TakeOrderV3, WithdrawV2,
     IOV2,
 };
@@ -968,7 +968,7 @@ mod tests {
     use alloy::hex;
     use alloy::primitives::{address, b256, Address, Bytes, FixedBytes, B256, U256};
     use rain_orderbook_bindings::IInterpreterStoreV3::Set;
-    use rain_orderbook_bindings::IOrderBookV6::{
+    use rain_orderbook_bindings::IRaindexV6::{
         ClearConfigV2, ClearStateChangeV2, EvaluableV4, SignedContextV1, TakeOrderConfigV4,
     };
     use std::collections::HashMap;

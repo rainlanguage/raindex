@@ -42,6 +42,22 @@ chmod +x prep-all.sh
 cd packages/webapp && nix develop -c npm run dev
 ```
 
+## Deployment
+
+Contracts are deployed via the Foundry script at `script/Deploy.sol`. The script is controlled by two environment variables:
+
+- `DEPLOYMENT_KEY` — the deployer private key
+- `DEPLOYMENT_SUITE` — which contracts to deploy. One of:
+  - `raindex` — OrderBookV6 only
+  - `subparser` — OrderBookV6SubParser only
+  - `route-processor` — Sushi RouteProcessor4 only
+  - `arb` — arb contracts only (order takers and flash borrowers)
+
+Example:
+```bash
+DEPLOYMENT_KEY=<key> DEPLOYMENT_SUITE=raindex forge script script/Deploy.sol --broadcast --rpc-url <rpc-url>
+```
+
 ## Legal stuff
 
 Everything is under DecentraLicense 1.0 (DCL-1.0) which can be found in `LICENSES/`.

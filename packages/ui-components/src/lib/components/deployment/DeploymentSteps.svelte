@@ -27,7 +27,7 @@
 	import { useGui } from '$lib/hooks/useGui';
 	import { fade } from 'svelte/transition';
 	import ShareChoicesButton from './ShareChoicesButton.svelte';
-	import { useRegistry } from '$lib/providers/registry/useRegistry';
+	import { useRainlang } from '$lib/providers/rainlang/useRainlang';
 	import type { Account } from '$lib/types/account';
 	import { useRaindexClient } from '$lib/hooks/useRaindexClient';
 	import type { TokenBalance } from '$lib/types/tokenBalance';
@@ -61,7 +61,7 @@
 	let tokenBalances: Map<string, TokenBalance> = new Map();
 
 	const gui = useGui();
-	const registry = useRegistry();
+	const rainlang = useRainlang();
 	const raindexClient = useRaindexClient();
 
 	let deploymentStepsError = DeploymentStepsError.error;
@@ -122,7 +122,7 @@
 	}
 
 	async function _handleShareChoices() {
-		await handleShareChoices(gui, registry.getCurrentRegistry());
+		await handleShareChoices(gui, rainlang.getCurrentRainlang());
 	}
 
 	async function fetchTokenBalance(tokenInfo: ExtendedTokenInfo) {

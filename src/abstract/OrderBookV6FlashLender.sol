@@ -9,8 +9,8 @@ import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/Safe
 import {
     IERC3156FlashBorrower,
     ON_FLASH_LOAN_CALLBACK_SUCCESS
-} from "rain.orderbook.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IERC3156FlashLender} from "rain.orderbook.interface/interface/ierc3156/IERC3156FlashLender.sol";
+} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IERC3156FlashLender} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashLender.sol";
 
 /// Thrown when the `onFlashLoan` callback returns anything other than
 /// ON_FLASH_LOAN_CALLBACK_SUCCESS.
@@ -72,8 +72,7 @@ abstract contract OrderBookV6FlashLender is IERC3156FlashLender, ERC165 {
     }
 
     /// There's no limit to the size of a flash loan from `Orderbook` other than
-    /// the current tokens deposited in `Orderbook`. If there is an active debt
-    /// then loans are disabled so the max becomes `0` until after repayment.
+    /// the current tokens deposited in `Orderbook`.
     /// @inheritdoc IERC3156FlashLender
     function maxFlashLoan(address token) external view override returns (uint256) {
         return IERC20(token).balanceOf(address(this));

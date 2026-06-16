@@ -5,6 +5,7 @@ use crate::yaml::{
 use crate::*;
 use alloy::primitives::{hex::FromHexError, Address};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::str::FromStr;
 use std::sync::RwLock;
 use std::{collections::HashMap, sync::Arc};
@@ -36,6 +37,8 @@ pub struct TokenCfg {
     pub symbol: Option<String>,
     #[cfg_attr(target_family = "wasm", tsify(optional, type = "string"))]
     pub logo_uri: Option<Url>,
+    #[cfg_attr(target_family = "wasm", tsify(optional, type = "Map<string, any>"))]
+    pub extensions: Option<HashMap<String, Value>>,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(TokenCfg);
@@ -339,6 +342,7 @@ impl YamlParsableHash for TokenCfg {
                         label,
                         symbol,
                         logo_uri,
+                        extensions: None,
                     };
 
                     if tokens.contains_key(&token_key) {
@@ -406,6 +410,7 @@ impl Default for TokenCfg {
             label: None,
             symbol: None,
             logo_uri: None,
+            extensions: None,
         }
     }
 }
@@ -418,6 +423,7 @@ impl PartialEq for TokenCfg {
             && self.label == other.label
             && self.symbol == other.symbol
             && self.logo_uri == other.logo_uri
+            && self.extensions == other.extensions
     }
 }
 

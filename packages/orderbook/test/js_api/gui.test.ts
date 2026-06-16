@@ -1,4 +1,4 @@
-import { decodeFunctionData, hexToBytes } from 'viem';
+import { decodeFunctionData, hexToBytes, toFunctionSelector } from 'viem';
 import assert from 'assert';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 import {
@@ -22,6 +22,13 @@ import {
 } from '../../dist/cjs';
 
 const SPEC_VERSION = OrderbookYaml.getCurrentSpecVersion().value;
+
+// Rainlang contract function selectors
+const EXPRESSION_DEPLOYER_ADDRESS_SELECTOR = toFunctionSelector('function expressionDeployerAddress() external view returns (address)');
+const INTERPRETER_ADDRESS_SELECTOR = toFunctionSelector('function interpreterAddress() external view returns (address)');
+const STORE_ADDRESS_SELECTOR = toFunctionSelector('function storeAddress() external view returns (address)');
+const PARSER_ADDRESS_SELECTOR = toFunctionSelector('function parserAddress() external view returns (address)');
+const PARSE2_SELECTOR = toFunctionSelector('function parse2(bytes calldata data) external view returns (bytes calldata bytecode)');
 import { getLocal } from 'mockttp';
 
 const guiConfig = `
@@ -155,8 +162,8 @@ metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -183,7 +190,7 @@ tokens:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
         scenarios:
@@ -199,7 +206,7 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 
 deployments:
@@ -235,8 +242,8 @@ metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -263,7 +270,7 @@ tokens:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
 
@@ -273,7 +280,7 @@ orders:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 
 deployments:
@@ -307,8 +314,8 @@ subgraphs:
 metaboards:
     test: http://localhost:8085/metaboard
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -321,7 +328,7 @@ orderbooks:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
 
@@ -331,7 +338,7 @@ orders:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 
 deployments:
@@ -395,11 +402,11 @@ subgraphs:
 metaboards:
     test: http://localhost:8085/metaboard
     some-network: http://localhost:8085/metaboard
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: remote-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
-    other-deployer:
+    other-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 orderbooks:
@@ -438,23 +445,23 @@ tokens:
         symbol: T3
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
     other-scenario:
-        deployer: other-deployer
+        rainlang: other-rainlang
 orders:
     some-order:
       inputs:
         - token: token1
       outputs:
         - token: token2
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
     other-order:
       inputs:
         - token: token3
       outputs:
         - token: token3
-      deployer: other-deployer
+      rainlang: other-rainlang
       orderbook: other-orderbook
 deployments:
     test-deployment:
@@ -1020,7 +1027,7 @@ describe('Rain Orderbook JS API Package Bindgen Tests - Gui', async function () 
 
 	describe('state management tests', async () => {
 		let serializedState =
-			'H4sIAAAAAAAA_21QT0vDMBRvqiiIBxGvguDV2ixZwzbmQUScFPyDRcTb1sa1NEtKklXED-HRq19g-Am8evPziDcpJnVle4f8kvf7vV_ee8D5i02DmirtjTKeZHwMTA46G_NsOWRT6prMmmVETnnLsbFqMICHpCFBtWTFYAtCsMwMNV-2QSUm1ONUPwqZ27pdg6nWRc_3mYiHLBVK9zqwE_iyiL2pZM-VAlQnsF-fRoMdc33pf8_2v_qzj9fg_efORd3Ptxhsg3VDR1UPewjYsSPkuM5_NLdQ-xNCwMJYNYsxPrB2A1hkKinD68uzk6vb_GGEw252fxHj4zK8OZdJGBDVbuMxUUdbpkbolEovoQUTTxPK9S-tddtKygEAAA==';
+			'H4sIAAAAAAAA_21QzUrEMBBuqiiIBxGvguDV2GxCy-6yXpSVQlFQi38X6bZhu26a1DZViw_h0asvsPgEXr35POJNi0ndsjuHfJP5vsnMF2D8xapCSXMJByMejfgQqBoyVqbZ-4AV1FSVJc2IMeUtQ8eiQhvtOg0JriULClsIgXmP4eZNL5iLhEJO5YPIxrpvU2EsZdq1LCbCgMUil902attWloawyNhTpQDVCfTovu9uqPS59zXZ_uxN3l_st-9LE3c-XkOwDpYV7Vc7bGGgbfu_PkzjP5rfUA9wHAfM-KpZQsiOSml5FHj9m9I9ZHeDW37qnYcH-Mx2OyfXBRtGJDnehx7BF_Dxam9N9QgZ0wxGNGWiTCiXP9NL3cfLAQAA';
 		let dotrain3: string;
 		let gui: DotrainOrderGui;
 		beforeAll(async () => {
@@ -1063,7 +1070,7 @@ ${dotrain}`;
 
 		it('should serialize gui state', async () => {
 			const serialized = extractWasmEncodedData<string>(gui.serializeState());
-			assert.equal(serialized, serializedState);
+			expect(serialized).toBe(serializedState);
 		});
 
 		it('should deserialize gui state', async () => {
@@ -1332,24 +1339,30 @@ ${dotrain}`;
 		});
 
 		it('generates deposit calldatas', async () => {
+			// expressionDeployerAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
-			// I_STORE()() call
+			// interpreterAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
-			// I_PARSER() call
+			// storeAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+			// parserAddress() call
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
 			// parse2() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1380,24 +1393,30 @@ ${dotrain}`;
 		});
 
 		it('generates add order calldata', async () => {
+			// expressionDeployerAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
-			// I_STORE()() call
+			// interpreterAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
-			// I_PARSER() call
+			// storeAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+			// parserAddress() call
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
 			// parse2() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1417,24 +1436,30 @@ ${dotrain}`;
 		});
 
 		it('generates add order calldata without entering field value', async () => {
+			// expressionDeployerAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
-			// I_STORE()() call
+			// interpreterAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
-			// I_PARSER() call
+			// storeAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+			// parserAddress() call
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
 			// parse2() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1452,24 +1477,30 @@ ${dotrain}`;
 		});
 
 		it('should generate multicalldata for deposit and add order with existing vault ids', async () => {
+			// expressionDeployerAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
-			// I_STORE()() call
+			// interpreterAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
-			// I_PARSER() call
+			// storeAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+			// parserAddress() call
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
 			// parse2() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1494,24 +1525,30 @@ ${dotrain}`;
 		});
 
 		it('should generate multicalldata for deposit and add order with missing field value', async () => {
+			// expressionDeployerAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
-			// I_STORE()() call
+			// interpreterAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
-			// I_PARSER() call
+			// storeAddress() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
+			// parserAddress() call
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
 			// parse2() call
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1564,19 +1601,23 @@ ${dotrainWithoutVaultIds}`;
 
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				// 0x1234 encoded bytes
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
@@ -1881,19 +1922,23 @@ ${dotrainWithoutVaultIds}`;
 				);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x56fb83e9')
+				.withBodyIncluding(EXPRESSION_DEPLOYER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '1'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0x251ac32e')
+				.withBodyIncluding(INTERPRETER_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '2'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xf79693f4')
+				.withBodyIncluding(STORE_ADDRESS_SELECTOR)
 				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '3'.repeat(40)}`);
 			await mockServer
 				.forPost('/rpc-url')
-				.withBodyIncluding('0xa3869e14')
+				.withBodyIncluding(PARSER_ADDRESS_SELECTOR)
+				.thenSendJsonRpcResult(`0x${'0'.repeat(24) + '4'.repeat(40)}`);
+			await mockServer
+				.forPost('/rpc-url')
+				.withBodyIncluding(PARSE2_SELECTOR)
 				.thenSendJsonRpcResult(
 					'0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000021234000000000000000000000000000000000000000000000000000000000000'
 				);

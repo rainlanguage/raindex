@@ -1,14 +1,14 @@
 use super::orders::{OrdersDataSource, SubgraphOrders};
+use super::ClientRef;
 use super::*;
-use crate::local_db::is_chain_supported_local_db;
 use crate::raindex_client::local_db::orders::LocalDbOrders;
 use crate::raindex_client::orders::{fetch_orders_dotrain_sources, RaindexOrder};
+use crate::raindex_client::QuerySource;
 use crate::retry::{retry_with_constant_interval, RetryError};
 use alloy::primitives::{hex::decode, Bytes, B256};
 use alloy::sol_types::{SolCall, SolValue};
-use rain_orderbook_bindings::IOrderBookV6::{removeOrder3Call, OrderV4};
+use rain_orderbook_bindings::IRaindexV6::{removeOrder3Call, OrderV4};
 use rain_orderbook_subgraph_client::types::order_detail_traits::OrderDetailError;
-use std::rc::Rc;
 
 const DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS: usize = 10;
 const DEFAULT_REMOVE_ORDER_POLL_INTERVAL_MS: u64 = 1_000;
@@ -24,8 +24,7 @@ impl RaindexClient {
     /// Fetches orders that were removed in a specific transaction
     ///
     /// Retrieves all orders cancelled or removed within a single blockchain transaction.
-    /// Uses a two-phase polling mechanism: first polls the local DB (if available and the
-    /// chain is supported), then falls back to subgraph polling.
+    /// Polls either local DB or subgraph based on the query source.
     ///
     /// ## Examples
     ///
@@ -92,15 +91,15 @@ impl RaindexClient {
         max_attempts: Option<usize>,
         interval_ms: Option<u64>,
     ) -> Result<Vec<RaindexOrder>, RaindexError> {
-        let raindex_client = Rc::new(self.clone());
+        let raindex_client = ClientRef::new(self.clone());
 
         let attempts = max_attempts
             .unwrap_or(DEFAULT_REMOVE_ORDER_POLL_ATTEMPTS)
             .max(1);
         let interval_ms = interval_ms.unwrap_or(DEFAULT_REMOVE_ORDER_POLL_INTERVAL_MS);
 
-        if let Some(local_db) = self.local_db() {
-            if is_chain_supported_local_db(chain_id) {
+        match self.query_source(chain_id) {
+            QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbOrders::new(&local_db, raindex_client.clone());
                 let local_result = retry_with_constant_interval(
                     || async {
@@ -123,52 +122,52 @@ impl RaindexClient {
                 match local_result {
                     Ok(orders) => {
                         let orders = fetch_orders_dotrain_sources(orders).await?;
-                        return Ok(orders);
+                        Ok(orders)
                     }
-                    Err(RetryError::Operation(PollError::Inner(e))) => return Err(e),
-                    Err(RetryError::InvalidMaxAttempts) => {
-                        return Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
-                    }
-                    Err(RetryError::Operation(PollError::Empty)) => {
-                        // Local DB exhausted, fall through to subgraph
+                    Err(RetryError::Operation(PollError::Inner(e))) => Err(e),
+                    Err(RetryError::Operation(PollError::Empty))
+                    | Err(RetryError::InvalidMaxAttempts) => {
+                        Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
                     }
                 }
             }
-        }
+            QuerySource::Subgraph => {
+                let subgraph_source = SubgraphOrders::new(self);
+                let subgraph_result = retry_with_constant_interval(
+                    || async {
+                        let orders = match subgraph_source
+                            .get_removed_by_tx_hash(chain_id, orderbook_address, tx_hash)
+                            .await
+                        {
+                            Ok(orders) => orders,
+                            Err(RaindexError::OrderbookSubgraphClientError(
+                                rain_orderbook_subgraph_client::OrderbookSubgraphClientError::Empty,
+                            )) => return Err(PollError::Empty),
+                            Err(e) => return Err(PollError::Inner(e)),
+                        };
+                        if orders.is_empty() {
+                            Err(PollError::Empty)
+                        } else {
+                            Ok(orders)
+                        }
+                    },
+                    attempts,
+                    interval_ms,
+                    |e| matches!(e, PollError::Empty),
+                )
+                .await;
 
-        let subgraph_source = SubgraphOrders::new(self);
-        let subgraph_result = retry_with_constant_interval(
-            || async {
-                let orders = match subgraph_source
-                    .get_removed_by_tx_hash(chain_id, orderbook_address, tx_hash)
-                    .await
-                {
-                    Ok(orders) => orders,
-                    Err(RaindexError::OrderbookSubgraphClientError(
-                        rain_orderbook_subgraph_client::OrderbookSubgraphClientError::Empty,
-                    )) => return Err(PollError::Empty),
-                    Err(e) => return Err(PollError::Inner(e)),
-                };
-                if orders.is_empty() {
-                    Err(PollError::Empty)
-                } else {
-                    Ok(orders)
+                match subgraph_result {
+                    Ok(orders) => {
+                        let orders = fetch_orders_dotrain_sources(orders).await?;
+                        Ok(orders)
+                    }
+                    Err(RetryError::Operation(PollError::Inner(e))) => Err(e),
+                    Err(RetryError::Operation(PollError::Empty))
+                    | Err(RetryError::InvalidMaxAttempts) => {
+                        Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
+                    }
                 }
-            },
-            attempts,
-            interval_ms,
-            |e| matches!(e, PollError::Empty),
-        )
-        .await;
-
-        match subgraph_result {
-            Ok(orders) => {
-                let orders = fetch_orders_dotrain_sources(orders).await?;
-                Ok(orders)
-            }
-            Err(RetryError::Operation(PollError::Inner(e))) => Err(e),
-            Err(RetryError::Operation(PollError::Empty)) | Err(RetryError::InvalidMaxAttempts) => {
-                Err(RaindexError::TransactionIndexingTimeout { tx_hash, attempts })
             }
         }
     }
@@ -230,7 +229,9 @@ mod tests {
             },
             local_db::OrderbookIdentifier,
             raindex_client::local_db::LocalDb,
-            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_ORDERBOOK_ADDRESS},
+            raindex_client::tests::{
+                get_test_yaml, new_with_local_db, CHAIN_ID_1_ORDERBOOK_ADDRESS,
+            },
         };
         use alloy::primitives::{b256, Address, Bytes, U256};
         use async_trait::async_trait;
@@ -251,7 +252,8 @@ mod tests {
             calls: Arc<AtomicUsize>,
         }
 
-        #[async_trait(?Send)]
+        #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+        #[cfg_attr(not(target_family = "wasm"), async_trait)]
         impl LocalDbQueryExecutor for CountingJsonExec {
             async fn execute_batch(
                 &self,
@@ -400,7 +402,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let res = raindex_client
                 .get_remove_orders_for_transaction(
@@ -605,7 +609,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let order = raindex_client
                 .get_order_by_hash(
@@ -641,7 +647,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let res = raindex_client
@@ -674,7 +682,9 @@ mod tests {
                     "http://localhost:3000",
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
 
             let err = raindex_client
@@ -736,17 +746,17 @@ mod tests {
                     .json_body_obj(&empty_remove_orders_response());
             });
 
-            let client = RaindexClient::new(
+            let client = new_with_local_db(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1").to_string(),
                     &sg_server.url("/sg2").to_string(),
                     "http://localhost:3000",
                     "http://localhost:3000",
                 )],
-                None,
+                local_db,
+                vec![137],
             )
-            .unwrap();
-            client.local_db.borrow_mut().replace(local_db);
+            .await;
 
             let res = client
                 .get_remove_orders_for_transaction(
@@ -772,7 +782,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn test_get_transaction_remove_orders_exhausts_local_before_subgraph() {
+        async fn test_get_transaction_remove_orders_exhausts_local_without_fallback() {
             let tx_hash =
                 b256!("0x00000000000000000000000000000000000000000000000000000000cafebabe");
             let orderbook_address =
@@ -792,19 +802,19 @@ mod tests {
                     .json_body_obj(&sample_remove_orders_response());
             });
 
-            let client = RaindexClient::new(
+            let client = new_with_local_db(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1").to_string(),
                     &sg_server.url("/sg2").to_string(),
                     "http://localhost:3000",
                     "http://localhost:3000",
                 )],
-                None,
+                local_db,
+                vec![137],
             )
-            .unwrap();
-            client.local_db.borrow_mut().replace(local_db);
+            .await;
 
-            let res = client
+            let err = client
                 .get_remove_orders_for_transaction(
                     137,
                     orderbook_address,
@@ -813,15 +823,22 @@ mod tests {
                     Some(1),
                 )
                 .await
-                .unwrap();
+                .unwrap_err();
 
+            assert!(
+                matches!(err, RaindexError::TransactionIndexingTimeout { .. }),
+                "should timeout without falling back to subgraph"
+            );
             assert_eq!(
                 local_calls.load(Ordering::SeqCst),
                 2,
                 "local DB should be tried for the full attempt budget"
             );
-            assert_eq!(sg_mock.hits(), 1, "subgraph should be queried after local");
-            assert_eq!(res.len(), 1);
+            assert_eq!(
+                sg_mock.hits(),
+                0,
+                "subgraph should not be queried when local DB is the source"
+            );
         }
     }
 }

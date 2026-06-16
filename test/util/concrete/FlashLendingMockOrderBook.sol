@@ -7,7 +7,7 @@ import {
     IOV2,
     OrderV4,
     SignedContextV1,
-    IOrderBookV6,
+    IRaindexV6,
     TakeOrdersConfigV5,
     OrderConfigV4,
     ClearConfigV2,
@@ -15,10 +15,10 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
-import {IERC3156FlashBorrower} from "rain.orderbook.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
+import {IERC3156FlashBorrower} from "rain.raindex.interface/interface/ierc3156/IERC3156FlashBorrower.sol";
 
-contract FlashLendingMockOrderBook is IOrderBookV6 {
+contract FlashLendingMockOrderBook is IRaindexV6 {
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
         external
         returns (bool)
@@ -29,15 +29,15 @@ contract FlashLendingMockOrderBook is IOrderBookV6 {
 
     function entask2(TaskV2[] calldata) external pure {}
 
-    /// @inheritdoc IOrderBookV6
+    /// @inheritdoc IRaindexV6
     function quote2(QuoteV2 calldata) external pure returns (bool, Float, Float) {
         revert("quote");
     }
 
-    /// @inheritdoc IOrderBookV6
+    /// @inheritdoc IRaindexV6
     function takeOrders4(TakeOrdersConfigV5 calldata) external pure returns (Float, Float) {}
 
-    /// @inheritdoc IOrderBookV6
+    /// @inheritdoc IRaindexV6
     function addOrder4(OrderConfigV4 calldata, TaskV2[] calldata) external pure returns (bool) {
         return false;
     }
@@ -46,7 +46,7 @@ contract FlashLendingMockOrderBook is IOrderBookV6 {
         return false;
     }
 
-    /// @inheritdoc IOrderBookV6
+    /// @inheritdoc IRaindexV6
     function clear3(
         OrderV4 memory,
         OrderV4 memory,

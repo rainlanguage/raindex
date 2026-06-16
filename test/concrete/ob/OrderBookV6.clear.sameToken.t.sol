@@ -10,9 +10,9 @@ import {
     ClearConfigV2,
     SignedContextV1,
     TaskV2
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {TokenSelfTrade} from "src/concrete/ob/OrderBookV6.sol";
+import {TokenSelfTrade} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 contract OrderBookV6ClearSameTokenTest is OrderBookV6ExternalRealTest {
     /// forge-config: default.fuzz.runs = 10

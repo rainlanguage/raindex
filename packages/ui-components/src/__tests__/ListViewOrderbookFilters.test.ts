@@ -33,17 +33,14 @@ vi.mock('$lib/hooks/useRaindexClient', () => ({
 type ListViewOrderbookFiltersProps = ComponentProps<ListViewOrderbookFilters>;
 
 describe('ListViewOrderbookFilters', () => {
-	const mockGetAllAccounts = vi.fn();
 	const mockGetAllOrderbooks = vi.fn();
 
 	const defaultProps: ListViewOrderbookFiltersProps = {
 		hideZeroBalanceVaults: writable(false),
 		hideInactiveOrdersVaults: writable(false),
-		activeAccountsItems: writable({}),
 		selectedChainIds: writable([]),
 		showInactiveOrders: writable(true),
 		orderHash: writable('0x0234'),
-		showMyItemsOnly: writable(false),
 		activeTokens: writable([]),
 		selectedTokens: [],
 		tokensQuery: readable({
@@ -53,7 +50,8 @@ describe('ListViewOrderbookFilters', () => {
 			error: null
 		} as QueryObserverResult<RaindexVaultToken[], Error>),
 		activeOrderbookAddresses: writable<Address[]>([]),
-		selectedOrderbookAddresses: []
+		selectedOrderbookAddresses: [],
+		ownerFilter: writable<Address>('' as unknown as Address)
 	} as ListViewOrderbookFiltersProps;
 
 	beforeEach(() => {
@@ -82,13 +80,7 @@ describe('ListViewOrderbookFilters', () => {
 				]),
 				error: undefined
 			})),
-			getAllAccounts: mockGetAllAccounts,
 			getAllOrderbooks: mockGetAllOrderbooks
-		});
-
-		mockGetAllAccounts.mockReturnValue({
-			value: new Map(),
-			error: undefined
 		});
 
 		mockAccount.set(null);
@@ -99,16 +91,11 @@ describe('ListViewOrderbookFilters', () => {
 			getAllNetworks: vi.fn(() => ({
 				value: new Map(),
 				error: undefined
-			})),
-			getAllAccounts: vi.fn(() => ({
-				value: new Map(),
-				error: undefined
 			}))
 		});
 		render(ListViewOrderbookFilters, defaultProps);
 
 		expect(screen.getByTestId('no-networks-alert')).toBeInTheDocument();
-		expect(screen.queryByTestId('my-items-only')).not.toBeInTheDocument();
 	});
 
 	test('shows vault-specific components on vault page', () => {
@@ -140,12 +127,7 @@ describe('ListViewOrderbookFilters', () => {
 	});
 
 	test('shows common components when networks exist', () => {
-		const props = {
-			...defaultProps,
-			showMyItemsOnly: writable(true),
-			activeAccountsItems: undefined
-		};
-		render(ListViewOrderbookFilters, props);
+		render(ListViewOrderbookFilters, defaultProps);
 
 		expect(screen.getByTestId('subgraphs-dropdown')).toBeInTheDocument();
 	});
@@ -160,67 +142,10 @@ describe('ListViewOrderbookFilters', () => {
 		expect(screen.queryByTestId('order-status-checkbox')).not.toBeInTheDocument();
 	});
 
-	test('shows accounts dropdown when accounts exist', () => {
-		mockGetAllAccounts.mockReturnValue({
-			value: new Map([
-				['0x123', { key: '0x123', address: '0x123', name: 'Account 1' }],
-				['0x456', { key: '0x456', address: '0x456', name: 'Account 2' }]
-			]),
-			error: undefined
-		});
-
+	test('shows owner filter input', () => {
 		render(ListViewOrderbookFilters, defaultProps);
 
-		expect(screen.getByTestId('accounts-dropdown')).toBeInTheDocument();
-	});
-
-	test('does not show accounts dropdown when no accounts exist', () => {
-		render(ListViewOrderbookFilters, defaultProps);
-
-		expect(screen.queryByTestId('accounts-dropdown')).not.toBeInTheDocument();
-	});
-
-	test('shows My Items Only checkbox when no accounts (current logic)', () => {
-		render(ListViewOrderbookFilters, defaultProps);
-
-		expect(screen.getByTestId('my-items-only')).toBeInTheDocument();
-	});
-
-	test('hides My Items Only checkbox when accounts exist (current logic)', () => {
-		mockGetAllAccounts.mockReturnValue({
-			value: new Map([['0x123', { key: '0x123', address: '0x123', name: 'Account 1' }]]),
-			error: undefined
-		});
-
-		render(ListViewOrderbookFilters, defaultProps);
-
-		expect(screen.queryByTestId('my-items-only')).not.toBeInTheDocument();
-	});
-
-	test('passes correct context to CheckboxMyItemsOnly on vaults page', () => {
-		mockPageStore.mockSetSubscribeValue({
-			url: {
-				pathname: '/vaults'
-			} as URL
-		});
-
-		render(ListViewOrderbookFilters, defaultProps);
-
-		const myItemsElement = screen.getByTestId('my-items-only');
-		expect(myItemsElement).toBeInTheDocument();
-	});
-
-	test('passes correct context to CheckboxMyItemsOnly on orders page', () => {
-		mockPageStore.mockSetSubscribeValue({
-			url: {
-				pathname: '/orders'
-			} as URL
-		});
-
-		render(ListViewOrderbookFilters, defaultProps);
-
-		const myItemsElement = screen.getByTestId('my-items-only');
-		expect(myItemsElement).toBeInTheDocument();
+		expect(screen.getByTestId('owner-filter-input')).toBeInTheDocument();
 	});
 
 	test('shows orderbooks dropdown when orderbooks exist', () => {
@@ -259,7 +184,6 @@ describe('ListViewOrderbookFilters', () => {
 				]),
 				error: undefined
 			})),
-			getAllAccounts: mockGetAllAccounts,
 			getAllOrderbooks: mockGetAllOrderbooks
 		});
 

@@ -21,6 +21,7 @@ pub async fn fetch_erc20_metadata_concurrent(
 ) -> Result<Vec<(Address, TokenInfo)>, LocalDbError> {
     let concurrency = config.max_concurrent_requests();
     let max_attempts = config.max_retry_attempts();
+    let retry_delay = config.retry_delay_ms();
 
     let results: Vec<Result<(Address, TokenInfo), LocalDbError>> =
         futures::stream::iter(missing_addrs.into_iter().map(|addr| async move {
@@ -31,7 +32,10 @@ pub async fn fetch_erc20_metadata_concurrent(
                     async move { erc20.token_info(None).await }
                 },
                 max_attempts,
+                retry_delay,
+                0,
                 should_retry_token_error,
+                |_| false,
             )
             .await
             .map_err(|e| match e {

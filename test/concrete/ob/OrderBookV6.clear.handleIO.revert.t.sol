@@ -7,16 +7,16 @@ import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6Externa
 import {
     ClearConfigV2,
     OrderV4,
-    TakeOrderConfigV4,
     IOV2,
     OrderConfigV4,
     EvaluableV4,
     SignedContextV1,
     TaskV2,
     Float
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {SourceIndexOutOfBounds} from "rain.interpreter.interface/error/ErrBytecode.sol";
 import {LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
+import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 /// @title OrderBookV6ClearHandleIORevertTest
 /// @notice A test harness for testing the OrderBook clear function will run
@@ -28,16 +28,27 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         internal
         returns (OrderV4 memory)
     {
-        bytes32 vaultId = 0;
+        return userDeposit(rainString, owner, inputToken, outputToken, bytes32(uint256(0x01)), bytes32(uint256(0x01)));
+    }
+
+    function userDeposit(
+        bytes memory rainString,
+        address owner,
+        address inputToken,
+        address outputToken,
+        bytes32 outputVaultId,
+        bytes32 inputVaultId
+    ) internal returns (OrderV4 memory) {
+        bytes32 vaultId = outputVaultId;
 
         OrderConfigV4 memory config;
         IOV2[] memory validOutputs;
         IOV2[] memory validInputs;
         {
             validInputs = new IOV2[](1);
-            validInputs[0] = IOV2(inputToken, vaultId);
+            validInputs[0] = IOV2(inputToken, inputVaultId);
             validOutputs = new IOV2[](1);
-            validOutputs[0] = IOV2(outputToken, vaultId);
+            validOutputs[0] = IOV2(outputToken, outputVaultId);
             // Etch with invalid.
             vm.etch(inputToken, hex"fe");
             vm.etch(outputToken, hex"fe");
@@ -47,10 +58,19 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
             vm.mockCall(outputToken, bytes(""), abi.encode(true));
         }
 
-        vm.prank(owner);
-        iOrderbook.deposit4(outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV2[](0));
-        Float balance = iOrderbook.vaultBalance2(owner, outputToken, vaultId);
-        assertTrue(balance.eq(LibDecimalFloat.packLossless(type(int224).max, 0)));
+        if (outputVaultId == bytes32(0)) {
+            mockVault0Output(outputToken, owner, uint256(int256(type(int224).max)));
+        } else {
+            vm.prank(owner);
+            iOrderbook.deposit4(
+                outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV2[](0)
+            );
+            Float balance = iOrderbook.vaultBalance2(owner, outputToken, vaultId);
+            assertTrue(balance.eq(LibDecimalFloat.packLossless(type(int224).max, 0)));
+        }
+        if (inputVaultId == bytes32(0)) {
+            mockVault0Input(inputToken, owner, 0);
+        }
 
         bytes memory bytecode = iParserV2.parse2(rainString);
         EvaluableV4 memory evaluable = EvaluableV4(iInterpreter, iStore, bytecode);
@@ -61,9 +81,8 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         iOrderbook.addOrder4(config, new TaskV2[](0));
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
-        (,, OrderV4 memory order) = abi.decode(entries[0].data, (address, bytes32, OrderV4));
 
-        return order;
+        return LibTestTakeOrder.extractOrderFromLogs(entries);
     }
 
     function checkClearOrderHandleIO(
@@ -72,13 +91,28 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         bytes memory aliceErr,
         bytes memory bobErr
     ) internal {
+        checkClearOrderHandleIO(
+            aliceString, bobString, aliceErr, bobErr, bytes32(uint256(0x01)), bytes32(uint256(0x01))
+        );
+    }
+
+    function checkClearOrderHandleIO(
+        bytes memory aliceString,
+        bytes memory bobString,
+        bytes memory aliceErr,
+        bytes memory bobErr,
+        bytes32 outputVaultId,
+        bytes32 inputVaultId
+    ) internal {
         address aliceInputToken = address(0x100);
         address aliceOutputToken = address(0x101);
         address alice = address(0x102);
         address bob = address(0x103);
 
-        OrderV4 memory aliceOrder = userDeposit(aliceString, alice, aliceInputToken, aliceOutputToken);
-        OrderV4 memory bobOrder = userDeposit(bobString, bob, aliceOutputToken, aliceInputToken);
+        OrderV4 memory aliceOrder =
+            userDeposit(aliceString, alice, aliceInputToken, aliceOutputToken, outputVaultId, inputVaultId);
+        OrderV4 memory bobOrder =
+            userDeposit(bobString, bob, aliceOutputToken, aliceInputToken, outputVaultId, inputVaultId);
         ClearConfigV2 memory clearConfig = ClearConfigV2(0, 0, 0, 0, 0, 0);
         if (aliceErr.length > 0) {
             vm.expectRevert(aliceErr);
@@ -148,9 +182,9 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         // This is a bit fragile but the error message includes the inner
         // executable bytecode only, not the outer parsed bytecode.
         bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
         bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
 
         checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
     }
@@ -164,9 +198,9 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         // This is a bit fragile but the error message includes the inner
         // executable bytecode only, not the outer parsed bytecode.
         bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
         bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
 
         checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
     }
@@ -180,10 +214,17 @@ contract OrderBookV6ClearHandleIORevertTest is OrderBookV6ExternalRealTest {
         // This is a bit fragile but the error message includes the inner
         // executable bytecode only, not the outer parsed bytecode.
         bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
         bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023e10000001100000");
+            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
 
         checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
+    }
+
+    function testClearOrderHandleIO0BothVaultIdZero() external {
+        bytes memory aliceString = "_ _:max-positive-value() 1;:ensure(0 \"alice err\");";
+        bytes memory bobString = "_ _:max-positive-value() 1;:ensure(0 \"bob err\");";
+
+        checkClearOrderHandleIO(aliceString, bobString, "alice err", "bob err", bytes32(0), bytes32(0));
     }
 }

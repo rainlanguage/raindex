@@ -48,14 +48,14 @@ vi.mock('$lib/services/handleAddOrder', () => ({
 }));
 
 describe('DeployPage', () => {
-	const mockRegistry = {
+	const mockRainlang = {
 		getGui: vi.fn()
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockPageStore.reset();
-		mockRegistry.getGui.mockReset();
+		mockRainlang.getGui.mockReset();
 
 		vi.mocked(useAccount).mockReturnValue({
 			account: writable('0x123'),
@@ -72,14 +72,14 @@ describe('DeployPage', () => {
 			manager: writable({}),
 			transactions: readable()
 		});
-		mockRegistry.getGui.mockResolvedValue({ value: {} });
+		mockRainlang.getGui.mockResolvedValue({ value: {} });
 	});
 
 	afterEach(() => {
 		vi.resetAllMocks();
 	});
 
-	it('should call registry.getGui with correct parameters when data exists', async () => {
+	it('should call rainlang.getGui with correct parameters when data exists', async () => {
 		const mockDeploymentKey = 'test-key';
 		const mockStateFromUrl = 'some-state';
 
@@ -88,7 +88,7 @@ describe('DeployPage', () => {
 				orderName: 'order-one',
 				deployment: { key: mockDeploymentKey, name: 'Deployment', description: 'desc' },
 				orderDetail: { name: 'Order', description: 'desc' },
-				registry: mockRegistry
+				rainlang: mockRainlang
 			},
 			url: new URL(`http://localhost:3000/deploy?state=${mockStateFromUrl}`)
 		});
@@ -96,7 +96,7 @@ describe('DeployPage', () => {
 		render(DeployPage);
 
 		await vi.waitFor(() => {
-			expect(mockRegistry.getGui).toHaveBeenCalledWith(
+			expect(mockRainlang.getGui).toHaveBeenCalledWith(
 				'order-one',
 				mockDeploymentKey,
 				mockStateFromUrl,
@@ -105,7 +105,7 @@ describe('DeployPage', () => {
 		});
 	});
 
-	it('should redirect to /deploy if registry or deployment is missing', async () => {
+	it('should redirect to /deploy if rainlang or deployment is missing', async () => {
 		vi.useFakeTimers();
 
 		mockPageStore.mockSetSubscribeValue({
@@ -113,7 +113,7 @@ describe('DeployPage', () => {
 				orderName: 'order-one',
 				deployment: null,
 				orderDetail: { name: 'Order', description: 'desc' },
-				registry: null
+				rainlang: null
 			},
 			url: new URL('http://localhost:3000/deploy/order/key')
 		});
@@ -134,7 +134,7 @@ describe('DeployPage', () => {
 	it('should show error message when GUI initialization fails', async () => {
 		const errorMessage = 'Failed to initialize GUI';
 
-		mockRegistry.getGui.mockResolvedValue({
+		mockRainlang.getGui.mockResolvedValue({
 			error: { readableMsg: errorMessage }
 		});
 
@@ -147,7 +147,7 @@ describe('DeployPage', () => {
 					description: 'desc'
 				},
 				orderDetail: { name: 'Order', description: 'desc' },
-				registry: mockRegistry
+				rainlang: mockRainlang
 			},
 			url: new URL('http://localhost:3000/deploy')
 		});

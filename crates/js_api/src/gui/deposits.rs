@@ -39,7 +39,7 @@ impl DotrainOrderGui {
         let gui_deposit = deployment
             .deposits
             .iter()
-            .find(|dg| dg.token.as_ref().map_or(false, |t| t.key == *key))
+            .find(|dg| dg.token.as_ref().is_some_and(|t| t.key == *key))
             .ok_or(GuiError::DepositTokenNotFound(key.to_string()))?;
         Ok(gui_deposit.clone())
     }

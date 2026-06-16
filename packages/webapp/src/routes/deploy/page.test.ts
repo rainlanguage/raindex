@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/svelte';
 import Page from './+page.svelte';
 import { readable } from 'svelte/store';
 import {
-	useRegistry,
+	useRainlang,
 	type ValidOrderDetail,
 	type InvalidOrderDetail
 } from '@rainlanguage/ui-components';
@@ -27,8 +27,8 @@ const mockValidOrder1: ValidOrderDetail = {
 	dotrain: ';;'
 };
 
-const mockRegistry = vi.fn();
-const mockIsCustomRegistry = vi.fn();
+const mockRainlang = vi.fn();
+const mockIsCustomRainlang = vi.fn();
 
 const mockValidOrder2: ValidOrderDetail = {
 	details: {
@@ -48,11 +48,11 @@ const mockInvalidOrder1: InvalidOrderDetail = {
 vi.mock('@rainlanguage/ui-components', async (importOriginal) => {
 	return {
 		...((await importOriginal()) as object),
-		useRegistry: vi.fn()
+		useRainlang: vi.fn()
 	};
 });
 
-const mockGetCurrentRegistry = vi.fn().mockReturnValue(readable({}));
+const mockGetCurrentRainlang = vi.fn().mockReturnValue(readable({}));
 
 describe('Page Component', () => {
 	const mockValidated = {
@@ -62,33 +62,33 @@ describe('Page Component', () => {
 
 	beforeEach(() => {
 		vi.resetAllMocks();
-		(useRegistry as Mock).mockReturnValue(
+		(useRainlang as Mock).mockReturnValue(
 			readable({
-				getCurrentRegistry: mockGetCurrentRegistry,
-				isCustomRegistry: mockIsCustomRegistry,
+				getCurrentRainlang: mockGetCurrentRainlang,
+				isCustomRainlang: mockIsCustomRainlang,
 				subscribe: vi.fn()
 			})
 		);
-		mockIsCustomRegistry.mockReturnValue(true);
+		mockIsCustomRainlang.mockReturnValue(true);
 		mockPageStore.reset();
 	});
 
 	it('should display error message when fetching orders fails', async () => {
 		mockPageStore.mockSetSubscribeValue({
 			data: {
-				error: 'Failed to fetch registry dotrains'
+				error: 'Failed to fetch rainlang dotrains'
 				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			} as any
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {
 			const errorMessage = screen.getByTestId('error-message');
 			expect(errorMessage).toBeInTheDocument();
-			expect(errorMessage).toHaveTextContent('Failed to fetch registry dotrains');
+			expect(errorMessage).toHaveTextContent('Failed to fetch rainlang dotrains');
 		});
 	});
 
@@ -101,7 +101,7 @@ describe('Page Component', () => {
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {
@@ -122,7 +122,7 @@ describe('Page Component', () => {
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {
@@ -140,7 +140,7 @@ describe('Page Component', () => {
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {
@@ -158,7 +158,7 @@ describe('Page Component', () => {
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {
@@ -176,7 +176,7 @@ describe('Page Component', () => {
 		});
 
 		render(Page, {
-			context: new Map([['$$_registry', mockRegistry]])
+			context: new Map([['$$_rainlang', mockRainlang]])
 		});
 
 		await waitFor(() => {

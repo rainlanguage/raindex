@@ -168,7 +168,7 @@ mod tests {
     use tempfile::TempDir;
 
     fn sample_runner_target(network_key: &str, chain_id: u32, address: Address) -> RunnerTarget {
-        let fetch = FetchConfig::new(10, 5, 5, 1).unwrap();
+        let fetch = FetchConfig::new(10, 5, 5, 1, 0, 0).unwrap();
         RunnerTarget {
             orderbook_key: format!("{}-{}", network_key, address),
             manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),

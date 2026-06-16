@@ -6,11 +6,9 @@ import {Test} from "forge-std/Test.sol";
 
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
-import {
-    OrderBookV6ExternalMockTest, REVERTING_MOCK_BYTECODE
-} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
+import {OrderBookV6ExternalMockTest, REVERTING_MOCK_BYTECODE} from "test/util/abstract/OrderBookV6ExternalMockTest.sol";
 import {Reenteroor, IERC20} from "test/util/concrete/Reenteroor.sol";
-import {TaskV2} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {TaskV2, IRaindexV6} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
@@ -28,9 +26,17 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     uint256 internal sRunID;
     mapping(uint256 => mapping(address => bool)) internal sHasDeposit;
 
+    /// Withdrawing vault ID zero is an error.
+    function testWithdrawZeroVaultId(address alice, address token) external {
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroVaultId.selector, alice, token));
+        iOrderbook.withdraw4(token, bytes32(0), Float.wrap(0), new TaskV2[](0));
+    }
+
     /// Withdrawing a zero target amount should revert.
     /// forge-config: default.fuzz.runs = 100
     function testWithdrawZero(address alice, address token, bytes32 vaultId) external {
+        vm.assume(vaultId != bytes32(0));
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(ZeroWithdrawTargetAmount.selector, alice, token, vaultId));
         iOrderbook.withdraw4(token, vaultId, Float.wrap(0), new TaskV2[](0));
@@ -39,6 +45,7 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     /// Withdrawing a non-zero amount from an empty vault should be a noop.
     /// forge-config: default.fuzz.runs = 100
     function testWithdrawEmptyVault(address alice, bytes32 vaultId, uint256 amount18) external {
+        vm.assume(vaultId != bytes32(0));
         amount18 = bound(amount18, 1, uint256(int256(type(int224).max)));
         vm.prank(alice);
         Float amount = LibDecimalFloat.fromFixedDecimalLosslessPacked(amount18, 18);
@@ -56,6 +63,7 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     function testWithdrawFullVault(address alice, bytes32 vaultId, uint256 depositAmount18, uint256 withdrawAmount18)
         external
     {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint224).max / 10);
         withdrawAmount18 = bound(withdrawAmount18, depositAmount18, type(uint224).max / 10);
         vm.prank(alice);
@@ -86,6 +94,7 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     function testWithdrawPartialVault(address alice, bytes32 vaultId, uint256 depositAmount18, uint256 withdrawAmount18)
         external
     {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 2, type(uint224).max / 10);
         withdrawAmount18 = bound(withdrawAmount18, 1, depositAmount18 - 1);
         vm.prank(alice);
@@ -122,6 +131,7 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
     function testWithdrawFailure(address alice, bytes32 vaultId, uint256 depositAmount18, uint256 withdrawAmount18)
         external
     {
+        vm.assume(vaultId != bytes32(0));
         depositAmount18 = bound(depositAmount18, 1, type(uint224).max / 10);
         withdrawAmount18 = bound(withdrawAmount18, 1, type(uint224).max / 10);
         vm.prank(alice);
@@ -195,6 +205,9 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
         Action memory action;
         for (uint256 i = 0; i < actions.length; i++) {
             action = actions[i];
+            if (action.vaultId == bytes32(0)) {
+                action.vaultId = bytes32(uint256(0x01));
+            }
             vm.etch(action.token, REVERTING_MOCK_BYTECODE);
             Float balance = iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId);
 
@@ -216,9 +229,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
                 emit DepositV2(action.alice, action.token, action.vaultId, action.amount);
                 iOrderbook.deposit4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
                 assertTrue(
-                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId).eq(
-                        balance.add(action.amountFloat)
-                    ),
+                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId)
+                        .eq(balance.add(action.amountFloat)),
                     "vault balance on deposit"
                 );
             } else {
@@ -246,9 +258,8 @@ contract OrderBookV6WithdrawTest is OrderBookV6ExternalMockTest {
                 }
                 iOrderbook.withdraw4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
                 assertTrue(
-                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId).eq(
-                        balance.sub(expectedActualAmount)
-                    ),
+                    iOrderbook.vaultBalance2(action.alice, action.token, action.vaultId)
+                        .eq(balance.sub(expectedActualAmount)),
                     "vault balance on withdraw"
                 );
             }

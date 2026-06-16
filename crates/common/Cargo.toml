@@ -49,7 +49,6 @@ wasm-bindgen-utils = { workspace = true }
 eyre.workspace = true
 rain-math-float.workspace = true
 tower.workspace = true
-backon = "0.4.4"
 flate2 = "1.0.34"
 itertools = { workspace = true }
 async-trait = { workspace = true }
@@ -60,6 +59,8 @@ gloo-timers = { version = "0.2", features = ["futures"] }
 tokio = { workspace = true, features = ["full"] }
 proptest = { workspace = true }
 alloy = { workspace = true, features = ["signer-ledger"] }
+backon = { version = "1.6", features = ["tokio-sleep"] }
+rusqlite = { version = "0.32", features = ["functions"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 tokio = { workspace = true, features = [
@@ -77,4 +78,4 @@ wasm-bindgen-futures = "0.4"
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 httpmock = "0.7.0"
 rain_orderbook_test_fixtures = { workspace = true }
-rusqlite = "0.31.0"
+tempfile = "3"

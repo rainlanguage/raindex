@@ -4,12 +4,12 @@
 	import type { ValidOrderDetail } from '$lib/types/order';
 
 	export let orders: ValidOrderDetail[];
-	let customRegistryParam = '';
+	let customRainlangParam = '';
 
 	onMount(async () => {
-		// Get the custom registry from URL if it exists
-		customRegistryParam = $page.url.searchParams.get('registry')
-			? `?registry=${$page.url.searchParams.get('registry')}`
+		// Get the custom rainlang from URL if it exists
+		customRainlangParam = $page.url.searchParams.get('rainlang')
+			? `?rainlang=${$page.url.searchParams.get('rainlang')}`
 			: '';
 	});
 </script>
@@ -17,7 +17,7 @@
 <div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3" data-testid="valid-orders">
 	{#each orders as order}
 		<a
-			href={`/deploy/${order.name}${customRegistryParam}`}
+			href={`/deploy/${order.name}${customRainlangParam}`}
 			data-testid="order-short-tile"
 			class="flex flex-col gap-y-2 rounded-xl border border-gray-200 p-4 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-900"
 		>

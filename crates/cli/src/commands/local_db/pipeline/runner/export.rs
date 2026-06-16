@@ -129,7 +129,7 @@ mod tests {
         drop(conn);
 
         let executor = RusqliteExecutor::new(&db_path);
-        let fetch = FetchConfig::new(1, 1, 1, 1).expect("fetch config");
+        let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         let sync_config = SyncConfig {
             deployment_block: 900,
             fetch,
@@ -218,7 +218,7 @@ mod tests {
         let chain_id = 10u32;
         let orderbook_address = address!("0x0000000000000000000000000000000000000fff");
         let executor = RusqliteExecutor::new(&db_path);
-        let fetch = FetchConfig::new(1, 1, 1, 1).expect("fetch config");
+        let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         let sync_config = SyncConfig {
             deployment_block: 0,
             fetch,

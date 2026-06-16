@@ -25,25 +25,19 @@ export const hideZeroBalanceVaults = cachedWritableStore<boolean>(
 );
 
 /**
- * A persistent store that controls whether to show only the user's items in lists.
+ * A persistent store that holds an owner address to filter orders/vaults by.
  *
  * This setting is saved to local storage and persists between sessions.
  *
- * @default false - All items are shown by default
- * @returns A writable store containing a boolean value
+ * @default '' - Empty string means no owner filtering
+ * @returns A writable store containing an address string
  */
-export const showMyItemsOnly = cachedWritableStore<boolean>(
-	'settings.showMyItemsOnly',
-	false,
-	(value) => JSON.stringify(value),
-	(str) => {
-		try {
-			const value = JSON.parse(str);
-			return typeof value === 'boolean' ? value : false;
-		} catch {
-			return false;
-		}
-	}
+export const ownerFilter = cachedWritableStore<Address>(
+	'settings.ownerFilter',
+	// @ts-expect-error initially the value is empty
+	'',
+	(value) => value,
+	(str) => (str || '') as Address
 );
 
 /**

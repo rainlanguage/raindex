@@ -34,7 +34,7 @@ pub struct ScenarioConfigSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocks: Option<BlocksCfg>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub deployer: Option<String>,
+    pub rainlang: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         target_family = "wasm",
@@ -88,7 +88,7 @@ impl TestConfigSource {
             bindings: bindings.clone(),
             runs: self.scenario.runs,
             blocks: self.scenario.blocks.clone(),
-            deployer: Arc::new(DeployerCfg::dummy()),
+            rainlang: Arc::new(RainlangCfg::dummy()),
         });
 
         TestConfig {

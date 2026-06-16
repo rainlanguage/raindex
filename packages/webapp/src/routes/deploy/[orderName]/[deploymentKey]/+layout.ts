@@ -1,19 +1,19 @@
 import type { LayoutLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import type { DotrainRegistry, NameAndDescriptionCfg } from '@rainlanguage/orderbook';
+import type { DotrainRainlang, NameAndDescriptionCfg } from '@rainlanguage/orderbook';
 
 type ParentData = {
 	orderName: string;
 	deployments: Map<string, NameAndDescriptionCfg>;
-	registry: DotrainRegistry | null;
+	rainlang: DotrainRainlang | null;
 	orderDetail?: NameAndDescriptionCfg;
 };
 
 export const load: LayoutLoad = async ({ params, parent }) => {
 	const { deploymentKey } = params;
-	const { orderName, deployments, registry, orderDetail } = (await parent()) as ParentData;
+	const { orderName, deployments, rainlang, orderDetail } = (await parent()) as ParentData;
 
-	if (!registry || !deploymentKey) {
+	if (!rainlang || !deploymentKey) {
 		throw redirect(307, '/deploy');
 	}
 
@@ -31,7 +31,7 @@ export const load: LayoutLoad = async ({ params, parent }) => {
 		},
 		orderName,
 		orderDetail,
-		registry,
+		rainlang,
 		pageName: deploymentKey
 	};
 };

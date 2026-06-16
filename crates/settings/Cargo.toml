@@ -20,8 +20,6 @@ alloy = { workspace = true, features = ["serde", "rand"] }
 reqwest = { workspace = true }
 rain_orderbook_bindings = { workspace = true }
 futures = { workspace = true }
-
-[target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-utils = { workspace = true }
 
 [dev-dependencies]

@@ -167,6 +167,11 @@ impl RpcClient {
     fn map_transport_error(err: TransportError, context: Option<&str>) -> RpcClientError {
         match err {
             TransportError::ErrorResp(resp) => {
+                if resp.code == -32090 {
+                    return RpcClientError::RateLimited {
+                        message: resp.message.to_string(),
+                    };
+                }
                 let message = if let Some(ctx) = context {
                     format!("{}: {}", ctx, resp)
                 } else {
@@ -213,6 +218,9 @@ pub enum RpcClientError {
 
     #[error("RPC error: {message}")]
     RpcError { message: String },
+
+    #[error("Rate limited: {message}")]
+    RateLimited { message: String },
 
     #[error("Missing expected field: {field}")]
     MissingField { field: String },
@@ -350,6 +358,32 @@ mod tests {
         // Update URLs to ensure debug path works.
         client.update_rpc_urls(vec![Url::parse(&server.base_url()).unwrap()]);
     }
+    #[tokio::test]
+    async fn test_rate_limited_error_code_detected() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(httpmock::Method::POST);
+            then.status(200)
+                .header("content-type", "application/json")
+                .body(r#"{"jsonrpc": "2.0", "id": 1, "error": {"code": -32090, "message": "rate limited"}}"#);
+        });
+
+        let client =
+            RpcClient::new_with_urls(vec![Url::parse(&server.base_url()).unwrap()]).unwrap();
+        let result = client.get_latest_block_number().await;
+        match result.unwrap_err() {
+            RpcClientError::RateLimited { message } => {
+                assert!(
+                    message.contains("rate limited"),
+                    "expected 'rate limited' in message, got: {message}"
+                );
+            }
+            other => panic!("expected RateLimited, got {other:?}"),
+        }
+
+        mock.assert();
+    }
+
     #[tokio::test]
     async fn test_get_latest_block_number_rpc_error() {
         let server = MockServer::start();

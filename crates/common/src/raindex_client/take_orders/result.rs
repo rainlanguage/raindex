@@ -3,7 +3,7 @@ use crate::take_orders::{build_approval_calldata, BuiltTakeOrdersConfig, ParsedT
 use alloy::primitives::{Address, Bytes};
 use alloy::sol_types::SolCall;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::takeOrders4Call;
+use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
 use serde::{Deserialize, Serialize};
 use std::ops::{Div, Mul};
 use wasm_bindgen_utils::prelude::*;
@@ -360,13 +360,14 @@ pub(crate) fn build_approval_result(
     amount: Float,
     decimals: u8,
 ) -> Result<TakeOrdersCalldataResult, RaindexError> {
-    let amount_u256 = amount.to_fixed_decimal(decimals)?;
+    let amount_u256 = amount.to_fixed_decimal_lossy(decimals)?.0;
     let calldata = build_approval_calldata(spender, amount_u256);
-    let formatted_amount = amount.format().unwrap_or_default();
+    let truncated_amount = Float::from_fixed_decimal(amount_u256, decimals)?;
+    let formatted_amount = truncated_amount.format().unwrap_or_default();
     Ok(TakeOrdersCalldataResult::needs_approval(ApprovalInfoData {
         token,
         spender,
-        amount,
+        amount: truncated_amount,
         formatted_amount,
         calldata,
     }))
@@ -424,7 +425,9 @@ mod tests {
     use crate::raindex_client::take_orders::selection::select_best_orderbook_simulation;
     use crate::take_orders::build_take_orders_config_from_simulation;
     use crate::test_helpers::candidates::make_candidate;
-    use rain_orderbook_bindings::IOrderBookV6::takeOrders4Call;
+    use alloy::primitives::U256;
+    use rain_orderbook_bindings::IRaindexV6::takeOrders4Call;
+    use rain_orderbook_bindings::IERC20::approveCall;
 
     fn high_price_cap() -> Float {
         Float::parse("1000000".to_string()).unwrap()
@@ -642,6 +645,41 @@ mod tests {
                 .eq(expected_max_sell_cap)
                 .unwrap(),
             "max_sell_cap in spend mode should equal spend_budget = 20"
+        );
+    }
+
+    #[test]
+    fn test_build_approval_result_excess_decimal_precision() {
+        let token = Address::from([0x22u8; 20]);
+        let spender = Address::from([0x33u8; 20]);
+        let amount = Float::parse("22.446685714285714".to_string()).unwrap();
+        let decimals = 6u8;
+
+        let result = build_approval_result(token, spender, amount, decimals);
+        assert!(
+            result.is_ok(),
+            "Should not error on excess decimal precision: {:?}",
+            result.err()
+        );
+        let result = result.unwrap();
+        assert!(result.is_needs_approval());
+        let approval_info = result.approval_info().unwrap();
+        assert_eq!(approval_info.token(), token);
+        assert_eq!(approval_info.spender(), spender);
+        assert!(!approval_info.calldata().is_empty());
+
+        let decoded = approveCall::abi_decode(approval_info.calldata())
+            .expect("Should decode approval calldata");
+        let expected_truncated = U256::from(22_446_685u64);
+        assert_eq!(
+            decoded.amount, expected_truncated,
+            "Approved amount should be 22.446685 truncated to 6 decimals = 22446685"
+        );
+
+        let truncated_float = Float::parse("22.446685".to_string()).unwrap();
+        assert!(
+            approval_info.amount().eq(truncated_float).unwrap(),
+            "Displayed amount should match truncated value, not original"
         );
     }
 

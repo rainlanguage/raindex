@@ -139,7 +139,7 @@ mod tests {
     use httpmock::MockServer;
 
     use super::*;
-    use rain_orderbook_bindings::IOrderBookV6::vaultBalance2Call;
+    use rain_orderbook_bindings::IRaindexV6::vaultBalance2Call;
 
     #[test]
     fn test_try_into_write_contract_parameters_ok() {

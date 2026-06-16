@@ -93,7 +93,7 @@ orderbooks:
     address: 0x0eA6d458488d1cf51695e1D6e4744e6FB715d37C
     network: ethereum
     subgraph: ethereum
-deployers:
+rainlangs:
   flare:
     address: 0xE3989Ea7486c0F418C764e6c511e86f6E8830FAb
     network: flare

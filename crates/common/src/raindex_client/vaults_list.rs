@@ -326,7 +326,9 @@ mod tests {
                     &sg_server.url("/rpc2"),
                 )],
                 None,
+                None,
             )
+            .await
             .unwrap();
             let vaults = raindex_client.get_vaults(None, None, None).await.unwrap();
             vaults.items()

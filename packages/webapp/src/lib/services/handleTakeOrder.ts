@@ -83,6 +83,17 @@ async function processSubmit(
 			return true;
 		}
 
+		console.log('DEBUG: Take order params:', {
+			inputIndex: quote.pair.inputIndex,
+			outputIndex: quote.pair.outputIndex,
+			account,
+			mode,
+			amount: amount.toString(),
+			priceCap: priceCap.toString(),
+			maxOutput: quote.data?.maxOutput.toString(),
+			ratio: quote.data?.ratio.toString()
+		});
+
 		const calldataResult = await order.getTakeCalldata(
 			quote.pair.inputIndex,
 			quote.pair.outputIndex,
@@ -91,7 +102,15 @@ async function processSubmit(
 			amount,
 			priceCap
 		);
+		
+		console.log('DEBUG: Calldata result:', {
+			error: calldataResult.error?.readableMsg,
+			isNeedsApproval: calldataResult.value?.isNeedsApproval,
+			isReady: calldataResult.value?.isReady
+		});
+		
 		if (calldataResult.error) {
+			console.log('DEBUG: Take order failed with error:', calldataResult.error);
 			errToast(calldataResult.error.readableMsg);
 			return true;
 		}

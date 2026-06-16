@@ -1,42 +1,42 @@
 import type { LayoutLoad } from './$types';
 import type { InvalidOrderDetail, ValidOrderDetail } from '@rainlanguage/ui-components';
-import type { DotrainRegistry } from '@rainlanguage/orderbook';
+import type { DotrainRainlang } from '@rainlanguage/orderbook';
 
 /**
  * Type defining the structure of the load function's return value,
- * including registry information and validation results.
+ * including rainlang information and validation results.
  */
 type LoadResult = {
 	validOrders: ValidOrderDetail[];
 	invalidOrders: InvalidOrderDetail[];
-	registry: DotrainRegistry | null;
+	rainlang: DotrainRainlang | null;
 	error: string | null;
 };
 
 interface ParentData {
-	registry?: DotrainRegistry | null;
+	rainlang?: DotrainRainlang | null;
 }
 
 export const load: LayoutLoad<LoadResult> = async ({ parent }) => {
 	const parentData: ParentData = await parent();
-	const registry = parentData.registry ?? null;
+	const rainlang = parentData.rainlang ?? null;
 
-	if (!registry) {
+	if (!rainlang) {
 		return {
 			validOrders: [],
 			invalidOrders: [],
-			registry,
-			error: 'Registry not loaded'
+			rainlang,
+			error: 'Rainlang not loaded'
 		};
 	}
 
 	try {
-		const orderDetails = registry.getAllOrderDetails();
+		const orderDetails = rainlang.getAllOrderDetails();
 		if (orderDetails.error) {
 			return {
 				validOrders: [],
 				invalidOrders: [],
-				registry,
+				rainlang,
 				error: orderDetails.error.readableMsg ?? orderDetails.error.msg
 			};
 		}
@@ -44,7 +44,7 @@ export const load: LayoutLoad<LoadResult> = async ({ parent }) => {
 		const validOrders: ValidOrderDetail[] = Array.from(orderDetails.value.valid.entries()).map(
 			([name, details]) => ({
 				name,
-				dotrain: registry.orders.get(name) ?? '',
+				dotrain: rainlang.orders.get(name) ?? '',
 				details
 			})
 		);
@@ -58,14 +58,14 @@ export const load: LayoutLoad<LoadResult> = async ({ parent }) => {
 		return {
 			validOrders,
 			invalidOrders,
-			registry,
+			rainlang,
 			error: null
 		};
 	} catch (error: unknown) {
 		return {
 			validOrders: [],
 			invalidOrders: [],
-			registry,
+			rainlang,
 			error: error instanceof Error ? error.message : 'Unknown error occurred'
 		};
 	}

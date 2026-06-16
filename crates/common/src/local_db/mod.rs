@@ -1,7 +1,11 @@
 pub mod address_collectors;
 pub mod decode;
+#[cfg(not(target_family = "wasm"))]
+pub mod executor;
 pub mod export;
 pub mod fetch;
+#[cfg(not(target_family = "wasm"))]
+pub mod functions;
 pub mod insert;
 pub mod pipeline;
 pub mod query;
@@ -25,8 +29,6 @@ use strict_yaml_rust::ScanError;
 use tokio::task::JoinError;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
-
-const SUPPORTED_LOCAL_DB_CHAINS: &[u32] = &[137, 8453, 42161];
 
 #[derive(Debug, thiserror::Error)]
 pub enum LocalDbError {
@@ -355,10 +357,6 @@ impl OrderbookIdentifier {
             orderbook_address,
         }
     }
-}
-
-pub fn is_chain_supported_local_db(chain_id: u32) -> bool {
-    SUPPORTED_LOCAL_DB_CHAINS.contains(&chain_id)
 }
 
 #[cfg(test)]

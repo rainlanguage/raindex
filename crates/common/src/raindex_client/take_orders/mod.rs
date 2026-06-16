@@ -26,7 +26,7 @@ use wasm_bindgen_utils::wasm_export;
 
 #[wasm_export]
 impl RaindexClient {
-    /// Generates calldata for `IOrderBookV6.takeOrders4` using a mode + price-cap policy.
+    /// Generates calldata for `IRaindexV6.takeOrders4` using a mode + price-cap policy.
     ///
     /// This method includes preflight simulation to validate the transaction will succeed
     /// and automatically removes failing orders from the config.
@@ -93,6 +93,7 @@ impl RaindexClient {
             req.sell_token,
             req.buy_token,
             Some(block_number),
+            None,
         )
         .await?;
 

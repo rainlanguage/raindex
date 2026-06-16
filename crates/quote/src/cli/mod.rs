@@ -1,6 +1,6 @@
 use crate::{OrderQuoteValue, QuoteResult};
 use alloy::primitives::Address;
-use clap::{command, ArgAction, Parser};
+use clap::{ArgAction, Parser};
 use serde::{Deserialize, Serialize};
 use std::{fs::write, io::Write, path::PathBuf};
 use url::Url;
@@ -93,8 +93,8 @@ impl Quoter {
                 .do_quote(
                     vec![self.rpc.to_string()],
                     self.block_number,
-                    None,
                     self.multicall_address,
+                    None,
                 )
                 .await?
                 .into(),
@@ -104,8 +104,8 @@ impl Quoter {
                         sg.as_str(),
                         vec![self.rpc.to_string()],
                         self.block_number,
-                        None,
                         self.multicall_address,
+                        None,
                     )
                     .await?
                     .into()
@@ -153,7 +153,7 @@ mod tests {
     use clap::CommandFactory;
     use httpmock::{Method::POST, MockServer};
     use rain_math_float::Float;
-    use rain_orderbook_bindings::IOrderBookV6::{quote2Call, quote2Return, OrderV4, IOV2};
+    use rain_orderbook_bindings::IRaindexV6::{quote2Call, quote2Return, OrderV4, IOV2};
     use serde_json::json;
     use std::{fs::read_to_string, str::FromStr};
     use tempfile::NamedTempFile;

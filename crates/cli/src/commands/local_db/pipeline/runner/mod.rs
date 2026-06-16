@@ -950,6 +950,7 @@ local-db-sync:
     rate-limit-delay-ms: 1
     finality-depth: 12
     bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
 orderbooks:
   ok:
     address: 0x00000000000000000000000000000000000000a1
@@ -997,6 +998,7 @@ local-db-sync:
     rate-limit-delay-ms: 1
     finality-depth: 12
     bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
 orderbooks:
   ok:
     address: 0x00000000000000000000000000000000000000a1
@@ -1037,6 +1039,7 @@ local-db-sync:
     rate-limit-delay-ms: 1
     finality-depth: 12
     bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
 orderbooks:
   panic:
     address: 0x00000000000000000000000000000000000000c3
@@ -1071,6 +1074,7 @@ local-db-sync:
     rate-limit-delay-ms: 1
     finality-depth: 12
     bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
 orderbooks:
   ok:
     address: 0x00000000000000000000000000000000000000a1
@@ -1106,6 +1110,7 @@ local-db-sync:
     rate-limit-delay-ms: 1
     finality-depth: 12
     bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
 orderbooks:
   ok:
     address: 0x00000000000000000000000000000000000000a1

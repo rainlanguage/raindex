@@ -3,12 +3,7 @@
 pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
-import {
-    OrderConfigV4,
-    EvaluableV4,
-    TaskV2,
-    SignedContextV1
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {OrderConfigV4, EvaluableV4, TaskV2, SignedContextV1} from "rain.raindex.interface/interface/IRaindexV6.sol";
 
 contract OrderBookV6EnactTest is OrderBookV6ExternalRealTest {
     function checkReentrancyRW() internal view {

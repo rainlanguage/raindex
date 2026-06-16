@@ -1,9 +1,23 @@
 use alloy::primitives::{Address, Bytes, FixedBytes, U256};
 use alloy::sol_types::SolValue;
-use rain_orderbook_bindings::IOrderBookV6::{OrderV4, SignedContextV1};
+use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
 use rain_orderbook_subgraph_client::types::common::SgOrder;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use url::Url;
+
+/// Validate that an oracle URL is safe to POST to.
+/// Only http and https schemes are allowed to prevent SSRF.
+fn validate_oracle_url(url: &str) -> Result<(), OracleError> {
+    let parsed =
+        Url::parse(url).map_err(|e| OracleError::InvalidUrl(format!("Cannot parse URL: {e}")))?;
+    match parsed.scheme() {
+        "http" | "https" => Ok(()),
+        scheme => Err(OracleError::InvalidUrl(format!(
+            "Unsupported scheme '{scheme}', only http and https are allowed"
+        ))),
+    }
+}
 
 /// Error types for oracle fetching
 #[derive(Debug, thiserror::Error)]
@@ -11,11 +25,11 @@ pub enum OracleError {
     #[error("HTTP request failed: {0}")]
     RequestFailed(#[from] reqwest::Error),
 
+    #[error("Invalid oracle URL: {0}")]
+    InvalidUrl(String),
+
     #[error("Invalid oracle response: {0}")]
     InvalidResponse(String),
-
-    #[error("Invalid URL: {0}")]
-    InvalidUrl(String),
 }
 
 /// JSON response format from an oracle endpoint.
@@ -61,9 +75,7 @@ pub fn encode_oracle_body(
 /// Encode the POST body for a batch oracle request.
 ///
 /// The body is `abi.encode((OrderV4, uint256 inputIOIndex, uint256 outputIOIndex, address counterparty)[])`.
-pub fn encode_oracle_body_batch(
-    requests: Vec<(&OrderV4, u32, u32, Address)>,
-) -> Vec<u8> {
+pub fn encode_oracle_body_batch(requests: Vec<(&OrderV4, u32, u32, Address)>) -> Vec<u8> {
     let tuples: Vec<_> = requests
         .into_iter()
         .map(|(order, input_io_index, output_io_index, counterparty)| {
@@ -75,7 +87,7 @@ pub fn encode_oracle_body_batch(
             )
         })
         .collect();
-    
+
     tuples.abi_encode()
 }
 
@@ -85,13 +97,12 @@ pub fn encode_oracle_body_batch(
 /// that will be used for calculateOrderIO:
 /// `abi.encode(OrderV4, uint256 inputIOIndex, uint256 outputIOIndex, address counterparty)`
 ///
-/// The endpoint must respond with a JSON body matching a single `OracleResponse`.
-/// 
-/// NOTE: This is a legacy function. The batch format is preferred.
+/// The endpoint must respond with a JSON array containing exactly one `OracleResponse`.
 pub async fn fetch_signed_context(
     url: &str,
     body: Vec<u8>,
 ) -> Result<SignedContextV1, OracleError> {
+    validate_oracle_url(url)?;
     let builder = Client::builder();
     #[cfg(not(target_family = "wasm"))]
     let builder = builder.timeout(std::time::Duration::from_secs(10));
@@ -107,13 +118,14 @@ pub async fn fetch_signed_context(
         .error_for_status()?
         .json()
         .await?;
-    
+
     if response.len() != 1 {
-        return Err(OracleError::InvalidResponse(
-            format!("Expected 1 response, got {}", response.len())
-        ));
+        return Err(OracleError::InvalidResponse(format!(
+            "Expected 1 response, got {}",
+            response.len()
+        )));
     }
-    
+
     Ok(response.into_iter().next().unwrap().into())
 }
 
@@ -127,7 +139,9 @@ pub async fn fetch_signed_context(
 pub async fn fetch_signed_context_batch(
     url: &str,
     body: Vec<u8>,
+    expected_count: usize,
 ) -> Result<Vec<SignedContextV1>, OracleError> {
+    validate_oracle_url(url)?;
     let builder = Client::builder();
     #[cfg(not(target_family = "wasm"))]
     let builder = builder.timeout(std::time::Duration::from_secs(10));
@@ -142,6 +156,14 @@ pub async fn fetch_signed_context_batch(
         .error_for_status()?
         .json()
         .await?;
+
+    if response.len() != expected_count {
+        return Err(OracleError::InvalidResponse(format!(
+            "Expected {} oracle responses, got {}",
+            expected_count,
+            response.len()
+        )));
+    }
 
     Ok(response.into_iter().map(|resp| resp.into()).collect())
 }
@@ -165,7 +187,7 @@ pub fn extract_oracle_url(order: &SgOrder) -> Option<String> {
 mod tests {
     use super::*;
     use alloy::primitives::{address, FixedBytes};
-    use rain_orderbook_bindings::IOrderBookV6::{EvaluableV4, IOV2, OrderV4};
+    use rain_orderbook_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
 
     #[test]
     fn test_oracle_response_to_signed_context() {
@@ -189,7 +211,12 @@ mod tests {
     #[test]
     fn test_encode_oracle_body_single() {
         let order = create_test_order();
-        let body = encode_oracle_body(&order, 1, 2, address!("0x1111111111111111111111111111111111111111"));
+        let body = encode_oracle_body(
+            &order,
+            1,
+            2,
+            address!("0x1111111111111111111111111111111111111111"),
+        );
         assert!(!body.is_empty());
     }
 
@@ -197,17 +224,32 @@ mod tests {
     fn test_encode_oracle_body_batch() {
         let order1 = create_test_order();
         let order2 = create_test_order();
-        
+
         let requests = vec![
-            (&order1, 1, 2, address!("0x1111111111111111111111111111111111111111")),
-            (&order2, 3, 4, address!("0x2222222222222222222222222222222222222222")),
+            (
+                &order1,
+                1,
+                2,
+                address!("0x1111111111111111111111111111111111111111"),
+            ),
+            (
+                &order2,
+                3,
+                4,
+                address!("0x2222222222222222222222222222222222222222"),
+            ),
         ];
-        
+
         let body = encode_oracle_body_batch(requests);
         assert!(!body.is_empty());
-        
+
         // Batch encoding should be different from single encoding
-        let single_body = encode_oracle_body(&order1, 1, 2, address!("0x1111111111111111111111111111111111111111"));
+        let single_body = encode_oracle_body(
+            &order1,
+            1,
+            2,
+            address!("0x1111111111111111111111111111111111111111"),
+        );
         assert_ne!(body, single_body);
     }
 
@@ -225,14 +267,28 @@ mod tests {
 
     #[tokio::test]
     async fn test_fetch_signed_context_batch_invalid_url() {
-        let result = fetch_signed_context_batch("not-a-url", vec![]).await;
+        let result = fetch_signed_context_batch("not-a-url", vec![], 0).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_fetch_signed_context_batch_unreachable() {
-        let result = fetch_signed_context_batch("http://127.0.0.1:1/oracle", vec![]).await;
+        let result = fetch_signed_context_batch("http://127.0.0.1:1/oracle", vec![], 0).await;
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_oracle_url_rejects_non_http() {
+        assert!(validate_oracle_url("ftp://example.com").is_err());
+        assert!(validate_oracle_url("javascript:alert(1)").is_err());
+        assert!(validate_oracle_url("file:///etc/passwd").is_err());
+        assert!(validate_oracle_url("data:text/html,<h1>hi</h1>").is_err());
+    }
+
+    #[test]
+    fn test_validate_oracle_url_accepts_http() {
+        assert!(validate_oracle_url("http://localhost:8080/oracle").is_ok());
+        assert!(validate_oracle_url("https://oracle.example.com/context").is_ok());
     }
 
     fn create_test_order() -> OrderV4 {

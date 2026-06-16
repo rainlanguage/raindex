@@ -2,8 +2,8 @@ use super::{cache::Cache, sanitize_all_documents, ValidationConfig, *};
 use crate::{
     accounts::AccountCfg, local_db_remotes::LocalDbRemoteCfg, local_db_sync::LocalDbSyncCfg,
     metaboard::MetaboardCfg, remote_networks::RemoteNetworksCfg, remote_tokens::RemoteTokensCfg,
-    sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, DeployerCfg, NetworkCfg,
-    OrderbookCfg, TokenCfg,
+    sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, NetworkCfg, OrderbookCfg,
+    RainlangCfg, TokenCfg,
 };
 use alloy::primitives::Address;
 use serde::{
@@ -41,7 +41,7 @@ pub struct OrderbookYamlValidation {
     pub local_db_sync: bool,
     pub orderbooks: bool,
     pub metaboards: bool,
-    pub deployers: bool,
+    pub rainlangs: bool,
 }
 impl OrderbookYamlValidation {
     pub fn full() -> Self {
@@ -55,7 +55,7 @@ impl OrderbookYamlValidation {
             local_db_sync: true,
             orderbooks: true,
             metaboards: true,
-            deployers: true,
+            rainlangs: true,
         }
     }
 }
@@ -87,8 +87,8 @@ impl ValidationConfig for OrderbookYamlValidation {
     fn should_validate_metaboards(&self) -> bool {
         self.metaboards
     }
-    fn should_validate_deployers(&self) -> bool {
-        self.deployers
+    fn should_validate_rainlangs(&self) -> bool {
+        self.rainlangs
     }
     fn should_validate_orders(&self) -> bool {
         false
@@ -99,6 +99,12 @@ impl ValidationConfig for OrderbookYamlValidation {
     fn should_validate_deployments(&self) -> bool {
         false
     }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct FetchedRemoteData {
+    pub remote_networks: HashMap<String, NetworkCfg>,
+    pub remote_tokens: HashMap<String, TokenCfg>,
 }
 
 impl YamlParsable for OrderbookYaml {
@@ -148,8 +154,8 @@ impl YamlParsable for OrderbookYaml {
         if validate.should_validate_metaboards() {
             MetaboardCfg::parse_all_from_yaml(documents.clone(), None)?;
         }
-        if validate.should_validate_deployers() {
-            DeployerCfg::parse_all_from_yaml(documents.clone(), None)?;
+        if validate.should_validate_rainlangs() {
+            RainlangCfg::parse_all_from_yaml(documents.clone(), None)?;
         }
 
         Ok(OrderbookYaml {
@@ -261,6 +267,26 @@ impl OrderbookYaml {
     pub fn get_remote_tokens(&self) -> Result<Option<RemoteTokensCfg>, YamlError> {
         let context = self.build_context();
         RemoteTokensCfg::parse_from_yaml_optional(self.documents.clone(), Some(&context))
+    }
+
+    pub async fn fetch_remote_data(&mut self) -> Result<FetchedRemoteData, YamlError> {
+        let remote_networks =
+            RemoteNetworksCfg::fetch_networks(self.get_remote_networks()?).await?;
+        if !remote_networks.is_empty() {
+            self.cache.update_remote_networks(remote_networks.clone());
+        }
+        let remote_tokens = if let Some(remote_tokens_cfg) = self.get_remote_tokens()? {
+            let networks = self.get_networks()?;
+            let tokens = RemoteTokensCfg::fetch_tokens(&networks, remote_tokens_cfg).await?;
+            self.cache.update_remote_tokens(tokens.clone());
+            tokens
+        } else {
+            HashMap::new()
+        };
+        Ok(FetchedRemoteData {
+            remote_networks,
+            remote_tokens,
+        })
     }
 
     pub fn get_subgraph_keys(&self) -> Result<Vec<String>, YamlError> {
@@ -381,16 +407,16 @@ impl OrderbookYaml {
         MetaboardCfg::add_record_to_yaml(self.documents[0].clone(), key, value)
     }
 
-    pub fn get_deployer_keys(&self) -> Result<Vec<String>, YamlError> {
-        Ok(self.get_deployers()?.keys().cloned().collect())
+    pub fn get_rainlang_keys(&self) -> Result<Vec<String>, YamlError> {
+        Ok(self.get_rainlangs()?.keys().cloned().collect())
     }
-    pub fn get_deployers(&self) -> Result<HashMap<String, DeployerCfg>, YamlError> {
+    pub fn get_rainlangs(&self) -> Result<HashMap<String, RainlangCfg>, YamlError> {
         let context = self.build_context();
-        DeployerCfg::parse_all_from_yaml(self.documents.clone(), Some(&context))
+        RainlangCfg::parse_all_from_yaml(self.documents.clone(), Some(&context))
     }
-    pub fn get_deployer(&self, key: &str) -> Result<DeployerCfg, YamlError> {
+    pub fn get_rainlang(&self, key: &str) -> Result<RainlangCfg, YamlError> {
         let context = self.build_context();
-        DeployerCfg::parse_from_yaml(self.documents.clone(), key, Some(&context))
+        RainlangCfg::parse_from_yaml(self.documents.clone(), key, Some(&context))
     }
 
     pub fn get_sentry(&self) -> Result<Option<bool>, YamlError> {
@@ -635,8 +661,8 @@ mod tests {
             decimals: 18
             label: Wrapped Ether
             symbol: WETH
-    deployers:
-        deployer1:
+    rainlangs:
+        registry1:
             address: 0x0000000000000000000000000000000000000002
             network: mainnet
     accounts:
@@ -666,8 +692,8 @@ mod tests {
         token1:
             network: mainnet
             address: 0x2345678901abcdef
-    deployers:
-        deployer1:
+    rainlangs:
+        registry1:
             address: 0x3456789012abcdef
     "#;
 
@@ -758,15 +784,15 @@ mod tests {
             Url::parse("https://meta.example.com/board2").unwrap()
         );
 
-        assert_eq!(ob_yaml.get_deployer_keys().unwrap().len(), 1);
-        let deployer = ob_yaml.get_deployer("deployer1").unwrap();
+        assert_eq!(ob_yaml.get_rainlang_keys().unwrap().len(), 1);
+        let rainlang_cfg = ob_yaml.get_rainlang("registry1").unwrap();
         assert_eq!(
-            deployer.address,
+            rainlang_cfg.address,
             Address::from_str("0x0000000000000000000000000000000000000002").unwrap()
         );
-        assert_eq!(deployer.network, network.into());
+        assert_eq!(rainlang_cfg.network, network.into());
         assert_eq!(
-            DeployerCfg::parse_network_key(ob_yaml.documents.clone(), "deployer1").unwrap(),
+            RainlangCfg::parse_network_key(ob_yaml.documents.clone(), "registry1").unwrap(),
             "mainnet"
         );
 
@@ -1228,6 +1254,7 @@ local-db-sync:
     rate-limit-delay-ms: 5
     finality-depth: 6
     bootstrap-block-threshold: 7
+    sync-interval-ms: 5000
 "#,
             version = SpecVersion::current()
         );
@@ -1247,6 +1274,7 @@ local-db-sync:
         assert_eq!(cfg.rate_limit_delay_ms, 5);
         assert_eq!(cfg.finality_depth, 6);
         assert_eq!(cfg.bootstrap_block_threshold, 7);
+        assert_eq!(cfg.sync_interval_ms, 5000);
     }
 
     #[test]
@@ -1263,6 +1291,7 @@ local-db-sync:
     rate-limit-delay-ms: 50
     finality-depth: 60
     bootstrap-block-threshold: 70
+    sync-interval-ms: 5000
 "#,
             version = SpecVersion::current()
         );
@@ -1277,6 +1306,7 @@ local-db-sync:
         assert_eq!(cfg.rate_limit_delay_ms, 50);
         assert_eq!(cfg.finality_depth, 60);
         assert_eq!(cfg.bootstrap_block_threshold, 70);
+        assert_eq!(cfg.sync_interval_ms, 5000);
     }
 
     #[test]
@@ -1293,6 +1323,7 @@ local-db-sync:
     rate-limit-delay-ms: 5
     finality-depth: 6
     bootstrap-block-threshold: 7
+    sync-interval-ms: 5000
 "#,
             version = SpecVersion::current()
         );

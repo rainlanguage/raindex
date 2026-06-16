@@ -1801,13 +1801,12 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "backon"
-version = "0.4.4"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d67782c3f868daa71d3533538e98a8e13713231969def7536e8039606fc46bf0"
+checksum = "cffb0e931875b666fc4fcb20fee52e9bbd1ef836fd9e9e04ec21555f9f85f7ef"
 dependencies = [
  "fastrand",
- "futures-core",
- "pin-project",
+ "gloo-timers 0.3.0",
  "tokio",
 ]
 
@@ -5314,9 +5313,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.28.0"
+version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c10584274047cb335c23d3e61bcef8e323adae7c5c8c760540f73610177fc3f"
+checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
  "pkg-config",
  "vcpkg",
@@ -6725,14 +6724,11 @@ dependencies = [
  "alloy",
  "eyre",
  "foundry-evm",
- "once_cell",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
  "rain_interpreter_bindings",
- "reqwest 0.11.27",
  "revm 24.0.1",
  "revm 25.0.0",
  "serde",
- "serde_json",
  "thiserror 1.0.69",
  "wasm-bindgen-utils 0.0.10 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -6846,14 +6842,6 @@ name = "rain_interpreter_dispair"
 version = "0.1.0"
 dependencies = [
  "alloy",
- "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
- "rain_interpreter_bindings",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.19",
 ]
 
 [[package]]
@@ -6864,8 +6852,6 @@ dependencies = [
  "alloy-ethers-typecast 0.2.0 (git+https://github.com/rainlanguage/alloy-ethers-typecast?rev=bcc3a04394aefe191fef4ae8e6e94381a419c99a)",
  "rain_interpreter_bindings",
  "rain_interpreter_dispair",
- "serde",
- "serde_json",
  "thiserror 1.0.69",
  "tokio",
 ]
@@ -6876,7 +6862,6 @@ version = "0.0.0"
 dependencies = [
  "alloy",
  "getrandom 0.2.16",
- "serde_json",
 ]
 
 [[package]]
@@ -6931,6 +6916,7 @@ dependencies = [
  "itertools 0.14.0",
  "rain-math-float",
  "rain-metadata 0.0.2-alpha.6",
+ "rain_interpreter_bindings",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_common",
@@ -6992,6 +6978,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "strict-yaml-rust",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tower",
@@ -7067,12 +7054,14 @@ dependencies = [
  "anyhow",
  "async-trait",
  "clap",
+ "futures",
  "getrandom 0.2.16",
  "httpmock",
  "once_cell",
  "rain-error-decoding 0.1.0 (git+https://github.com/rainlanguage/rain.error?rev=3d2ed70fb2f7c6156706846e10f163d1e493a8d3)",
  "rain-interpreter-eval",
  "rain-math-float",
+ "rain-metadata 0.0.2-alpha.6",
  "rain_orderbook_app_settings",
  "rain_orderbook_bindings",
  "rain_orderbook_common",
@@ -8037,9 +8026,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.31.0"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b838eba278d213a8beaf485bd313fd580ca4505a00d5871caeb1457c55322cae"
+checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
 dependencies = [
  "bitflags 2.9.1",
  "fallible-iterator",

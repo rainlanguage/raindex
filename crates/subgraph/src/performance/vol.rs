@@ -366,7 +366,7 @@ mod tests {
         };
 
         let result = get_vaults_vol(&[trade1, trade2]).unwrap();
-        let expected = vec![
+        let expected = [
             VaultVolume {
                 id: vault_id2.to_string(),
                 token: token2,

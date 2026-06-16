@@ -96,6 +96,7 @@ impl JsCallbackExecutor {
 // that thread, so sharing the executor across async tasks is safe.
 unsafe impl Sync for JsCallbackExecutor {}
 
+#[cfg(target_family = "wasm")]
 #[async_trait(?Send)]
 impl LocalDbQueryExecutor for JsCallbackExecutor {
     async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {

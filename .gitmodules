@@ -1,12 +1,9 @@
 [submodule "lib/sushixswap-v2"]
 	path = lib/sushixswap-v2
 	url = https://github.com/rainprotocol/sushixswap-v2
-[submodule "lib/rain.orderbook.interface"]
-	path = lib/rain.orderbook.interface
-	url = https://github.com/rainlanguage/rain.orderbook.interface
 [submodule "lib/rain.interpreter"]
 	path = lib/rain.interpreter
 	url = https://github.com/rainlanguage/rain.interpreter
-[submodule "lib/rain.tofu.erc20-decimals"]
-	path = lib/rain.tofu.erc20-decimals
-	url = https://github.com/rainlanguage/rain.tofu.erc20-decimals
+[submodule "lib/rain.raindex.interface"]
+	path = lib/rain.raindex.interface
+	url = https://github.com/rainlanguage/rain.raindex.interface

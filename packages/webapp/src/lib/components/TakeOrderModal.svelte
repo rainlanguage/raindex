@@ -58,6 +58,20 @@
 			quotes = result.value.filter((q: RaindexOrderQuote) => q.success && q.data);
 			if (quotes.length > 0) {
 				errorMessage = '';
+				// Auto-populate price cap with current ratio + 10% margin if not set
+				if (!priceCap && quotes[selectedPairIndex]?.data?.ratio) {
+					try {
+						const currentRatio = quotes[selectedPairIndex].data.ratio as unknown as Float;
+						const marginMultiplier = Float.parse('1.1').value as Float; // 10% margin
+						const priceCapFloat = currentRatio.mul(marginMultiplier).value as Float;
+						const formatted = priceCapFloat.format().value;
+						if (typeof formatted === 'string') {
+							priceCap = formatted;
+						}
+					} catch (e) {
+						console.log('Failed to set default price cap:', e);
+					}
+				}
 			}
 			if (selectedPairIndex >= quotes.length) {
 				selectedPairIndex = 0;
@@ -124,6 +138,22 @@
 	}
 
 	$: selectedQuote = quotes[selectedPairIndex];
+	
+	// Auto-update price cap when changing pairs
+	$: if (selectedQuote?.data?.ratio && quotes.length > 0) {
+		try {
+			const currentRatio = selectedQuote.data.ratio as unknown as Float;
+			const marginMultiplier = Float.parse('1.1').value as Float; // 10% margin
+			const priceCapFloat = currentRatio.mul(marginMultiplier).value as Float;
+			const formatted = priceCapFloat.format().value;
+			if (typeof formatted === 'string' && !priceCap) {
+				priceCap = formatted;
+			}
+		} catch (e) {
+			console.log('Failed to update price cap for selected pair:', e);
+		}
+	}
+
 	$: maxOutputHex = selectedQuote?.data?.maxOutput as unknown as Hex | undefined;
 	$: maxInputHex = selectedQuote?.data?.maxInput as unknown as Hex | undefined;
 	$: maxOutput = (() => {

@@ -9,9 +9,9 @@ import {
     TaskV2,
     OrderV4,
     SignedContextV1
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {LibOrder} from "src/lib/LibOrder.sol";
+import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 
@@ -22,7 +22,7 @@ contract OrderBookV6AddOrderEnactTest is OrderBookV6ExternalRealTest {
 
     mapping(bytes32 => bool) nonces;
 
-    function checkReentrancyRW(uint256 expectedReads, uint256 expectedWrites) internal {
+    function checkReentrancyRW(uint256 expectedReads, uint256 expectedWrites) internal view {
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iOrderbook));
         // ReentrancyGuard.REENTRANCY_GUARD_STORAGE
         bytes32 reentrancyGuardStorage = 0x9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00;

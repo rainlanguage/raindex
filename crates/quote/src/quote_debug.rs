@@ -7,7 +7,7 @@ use rain_interpreter_eval::{
     fork::{Forker, NewForkedEvm},
     trace::{RainEvalResult, RainEvalResultFromRawCallResultError},
 };
-use rain_orderbook_bindings::IOrderBookV6::quote2Call;
+use rain_orderbook_bindings::IRaindexV6::quote2Call;
 use url::Url;
 
 pub struct NewQuoteDebugger {
@@ -89,7 +89,7 @@ mod tests {
     use alloy::sol_types::{SolCall, SolValue};
     use httpmock::MockServer;
     use rain_orderbook_app_settings::spec_version::SpecVersion;
-    use rain_orderbook_bindings::IOrderBookV6::{OrderV4, QuoteV2};
+    use rain_orderbook_bindings::IRaindexV6::{OrderV4, QuoteV2};
     use rain_orderbook_common::add_order::AddOrderArgs;
     use rain_orderbook_common::dotrain_order::DotrainOrder;
     use rain_orderbook_test_fixtures::LocalEvm;
@@ -114,9 +114,9 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 tokens:
     t1:
         network: some-key
@@ -142,7 +142,7 @@ orders:
               vault-id: 0x01
 scenarios:
     some-key:
-        deployer: some-key
+        rainlang: some-key
         bindings:
             key1: 10
 deployments:
@@ -160,7 +160,7 @@ amount price: 16 52;
 "#,
             rpc_url = local_evm.url(),
             orderbook = orderbook.address(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
             spec_version = SpecVersion::current()
@@ -239,9 +239,9 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 tokens:
     t1:
         network: some-key
@@ -267,7 +267,7 @@ orders:
               vault-id: 0x01
 scenarios:
     some-key:
-        deployer: some-key
+        rainlang: some-key
         bindings:
             key1: 10
 deployments:
@@ -290,7 +290,7 @@ _: 1;
 "#,
             rpc_url = local_evm.url(),
             orderbook = orderbook.address(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
             spec_version = SpecVersion::current()
@@ -376,9 +376,9 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang_address}
 tokens:
     t1:
         network: some-key
@@ -404,7 +404,7 @@ orders:
               vault-id: 0x01
 scenarios:
     some-key:
-        deployer: some-key
+        rainlang: some-key
         bindings:
             key1: 10
 deployments:
@@ -427,7 +427,7 @@ _: 1;
 "#,
             rpc_url = local_evm.url(),
             orderbook = orderbook.address(),
-            deployer = local_evm.deployer.address(),
+            rainlang_address = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
             spec_version = SpecVersion::current(),

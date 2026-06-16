@@ -6,22 +6,26 @@ import {StackAllocationMismatch} from "rain.interpreter/error/ErrIntegrity.sol";
 import {ExpectedOperand, UnexpectedOperandValue} from "rain.interpreter/error/ErrParse.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 import {OpTest, StackItem} from "rain.interpreter/../test/abstract/OpTest.sol";
-import {OrderBookV6SubParser} from "src/concrete/parser/OrderBookV6SubParser.sol";
 import {LibOrderBookSubParserContextFixture} from "test/util/fixture/LibOrderBookSubParserContextFixture.sol";
+import {LibOrderBookDeploy} from "../../../src/lib/deploy/LibOrderBookDeploy.sol";
+import {LibEtchOrderBook} from "test/util/lib/LibEtchOrderBook.sol";
 
 contract OrderBookV6SubParserSignedContextTest is OpTest {
     using Strings for address;
 
+    function setUp() public {
+        LibEtchOrderBook.etchOrderBook(vm);
+    }
+
     /// Test signed-context-0-0
-    function testSubParserContextSignedContextHappy0() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+    function testSubParserContextSignedContextHappy0() external view {
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
         StackItem[] memory expectedStack = new StackItem[](1);
         expectedStack[0] = StackItem.wrap(keccak256(bytes("signed-context-0-0")));
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<0 0>();")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<0 0>();"));
 
         checkHappy(
             rainlang, LibOrderBookSubParserContextFixture.hashedNamesContext(), expectedStack, "signed-context-0-0"
@@ -29,15 +33,14 @@ contract OrderBookV6SubParserSignedContextTest is OpTest {
     }
 
     /// Test signed-context-0-1
-    function testSubParserContextSignedContextHappy1() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+    function testSubParserContextSignedContextHappy1() external view {
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
         StackItem[] memory expectedStack = new StackItem[](1);
         expectedStack[0] = StackItem.wrap(keccak256(bytes("signed-context-0-1")));
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<0 1>();")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<0 1>();"));
 
         checkHappy(
             rainlang, LibOrderBookSubParserContextFixture.hashedNamesContext(), expectedStack, "signed-context-0-1"
@@ -45,15 +48,14 @@ contract OrderBookV6SubParserSignedContextTest is OpTest {
     }
 
     /// Test signed-context-1-0
-    function testSubParserContextSignedContextHappy2() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+    function testSubParserContextSignedContextHappy2() external view {
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
         StackItem[] memory expectedStack = new StackItem[](1);
         expectedStack[0] = StackItem.wrap(keccak256(bytes("signed-context-1-0")));
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<1 0>();")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<1 0>();"));
 
         checkHappy(
             rainlang, LibOrderBookSubParserContextFixture.hashedNamesContext(), expectedStack, "signed-context-1-0"
@@ -61,15 +63,14 @@ contract OrderBookV6SubParserSignedContextTest is OpTest {
     }
 
     /// Test signed-context-1-1
-    function testSubParserContextSignedContextHappy3() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+    function testSubParserContextSignedContextHappy3() external view {
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
         StackItem[] memory expectedStack = new StackItem[](1);
         expectedStack[0] = StackItem.wrap(keccak256(bytes("signed-context-1-1")));
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<1 1>();")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<1 1>();"));
 
         checkHappy(
             rainlang, LibOrderBookSubParserContextFixture.hashedNamesContext(), expectedStack, "signed-context-1-1"
@@ -78,35 +79,30 @@ contract OrderBookV6SubParserSignedContextTest is OpTest {
 
     /// Test signed-context without an operand errors.
     function testSubParserContextSignedContextUnhappyNoOperand() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context();")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context();"));
 
         checkUnhappyParse(rainlang, abi.encodeWithSelector(ExpectedOperand.selector));
     }
 
     /// Test signed-context with too many operands errors.
     function testSubParserContextSignedContextUnhappyTooManyOperands() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
-        bytes memory rainlang = bytes(
-            string.concat(
-                "using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<0 0 0>();"
-            )
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<0 0 0>();"));
 
         checkUnhappyParse(rainlang, abi.encodeWithSelector(UnexpectedOperandValue.selector));
     }
 
     /// Test signed-context with an input errors.
     function testSubParserContextSignedContextUnhappyInput() external {
-        OrderBookV6SubParser orderBookSubParser = new OrderBookV6SubParser();
+        address subParserAddress = LibOrderBookDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
 
-        bytes memory rainlang = bytes(
-            string.concat("using-words-from ", address(orderBookSubParser).toHexString(), " _: signed-context<0 0>(0);")
-        );
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signed-context<0 0>(0);"));
 
         checkUnhappyParse2(rainlang, abi.encodeWithSelector(StackAllocationMismatch.selector, 2, 1));
     }

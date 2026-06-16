@@ -8,7 +8,7 @@ homepage.workspace = true
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 serde = { workspace = true }

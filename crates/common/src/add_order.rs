@@ -7,14 +7,19 @@ use alloy::primitives::{hex::FromHexError, Address, Bytes, B256};
 #[cfg(not(target_family = "wasm"))]
 use alloy::primitives::{FixedBytes, U256};
 use alloy::sol_types::SolCall;
+use alloy_ethers_typecast::ReadContractParametersBuilder;
 use alloy_ethers_typecast::{
-    ReadableClient, ReadableClientError, WritableClientError, WriteContractParameters,
+    ReadContractParametersBuilderError, ReadableClient, ReadableClientError, WritableClientError,
+    WriteContractParameters,
 };
 #[cfg(not(target_family = "wasm"))]
 use alloy_ethers_typecast::{WriteTransaction, WriteTransactionStatus};
 use dotrain::error::ComposeError;
 use rain_interpreter_bindings::IParserV2::parse2Return;
-use rain_interpreter_dispair::{DISPair, DISPairError};
+use rain_interpreter_bindings::Rainlang::{
+    expressionDeployerAddressCall, interpreterAddressCall, parserAddressCall, storeAddressCall,
+};
+use rain_interpreter_dispair::DISPaiR;
 #[cfg(not(target_family = "wasm"))]
 use rain_interpreter_eval::{
     error::ForkCallError,
@@ -28,7 +33,7 @@ use rain_metadata::{
 };
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
 use rain_orderbook_app_settings::deployment::DeploymentCfg;
-use rain_orderbook_bindings::IOrderBookV6::{
+use rain_orderbook_bindings::IRaindexV6::{
     addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2,
 };
 use serde::{Deserialize, Serialize};
@@ -44,9 +49,9 @@ pub enum AddOrderArgsError {
     #[error("Empty Front Matter")]
     EmptyFrontmatter,
     #[error(transparent)]
-    DISPairError(#[from] DISPairError),
-    #[error(transparent)]
     ReadableClientError(#[from] ReadableClientError),
+    #[error(transparent)]
+    ReadContractParametersBuilderError(#[from] ReadContractParametersBuilderError),
     #[error(transparent)]
     ParserError(#[from] ParserError),
     #[error(transparent)]
@@ -91,7 +96,7 @@ pub struct AddOrderArgs {
     pub dotrain: String,
     pub inputs: Vec<IOV2>,
     pub outputs: Vec<IOV2>,
-    pub deployer: Address,
+    pub rainlang: Address,
     pub bindings: HashMap<String, String>,
     pub additional_meta: Option<Vec<RainMetaDocumentV1Item>>,
 }
@@ -131,13 +136,22 @@ impl AddOrderArgs {
             });
         }
 
-        // If the order has an oracle URL, add a RaindexSignedContextOracleV1 meta item
+        // If the order has an oracle URL and one isn't already present in
+        // additional_meta, add a RaindexSignedContextOracleV1 meta item.
         let additional_meta = {
             let mut meta = additional_meta.unwrap_or_default();
             if let Some(ref oracle_url) = deployment.order.oracle_url {
-                let oracle = RaindexSignedContextOracleV1::parse(oracle_url)
-                    .map_err(AddOrderArgsError::RainMetaError)?;
-                meta.push(oracle.to_meta_item());
+                let already_has_oracle = meta.iter().any(|item| {
+                    RaindexSignedContextOracleV1::find_in_items(std::slice::from_ref(item))
+                        .ok()
+                        .flatten()
+                        .is_some()
+                });
+                if !already_has_oracle {
+                    let oracle = RaindexSignedContextOracleV1::parse(oracle_url)
+                        .map_err(AddOrderArgsError::RainMetaError)?;
+                    meta.push(oracle.to_meta_item());
+                }
             }
             if meta.is_empty() {
                 None
@@ -150,25 +164,60 @@ impl AddOrderArgs {
             dotrain: dotrain.to_string(),
             inputs,
             outputs,
-            deployer: deployment.scenario.deployer.address,
+            rainlang: deployment.scenario.rainlang.address,
             bindings: deployment.scenario.bindings.to_owned(),
             additional_meta,
         })
     }
 
-    /// Read parser address from deployer contract, then call parser to parse rainlang into bytecode and constants
+    /// Read DISPaiR addresses from the rainlang contract.
+    async fn read_dispair(&self, client: &ReadableClient) -> Result<DISPaiR, AddOrderArgsError> {
+        let deployer: Address = client
+            .read(
+                ReadContractParametersBuilder::default()
+                    .address(self.rainlang)
+                    .call(expressionDeployerAddressCall {})
+                    .build()?,
+            )
+            .await?;
+        let interpreter: Address = client
+            .read(
+                ReadContractParametersBuilder::default()
+                    .address(self.rainlang)
+                    .call(interpreterAddressCall {})
+                    .build()?,
+            )
+            .await?;
+        let store: Address = client
+            .read(
+                ReadContractParametersBuilder::default()
+                    .address(self.rainlang)
+                    .call(storeAddressCall {})
+                    .build()?,
+            )
+            .await?;
+        let parser: Address = client
+            .read(
+                ReadContractParametersBuilder::default()
+                    .address(self.rainlang)
+                    .call(parserAddressCall {})
+                    .build()?,
+            )
+            .await?;
+        Ok(DISPaiR::new(deployer, interpreter, store, parser))
+    }
+
+    /// Call parser to parse rainlang into bytecode and constants.
     async fn try_parse_rainlang(
         &self,
         rpcs: Vec<String>,
         rainlang: String,
     ) -> Result<Vec<u8>, AddOrderArgsError> {
         let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
-        let dispair = DISPair::from_deployer(self.deployer, client)
-            .await
-            .map_err(AddOrderArgsError::DISPairError)?;
+        let dispair = self.read_dispair(&client).await?;
 
         let client = ReadableClient::new_from_http_urls(rpcs)?;
-        let parser: ParserV2 = dispair.clone().into();
+        let parser: ParserV2 = dispair.into();
         let rainlang_parsed: parse2Return = parser
             .parse_text(rainlang.as_str(), client)
             .await
@@ -236,10 +285,8 @@ impl AddOrderArgs {
 
         let meta = self.try_generate_meta(rainlang)?;
 
-        let deployer = self.deployer;
-        let dispair =
-            DISPair::from_deployer(deployer, ReadableClient::new_from_http_urls(rpcs.clone())?)
-                .await?;
+        let client = ReadableClient::new_from_http_urls(rpcs.clone())?;
+        let dispair = self.read_dispair(&client).await?;
 
         // get the evaluable for the post action
         let post_rainlang = self.compose_addorder_post_task()?;
@@ -426,9 +473,9 @@ mod tests {
         types::dotrain::source_v1::DotrainSourceV1, Error as RainMetaError, KnownMagic,
     };
     use rain_orderbook_app_settings::{
-        deployer::DeployerCfg,
         network::NetworkCfg,
         order::{OrderCfg, OrderIOCfg},
+        rainlang::RainlangCfg,
         scenario::ScenarioCfg,
         spec_version::SpecVersion,
         token::TokenCfg,
@@ -461,7 +508,7 @@ price: 2e18;
             inputs: vec![],
             outputs: vec![],
             bindings: HashMap::new(),
-            deployer: Address::default(),
+            rainlang: Address::default(),
             additional_meta: None,
         };
 
@@ -513,7 +560,7 @@ price: 2e18;
             inputs: vec![],
             outputs: vec![],
             bindings: HashMap::new(),
-            deployer: Address::default(),
+            rainlang: Address::default(),
             additional_meta: Some(additional_meta),
         };
 
@@ -552,7 +599,7 @@ price: 2e18;
             inputs: vec![],
             outputs: vec![],
             bindings: HashMap::new(),
-            deployer: Address::default(),
+            rainlang: Address::default(),
             additional_meta: Some(vec![RainMetaDocumentV1Item::try_from(gui_state).unwrap()]),
         };
 
@@ -582,7 +629,7 @@ price: 2e18;
             inputs: vec![],
             outputs: vec![],
             bindings: HashMap::new(),
-            deployer: Address::default(),
+            rainlang: Address::default(),
             additional_meta: Some(vec![invalid_gui_state]),
         };
 
@@ -600,7 +647,7 @@ price: 2e18;
             inputs: vec![],
             outputs: vec![],
             bindings: HashMap::new(),
-            deployer: Address::default(),
+            rainlang: Address::default(),
             additional_meta: None,
         };
         let meta_bytes = args.try_generate_meta("".to_string()).unwrap();
@@ -626,13 +673,13 @@ price: 2e18;
             currency: None,
         };
         let network_arc = Arc::new(network);
-        let deployer = DeployerCfg {
+        let rainlang = RainlangCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             key: "".to_string(),
             network: network_arc.clone(),
             address: Address::default(),
         };
-        let deployer_arc = Arc::new(deployer);
+        let rainlang_arc = Arc::new(rainlang);
         let scenario = ScenarioCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             documents: default_documents(),
@@ -640,7 +687,7 @@ price: 2e18;
             bindings: HashMap::new(),
             runs: None,
             blocks: None,
-            deployer: deployer_arc.clone(),
+            rainlang: rainlang_arc.clone(),
         };
         let token1 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -651,6 +698,7 @@ price: 2e18;
             label: None,
             symbol: Some("Token1".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token2 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -661,6 +709,7 @@ price: 2e18;
             label: None,
             symbol: Some("Token2".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token3 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -671,6 +720,7 @@ price: 2e18;
             label: None,
             symbol: Some("Token3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token1_arc = Arc::new(token1);
         let token2_arc = Arc::new(token2);
@@ -697,7 +747,7 @@ price: 2e18;
                 vault_id: None,
             }],
             network: network_arc.clone(),
-            deployer: None,
+            rainlang: None,
             orderbook: None,
             oracle_url: None,
         };
@@ -748,13 +798,13 @@ _ _: 0 0;
             currency: None,
         };
         let network_arc = Arc::new(network);
-        let deployer = DeployerCfg {
+        let rainlang = RainlangCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             key: "".to_string(),
             network: network_arc.clone(),
-            address: *local_evm.deployer.address(),
+            address: local_evm.rainlang,
         };
-        let deployer_arc = Arc::new(deployer);
+        let rainlang_arc = Arc::new(rainlang);
         let scenario = ScenarioCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             documents: default_documents(),
@@ -762,7 +812,7 @@ _ _: 0 0;
             bindings: HashMap::new(),
             runs: None,
             blocks: None,
-            deployer: deployer_arc.clone(),
+            rainlang: rainlang_arc.clone(),
         };
         let token1 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -773,6 +823,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token1".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token2 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -783,6 +834,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token2".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token3 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -793,6 +845,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token1_arc = Arc::new(token1);
         let token2_arc = Arc::new(token2);
@@ -818,7 +871,7 @@ _ _: 0 0;
                 vault_id: Some(U256::from(4)),
             }],
             network: network_arc.clone(),
-            deployer: None,
+            rainlang: None,
             orderbook: None,
             oracle_url: None,
         };
@@ -911,13 +964,13 @@ _ _: 0 0;
             currency: None,
         };
         let network_arc = Arc::new(network);
-        let deployer = DeployerCfg {
+        let rainlang = RainlangCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             key: "".to_string(),
             network: network_arc.clone(),
             address: Address::default(),
         };
-        let deployer_arc = Arc::new(deployer);
+        let rainlang_arc = Arc::new(rainlang);
         let scenario = ScenarioCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             documents: default_documents(),
@@ -925,7 +978,7 @@ _ _: 0 0;
             bindings: HashMap::new(),
             runs: None,
             blocks: None,
-            deployer: deployer_arc.clone(),
+            rainlang: rainlang_arc.clone(),
         };
         let token1 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -936,6 +989,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token1".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token2 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -946,6 +1000,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token2".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token3 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -956,6 +1011,7 @@ _ _: 0 0;
             label: None,
             symbol: Some("Token3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token1_arc = Arc::new(token1);
         let token2_arc = Arc::new(token2);
@@ -982,7 +1038,7 @@ _ _: 0 0;
                 vault_id: None,
             }],
             network: network_arc.clone(),
-            deployer: None,
+            rainlang: None,
             orderbook: None,
             oracle_url: None,
         };
@@ -1019,7 +1075,7 @@ _ _: 0 0;
     #[tokio::test]
     async fn test_compose_addorder_post_task_empty_dotrain() {
         let local_evm = LocalEvm::new().await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
         let result = AddOrderArgs::new_from_deployment("".to_string(), deployment.clone(), None)
             .await
             .unwrap();
@@ -1033,7 +1089,7 @@ _ _: 0 0;
     #[tokio::test]
     async fn test_compose_addorder_post_task_missing_bindings() {
         let local_evm = LocalEvm::new().await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
         let result = AddOrderArgs::new_from_deployment(
             format!(
                 "
@@ -1079,9 +1135,9 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang}
 tokens:
     t1:
         network: some-key
@@ -1107,7 +1163,7 @@ orders:
               vault-id: 0x01
 scenarios:
     some-key:
-        deployer: some-key
+        rainlang: some-key
         bindings:
             key1: 10
 deployments:
@@ -1125,7 +1181,7 @@ _ _: 16 52;
 "#,
             rpc_url = local_evm.url(),
             orderbook = orderbook.address(),
-            deployer = local_evm.deployer.address(),
+            rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
             spec_version = SpecVersion::current()
@@ -1170,9 +1226,9 @@ networks:
         chain-id: 123
         network-id: 123
         currency: ETH
-deployers:
+rainlangs:
     some-key:
-        address: {deployer}
+        address: {rainlang}
 tokens:
     t1:
         network: some-key
@@ -1198,7 +1254,7 @@ orders:
               vault-id: 0x01
 scenarios:
     some-key:
-        deployer: some-key
+        rainlang: some-key
         bindings:
             key1: 10
 deployments:
@@ -1216,7 +1272,7 @@ _ _: 16 52;
 "#,
             rpc_url = local_evm.url(),
             orderbook = orderbook.address(),
-            deployer = local_evm.deployer.address(),
+            rainlang = local_evm.rainlang,
             token1 = token1.address(),
             token2 = token2.address(),
             spec_version = SpecVersion::current()
@@ -1243,7 +1299,7 @@ _ _: 16 52;
             .expect_err("expected to fail but resolved");
     }
 
-    fn get_deployment(rpc_url: &str, deployer: Address) -> DeploymentCfg {
+    fn get_deployment(rpc_url: &str, rainlang_address: Address) -> DeploymentCfg {
         let network = NetworkCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             key: "test-network".to_string(),
@@ -1254,13 +1310,13 @@ _ _: 16 52;
             currency: None,
         };
         let network_arc = Arc::new(network);
-        let deployer = DeployerCfg {
+        let rainlang = RainlangCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             key: "".to_string(),
             network: network_arc.clone(),
-            address: deployer,
+            address: rainlang_address,
         };
-        let deployer_arc = Arc::new(deployer);
+        let rainlang_arc = Arc::new(rainlang);
         let scenario = ScenarioCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
             documents: default_documents(),
@@ -1268,7 +1324,7 @@ _ _: 16 52;
             bindings: HashMap::new(),
             runs: None,
             blocks: None,
-            deployer: deployer_arc.clone(),
+            rainlang: rainlang_arc.clone(),
         };
         let token1 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -1279,6 +1335,7 @@ _ _: 16 52;
             label: None,
             symbol: Some("Token1".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token2 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -1289,6 +1346,7 @@ _ _: 16 52;
             label: None,
             symbol: Some("Token2".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token3 = TokenCfg {
             document: Arc::new(RwLock::new(StrictYaml::String("".to_string()))),
@@ -1299,6 +1357,7 @@ _ _: 16 52;
             label: None,
             symbol: Some("Token3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
         let token1_arc = Arc::new(token1);
         let token2_arc = Arc::new(token2);
@@ -1324,7 +1383,7 @@ _ _: 16 52;
                 vault_id: Some(U256::from(4)),
             }],
             network: network_arc.clone(),
-            deployer: None,
+            rainlang: None,
             orderbook: None,
             oracle_url: None,
         };
@@ -1339,7 +1398,7 @@ _ _: 16 52;
     #[tokio::test]
     async fn test_try_parse_rainlang() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
 
         let dotrain = format!(
             "
@@ -1432,9 +1491,9 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::DISPairError(DISPairError::ReadableClientError(
+                AddOrderArgsError::ReadableClientError(
                     ReadableClientError::AllProvidersFailed(ref msg)
-                ))
+                )
                 if msg.get(&rpc_url).is_some()
                     && matches!(
                         msg.get(&rpc_url).unwrap(),
@@ -1448,7 +1507,7 @@ _ _: 0 0;
     #[tokio::test]
     async fn test_try_parse_rainlang_malformed_rainlang() {
         let local_evm = LocalEvm::new_with_tokens(2).await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
         let dotrain = format!(
             "
 version: {spec_version}
@@ -1486,7 +1545,7 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     test:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
@@ -1494,7 +1553,7 @@ scenarios:
         bindings:
             key1: 10
             key2: 20
-        deployer: test
+        rainlang: test
 ---
 #key1 !Test binding
 #key2 !Test binding
@@ -1511,7 +1570,7 @@ _ _: key1 key2;
             dotrain: dotrain.clone(),
             inputs: vec![],
             outputs: vec![],
-            deployer: *local_evm.deployer.address(),
+            rainlang: local_evm.rainlang,
             bindings: HashMap::from([
                 ("key1".to_string(), "10".to_string()),
                 ("key2".to_string(), "20".to_string()),
@@ -1531,7 +1590,7 @@ _ _: key1 key2;
             dotrain: "invalid-dotrain".to_string(),
             inputs: vec![],
             outputs: vec![],
-            deployer: Address::random(),
+            rainlang: Address::random(),
             bindings: HashMap::from([
                 ("key1".to_string(), "10".to_string()),
                 ("key2".to_string(), "20".to_string()),
@@ -1555,7 +1614,7 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     test:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
@@ -1563,7 +1622,7 @@ scenarios:
         bindings:
             key1: 10
             key2: 20
-        deployer: test
+        rainlang: test
 ---
 #key1 !Test binding
 #key2 !Test binding
@@ -1577,7 +1636,7 @@ _ _: key1 key2;
             dotrain: dotrain.to_string(),
             inputs: vec![],
             outputs: vec![],
-            deployer: Address::random(),
+            rainlang: Address::random(),
             bindings: HashMap::new(),
             additional_meta: None,
         };
@@ -1600,12 +1659,12 @@ networks:
         chain-id: 137
         network-id: 137
         currency: MATIC
-deployers:
+rainlangs:
     test:
         address: 0x1234567890123456789012345678901234567890
 scenarios:
     test:
-        deployer: test
+        rainlang: test
 ---
 #calculate-io
 _ _: 0 0;
@@ -1625,7 +1684,7 @@ _ _: 0 0;
                 token: *local_evm.tokens[1].address(),
                 vaultId: B256::from(U256::from(4)),
             }],
-            deployer: *local_evm.deployer.address(),
+            rainlang: local_evm.rainlang,
             bindings: HashMap::new(),
             additional_meta: None,
         };
@@ -1694,7 +1753,7 @@ _ _: 0 0;
     #[tokio::test]
     async fn test_get_add_order_calldata() {
         let local_evm = LocalEvm::new().await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
         let dotrain = format!(
             "
 version: {spec_version}
@@ -1765,7 +1824,7 @@ _ _: 0 0;
     #[tokio::test]
     async fn test_get_add_order_calldata_invalid_rpc_url() {
         let local_evm = LocalEvm::new().await;
-        let deployment = get_deployment(&local_evm.url(), *local_evm.deployer.address());
+        let deployment = get_deployment(&local_evm.url(), local_evm.rainlang);
         let dotrain = format!(
             "
 version: {spec_version}
@@ -1794,9 +1853,9 @@ _ _: 0 0;
         assert!(
             matches!(
                 &err,
-                AddOrderArgsError::DISPairError(DISPairError::ReadableClientError(
+                AddOrderArgsError::ReadableClientError(
                     ReadableClientError::AllProvidersFailed(msg)
-                ))
+                )
                 if msg.get(&rpc_url).is_some()
                     && matches!(
                         msg.get(&rpc_url).unwrap(),

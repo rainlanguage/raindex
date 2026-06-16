@@ -60,18 +60,16 @@ const {
 	mockHideZeroBalanceVaultsStore,
 	mockHideInactiveOrdersVaultsStore,
 	mockOrderHashStore,
-	mockActiveAccountsItemsStore,
 	mockShowInactiveOrdersStore,
 	mockActiveAccountsStore,
 	mockSelectedChainIdsStore,
-	mockShowMyItemsOnlyStore,
 	mockActiveTokensStore,
-	mockActiveOrderbookAddressesStore
+	mockActiveOrderbookAddressesStore,
+	mockOwnerFilterStore
 } = await vi.hoisted(() => import('../lib/__mocks__/stores'));
 
 const defaultProps = {
 	orderHash: mockOrderHashStore,
-	activeAccountsItems: mockActiveAccountsItemsStore,
 	showInactiveOrders: mockShowInactiveOrdersStore,
 	hideZeroBalanceVaults: mockHideZeroBalanceVaultsStore,
 	hideInactiveOrdersVaults: mockHideInactiveOrdersVaultsStore,
@@ -79,9 +77,9 @@ const defaultProps = {
 	activeOrderbookRef: mockActiveOrderbookRefStore,
 	activeAccounts: mockActiveAccountsStore,
 	selectedChainIds: mockSelectedChainIdsStore,
-	showMyItemsOnly: mockShowMyItemsOnlyStore,
 	activeTokens: mockActiveTokensStore,
-	activeOrderbookAddresses: mockActiveOrderbookAddressesStore
+	activeOrderbookAddresses: mockActiveOrderbookAddressesStore,
+	ownerFilter: mockOwnerFilterStore
 };
 
 type VaultsListTableProps = ComponentProps<VaultsListTable>;

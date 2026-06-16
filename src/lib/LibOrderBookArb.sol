@@ -2,24 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {TaskV2} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {LibOrderBook} from "./LibOrderBook.sol";
 import {Address} from "openzeppelin-contracts/contracts/utils/Address.sol";
 import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibDecimalFloat, Float} from "rain.math.float/lib/LibDecimalFloat.sol";
 
-/// Thrown when the stack is not empty after the access control dispatch.
-error NonZeroBeforeArbStack();
-
-/// Thrown when the lender is not the trusted `OrderBook`.
-/// @param badLender The untrusted lender calling `onFlashLoan`.
-error BadLender(address badLender);
-
+/// @title LibOrderBookArb
 library LibOrderBookArb {
     using SafeERC20 for IERC20;
 
+    /// @dev Sends all remaining token balances and native gas to `msg.sender`,
+    /// then evaluates the post-arb task with a context column containing the
+    /// amounts sent as Floats.
     function finalizeArb(
         TaskV2 memory task,
         address ordersInputToken,
@@ -36,8 +32,8 @@ library LibOrderBookArb {
             if (inputBalance > 0) {
                 IERC20(ordersInputToken).safeTransfer(msg.sender, inputBalance);
             }
-            (Float input, bool lossless) = LibDecimalFloat.fromFixedDecimalLossyPacked(inputBalance, inputDecimals);
-            (lossless);
+            //slither-disable-next-line unused-return
+            (Float input,) = LibDecimalFloat.fromFixedDecimalLossyPacked(inputBalance, inputDecimals);
             col[0] = Float.unwrap(input);
         }
 
@@ -48,8 +44,8 @@ library LibOrderBookArb {
                 IERC20(ordersOutputToken).safeTransfer(msg.sender, outputBalance);
             }
 
-            (Float output, bool lossless) = LibDecimalFloat.fromFixedDecimalLossyPacked(outputBalance, outputDecimals);
-            (lossless);
+            //slither-disable-next-line unused-return
+            (Float output,) = LibDecimalFloat.fromFixedDecimalLossyPacked(outputBalance, outputDecimals);
             col[1] = Float.unwrap(output);
         }
 
@@ -61,7 +57,12 @@ library LibOrderBookArb {
             // calling `arb` is going to lose their tokens/gas.
             // See https://github.com/crytic/slither/issues/1658
             uint256 gasBalance = address(this).balance;
-            Address.sendValue(payable(msg.sender), gasBalance);
+            if (gasBalance > 0) {
+                Address.sendValue(payable(msg.sender), gasBalance);
+            }
+            // gasBalance can't overflow int256 because there isn't enough gas
+            // in existence for that to happen on every production chain.
+            // forge-lint: disable-next-line(unsafe-typecast)
             col[2] = Float.unwrap(LibDecimalFloat.packLossless(int256(gasBalance), -18));
         }
 

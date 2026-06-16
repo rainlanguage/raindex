@@ -1,19 +1,19 @@
 import type { LayoutLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import type { NameAndDescriptionCfg, DotrainRegistry } from '@rainlanguage/orderbook';
+import type { NameAndDescriptionCfg, DotrainRainlang } from '@rainlanguage/orderbook';
 import type { InvalidOrderDetail, ValidOrderDetail } from '@rainlanguage/ui-components';
 
 type ParentData = {
 	validOrders: ValidOrderDetail[];
 	invalidOrders: InvalidOrderDetail[];
-	registry: DotrainRegistry | null;
+	rainlang: DotrainRainlang | null;
 };
 
 export const load: LayoutLoad = async ({ params, parent }) => {
 	const { orderName } = params;
-	const { validOrders, registry } = (await parent()) as ParentData;
+	const { validOrders, rainlang } = (await parent()) as ParentData;
 
-	if (!registry) {
+	if (!rainlang) {
 		throw redirect(307, '/deploy');
 	}
 
@@ -22,7 +22,7 @@ export const load: LayoutLoad = async ({ params, parent }) => {
 		throw redirect(307, '/deploy');
 	}
 
-	const deploymentsResult = registry.getDeploymentDetails(orderName);
+	const deploymentsResult = rainlang.getDeploymentDetails(orderName);
 	if (deploymentsResult.error) {
 		throw redirect(307, '/deploy');
 	}
@@ -31,7 +31,7 @@ export const load: LayoutLoad = async ({ params, parent }) => {
 		orderName,
 		orderDetail: orderDetail as NameAndDescriptionCfg,
 		deployments: deploymentsResult.value,
-		registry,
+		rainlang,
 		pageName: orderName
 	};
 };

@@ -8,7 +8,7 @@ vi.mock('@rainlanguage/orderbook', () => ({
 
 describe('handleShareChoices', () => {
 	let guiInstance: DotrainOrderGui;
-	const mockRegistryUrl = 'https://example.com/registry';
+	const mockRainlangUrl = 'https://example.com/rainlang';
 
 	beforeEach(() => {
 		guiInstance = {
@@ -30,23 +30,23 @@ describe('handleShareChoices', () => {
 		}));
 	});
 
-	it('should share the choices with state and registry', async () => {
+	it('should share the choices with state and rainlang', async () => {
 		(guiInstance.serializeState as Mock).mockReturnValue({ value: 'mockState123' });
 
-		await handleShareChoices(guiInstance, mockRegistryUrl);
+		await handleShareChoices(guiInstance, mockRainlangUrl);
 
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-			'http://example.com/?state=mockState123&registry=https%3A%2F%2Fexample.com%2Fregistry'
+			'http://example.com/?state=mockState123&rainlang=https%3A%2F%2Fexample.com%2Frainlang'
 		);
 	});
 
 	it('should handle null state', async () => {
 		(guiInstance.serializeState as Mock).mockReturnValue({ value: null });
 
-		await handleShareChoices(guiInstance, mockRegistryUrl);
+		await handleShareChoices(guiInstance, mockRainlangUrl);
 
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-			'http://example.com/?state=&registry=https%3A%2F%2Fexample.com%2Fregistry'
+			'http://example.com/?state=&rainlang=https%3A%2F%2Fexample.com%2Frainlang'
 		);
 	});
 });

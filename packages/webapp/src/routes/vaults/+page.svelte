@@ -10,18 +10,18 @@
 	import {
 		hideZeroBalanceVaults,
 		hideInactiveOrdersVaults,
-		showMyItemsOnly,
 		orderHash,
 		activeTokens,
-		activeOrderbookAddresses
+		activeOrderbookAddresses,
+		selectedChainIds,
+		ownerFilter
 	} from '$lib/stores/settings';
-	import { selectedChainIds } from '$lib/stores/settings';
 	import { handleTransactionConfirmationModal, handleWithdrawAllModal } from '$lib/services/modal';
 	import type { RaindexClient, RaindexVaultsList } from '@rainlanguage/orderbook';
 	import { handleVaultsWithdrawAll } from '$lib/services/handleVaultsWithdrawAll';
 	import type { Hex } from 'viem';
 
-	const { activeAccountsItems, showInactiveOrders } = $page.data.stores;
+	const { showInactiveOrders } = $page.data.stores;
 
 	const { account } = useAccount();
 	const { errToast } = useToasts();
@@ -48,13 +48,12 @@
 
 <VaultsListTable
 	{orderHash}
-	{showMyItemsOnly}
-	{activeAccountsItems}
 	{showInactiveOrders}
 	{hideZeroBalanceVaults}
 	{hideInactiveOrdersVaults}
 	{activeTokens}
 	{selectedChainIds}
 	{activeOrderbookAddresses}
+	{ownerFilter}
 	{onWithdrawAll}
 />

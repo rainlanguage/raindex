@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
-pragma solidity ^0.8.18;
+pragma solidity ^0.8.19;
 
-import {OrderV4} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {OrderV4} from "rain.raindex.interface/interface/IRaindexV6.sol";
 
 /// @title LibOrder
 /// @notice Consistent handling of `OrderV4` for where it matters w.r.t.

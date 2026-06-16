@@ -5,7 +5,7 @@ use csv::Writer;
 use rain_orderbook_common::dotrain_order::{AuthoringMetaV2, DotrainOrder, WordsResult};
 use std::{fs::read_to_string, path::PathBuf};
 
-/// Get words of a deployer contract from the given inputs
+/// Get words of a rainlang contract from the given inputs
 #[derive(Debug, Parser)]
 pub struct Words {
     #[command(flatten)]
@@ -19,18 +19,18 @@ pub struct Words {
         long,
         requires = "scenario",
         action = ArgAction::SetTrue,
-        conflicts_with_all = ["deployer_only", "deployer", "deployment"],
+        conflicts_with_all = ["rainlang_only", "rainlang", "deployment"],
     )]
     pub pragma_only: bool,
 
-    /// Only get deployer words for a given scenario
+    /// Only get rainlang words for a given scenario
     #[arg(
         long,
         requires = "scenario",
         action = ArgAction::SetTrue,
-        conflicts_with_all = ["pragma_only", "deployer", "deployment"],
+        conflicts_with_all = ["pragma_only", "rainlang", "deployment"],
     )]
-    pub deployer_only: bool,
+    pub rainlang_only: bool,
 
     /// Optional metaboard subgraph url, will override the metaboard in
     /// inputs or if inputs has no metaboard specified inside
@@ -60,13 +60,13 @@ pub struct Input {
     pub settings_file: Option<PathBuf>,
 }
 
-/// Group of possible sources, only one of deployer or scenario or deployment
+/// Group of possible sources, only one of rainlang or scenario or deployment
 #[derive(Args, Clone, Debug, PartialEq)]
 #[group(required = true, multiple = false)]
 pub struct Source {
-    /// Deployer key to get its associating words
+    /// Rainlang key to get its associating words
     #[arg(short = 'd', long)]
-    pub deployer: Option<String>,
+    pub rainlang: Option<String>,
 
     /// Scenario key, requires dotrain_file if used
     #[arg(short = 's', long, requires = "dotrain_file")]
@@ -94,9 +94,9 @@ impl Execute for Words {
 
         let dotrain_order = DotrainOrder::create(dotrain, settings.map(|v| vec![v])).await?;
 
-        let results = if let Some(deployer_key) = &self.source.deployer {
-            // get deployer from order config
-            let deployer = dotrain_order.orderbook_yaml().get_deployer(deployer_key)?;
+        let results = if let Some(rainlang_key) = &self.source.rainlang {
+            // get rainlang from order config
+            let rainlang = dotrain_order.orderbook_yaml().get_rainlang(rainlang_key)?;
 
             // get metaboard subgraph url
             let metaboard_url = self
@@ -106,19 +106,19 @@ impl Execute for Words {
                 .or_else(|| {
                     dotrain_order
                         .orderbook_yaml()
-                        .get_metaboard(&deployer.network.key)
+                        .get_metaboard(&rainlang.network.key)
                         .ok()
                         .map(|metaboard| metaboard.url.to_string())
                 })
                 .ok_or(anyhow!("undefined metaboard subgraph url"))?;
 
-            let rpcs = deployer
+            let rpcs = rainlang
                 .network
                 .rpcs
                 .iter()
                 .map(|rpc| rpc.to_string())
                 .collect::<Vec<String>>();
-            AuthoringMetaV2::fetch_for_contract(deployer.address, rpcs, metaboard_url)
+            AuthoringMetaV2::fetch_for_contract(rainlang.address, rpcs, metaboard_url)
                 .await?
                 .words
         } else if let Some(scenario) = &self.source.scenario {
@@ -127,7 +127,7 @@ impl Execute for Words {
                 let network_name = &dotrain_order
                     .dotrain_yaml()
                     .get_scenario(scenario)?
-                    .deployer
+                    .rainlang
                     .network
                     .key
                     .clone();
@@ -135,9 +135,9 @@ impl Execute for Words {
                     .orderbook_yaml()
                     .add_metaboard(network_name, v)?;
             }
-            if self.deployer_only {
+            if self.rainlang_only {
                 match dotrain_order
-                    .get_deployer_words_for_scenario(scenario)
+                    .get_rainlang_words_for_scenario(scenario)
                     .await?
                     .words
                 {
@@ -159,7 +159,7 @@ impl Execute for Words {
             } else {
                 let result = dotrain_order.get_all_words_for_scenario(scenario).await?;
                 let mut words = vec![];
-                match result.deployer_words.words {
+                match result.rainlang_words.words {
                     WordsResult::Success(v) => words.extend(v.words),
                     WordsResult::Error(e) => Err(anyhow!(e))?,
                 }
@@ -177,14 +177,14 @@ impl Execute for Words {
 
             // set the cli given metaboard url into the config
             if let Some(v) = &self.metaboard_subgraph {
-                let network_key = deployment.scenario.deployer.network.key.clone();
+                let network_key = deployment.scenario.rainlang.network.key.clone();
                 dotrain_order
                     .orderbook_yaml()
                     .add_metaboard(&network_key, v)?;
             }
             let result = dotrain_order.get_all_words_for_scenario(scenario).await?;
             let mut words = vec![];
-            match result.deployer_words.words {
+            match result.rainlang_words.words {
                 WordsResult::Success(v) => words.extend(v.words),
                 WordsResult::Error(e) => Err(anyhow!(e))?,
             }
@@ -262,8 +262,8 @@ networks:
 metaboards:
     some-network: {}
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 ---
@@ -284,12 +284,12 @@ deployers:
                 settings_file: None,
             },
             source: Source {
-                deployer: Some("some-deployer".to_string()),
+                rainlang: Some("some-rainlang".to_string()),
                 scenario: None,
                 deployment: None,
             },
             pragma_only: false,
-            deployer_only: false,
+            rainlang_only: false,
             metaboard_subgraph: None,
             output: None,
             stdout: true,
@@ -324,8 +324,8 @@ networks:
         network-id: 123
         currency: ETH
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba",
             server.url("/rpc"),
@@ -346,12 +346,12 @@ deployers:
                 dotrain_file: Some(dotrain_path),
             },
             source: Source {
-                deployer: Some("some-deployer".to_string()),
+                rainlang: Some("some-rainlang".to_string()),
                 scenario: None,
                 deployment: None,
             },
             pragma_only: false,
-            deployer_only: false,
+            rainlang_only: false,
             metaboard_subgraph: None,
             output: None,
             stdout: true,
@@ -376,15 +376,15 @@ networks:
         network-id: 123
         currency: ETH
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key1: 10
 ---
@@ -408,12 +408,12 @@ _ _: 1 2;
                 dotrain_file: Some(dotrain_path),
             },
             source: Source {
-                deployer: None,
+                rainlang: None,
                 deployment: None,
                 scenario: Some("some-scenario".to_string()),
             },
             pragma_only: false,
-            deployer_only: false,
+            rainlang_only: false,
             metaboard_subgraph: Some(server.url("/sg").to_string()),
             output: None,
             stdout: true,
@@ -425,7 +425,7 @@ _ _: 1 2;
     }
 
     #[tokio::test]
-    async fn test_execute_happy_scenario_deployer_words() {
+    async fn test_execute_happy_scenario_rainlang_words() {
         let server = mock_server();
         let dotrain_content = format!(
             "
@@ -448,15 +448,15 @@ networks:
         network-id: 123
         currency: ETH
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key1: value1
 
@@ -489,12 +489,12 @@ orders:
                 dotrain_file: Some(dotrain_path),
             },
             source: Source {
-                deployer: None,
+                rainlang: None,
                 deployment: None,
                 scenario: Some("some-scenario".to_string()),
             },
             pragma_only: false,
-            deployer_only: true,
+            rainlang_only: true,
             metaboard_subgraph: None,
             output: None,
             stdout: true,
@@ -521,15 +521,15 @@ networks:
 subgraphs:
     some-sg: https://some-sg.com
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key1: 10
 
@@ -562,7 +562,7 @@ orders:
         outputs:
             - token: token2
               vault-id: 1
-        deployer: some-deployer
+        rainlang: some-rainlang
         orderbook: some-orderbook
 
 deployments:
@@ -591,11 +591,11 @@ _ _: 1 2;
             },
             source: Source {
                 deployment: Some("some-deployment".to_string()),
-                deployer: None,
+                rainlang: None,
                 scenario: None,
             },
             pragma_only: false,
-            deployer_only: false,
+            rainlang_only: false,
             metaboard_subgraph: Some(server.url("/sg").to_string()),
             output: None,
             stdout: true,
@@ -632,8 +632,8 @@ networks:
 metaboards:
     some-network: {}
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 ---
@@ -653,12 +653,12 @@ deployers:
                 settings_file: None,
             },
             source: Source {
-                deployer: Some("some-deployer".to_string()),
+                rainlang: Some("some-rainlang".to_string()),
                 scenario: None,
                 deployment: None,
             },
             pragma_only: false,
-            deployer_only: false,
+            rainlang_only: false,
             metaboard_subgraph: None,
             output: None,
             stdout: true,

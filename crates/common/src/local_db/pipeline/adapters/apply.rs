@@ -169,7 +169,8 @@ mod tests {
         pub executed: std::sync::Mutex<Vec<String>>,
     }
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for MockDb {
         async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             let mut exec = self.executed.lock().unwrap();
@@ -197,7 +198,8 @@ mod tests {
 
     struct FailingDb;
 
-    #[async_trait(?Send)]
+    #[cfg_attr(target_family = "wasm", async_trait(?Send))]
+    #[cfg_attr(not(target_family = "wasm"), async_trait)]
     impl LocalDbQueryExecutor for FailingDb {
         async fn execute_batch(&self, _batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
             Err(LocalDbQueryError::database("boom"))
@@ -225,7 +227,7 @@ mod tests {
 
     fn deposit_event(addr: Address) -> DecodedEventData<DecodedEvent> {
         use crate::local_db::decode::EventType;
-        use rain_orderbook_bindings::IOrderBookV6::DepositV2;
+        use rain_orderbook_bindings::IRaindexV6::DepositV2;
         DecodedEventData {
             event_type: EventType::DepositV2,
             block_number: U256::from(1),
@@ -245,7 +247,7 @@ mod tests {
 
     fn withdraw_event(addr: Address) -> DecodedEventData<DecodedEvent> {
         use crate::local_db::decode::EventType;
-        use rain_orderbook_bindings::IOrderBookV6::WithdrawV2;
+        use rain_orderbook_bindings::IRaindexV6::WithdrawV2;
         DecodedEventData {
             event_type: EventType::WithdrawV2,
             block_number: U256::from(0x10),

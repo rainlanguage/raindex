@@ -15,7 +15,7 @@ SELECT
           'chainId', ios.chain_id,
           'vaultId', ios.vault_id,
           'token', ios.token,
-          'owner', COALESCE(vo.owner, l.order_owner),
+          'owner', l.order_owner,
           'orderbookAddress', l.orderbook_address,
           'tokenName', COALESCE(tok.name, ''),
           'tokenSymbol', COALESCE(tok.symbol, ''),
@@ -36,7 +36,7 @@ SELECT
           'chainId', ios.chain_id,
           'vaultId', ios.vault_id,
           'token', ios.token,
-          'owner', COALESCE(vo.owner, l.order_owner),
+          'owner', l.order_owner,
           'orderbookAddress', l.orderbook_address,
           'tokenName', COALESCE(tok.name, ''),
           'tokenSymbol', COALESCE(tok.symbol, ''),
@@ -150,50 +150,6 @@ LEFT JOIN erc20_tokens tok
  AND tok.token_address = ios.token
 LEFT JOIN (
   SELECT
-    chain_id,
-    orderbook_address,
-    token,
-    vault_id,
-    substr(MAX(owner_key), 33) AS owner
-  FROM (
-    SELECT
-      io.chain_id,
-      io.orderbook_address,
-      io.token,
-      io.vault_id,
-      printf('%020d:%010d:%s', oe.block_number, oe.log_index, oe.order_owner) AS owner_key
-    FROM order_ios io
-    JOIN order_events oe
-      ON oe.chain_id = io.chain_id
-     AND oe.orderbook_address = io.orderbook_address
-     AND oe.transaction_hash = io.transaction_hash
-     AND oe.log_index = io.log_index
-    WHERE UPPER(io.io_type) IN ('INPUT', 'OUTPUT')
-    UNION ALL
-    SELECT
-      d.chain_id,
-      d.orderbook_address,
-      d.token,
-      d.vault_id,
-      printf('%020d:%010d:%s', d.block_number, d.log_index, d.sender) AS owner_key
-    FROM deposits d
-    UNION ALL
-    SELECT
-      w.chain_id,
-      w.orderbook_address,
-      w.token,
-      w.vault_id,
-      printf('%020d:%010d:%s', w.block_number, w.log_index, w.sender) AS owner_key
-    FROM withdrawals w
-  )
-  GROUP BY chain_id, orderbook_address, token, vault_id
-) vo
-  ON vo.chain_id = ios.chain_id
- AND vo.orderbook_address = ios.orderbook_address
- AND vo.token = ios.token
- AND vo.vault_id = ios.vault_id
-LEFT JOIN (
-  SELECT
     rvb.chain_id,
     rvb.orderbook_address,
     rvb.owner,
@@ -206,7 +162,7 @@ LEFT JOIN (
  AND vb.orderbook_address = ios.orderbook_address
  AND vb.token = ios.token
  AND vb.vault_id = ios.vault_id
- AND vb.owner = COALESCE(vo.owner, l.order_owner)
+ AND vb.owner = l.order_owner
 LEFT JOIN (
   SELECT
     t.chain_id,
@@ -308,4 +264,5 @@ GROUP BY
   l.order_nonce,
   l.event_type,
   la.transaction_hash
-ORDER BY fa.block_timestamp DESC;
+ORDER BY fa.block_timestamp DESC
+/*PAGINATION_CLAUSE*/;

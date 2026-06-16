@@ -13,7 +13,7 @@ describe('Layout load function', () => {
 		mockParent.mockResolvedValue({
 			orderName: 'test-order',
 			deployments: deploymentMap,
-			registry: {} // non-null placeholder
+			rainlang: {} // non-null placeholder
 		});
 	});
 
@@ -32,7 +32,7 @@ describe('Layout load function', () => {
 			},
 			orderName: 'test-order',
 			orderDetail: undefined,
-			registry: {},
+			rainlang: {},
 			pageName: 'test-deployment'
 		});
 	});

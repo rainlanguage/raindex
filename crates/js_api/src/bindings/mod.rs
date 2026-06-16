@@ -8,7 +8,7 @@ use alloy::{
     },
     sol_types::SolCall,
 };
-use rain_orderbook_bindings::IOrderBookV6::{takeOrders4Call, OrderV4, TakeOrdersConfigV5};
+use rain_orderbook_bindings::IRaindexV6::{takeOrders4Call, OrderV4, TakeOrdersConfigV5};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 

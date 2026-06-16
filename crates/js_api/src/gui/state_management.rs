@@ -548,14 +548,14 @@ mod tests {
     use alloy::primitives::{Address, U256};
     use js_sys::{eval, Reflect};
     use rain_orderbook_app_settings::{
-        network::NetworkCfg, order::VaultType, spec_version::SpecVersion, yaml::YamlParsableHash,
+        network::NetworkCfg, order::VaultType, yaml::YamlParsableHash,
     };
     use rain_orderbook_common::dotrain::RainDocument;
     use rain_orderbook_common::dotrain_order::DotrainOrder;
     use std::str::FromStr;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21Qy2rDMBCU0tJS6CkUeir0Ayos2S5YgR7bmjb4UEIOvQRHURJjRTLOmrx-Ip8cnEgOMdnDzo5mtLtsB53iweI405NMzwhDLm4sMkrbJh_bB4qayhV3FsHkUgfXul13XrJHy5ZmIYmWsDJl7v69WJwDFD3PU0akam6W0Ito9O6VhSBVqXa1A9cZu9Gfg_jJlt1wuN63Eu7ieysP6h1eA3zr-G8SoA46x8WyrJnAOMdt1W9Un_M3ZwQq6JDwUI03f6zaQtzPov80qfTPV5jqeDTVZb_4TiqRfzy7U0glBZBjUzKRhTKbhdRwAGw0tlzJAQAA";
+    const SERIALIZED_STATE: &str = "H4sIAAAAAAAA_21QXWvCMBRt3NgY7EkGexrsByy0aXWzwh4Ev4qgKH6AL6JttNKY1Bqx4p_wJ2v1pmLxPtxzbs7JvTfJadd4A5wtubfkC0w0FU-AxDCyJhPBgaGlTJEXQCkCyq1H3R4776t3qDZiRTGncieiQN37AvSlDMu6zoQ7Zb7YyHLJKBX1KHTxNmKHxIGSjNToWr_5ATRfGMbHTEJ59ApyP9nh20LPqm61zy_Jabe425akI4hto6xqpqpp2z9A4-pv2Cn8tQbxvLGddTvDRX3tBGMyao6Z4xV7vus4k8iq9Oq7_0_1F5RRV-JLU-zRkIn9inJ5AjfkymPKAQAA";
 
     fn encode_state(state: &SerializedGuiState) -> String {
         let bytes = bincode::serialize(state).unwrap();
@@ -698,7 +698,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn test_new_from_state_invalid_dotrain() {
         let dotrain = r#"
-            version: 4
+            version: 5
             networks:
                 test:
                     rpcs:
@@ -710,7 +710,7 @@ mod tests {
                 token1:
                     network: test
                     address: 0xc2132d05d31c914a87c6611c10748aeb04b58e8f
-            deployers:
+            rainlangs:
                 test:
                     network: test
                     address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
@@ -722,14 +722,14 @@ mod tests {
                     deployment-block: 12345
             scenarios:
                 test:
-                    deployer: test
+                    rainlang: test
             orders:
                 test:
                     inputs:
                         - token: token1
                     outputs:
                         - token: token1
-                    deployer: test
+                    rainlang: test
                     orderbook: test
             deployments:
                 select-token-deployment:
@@ -825,6 +825,7 @@ mod tests {
             label: Some("Replaced Token 3".to_string()),
             symbol: Some("NEW3".to_string()),
             logo_uri: None,
+            extensions: None,
         };
 
         let dotrain_order = DotrainOrder::create(dotrain_with_existing_token.clone(), None)

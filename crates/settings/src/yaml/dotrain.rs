@@ -67,7 +67,7 @@ impl ValidationConfig for DotrainYamlValidation {
     fn should_validate_metaboards(&self) -> bool {
         false
     }
-    fn should_validate_deployers(&self) -> bool {
+    fn should_validate_rainlangs(&self) -> bool {
         false
     }
     fn should_validate_orders(&self) -> bool {
@@ -413,11 +413,11 @@ mod tests {
             decimals: 6
             label: USD Coin
             symbol: USDC
-    deployers:
+    rainlangs:
         scenario1:
             address: 0x0000000000000000000000000000000000000002
             network: mainnet
-        deployer2:
+        registry2:
             address: 0x0000000000000000000000000000000000000003
             network: testnet
     orders:
@@ -554,8 +554,8 @@ mod tests {
             decimals: 6
             label: USD Coin
             symbol: USDC
-    deployers:
-        deployer1:
+    rainlangs:
+        registry1:
             address: 0x0000000000000000000000000000000000000002
             network: mainnet
     orders:
@@ -570,7 +570,7 @@ mod tests {
         scenario1:
             bindings:
                 key1: ${{order.inputs.0.token.address}}
-            deployer: deployer1
+            rainlang: registry1
             scenarios:
                 scenario2:
                     bindings:
@@ -653,16 +653,16 @@ mod tests {
         assert_eq!(scenario1.bindings.len(), 1);
         assert_eq!(scenario1.bindings.get("key1").unwrap(), "value1");
         assert_eq!(
-            *scenario1.deployer.as_ref(),
-            ob_yaml.get_deployer("scenario1").unwrap()
+            *scenario1.rainlang.as_ref(),
+            ob_yaml.get_rainlang("scenario1").unwrap()
         );
         let scenario2 = dotrain_yaml.get_scenario("scenario1.scenario2").unwrap();
         assert_eq!(scenario2.bindings.len(), 2);
         assert_eq!(scenario2.bindings.get("key1").unwrap(), "value1");
         assert_eq!(scenario2.bindings.get("key2").unwrap(), "value2");
         assert_eq!(
-            *scenario2.deployer.as_ref(),
-            ob_yaml.get_deployer("scenario1").unwrap()
+            *scenario2.rainlang.as_ref(),
+            ob_yaml.get_rainlang("scenario1").unwrap()
         );
 
         let deployment_keys = dotrain_yaml.get_deployment_keys().unwrap();
@@ -871,8 +871,8 @@ mod tests {
                 rpcs:
                     - https://mainnet.infura.io
                 chain-id: 1
-        deployers:
-            deployer1:
+        rainlangs:
+            registry1:
                 address: 0x0000000000000000000000000000000000000002
                 network: mainnet
         tokens:
@@ -886,14 +886,14 @@ mod tests {
                 decimals: 18
         orders:
             order1:
-                deployer: deployer1
+                rainlang: registry1
                 inputs:
                     - token: token1
                 outputs:
                     - token: token2
         scenarios:
             scenario1:
-                deployer: deployer1
+                rainlang: registry1
         deployments:
             deployment1:
                 order: order1
@@ -971,20 +971,20 @@ mod tests {
                 rpcs:
                     - https://mainnet.infura.io
                 chain-id: 1
-        deployers:
-            deployer1:
+        rainlangs:
+            registry1:
                 address: 0x0000000000000000000000000000000000000002
                 network: mainnet
         orders:
             order1:
-                deployer: deployer1
+                rainlang: registry1
                 inputs:
                     - token: token1
                 outputs:
                     - token: token2
         scenarios:
             scenario1:
-                deployer: deployer1
+                rainlang: registry1
         deployments:
             deployment1:
                 order: order1
@@ -1319,13 +1319,13 @@ networks:
         rpcs:
             - https://mainnet.infura.io
         chain-id: 1
-deployers:
+rainlangs:
     mainnet:
         address: 0x0000000000000000000000000000000000000001
         network: mainnet
 scenarios:
     scenario1:
-        deployer: mainnet
+        rainlang: mainnet
         bindings:
             key1: value1
 deployments:
@@ -1364,7 +1364,7 @@ gui:
             "{yaml_prefix}
 orders:
     order1:
-        deployer: mainnet
+        rainlang: mainnet
         inputs:
             - token: token-three
         outputs:
@@ -1376,7 +1376,7 @@ orders:
             "{yaml_prefix}
 orders:
     order1:
-        deployer: mainnet
+        rainlang: mainnet
         inputs:
             - token: token-one
             - token: token-two

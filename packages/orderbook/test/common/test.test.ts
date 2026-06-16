@@ -18,8 +18,8 @@ networks:
 subgraphs:
     some-sg: https://www.some-sg.com
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -47,7 +47,7 @@ tokens:
 scenarios:
     some-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key: 10
 
@@ -59,7 +59,7 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 
 deployments:
@@ -95,7 +95,7 @@ version: ${SPEC_VERSION}
 scenarios:
     config-scenario:
         network: some-network
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             key: 10
 `;

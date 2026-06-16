@@ -5,8 +5,8 @@ use super::{
 use crate::{
     accounts::AccountCfg, local_db_remotes::LocalDbRemoteCfg, local_db_sync::LocalDbSyncCfg,
     metaboard::MetaboardCfg, remote_networks::RemoteNetworksCfg, remote_tokens::RemoteTokensCfg,
-    sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, ChartCfg, DeployerCfg,
-    DeploymentCfg, GuiCfg, NetworkCfg, OrderCfg, OrderbookCfg, ScenarioCfg, TokenCfg,
+    sentry::Sentry, spec_version::SpecVersion, subgraph::SubgraphCfg, ChartCfg, DeploymentCfg,
+    GuiCfg, NetworkCfg, OrderCfg, OrderbookCfg, RainlangCfg, ScenarioCfg, TokenCfg,
 };
 use std::sync::{Arc, RwLock};
 use strict_yaml_rust::{strict_yaml::Hash, StrictYaml, StrictYamlEmitter};
@@ -18,7 +18,7 @@ const CANONICAL_ROOT_KEYS: &[&str] = &[
     "subgraphs",
     "metaboards",
     "tokens",
-    "deployers",
+    "rainlangs",
     "orderbooks",
     "orders",
     "scenarios",
@@ -44,7 +44,7 @@ pub fn validate_and_emit_documents(
     validate_hash_section::<MetaboardCfg>(documents, context)?;
     validate_hash_section::<TokenCfg>(documents, context)?;
     validate_hash_section::<OrderbookCfg>(documents, context)?;
-    validate_hash_section::<DeployerCfg>(documents, context)?;
+    validate_hash_section::<RainlangCfg>(documents, context)?;
 
     ChartCfg::parse_all_from_yaml(documents.to_vec(), context)?;
     RemoteNetworksCfg::parse_all_from_yaml(documents.to_vec(), context)?;
@@ -261,8 +261,8 @@ tokens:
         network: mainnet
         address: 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
         decimals: 18
-deployers:
-    deployer1:
+rainlangs:
+    registry1:
         network: mainnet
         address: 0x0000000000000000000000000000000000000001
 subgraphs:
@@ -275,7 +275,7 @@ orderbooks:
         deployment-block: 1
 orders:
     order1:
-        deployer: deployer1
+        rainlang: registry1
         orderbook: ob1
         inputs:
             - token: weth
@@ -283,7 +283,7 @@ orders:
             - token: weth
 scenarios:
     scenario1:
-        deployer: deployer1
+        rainlang: registry1
         bindings:
             key: value
 deployments:
@@ -296,7 +296,7 @@ deployments:
         let output = result.unwrap();
         assert!(output.contains("networks:"));
         assert!(output.contains("tokens:"));
-        assert!(output.contains("deployers:"));
+        assert!(output.contains("rainlangs:"));
         assert!(output.contains("orders:"));
         assert!(output.contains("scenarios:"));
         assert!(output.contains("deployments:"));
@@ -393,15 +393,15 @@ tokens:
     }
 
     #[test]
-    fn test_validate_invalid_deployer_address() {
+    fn test_validate_invalid_rainlang_address() {
         let yaml = r#"
 networks:
     mainnet:
         rpcs:
             - https://eth.llamarpc.com
         chain-id: 1
-deployers:
-    deployer1:
+rainlangs:
+    registry1:
         network: mainnet
         address: invalid-address
 "#;
@@ -413,13 +413,13 @@ deployers:
                     field: "address".to_string(),
                     reason: "Failed to parse address".to_string()
                 },
-                location: "deployer 'deployer1'".to_string()
+                location: "rainlang 'registry1'".to_string()
             }
         );
     }
 
     #[test]
-    fn test_validate_invalid_order_missing_deployer() {
+    fn test_validate_invalid_order_missing_rainlang() {
         let yaml = r#"
 networks:
     mainnet:
@@ -428,7 +428,7 @@ networks:
         chain-id: 1
 orders:
     order1:
-        deployer: nonexistent
+        rainlang: nonexistent
         inputs:
             - token: weth
         outputs:
@@ -439,8 +439,8 @@ orders:
             error,
             YamlError::Field {
                 kind: FieldErrorKind::InvalidValue {
-                    field: "deployers".to_string(),
-                    reason: "Missing required field 'deployers' in root".to_string()
+                    field: "rainlangs".to_string(),
+                    reason: "Missing required field 'rainlangs' in root".to_string()
                 },
                 location: "root".to_string(),
             }
@@ -534,8 +534,8 @@ networks:
         rpcs:
             - https://eth.llamarpc.com
         chain-id: 1
-deployers:
-    deployer1:
+rainlangs:
+    registry1:
         network: mainnet
         address: 0x0000000000000000000000000000000000000001
 "#;
@@ -544,14 +544,14 @@ deployers:
         let output = result.unwrap();
         let networks_pos = output.find("networks:").unwrap();
         let tokens_pos = output.find("tokens:").unwrap();
-        let deployers_pos = output.find("deployers:").unwrap();
+        let rainlangs_pos = output.find("rainlangs:").unwrap();
         assert!(
             networks_pos < tokens_pos,
             "networks should come before tokens"
         );
         assert!(
-            tokens_pos < deployers_pos,
-            "tokens should come before deployers"
+            tokens_pos < rainlangs_pos,
+            "tokens should come before rainlangs"
         );
     }
 
@@ -563,22 +563,22 @@ networks:
         rpcs:
             - https://eth.llamarpc.com
         chain-id: 1
-deployers:
-    deployer1:
+rainlangs:
+    registry1:
         network: mainnet
         address: 0x0000000000000000000000000000000000000001
 "#;
         let yaml2 = r#"
-deployers:
-    deployer2:
+rainlangs:
+    registry2:
         network: mainnet
         address: 0x0000000000000000000000000000000000000002
 "#;
         let result = emit_documents(&[get_document(yaml1), get_document(yaml2)]);
         assert!(result.is_ok());
         let output = result.unwrap();
-        assert!(output.contains("deployer1:"), "deployer1 should be present");
-        assert!(output.contains("deployer2:"), "deployer2 should be present");
+        assert!(output.contains("registry1:"), "registry1 should be present");
+        assert!(output.contains("registry2:"), "registry2 should be present");
         assert!(output.contains("0x0000000000000000000000000000000000000001"));
         assert!(output.contains("0x0000000000000000000000000000000000000002"));
     }

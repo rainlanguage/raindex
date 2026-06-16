@@ -212,14 +212,18 @@
 						</div>
 					</svelte:fragment>
 					<svelte:fragment slot="value">
-						<a
-							href={data.oracleUrl}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="break-all text-blue-500 hover:underline"
-						>
-							{data.oracleUrl}
-						</a>
+						{#if data.oracleUrl.startsWith('https://') || data.oracleUrl.startsWith('http://')}
+							<a
+								href={data.oracleUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="break-all text-blue-500 hover:underline"
+							>
+								{data.oracleUrl}
+							</a>
+						{:else}
+							<span class="break-all text-gray-500">{data.oracleUrl}</span>
+						{/if}
 					</svelte:fragment>
 				</CardProperty>
 			{/if}

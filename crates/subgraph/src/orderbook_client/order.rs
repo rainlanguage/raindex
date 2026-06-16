@@ -111,33 +111,49 @@ impl OrderbookSubgraphClient {
     }
 
     /// Fetch all pages of orders_list query
-    pub async fn orders_list_all(&self) -> Result<Vec<SgOrder>, OrderbookSubgraphClientError> {
+    async fn fetch_all_orders_pages(
+        &self,
+        filter_args: SgOrdersListFilterArgs,
+    ) -> Result<Vec<SgOrder>, OrderbookSubgraphClientError> {
         let mut all_pages_merged = vec![];
-        let mut page = 1;
+        let mut page: u16 = 1;
 
         loop {
             let page_data = self
                 .orders_list(
-                    SgOrdersListFilterArgs {
-                        owners: vec![],
-                        active: None,
-                        order_hash: None,
-                        tokens: None,
-                        orderbooks: vec![],
-                    },
+                    filter_args.clone(),
                     SgPaginationArgs {
                         page,
                         page_size: ALL_PAGES_QUERY_PAGE_SIZE,
                     },
                 )
                 .await?;
-            if page_data.is_empty() {
+            let batch_len = page_data.len();
+            all_pages_merged.extend(page_data);
+            if (batch_len as u16) < ALL_PAGES_QUERY_PAGE_SIZE {
                 break;
             }
-            all_pages_merged.extend(page_data);
-            page += 1
+            page += 1;
         }
         Ok(all_pages_merged)
+    }
+
+    pub async fn orders_list_all(&self) -> Result<Vec<SgOrder>, OrderbookSubgraphClientError> {
+        self.fetch_all_orders_pages(SgOrdersListFilterArgs {
+            owners: vec![],
+            active: None,
+            order_hash: None,
+            tokens: None,
+            orderbooks: vec![],
+        })
+        .await
+    }
+
+    pub async fn orders_count(
+        &self,
+        filter_args: SgOrdersListFilterArgs,
+    ) -> Result<u32, OrderbookSubgraphClientError> {
+        Ok(self.fetch_all_orders_pages(filter_args).await?.len() as u32)
     }
 
     /// Fetch single order given its hash
@@ -682,6 +698,86 @@ mod tests {
             result,
             Err(OrderbookSubgraphClientError::CynicClientError(_))
         ));
+    }
+
+    fn default_filter_args() -> SgOrdersListFilterArgs {
+        SgOrdersListFilterArgs {
+            owners: vec![],
+            active: None,
+            order_hash: None,
+            tokens: None,
+            orderbooks: vec![],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_single_page() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let orders: Vec<SgOrder> = (0..5).map(|_| default_sg_order()).collect();
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders}}));
+        });
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, 5);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_multiple_pages() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let orders_page1: Vec<SgOrder> = (0..ALL_PAGES_QUERY_PAGE_SIZE)
+            .map(|_| default_sg_order())
+            .collect();
+        let orders_page2: Vec<SgOrder> = (0..50).map(|_| default_sg_order()).collect();
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/").body_contains("\"skip\":0");
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders_page1}}));
+        });
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200)
+                .json_body(json!({"data": {"orders": orders_page2}}));
+        });
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, ALL_PAGES_QUERY_PAGE_SIZE as u32 + 50);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_empty() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200).json_body(json!({"data": {"orders": []}}));
+        });
+
+        let count = client.orders_count(default_filter_args()).await.unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_orders_count_network_error() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+
+        sg_server.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let result = client.orders_count(default_filter_args()).await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

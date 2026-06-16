@@ -10,9 +10,9 @@ import {
     TakeOrderConfigV4,
     SignedContextV1,
     TakeOrdersConfigV5
-} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {TokenSelfTrade} from "src/concrete/ob/OrderBookV6.sol";
+import {TokenSelfTrade} from "../../../src/concrete/ob/OrderBookV6.sol";
 import {Float, LibDecimalFloat} from "rain.math.float/lib/LibDecimalFloat.sol";
 
 contract OrderBookV6TakeOrderSameTokenTest is OrderBookV6ExternalRealTest {
@@ -30,10 +30,7 @@ contract OrderBookV6TakeOrderSameTokenTest is OrderBookV6ExternalRealTest {
 
         TakeOrderConfigV4[] memory takeOrders = new TakeOrderConfigV4[](1);
         takeOrders[0] = TakeOrderConfigV4({
-            order: orderAlice,
-            inputIOIndex: 0,
-            outputIOIndex: 0,
-            signedContext: new SignedContextV1[](0)
+            order: orderAlice, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
         });
 
         TakeOrdersConfigV5 memory takeOrdersConfig = TakeOrdersConfigV5({

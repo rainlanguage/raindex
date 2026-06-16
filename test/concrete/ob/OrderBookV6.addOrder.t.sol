@@ -4,9 +4,9 @@ pragma solidity =0.8.25;
 
 import {OrderBookV6ExternalRealTest} from "test/util/abstract/OrderBookV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2} from "rain.orderbook.interface/interface/unstable/IOrderBookV6.sol";
+import {OrderConfigV4, EvaluableV4, TaskV2} from "rain.raindex.interface/interface/IRaindexV6.sol";
 import {IParserV2} from "rain.interpreter.interface/interface/IParserV2.sol";
-import {UnsupportedCalculateOutputs, UnsupportedCalculateInputs} from "src/concrete/ob/OrderBookV6.sol";
+import {UnsupportedCalculateOutputs} from "../../../src/concrete/ob/OrderBookV6.sol";
 
 /// @title OrderBookV6AddOrderTest
 /// @notice A test harness for testing the OrderBookV6 addOrder function.

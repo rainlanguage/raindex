@@ -1,5 +1,5 @@
 use crate::local_db::{query::LocalDbQueryError, LocalDbError};
-use crate::raindex_client::local_db::{pipeline::runner::scheduler::SchedulerHandle, LocalDb};
+use crate::raindex_client::local_db::{LocalDb, SyncReadiness};
 use crate::{
     add_order::AddOrderArgsError, deposit::DepositError, dotrain_order::DotrainOrderError,
     meta::TryDecodeRainlangSourceError, transaction::WritableTransactionExecuteError,
@@ -12,9 +12,12 @@ use alloy::{
         Address, ParseSignedError, B256,
     },
 };
+pub(crate) use local_db::{ClassifiedChains, LocalDbState, QuerySource};
 use rain_math_float::FloatError;
 use rain_orderbook_app_settings::{
     network::NetworkCfg,
+    remote_networks::ParseRemoteNetworksError,
+    remote_tokens::ParseRemoteTokensError,
     yaml::{
         orderbook::{OrderbookYaml, OrderbookYamlValidation},
         YamlError, YamlParsable,
@@ -25,8 +28,17 @@ use rain_orderbook_subgraph_client::{
     OrderbookSubgraphClientError,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_family = "wasm"))]
+use std::sync::Arc;
+#[cfg(target_family = "wasm")]
 use std::{cell::RefCell, rc::Rc};
 use std::{collections::BTreeMap, fmt, num::ParseIntError, str::FromStr};
+
+#[cfg(target_family = "wasm")]
+pub(crate) type ClientRef = std::rc::Rc<RaindexClient>;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) type ClientRef = std::sync::Arc<RaindexClient>;
+
 use thiserror::Error;
 use tsify::Tsify;
 use url::Url;
@@ -37,6 +49,7 @@ pub mod local_db;
 pub mod order_quotes;
 pub mod orderbook_yaml;
 pub mod orders;
+pub mod orders_list;
 pub mod remove_orders;
 pub mod take_orders;
 pub mod trades;
@@ -85,35 +98,36 @@ impl_wasm_traits!(ChainIds);
 pub struct RaindexClient {
     orderbook_yaml: OrderbookYaml,
     #[serde(skip_serializing, skip_deserializing)]
-    local_db: Rc<RefCell<Option<LocalDb>>>,
-    #[serde(skip_serializing, skip_deserializing)]
-    local_db_scheduler: Rc<RefCell<Option<SchedulerHandle>>>,
+    local_db_state: LocalDbState,
 }
 
+#[cfg(target_family = "wasm")]
 #[wasm_export]
 impl RaindexClient {
-    /// Constructor that creates and returns RaindexClient instance directly
+    /// Creates a RaindexClient from YAML config, optionally setting up local DB
+    /// sync automatically when the YAML declares `local-db-sync`.
     ///
     /// ## Examples
     ///
     /// ```javascript
-    /// // Single YAML file
+    /// // Subgraph-only (no local-db-sync in YAML)
     /// const result = await RaindexClient.new([yamlConfig]);
-    /// if (result.error) {
-    ///   console.error("Init failed:", result.error.readableMsg);
-    ///   return;
-    /// }
-    /// const client = result.value;
     ///
-    /// // Multiple YAML files (for modular configuration)
-    /// const result = await RaindexClient.new([networksYaml, orderbooksYaml, tokensYaml]);
+    /// // With local DB (YAML has local-db-sync, pass callbacks)
+    /// const result = await RaindexClient.new(
+    ///   [yamlConfig],
+    ///   undefined,
+    ///   localDb.query.bind(localDb),
+    ///   localDb.wipeAndRecreate.bind(localDb),
+    ///   updateStatus,
+    /// );
     /// ```
     #[wasm_export(
         js_name = "new",
         return_description = "Initialized client instance for further operations",
         preserve_js_class
     )]
-    pub fn new(
+    pub async fn new(
         #[wasm_export(
             js_name = "obYamls",
             param_description = "List of YAML configuration strings. \
@@ -122,40 +136,78 @@ impl RaindexClient {
         )]
         ob_yamls: Vec<String>,
         validate: Option<bool>,
+        #[wasm_export(
+            js_name = "queryCallback",
+            param_description = "Optional JavaScript function to execute local database queries"
+        )]
+        query_callback: Option<js_sys::Function>,
+        #[wasm_export(
+            js_name = "wipeCallback",
+            param_description = "Optional JavaScript function to wipe and recreate the database"
+        )]
+        wipe_callback: Option<js_sys::Function>,
+        #[wasm_export(
+            js_name = "statusCallback",
+            param_description = "Optional callback invoked with the current local DB sync status"
+        )]
+        status_callback: Option<js_sys::Function>,
     ) -> Result<RaindexClient, RaindexError> {
-        let orderbook_yaml = OrderbookYaml::new(
+        let mut orderbook_yaml = OrderbookYaml::new(
             ob_yamls,
             match validate {
                 Some(true) => OrderbookYamlValidation::full(),
                 _ => OrderbookYamlValidation::default(),
             },
         )?;
+        orderbook_yaml.fetch_remote_data().await?;
+
+        let sync_configured_chains = LocalDbState::compute_chain_ids(&orderbook_yaml);
+        let sync_readiness = SyncReadiness::new();
+        let has_syncs = !sync_configured_chains.is_empty();
+
+        let local_db = if has_syncs {
+            let cb = query_callback
+                .ok_or_else(|| RaindexError::LocalDbSetupMissing("query_callback".to_string()))?;
+            Some(LocalDb::from_js_callback(cb, wipe_callback))
+        } else {
+            None
+        };
+
+        let scheduler = if has_syncs {
+            let db = local_db
+                .clone()
+                .expect("local_db should be set when has_syncs");
+            let settings =
+                crate::local_db::pipeline::runner::utils::parse_runner_settings_from_yaml(
+                    &orderbook_yaml,
+                )?;
+            let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
+                settings,
+                db,
+                status_callback,
+                sync_readiness.clone(),
+            )?;
+            Rc::new(RefCell::new(Some(handle)))
+        } else {
+            Rc::new(RefCell::new(None))
+        };
+        #[cfg(not(target_family = "wasm"))]
+        let scheduler = Arc::new(std::sync::Mutex::new(None));
+
         Ok(RaindexClient {
             orderbook_yaml,
-            local_db: Rc::new(RefCell::new(None)),
-            local_db_scheduler: Rc::new(RefCell::new(None)),
+            local_db_state: LocalDbState::new(
+                local_db,
+                scheduler,
+                sync_readiness,
+                sync_configured_chains,
+            ),
         })
     }
+}
 
-    #[wasm_export(js_name = "setDbCallback", unchecked_return_type = "void")]
-    pub fn set_local_db_callback(
-        &self,
-        #[wasm_export(
-            js_name = "queryCallback",
-            param_description = "JavaScript function to execute local database queries"
-        )]
-        query_callback: js_sys::Function,
-        #[wasm_export(
-            js_name = "wipeCallback",
-            param_description = "Optional JavaScript function to wipe and recreate the database"
-        )]
-        wipe_callback: Option<js_sys::Function>,
-    ) -> Result<(), RaindexError> {
-        let mut slot = self.local_db.borrow_mut();
-        *slot = Some(LocalDb::from_js_callback(query_callback, wipe_callback));
-        Ok(())
-    }
-
+#[wasm_export]
+impl RaindexClient {
     fn resolve_networks(
         &self,
         chain_ids: Option<Vec<u32>>,
@@ -219,8 +271,66 @@ impl RaindexClient {
         Ok(network.rpcs.clone())
     }
 
-    fn local_db(&self) -> Option<LocalDb> {
-        self.local_db.borrow().as_ref().cloned()
+    pub(crate) fn query_source(&self, chain_id: u32) -> QuerySource {
+        self.local_db_state.query_source(chain_id)
+    }
+
+    pub(crate) fn classify_chains(
+        &self,
+        chain_ids: Option<Vec<u32>>,
+    ) -> Result<ClassifiedChains, RaindexError> {
+        let networks = self.resolve_networks(chain_ids)?;
+        Ok(self.local_db_state.classify_chains(&networks))
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexClient {
+    pub async fn new(
+        ob_yamls: Vec<String>,
+        validate: Option<bool>,
+        db_path: Option<std::path::PathBuf>,
+    ) -> Result<RaindexClient, RaindexError> {
+        let mut orderbook_yaml = OrderbookYaml::new(
+            ob_yamls,
+            match validate {
+                Some(true) => OrderbookYamlValidation::full(),
+                _ => OrderbookYamlValidation::default(),
+            },
+        )?;
+        orderbook_yaml.fetch_remote_data().await?;
+
+        let sync_configured_chains = LocalDbState::compute_chain_ids(&orderbook_yaml);
+        let sync_readiness = SyncReadiness::new();
+        let has_syncs = !sync_configured_chains.is_empty();
+
+        let (local_db, scheduler) = if has_syncs {
+            let path =
+                db_path.ok_or_else(|| RaindexError::LocalDbSetupMissing("db_path".to_string()))?;
+            let settings =
+                crate::local_db::pipeline::runner::utils::parse_runner_settings_from_yaml(
+                    &orderbook_yaml,
+                )?;
+            let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
+                settings,
+                path.clone(),
+                sync_readiness.clone(),
+            )?;
+            let executor = crate::local_db::executor::RusqliteExecutor::new(&path);
+            (Some(LocalDb::new(executor)), Some(handle))
+        } else {
+            (None, None)
+        };
+
+        Ok(RaindexClient {
+            orderbook_yaml,
+            local_db_state: LocalDbState::new(
+                local_db,
+                Arc::new(std::sync::Mutex::new(scheduler)),
+                sync_readiness,
+                sync_configured_chains,
+            ),
+        })
     }
 }
 
@@ -249,6 +359,8 @@ impl From<serde_wasm_bindgen::Error> for SerdeWasmBindgenErrorWrapper {
 pub enum RaindexError {
     #[error("Invalid yaml configuration")]
     InvalidYamlConfig,
+    #[error("{0}")]
+    OracleFetchError(String),
     #[error("Chain ID not found: {0}")]
     ChainIdNotFound(u32),
     #[error("No networks configured")]
@@ -259,6 +371,10 @@ pub enum RaindexError {
     TransactionIndexingTimeout { tx_hash: B256, attempts: usize },
     #[error(transparent)]
     YamlError(#[from] YamlError),
+    #[error(transparent)]
+    ParseRemoteNetworksError(#[from] ParseRemoteNetworksError),
+    #[error(transparent)]
+    ParseRemoteTokensError(#[from] ParseRemoteTokensError),
     #[error(transparent)]
     SerdeError(#[from] SerdeWasmBindgenErrorWrapper),
     #[error(transparent)]
@@ -323,6 +439,8 @@ pub enum RaindexError {
     LocalDbQueryError(#[from] LocalDbQueryError),
     #[error("Chain id: {0} is not supported for local database")]
     LocalDbUnsupportedNetwork(u32),
+    #[error("YAML has local-db-sync but no {0} was provided")]
+    LocalDbSetupMissing(String),
     #[error("No liquidity available for the requested token pair")]
     NoLiquidity,
     #[error("Insufficient liquidity: requested {requested}, available {available}")]
@@ -399,6 +517,12 @@ impl RaindexError {
                 "YAML configuration parsing failed: {}. Check file syntax and structure.",
                 err
             ),
+            RaindexError::ParseRemoteNetworksError(e) => {
+                format!("Error parsing the remote networks configuration: {e}")
+            }
+            RaindexError::ParseRemoteTokensError(e) => {
+                format!("Error parsing the remote tokens configuration: {e}")
+            }
             RaindexError::SerdeError(err) => format!(
                 "Data conversion failed: {}. The data format may be incompatible.",
                 err
@@ -500,6 +624,9 @@ impl RaindexError {
             RaindexError::LocalDbUnsupportedNetwork(chain_id) => {
                 format!("The chain ID: {chain_id} is not supported for local database operations.")
             }
+            RaindexError::LocalDbSetupMissing(field) => {
+                format!("YAML has local-db-sync configured but no {field} was provided.")
+            }
             RaindexError::NoLiquidity => {
                 "No liquidity available for the requested token pair".to_string()
             }
@@ -544,6 +671,7 @@ impl RaindexError {
             RaindexError::InvalidDotrainSourceMetadata => {
                 "Found metadata but it could not be parsed as valid dotrain source".to_string()
             }
+            RaindexError::OracleFetchError(err) => err.clone(),
         }
     }
 }
@@ -564,8 +692,7 @@ impl From<RaindexError> for WasmEncodedError {
 }
 
 #[cfg(test)]
-mod tests {
-    #[cfg(target_family = "wasm")]
+pub(crate) mod tests {
     use super::*;
     use rain_orderbook_app_settings::spec_version::SpecVersion;
 
@@ -624,8 +751,8 @@ tokens:
         decimals: 6
         label: USD Coin
         symbol: USDC
-deployers:
-    mainnet-deployer:
+rainlangs:
+    mainnet-rainlang:
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
         network: mainnet
 accounts:
@@ -637,14 +764,169 @@ accounts:
         )
     }
 
+    #[cfg(not(target_family = "wasm"))]
+    pub async fn new_with_local_db(
+        yamls: Vec<String>,
+        local_db: super::local_db::LocalDb,
+        chain_ids: Vec<u32>,
+    ) -> RaindexClient {
+        let mut client = RaindexClient::new(yamls, None, None)
+            .await
+            .expect("test yaml should be valid");
+        client.local_db_state.db = Arc::new(std::sync::Mutex::new(Some(local_db)));
+        for &id in &chain_ids {
+            client.local_db_state.sync_readiness.mark_ready(id);
+            client.local_db_state.sync_configured_chains.insert(id);
+        }
+        client
+    }
+
     #[cfg(target_family = "wasm")]
     pub fn new_test_client_with_db_callback(
         yamls: Vec<String>,
         query_callback: js_sys::Function,
+        chain_ids: Vec<u32>,
     ) -> RaindexClient {
-        let client = RaindexClient::new(yamls, None).expect("test yaml should be valid");
-        client.set_local_db_callback(query_callback, None).unwrap();
-        client
+        let orderbook_yaml = OrderbookYaml::new(yamls, OrderbookYamlValidation::default())
+            .expect("test yaml should be valid");
+        let sync_readiness = SyncReadiness::new();
+        let mut db_chain_ids = std::collections::HashSet::new();
+        for &id in &chain_ids {
+            sync_readiness.mark_ready(id);
+            db_chain_ids.insert(id);
+        }
+        RaindexClient {
+            orderbook_yaml,
+            local_db_state: LocalDbState::new(
+                Some(super::local_db::LocalDb::from_js_callback(
+                    query_callback,
+                    None,
+                )),
+                Rc::new(RefCell::new(None)),
+                sync_readiness,
+                db_chain_ids,
+            ),
+        }
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    mod native_tests {
+        use super::*;
+        use httpmock::MockServer;
+        use std::str::FromStr;
+
+        #[tokio::test]
+        async fn test_create_fetches_remote_networks() {
+            let server = MockServer::start_async().await;
+            let response = r#"[
+                {
+                    "name": "Remote Network",
+                    "chain": "remote-network",
+                    "chainId": 999,
+                    "rpc": ["http://localhost:8085/rpc-url"],
+                    "networkId": 999,
+                    "nativeCurrency": {
+                        "name": "Remote",
+                        "symbol": "REM",
+                        "decimals": 18
+                    },
+                    "infoURL": "http://localhost:8085/info-url",
+                    "shortName": "remote-network"
+                }
+            ]"#;
+            server
+                .mock_async(|when, then| {
+                    when.method("GET").path("/");
+                    then.status(200)
+                        .header("content-type", "application/json")
+                        .body(response);
+                })
+                .await;
+
+            let yaml = format!(
+                r#"
+version: {spec_version}
+using-networks-from:
+    remote-source:
+        url: {url}
+        format: chainid
+"#,
+                spec_version = SpecVersion::current(),
+                url = server.base_url()
+            );
+
+            let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
+
+            let networks = client.get_all_networks().unwrap();
+            assert!(networks.contains_key("remote-network"));
+            let network = networks.get("remote-network").unwrap();
+            assert_eq!(network.chain_id, 999);
+            assert_eq!(network.key, "remote-network");
+            assert_eq!(
+                network.rpcs,
+                vec![Url::parse("http://localhost:8085/rpc-url").unwrap()]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_create_fetches_remote_tokens() {
+            let server = MockServer::start_async().await;
+            let response = r#"{
+                "name": "Remote Tokens",
+                "timestamp": "2021-01-01T00:00:00.000Z",
+                "keywords": [],
+                "version": {"major": 1, "minor": 0, "patch": 0},
+                "tokens": [
+                    {
+                        "chainId": 123,
+                        "address": "0x0000000000000000000000000000000000000001",
+                        "name": "RemoteToken",
+                        "symbol": "REM",
+                        "decimals": 18
+                    }
+                ],
+                "logoURI": "http://localhost.com"
+            }"#;
+            server
+                .mock_async(|when, then| {
+                    when.method("GET").path("/");
+                    then.status(200)
+                        .header("content-type", "application/json")
+                        .body(response);
+                })
+                .await;
+
+            let yaml = format!(
+                r#"
+version: {spec_version}
+networks:
+    test-network:
+        rpcs:
+            - http://localhost:8085/rpc
+        chain-id: 123
+using-tokens-from:
+    - {url}
+"#,
+                spec_version = SpecVersion::current(),
+                url = server.base_url()
+            );
+
+            let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
+
+            let tokens = client.orderbook_yaml.get_tokens().unwrap();
+            let expected_key =
+                "test-network-RemoteToken-0x0000000000000000000000000000000000000001";
+            assert!(tokens.contains_key(expected_key));
+            let token = tokens.get(expected_key).unwrap();
+            assert_eq!(token.key, expected_key);
+            assert_eq!(
+                token.address,
+                Address::from_str("0x0000000000000000000000000000000000000001").unwrap()
+            );
+            assert_eq!(token.network.chain_id, 123);
+            assert_eq!(token.network.key, "test-network");
+            assert_eq!(token.decimals, Some(18));
+        }
     }
 
     #[cfg(target_family = "wasm")]
@@ -684,8 +966,8 @@ tokens:
         decimals: 6
         label: Token B
         symbol: TKNB
-deployers:
-    arb-deployer:
+rainlangs:
+    arb-rainlang:
         address: 0x1111111111111111111111111111111111111111
         network: arbitrum
 accounts:
@@ -722,24 +1004,29 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_raindex_client_new_success() {
+        async fn test_raindex_client_new_success() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
             assert!(!client.orderbook_yaml.documents.is_empty());
         }
 
         #[wasm_bindgen_test]
-        fn test_raindex_client_new_invalid_yaml() {
-            let err = RaindexClient::new(vec![get_invalid_yaml()], Some(true)).unwrap_err();
+        async fn test_raindex_client_new_invalid_yaml() {
+            let err = RaindexClient::new(vec![get_invalid_yaml()], Some(true), None, None, None)
+                .await
+                .unwrap_err();
             assert!(matches!(
                 err,
                 RaindexError::YamlError(YamlError::Field { .. })
@@ -750,23 +1037,28 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_raindex_client_new_empty_yaml() {
-            let err = RaindexClient::new(vec!["".to_string()], None).unwrap_err();
+        async fn test_raindex_client_new_empty_yaml() {
+            let err = RaindexClient::new(vec!["".to_string()], None, None, None, None)
+                .await
+                .unwrap_err();
             assert!(matches!(err, RaindexError::YamlError(YamlError::EmptyFile)));
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_single_chain() {
+        async fn test_get_multi_subgraph_args_single_chain() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
 
             let args = client.get_multi_subgraph_args(Some(vec![1])).unwrap();
@@ -779,17 +1071,20 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_all_chains() {
+        async fn test_get_multi_subgraph_args_all_chains() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
 
             let args = client.get_multi_subgraph_args(None).unwrap();
@@ -805,17 +1100,20 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_empty_chain_ids_defaults_to_all() {
+        async fn test_get_multi_subgraph_args_empty_chain_ids_defaults_to_all() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
 
             let args = client.get_multi_subgraph_args(Some(vec![])).unwrap();
@@ -827,17 +1125,20 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_multiple_chains() {
+        async fn test_get_multi_subgraph_args_multiple_chains() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
 
             let args = client.get_multi_subgraph_args(Some(vec![1, 137])).unwrap();
@@ -861,17 +1162,20 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_invalid_chain() {
+        async fn test_get_multi_subgraph_args_invalid_chain() {
             let client = RaindexClient::new(
                 vec![get_test_yaml(
-                    // not used
                     "http://localhost:3000/sg1",
                     "http://localhost:3000/sg2",
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
                 None,
+                None,
+                None,
+                None,
             )
+            .await
             .unwrap();
 
             let err = client.get_multi_subgraph_args(Some(vec![999])).unwrap_err();
@@ -881,7 +1185,7 @@ accounts:
         }
 
         #[wasm_bindgen_test]
-        fn test_get_multi_subgraph_args_no_networks() {
+        async fn test_get_multi_subgraph_args_no_networks() {
             let yaml = format!(
                 r#"
     version: {spec_version}
@@ -903,8 +1207,8 @@ accounts:
             network: isolated
             address: 0x1111111111111111111111111111111111111111
             decimals: 18
-    deployers:
-        test-deployer:
+    rainlangs:
+        test-rainlang:
             address: 0x2222222222222222222222222222222222222222
             network: isolated
     orderbooks:
@@ -919,7 +1223,9 @@ accounts:
                 spec_version = SpecVersion::current()
             );
 
-            let client = RaindexClient::new(vec![yaml], None).unwrap();
+            let client = RaindexClient::new(vec![yaml], None, None, None, None)
+                .await
+                .unwrap();
 
             let err = client.get_multi_subgraph_args(None).unwrap_err();
             assert!(matches!(

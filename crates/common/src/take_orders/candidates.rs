@@ -1,14 +1,11 @@
-use crate::raindex_client::order_quotes::RaindexOrderQuote;
+use crate::raindex_client::order_quotes::{get_order_quotes_batch, RaindexOrderQuote};
 use crate::raindex_client::orders::RaindexOrder;
 use crate::raindex_client::RaindexError;
 use alloy::primitives::Address;
-use futures::StreamExt;
 use rain_math_float::Float;
-use rain_orderbook_bindings::IOrderBookV6::{OrderV4, SignedContextV1};
+use rain_orderbook_bindings::IRaindexV6::{OrderV4, SignedContextV1};
 #[cfg(target_family = "wasm")]
 use std::str::FromStr;
-
-const DEFAULT_QUOTE_CONCURRENCY: usize = 5;
 
 fn indices_in_bounds(order: &OrderV4, input_index: u32, output_index: u32) -> bool {
     (input_index as usize) < order.validInputs.len()
@@ -61,36 +58,15 @@ pub async fn build_take_order_candidates_for_pair(
     input_token: Address,
     output_token: Address,
     block_number: Option<u64>,
-    gas: Option<u64>,
+    chunk_size: Option<u32>,
 ) -> Result<Vec<TakeOrderCandidate>, RaindexError> {
-    let gas_string = gas.map(|g| g.to_string());
+    let all_quotes = get_order_quotes_batch(orders, block_number, chunk_size).await?;
 
-    // Fetch quotes for each order (oracle context fetched per-pair inside get_quotes)
-    let results: Vec<Result<Vec<RaindexOrderQuote>, RaindexError>> =
-        futures::stream::iter(orders.iter().map(|order| {
-            let gas_string = gas_string.clone();
-            async move { order.get_quotes(block_number, gas_string).await }
-        }))
-        .buffered(DEFAULT_QUOTE_CONCURRENCY)
-        .collect()
-        .await;
-
-    // Build candidates — oracle context for take-order will be fetched per-pair
     let mut all_candidates = vec![];
-    for (order, quotes_result) in orders.iter().zip(results) {
-        let quotes = quotes_result?;
+    for (order, quotes) in orders.iter().zip(all_quotes) {
         let order_v4: OrderV4 = order.try_into()?;
         let orderbook = get_orderbook_address(order)?;
-        let oracle_url = {
-            #[cfg(target_family = "wasm")]
-            {
-                order.oracle_url()
-            }
-            #[cfg(not(target_family = "wasm"))]
-            {
-                order.oracle_url()
-            }
-        };
+        let oracle_url = order.oracle_url();
 
         for quote in &quotes {
             let signed_context = match &oracle_url {
@@ -100,9 +76,13 @@ pub async fn build_take_order_candidates_for_pair(
                         &order_v4,
                         quote.pair.input_index,
                         quote.pair.output_index,
-                        Address::ZERO, // counterparty unknown at candidate building time
+                        // Counterparty is unknown at candidate-building time (the taker
+                        // address isn't known until the transaction is submitted).
+                        // The oracle server ignores this field — it only uses the order's
+                        // input/output tokens to determine the price pair.
+                        Address::ZERO,
                     )
-                    .await
+                    .await?
                 }
                 None => vec![],
             };
@@ -124,27 +104,21 @@ pub async fn build_take_order_candidates_for_pair(
 }
 
 /// Fetch signed context from an order's oracle endpoint for a specific IO pair.
-/// Returns empty vec if no oracle URL or if fetch fails (best-effort).
 async fn fetch_oracle_for_pair(
     oracle_url: &str,
     order: &OrderV4,
     input_io_index: u32,
     output_io_index: u32,
     counterparty: Address,
-) -> Vec<SignedContextV1> {
+) -> Result<Vec<SignedContextV1>, RaindexError> {
     let body =
         crate::oracle::encode_oracle_body(order, input_io_index, output_io_index, counterparty);
     match crate::oracle::fetch_signed_context(oracle_url, body).await {
-        Ok(ctx) => vec![ctx],
-        Err(e) => {
-            tracing::warn!(
-                "Failed to fetch oracle for pair ({}, {}): {}",
-                input_io_index,
-                output_io_index,
-                e
-            );
-            vec![]
-        }
+        Ok(ctx) => Ok(vec![ctx]),
+        Err(e) => Err(RaindexError::OracleFetchError(format!(
+            "Oracle fetch failed for pair ({}, {}): {}",
+            input_io_index, output_io_index, e
+        ))),
     }
 }
 

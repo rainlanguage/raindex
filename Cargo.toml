@@ -2,7 +2,7 @@
 members = ["crates/*"]
 exclude = [
     "lib/rain.interpreter",
-    "lib/rain.orderbook.interface",
+    "lib/rain.raindex.interface",
 ]
 resolver = "2"
 

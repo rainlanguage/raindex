@@ -33,7 +33,7 @@ serde_json = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 flate2 = "1.0.34"
-rusqlite = { version = "0.31", features = ["functions"] }
+rusqlite = { version = "0.32", features = ["functions"] }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -50,5 +50,6 @@ tokio = { workspace = true, features = [
 [dev-dependencies]
 httpmock = "0.7.0"
 rain-metadata = { workspace = true }
+rain_interpreter_bindings = { workspace = true }
 tempfile.workspace = true
 rain_orderbook_test_fixtures = { workspace = true }

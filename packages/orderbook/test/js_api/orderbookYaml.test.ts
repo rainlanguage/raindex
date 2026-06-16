@@ -22,8 +22,8 @@ subgraphs:
 metaboards:
     test: https://metaboard.com
 
-deployers:
-    some-deployer:
+rainlangs:
+    some-rainlang:
         network: some-network
         address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
 
@@ -39,6 +39,7 @@ local-db-sync:
     rate-limit-delay-ms: 1000
     finality-depth: 30
     bootstrap-block-threshold: 1000
+    sync-interval-ms: 5000
 
 orderbooks:
     some-orderbook:
@@ -63,7 +64,7 @@ tokens:
 
 scenarios:
     some-scenario:
-        deployer: some-deployer
+        rainlang: some-rainlang
         bindings:
             test-binding: 5
         scenarios:
@@ -79,7 +80,7 @@ orders:
       outputs:
         - token: token2
           vault-id: 1
-      deployer: some-deployer
+      rainlang: some-rainlang
       orderbook: some-orderbook
 
 deployments:
@@ -496,6 +497,62 @@ using-tokens-from:
 				tokens.find((t: { symbol: string }) => t.symbol === 'USDT'),
 				'USDT should exist'
 			);
+		});
+
+		it('should preserve extensions from remote tokens', async function () {
+			const remoteTokensResponse = {
+				name: 'Remote Tokens',
+				timestamp: '2021-01-01T00:00:00.000Z',
+				keywords: [],
+				version: { major: 1, minor: 0, patch: 0 },
+				tokens: [
+					{
+						chainId: 1,
+						address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+						name: 'USD Coin',
+						symbol: 'USDC',
+						decimals: 6,
+						extensions: {
+							isStablecoin: true,
+							coingeckoId: 'usd-coin'
+						}
+					},
+					{
+						chainId: 1,
+						address: '0xdAC17F958D2ee523a2206206994597C13D831ec7',
+						name: 'Tether USD',
+						symbol: 'USDT',
+						decimals: 6
+					}
+				],
+				logoURI: 'http://localhost.com'
+			};
+
+			await mockServer.forGet('/tokens-ext.json').thenJson(200, remoteTokensResponse);
+
+			const yaml = `
+version: ${SPEC_VERSION}
+networks:
+    mainnet:
+        rpcs:
+            - http://localhost:8085/rpc-url
+        chain-id: 1
+using-tokens-from:
+    - http://localhost:8232/tokens-ext.json
+`;
+			const orderbookYaml = buildYaml(yaml);
+			const tokensResult = await orderbookYaml.getTokens();
+			const tokens = extractWasmEncodedData(tokensResult);
+
+			const usdc = tokens.find((t: { symbol: string }) => t.symbol === 'USDC');
+			assert.ok(usdc, 'USDC should exist');
+			assert.ok(usdc.extensions instanceof Map, 'USDC extensions should be a Map');
+			assert.strictEqual(usdc.extensions.get('isStablecoin'), true);
+			assert.strictEqual(usdc.extensions.get('coingeckoId'), 'usd-coin');
+
+			const usdt = tokens.find((t: { symbol: string }) => t.symbol === 'USDT');
+			assert.ok(usdt, 'USDT should exist');
+			assert.strictEqual(usdt.extensions, undefined);
 		});
 
 		it('should return tokens with correct chainId from multiple networks', async function () {
