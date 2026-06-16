@@ -1,4 +1,7 @@
-use alloy::{primitives::Bytes, sol_types::SolCall};
+use alloy::{
+    primitives::{Bytes, U256},
+    sol_types::SolCall,
+};
 use rain_math_float::Float;
 use raindex_bindings::Raindex::multicallCall;
 use serde::{Deserialize, Serialize};
@@ -21,7 +24,10 @@ impl RaindexVaultsList {
     pub fn get_withdrawable_vaults(&self) -> Vec<&RaindexVault> {
         self.0
             .iter()
-            .filter(|vault| vault.balance().gt(*ZERO_FLOAT).unwrap_or(false))
+            .filter(|vault| {
+                vault.raw_vault_id() != U256::ZERO
+                    && vault.balance().gt(*ZERO_FLOAT).unwrap_or(false)
+            })
             .collect()
     }
 
@@ -298,6 +304,28 @@ mod tests {
             })
         }
 
+        fn get_vault3_json() -> Value {
+            json!({
+                "id": "0x0345",
+                "owner": "0x0000000000000000000000000000000000000000",
+                "vaultId": "0",
+                "balance": "0x0000000000000000000000000000000000000000000000000000000000000020",
+                "token": {
+                    "id": "token2",
+                    "address": "0x12e605bc104e93b45e1ad99f9e555f659051c2bb",
+                    "name": "Token 2",
+                    "symbol": "TKN2",
+                    "decimals": "18"
+                },
+                "raindex": {
+                    "id": "0x0000000000000000000000000000000000000000"
+                },
+                "ordersAsOutput": [],
+                "ordersAsInput": [],
+                "balanceChanges": []
+            })
+        }
+
         async fn get_vaults() -> Vec<RaindexVault> {
             let sg_server = MockServer::start_async().await;
             sg_server.mock(|when, then| {
@@ -312,7 +340,7 @@ mod tests {
                 when.path("/sg2");
                 then.status(200).json_body_obj(&json!({
                     "data": {
-                        "vaults": [get_vault2_json()]
+                        "vaults": [get_vault2_json(), get_vault3_json()]
                     }
                 }));
             });
@@ -337,7 +365,7 @@ mod tests {
         #[tokio::test]
         async fn test_get_vaults_not_empty() {
             let vaults_list = RaindexVaultsList::new(get_vaults().await);
-            assert_eq!(vaults_list.0.len(), 2);
+            assert_eq!(vaults_list.0.len(), 3);
         }
 
         #[tokio::test]
@@ -346,6 +374,26 @@ mod tests {
             let withdrawable_vaults = vaults_list.get_withdrawable_vaults();
             assert_eq!(withdrawable_vaults.len(), 1);
             assert_eq!(withdrawable_vaults[0].id().to_string(), "0x0234"); // vault2 has non-zero balance
+            assert_ne!(withdrawable_vaults[0].vault_id(), U256::ZERO);
+        }
+
+        #[tokio::test]
+        async fn test_zero_vault_get_calldatas_rejects_before_allowance_read() {
+            let vaults_list = RaindexVaultsList::new(get_vaults().await);
+            let zero_vault = vaults_list
+                .items()
+                .into_iter()
+                .find(|vault| vault.vault_id() == U256::ZERO)
+                .unwrap();
+
+            let err = zero_vault
+                .get_calldatas(&Float::parse("1".to_string()).unwrap())
+                .await
+                .unwrap_err();
+
+            assert!(err
+                .to_string()
+                .contains("vault-id 0 is vaultless and cannot be used for deposits"));
         }
 
         #[tokio::test]

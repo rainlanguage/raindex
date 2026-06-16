@@ -22,6 +22,9 @@ pub enum DepositError {
     #[error(transparent)]
     FloatError(#[from] FloatError),
 
+    #[error("vault-id 0 is vaultless and cannot be used for deposits")]
+    ZeroVaultId,
+
     #[cfg(not(target_family = "wasm"))]
     #[error(transparent)]
     WriteTransactionError(#[from] crate::write_tx::WriteTransactionError),
@@ -36,9 +39,13 @@ pub struct DepositArgs {
 }
 
 impl TryFrom<DepositArgs> for deposit4Call {
-    type Error = FloatError;
+    type Error = DepositError;
 
     fn try_from(val: DepositArgs) -> Result<Self, Self::Error> {
+        if val.vault_id == B256::ZERO {
+            return Err(DepositError::ZeroVaultId);
+        }
+
         Ok(deposit4Call {
             token: val.token,
             vaultId: val.vault_id,
@@ -97,14 +104,51 @@ impl DepositArgs {
         transaction_args: TransactionArgs,
         transaction_status_changed: S,
     ) -> Result<(), DepositError> {
+        let deposit_call: deposit4Call = self.clone().try_into()?;
         let (ledger_client, _) = transaction_args.clone().try_into_ledger_client().await?;
 
-        let deposit_call: deposit4Call = self.clone().try_into()?;
         let tx_request = transaction_args
             .try_into_transaction_request(deposit_call, transaction_args.raindex_address)?;
 
         execute_write_tx(ledger_client, tx_request, 4, transaction_status_changed).await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deposit_call_rejects_zero_vault_id() {
+        let args = DepositArgs {
+            token: Address::ZERO,
+            vault_id: B256::ZERO,
+            amount: Float::parse("1".to_string()).unwrap(),
+            decimals: 18,
+        };
+
+        assert!(matches!(
+            deposit4Call::try_from(args),
+            Err(DepositError::ZeroVaultId)
+        ));
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn test_execute_deposit_rejects_zero_vault_id_before_transaction_setup() {
+        let args = DepositArgs {
+            token: Address::ZERO,
+            vault_id: B256::ZERO,
+            amount: Float::parse("1".to_string()).unwrap(),
+            decimals: 18,
+        };
+
+        assert!(matches!(
+            args.execute_deposit(TransactionArgs::default(), |_| {})
+                .await,
+            Err(DepositError::ZeroVaultId)
+        ));
     }
 }

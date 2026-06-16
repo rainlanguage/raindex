@@ -502,12 +502,12 @@ impl RaindexVault {
     ) -> Result<RaindexVaultCalldatas, RaindexError> {
         self.validate_amount(amount)?;
 
-        let approval = self.build_approval_calldata(amount).await?;
-
         let deposit_args = self.get_deposit_args(amount);
-        let deposit = Bytes::copy_from_slice(&deposit4Call::try_from(deposit_args)?.abi_encode());
-
+        let deposit_call = deposit4Call::try_from(deposit_args)?;
         let withdraw = self.build_withdraw_calldata(amount).await?;
+
+        let approval = self.build_approval_calldata(amount).await?;
+        let deposit = Bytes::copy_from_slice(&deposit_call.abi_encode());
 
         Ok(RaindexVaultCalldatas {
             approval,
