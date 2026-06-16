@@ -112,7 +112,7 @@ export const cachedWritableOptionalStore = <T>(
  */
 export const cachedWritableIntOptional = (
   key: string,
-  defaultValue = undefined,
+  defaultValue: number | undefined = undefined,
 ) =>
   cachedWritableOptionalStore<number>(
     key,
@@ -133,7 +133,7 @@ export const cachedWritableIntOptional = (
  */
 export const cachedWritableStringOptional = (
   key: string,
-  defaultValue = undefined,
+  defaultValue: string | undefined = undefined,
 ) =>
   cachedWritableOptionalStore<string>(
     key,
