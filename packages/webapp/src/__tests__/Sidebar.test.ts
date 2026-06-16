@@ -84,6 +84,24 @@ describe('Sidebar', () => {
 		const barsButton = screen.getByTestId('sidebar-bars');
 		expect(barsButton).toBeInTheDocument();
 	});
+	it('shows hover title and aria-label on the open and close menu buttons', async () => {
+		mockWindowSize(500);
+		const mockColorTheme = writable('light');
+		const mockPage = {
+			url: { pathname: '/' }
+		};
+		render(Sidebar, { colorTheme: mockColorTheme, page: mockPage });
+
+		const barsButton = screen.getByTestId('sidebar-bars');
+		expect(barsButton).toHaveAttribute('title', 'Open menu');
+		expect(barsButton).toHaveAttribute('aria-label', 'Open menu');
+
+		await fireEvent.click(barsButton);
+
+		const closeButton = await screen.findByTestId('close-button');
+		expect(closeButton).toHaveAttribute('title', 'Close menu');
+		expect(closeButton).toHaveAttribute('aria-label', 'Close menu');
+	});
 	it('shows sidebar on wide screen', () => {
 		mockWindowSize(1025);
 		const mockColorTheme = writable('light');
@@ -110,6 +128,16 @@ describe('Sidebar', () => {
 			const sidebar = screen.getByTestId('sidebar');
 			expect(sidebar.hidden).toBe(false);
 		});
+	});
+	it('renders the scrub toggle next to the dark mode button', () => {
+		mockWindowSize(1025);
+		const mockColorTheme = writable('light');
+		const mockPage = {
+			url: { pathname: '/' }
+		};
+		render(Sidebar, { colorTheme: mockColorTheme, page: mockPage });
+
+		expect(screen.getByTestId('scrub-toggle')).toBeInTheDocument();
 	});
 	it('hides sidebar when close button is clicked', async () => {
 		mockWindowSize(500);

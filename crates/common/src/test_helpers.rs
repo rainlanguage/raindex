@@ -630,6 +630,7 @@ pub mod quotes {
             formatted_ratio: ratio.format().unwrap(),
             inverse_ratio: ratio,
             formatted_inverse_ratio: ratio.format().unwrap(),
+            formatted_max_output_as_percent_of_vault: None,
         }
     }
 
