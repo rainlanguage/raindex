@@ -375,9 +375,7 @@ impl RaindexOrderBuilder {
                 vault_id: vault_id.into(),
                 decimals,
             };
-            let calldata = deposit4Call::try_from(deposit_args)
-                .map_err(crate::deposit::DepositError::from)?
-                .abi_encode();
+            let calldata = deposit4Call::try_from(deposit_args)?.abi_encode();
             calldatas.push(Bytes::copy_from_slice(&calldata));
         }
 
