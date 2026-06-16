@@ -132,6 +132,10 @@ impl RaindexVault {
     pub(crate) fn token_address(&self) -> Address {
         self.token.address
     }
+
+    pub fn is_vaultless(&self) -> bool {
+        self.vault_id == U256::ZERO
+    }
 }
 
 #[cfg(target_family = "wasm")]
@@ -164,6 +168,14 @@ impl RaindexVault {
     #[wasm_bindgen(getter = vaultId)]
     pub fn vault_id(&self) -> Result<BigInt, RaindexError> {
         Self::u256_to_bigint(self.vault_id)
+    }
+    #[wasm_bindgen(getter)]
+    pub fn vaultless(&self) -> bool {
+        self.is_vaultless()
+    }
+    #[wasm_bindgen(getter = isVaultless)]
+    pub fn is_vaultless_getter(&self) -> bool {
+        self.is_vaultless()
     }
     #[wasm_bindgen(getter)]
     pub fn balance(&self) -> Float {
@@ -207,6 +219,9 @@ impl RaindexVault {
     }
     pub fn vault_id(&self) -> U256 {
         self.vault_id
+    }
+    pub fn vaultless(&self) -> bool {
+        self.is_vaultless()
     }
     pub fn balance(&self) -> Float {
         self.balance

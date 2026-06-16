@@ -658,6 +658,15 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       assert.equal(result.orders.length, 2);
       assert.equal(result.orders[0].id, order1.id);
       assert.equal(result.orders[1].id, order2.id);
+      assert.equal(result.orders[0].vaultsList.items[0].isVaultless, false);
+      assert.equal(result.orders[0].vaultsList.items[0].vaultless, false);
+      assert.equal(result.orders[1].vaultsList.items[0].isVaultless, true);
+      assert.equal(result.orders[1].vaultsList.items[0].vaultless, true);
+      assert.equal(
+        result.orders[1].inputsOutputsList.items[0].isVaultless,
+        true,
+      );
+      assert.equal(result.orders[1].inputsOutputsList.items[0].vaultless, true);
       assert.equal(result.totalCount, 2);
 
       result = extractWasmEncodedData(await raindexClient.getOrders([1]));
