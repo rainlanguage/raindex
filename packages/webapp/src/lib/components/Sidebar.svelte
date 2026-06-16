@@ -17,6 +17,7 @@
 	} from 'flowbite-svelte-icons';
 	import {
 		ButtonDarkMode,
+		ButtonScrub,
 		IconTelegram,
 		IconExternalLink,
 		logoDark,
@@ -150,8 +151,9 @@
 					</svelte:fragment>
 				</SidebarItem>
 			</SidebarGroup>
-			<SidebarGroup border class="flex justify-start" ulClass="list-none">
+			<SidebarGroup border class="flex justify-start gap-2" ulClass="list-none">
 				<ButtonDarkMode {colorTheme} />
+				<ButtonScrub />
 			</SidebarGroup>
 			<SidebarGroup border class="min-h-0 flex-1 overflow-hidden" ulClass="list-none h-full">
 				<TransactionList />

@@ -17,6 +17,7 @@ import {
     TaskV2
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {NegativeBounty} from "../../../src/concrete/raindex/RaindexV6.sol";
 
 /// @title RaindexV6TakeOrderVaultZeroInputTest
 /// @notice An order with a `vaultId == 0` INPUT is settled as a direct wallet
@@ -672,5 +673,44 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         // Reverts (TokenDecimalsReadFailure) rather than returning a balance.
         vm.expectRevert();
         iRaindex.vaultBalance2(owner, address(token0), bytes32(0));
+    }
+
+    /// A `clear3` whose orders cross into a negative bounty reverts with the
+    /// explicit `NegativeBounty` before any vault is settled. Both orders take
+    /// and give via vault 0 against an orderbook with zero ambient balance, so
+    /// the only funds that could settle a vault-0 input are the capped outputs
+    /// pulled from the counterparty. The negative-bounty guard runs ahead of that
+    /// settlement, so the explicit error is the revert rather than the vault-0
+    /// token push running short first.
+    ///
+    ///   Alice: gives token0, wants token1 @ IO ratio 2 (both vault 0)
+    ///   Bob:   gives token1, wants token0 @ IO ratio 2 (both vault 0)
+    ///
+    /// Each order's input demand (1 * 2 = 2) caps to the counterparty's max
+    /// output (1): each output is 0.5 and each input is 1, so both bounties are
+    /// 0.5 - 1 = -0.5.
+    function testClearNegativeBountyVaultZeroRevertsNegativeBounty() external {
+        token0.mint(alice, 10e18);
+        vm.prank(alice);
+        token0.approve(address(iRaindex), 10e18);
+
+        token1.mint(bob, 10e18);
+        vm.prank(bob);
+        token1.approve(address(iRaindex), 10e18);
+
+        OrderV4 memory aliceOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, alice, "_ _: 1 2;:;", address(token1), bytes32(0), address(token0), bytes32(0)
+        );
+        OrderV4 memory bobOrder = LibTestTakeOrder.addOrderWithExpression(
+            vm, bob, "_ _: 1 2;:;", address(token0), bytes32(0), address(token1), bytes32(0)
+        );
+
+        assertEq(token0.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token0");
+        assertEq(token1.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token1");
+
+        vm.expectRevert(NegativeBounty.selector);
+        iRaindex.clear3(
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        );
     }
 }
