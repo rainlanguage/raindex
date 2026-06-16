@@ -203,6 +203,8 @@
   <Refresh
     class="ml-2 h-8 w-5 cursor-pointer text-gray-400 dark:text-gray-400"
     data-testid="refreshButton"
+    title="Refresh"
+    ariaLabel="Refresh"
     spin={$query.isLoading || $query.isFetching}
     on:click={async () => {
       if (queryKey) {

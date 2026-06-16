@@ -9,6 +9,7 @@
 
 <script lang="ts">
 	import Tooltip from './Tooltip.svelte';
+	import Sensitive from './Sensitive.svelte';
 	import {
 		WalletOutline,
 		FingerprintOutline,
@@ -60,7 +61,7 @@
 	{:else if type === HashType.Address}
 		<ClipboardOutline size="sm" />
 	{/if}
-	<div>{displayValue}</div>
+	<Sensitive><div>{displayValue}</div></Sensitive>
 </button>
 
 {#if showCopiedMessage}
@@ -85,7 +86,7 @@
 			{:else if type === HashType.Address}
 				<ClipboardOutline size="sm" />
 			{/if}
-			<div>{value}</div>
+			<Sensitive><div>{value}</div></Sensitive>
 		</div>
 	</Tooltip>
 {/if}
