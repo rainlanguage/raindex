@@ -1,4 +1,5 @@
-import type { NetworkSyncStatus, LocalDbStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
+import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
+import { aggregateLocalDbStatus } from '@rainlanguage/ui-components';
 import { writable, derived } from 'svelte/store';
 
 export const networkStatuses = writable<Map<number, NetworkSyncStatus>>(new Map());
@@ -40,28 +41,11 @@ export function updateStatus(status: NetworkSyncStatus | RaindexSyncStatus) {
 
 export const aggregateStatus = derived(
 	[networkStatuses, raindexStatuses],
-	([$networkMap, $raindexMap]) => {
-		const allStatuses: { status: LocalDbStatus; error?: string }[] = [
+	([$networkMap, $raindexMap]) =>
+		aggregateLocalDbStatus([
 			...Array.from($networkMap.values()),
 			...Array.from($raindexMap.values())
-		];
-
-		if (allStatuses.length === 0) {
-			return { status: 'active' as LocalDbStatus, error: undefined };
-		}
-
-		const failure = allStatuses.find((s) => s.status === 'failure');
-		if (failure) {
-			return { status: 'failure' as LocalDbStatus, error: failure.error };
-		}
-
-		const syncing = allStatuses.find((s) => s.status === 'syncing');
-		if (syncing) {
-			return { status: 'syncing' as LocalDbStatus, error: undefined };
-		}
-
-		return { status: 'active' as LocalDbStatus, error: undefined };
-	}
+		])
 );
 
 export const localDbStatus = aggregateStatus;
