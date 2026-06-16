@@ -160,6 +160,8 @@
         <button
           data-testid="debug-trade-button"
           class="text-gray-500 hover:text-gray-700"
+          title="Debug trade"
+          aria-label="Debug trade"
           on:click={() => {
             if (rpcs) handleDebugTradeModal(item.transaction.id, rpcs);
           }}

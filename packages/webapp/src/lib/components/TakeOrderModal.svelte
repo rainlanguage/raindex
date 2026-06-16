@@ -4,7 +4,8 @@
 		InputTokenAmount,
 		WalletConnect,
 		Refresh,
-		DEFAULT_REFRESH_INTERVAL
+		DEFAULT_REFRESH_INTERVAL,
+		validateAmount
 	} from '@rainlanguage/ui-components';
 	import { onDestroy } from 'svelte';
 	import { appKitModal, connected, signerAddress } from '$lib/stores/wagmi';
@@ -190,6 +191,8 @@
 		updateEstimate();
 	}
 
+	$: priceCapDecimalsError = validateAmount(priceCap).errorMessage;
+
 	$: effectivePriceCap = (() => {
 		if (priceCap && priceCap.trim() !== '') {
 			const parsed = Float.parse(priceCap);
@@ -220,7 +223,12 @@
 	})();
 
 	$: canSubmit =
-		isAmountValid && !exceedsMax && selectedQuote && effectivePriceCap && $signerAddress;
+		isAmountValid &&
+		!exceedsMax &&
+		!priceCapDecimalsError &&
+		selectedQuote &&
+		effectivePriceCap &&
+		$signerAddress;
 
 	async function handleSubmit() {
 		if (!selectedQuote || !effectivePriceCap) return;
@@ -299,6 +307,8 @@
 						<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Current Quote</h4>
 						<Refresh
 							class="h-5 w-5 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+							title="Refresh quote"
+							ariaLabel="Refresh quote"
 							on:click={refreshQuotes}
 							spin={isFetchingQuotes}
 						/>
@@ -395,6 +405,11 @@
 						bind:value={priceCap}
 						data-testid="price-cap-input"
 					/>
+					{#if priceCapDecimalsError}
+						<p class="mt-1 text-sm text-red-500" data-testid="price-cap-error">
+							{priceCapDecimalsError}
+						</p>
+					{/if}
 				</div>
 
 				{#if isAmountValid && estimateResult}

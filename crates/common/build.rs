@@ -1,11 +1,15 @@
 use std::process::Command;
 
 // `lib.rs` embeds the build's git commit as `GH_COMMIT_SHA` via
-// `env!("COMMIT_SHA")`. CI sets `COMMIT_SHA` in the environment (github.sha); in
-// that case `env!` reads it directly and this script is a no-op. For local
-// builds the var is usually unset, so derive it from `git rev-parse HEAD` here
-// rather than hard-failing the compile (or relying on a hand-written .env that
-// goes stale). Falls back to "unknown" if git isn't available.
+// `env!("COMMIT_SHA")`, and that read is gated behind `#[cfg(test)]` — so only
+// test builds need `COMMIT_SHA` to resolve at compile time. This script provides
+// the value for those test builds: CI sets `COMMIT_SHA` in the environment
+// (github.sha), in which case `env!` reads it directly and this script is a
+// no-op; otherwise (local test runs) it derives the SHA from `git rev-parse
+// HEAD` rather than hard-failing the compile (or relying on a hand-written .env
+// that goes stale). Falls back to "unknown" if git isn't available. A build
+// script can't tell the test profile from a prod build, so the derivation runs
+// unconditionally — it's harmless for prod, which doesn't read the var.
 fn main() {
     println!("cargo:rerun-if-env-changed=COMMIT_SHA");
 

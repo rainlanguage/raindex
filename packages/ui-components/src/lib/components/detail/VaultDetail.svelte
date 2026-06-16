@@ -109,6 +109,8 @@
 
 			<Refresh
 				testId="top-refresh"
+				title="Refresh vault"
+				ariaLabel="Refresh vault"
 				on:click={handleRefresh}
 				spin={$vaultDetailQuery.isLoading || $vaultDetailQuery.isFetching}
 			/>
