@@ -189,8 +189,10 @@ jobs:
           # the initial release instead of bumping it.
           if npm view @rainlanguage/raindex@latest version &>/dev/null; then
             npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/raindex
+            echo "FIRST_PUBLISH=false" >> $GITHUB_ENV
           else
             echo "@rainlanguage/raindex not yet on npm; publishing committed version as initial release"
+            echo "FIRST_PUBLISH=true" >> $GITHUB_ENV
           fi
           RAINDEX_NEW_VERSION=$(jq -r '.version' ./packages/raindex/package.json)
           echo "RAINDEX_NEW_VERSION=$RAINDEX_NEW_VERSION" >> $GITHUB_ENV
