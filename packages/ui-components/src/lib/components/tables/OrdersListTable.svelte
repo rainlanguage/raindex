@@ -271,6 +271,8 @@
 								data-testid={`order-menu-${item.id}`}
 								id={`order-menu-${item.id}`}
 								class="border-none px-2"
+								title="Order actions"
+								aria-label="Order actions"
 								on:click={(e) => {
 									e.stopPropagation();
 								}}

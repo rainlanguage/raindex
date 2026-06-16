@@ -134,6 +134,21 @@ describe('TakeOrderModal', () => {
 		});
 	});
 
+	it('shows hover title and aria-label on the refresh quote icon', async () => {
+		vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+			value: mockQuotes as never,
+			error: undefined
+		});
+
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			const refreshButton = screen.getByTestId('refresh-button');
+			expect(refreshButton).toHaveAttribute('title', 'Refresh quote');
+			expect(refreshButton).toHaveAttribute('aria-label', 'Refresh quote');
+		});
+	});
+
 	it('shows pair selector when multiple quotes are available', async () => {
 		const multiQuotes = [
 			...mockQuotes,

@@ -60,6 +60,8 @@ export { default as CodeMirrorDotrain } from "./components/CodeMirrorDotrain.sve
 export { default as OrderOrVaultHash } from "./components/OrderOrVaultHash.svelte";
 export { default as License } from "./components/License.svelte";
 export { default as ButtonDarkMode } from "./components/ButtonDarkMode.svelte";
+export { default as ButtonScrub } from "./components/ButtonScrub.svelte";
+export { default as Sensitive } from "./components/Sensitive.svelte";
 export { default as OrderPage } from "./components/deployment/OrderPage.svelte";
 export { default as InputHex } from "./components/input/InputHex.svelte";
 export { default as InputTokenAmount } from "./components/input/InputTokenAmount.svelte";
@@ -73,6 +75,8 @@ export { default as FixedBottomTransaction } from "./components/transactions/Fix
 export { default as LocalDbStatusCard } from "./components/LocalDbStatusCard.svelte";
 export { default as LocalDbStatusBadge } from "./components/LocalDbStatusBadge.svelte";
 export { default as LocalDbStatusModal } from "./components/LocalDbStatusModal.svelte";
+export { aggregateLocalDbStatus } from "./utils/localDbStatus";
+export type { AggregableSyncStatus } from "./utils/localDbStatus";
 
 //Types
 export type { AppStoresInterface } from "./types/appStores.ts";
@@ -148,6 +152,7 @@ export {
   cachedWritableStringOptional,
   cachedWritableString,
 } from "./storesGeneric/cachedWritableStore";
+export { scrub } from "./storesGeneric/scrub";
 
 // Assets
 export { default as logoLight } from "./assets/logo-light.svg";

@@ -307,6 +307,8 @@
 						<h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Current Quote</h4>
 						<Refresh
 							class="h-5 w-5 cursor-pointer text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+							title="Refresh quote"
+							ariaLabel="Refresh quote"
 							on:click={refreshQuotes}
 							spin={isFetchingQuotes}
 						/>
