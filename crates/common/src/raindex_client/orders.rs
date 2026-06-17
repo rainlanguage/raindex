@@ -3070,6 +3070,8 @@ mod tests {
                 Address::from_str("0x0000000000000000000000000000000000000000").unwrap()
             );
             assert_eq!(order2_outputs.vault_id(), U256::from(0));
+            assert!(order2_outputs.vaultless());
+            assert!(order2_outputs.is_vaultless());
             assert_eq!(
                 order2_outputs.token().id(),
                 "0x0000000000000000000000000000000000000000".to_string()
@@ -3097,6 +3099,8 @@ mod tests {
                 Address::from_str("0x0000000000000000000000000000000000000000").unwrap()
             );
             assert_eq!(order2_inputs.vault_id(), U256::from(0));
+            assert!(order2_inputs.vaultless());
+            assert!(order2_inputs.is_vaultless());
             assert_eq!(
                 order2_inputs.token().id(),
                 "0x0000000000000000000000000000000000000000".to_string()
