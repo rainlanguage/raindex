@@ -479,7 +479,7 @@ if (import.meta.vitest) {
     const makeZeroAmountTrade = (
       id: `0x${string}`,
       inputFormattedAmount: string,
-    ): RaindexTrade => ({
+    ) => ({
       id,
       timestamp: BigInt(1632000000),
       transaction: {
@@ -540,7 +540,7 @@ if (import.meta.vitest) {
         raindex: "0x1",
       } as unknown as RaindexVaultBalanceChange,
       raindex: "0x00",
-    });
+    }) as unknown as RaindexTrade;
 
     const takeOrderEntities: RaindexTrade[] = [
       makeZeroAmountTrade("0x1", "200"),
