@@ -1195,8 +1195,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         Float credit = sDustCredit[account][token];
         Float effective = amount.sub(credit);
 
-        uint256 amount18;
-        bool clamped;
+        uint256 amount18 = 0;
+        bool clamped = false;
         // A non-positive `effective` means the credit already covers the whole
         // pull, so no tokens move; `toFixedDecimalLossy` also rejects negatives.
         if (effective.gt(LibDecimalFloat.FLOAT_ZERO)) {
