@@ -67,18 +67,14 @@ describe("validateAmount", () => {
   });
 
   it("accepts exactly 67 decimal places (the Float parser limit)", () => {
-    expect(
-      validateAmount("0." + "1".repeat(67)),
-    ).toEqual({
+    expect(validateAmount("0." + "1".repeat(67))).toEqual({
       isValid: true,
       errorMessage: null,
     });
   });
 
   it("rejects 68 decimal places with a friendly message", () => {
-    expect(
-      validateAmount("0." + "1".repeat(68)),
-    ).toEqual({
+    expect(validateAmount("0." + "1".repeat(68))).toEqual({
       isValid: false,
       errorMessage: EXPECTED_ERROR,
     });
