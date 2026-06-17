@@ -477,7 +477,7 @@ if (import.meta.vitest) {
     // Trade 1: value = |200/100| = 2, trade 2: value = |400/100| = 4.
     // Fallback: unweighted mean = (2 + 4) / 2 = 3.
     const makeZeroAmountTrade = (
-      id: string,
+      id: `0x${string}`,
       inputFormattedAmount: string,
     ): RaindexTrade => ({
       id,
@@ -513,7 +513,7 @@ if (import.meta.vitest) {
         } as unknown as RaindexTransaction,
         raindex: "0x1",
       } as unknown as RaindexVaultBalanceChange,
-      orderHash: "orderHash",
+      orderHash: "0xorderHash" as `0x${string}`,
       inputVaultBalanceChange: {
         vaultId: BigInt(1),
         token: {
@@ -543,8 +543,8 @@ if (import.meta.vitest) {
     });
 
     const takeOrderEntities: RaindexTrade[] = [
-      makeZeroAmountTrade("1", "200"),
-      makeZeroAmountTrade("2", "400"),
+      makeZeroAmountTrade("0x1", "200"),
+      makeZeroAmountTrade("0x2", "400"),
     ];
 
     const result = prepareHistoricalOrderChartData(takeOrderEntities, "dark");
