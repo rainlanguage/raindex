@@ -201,4 +201,26 @@ contract RaindexV6AddOrderEnactTest is RaindexV6ExternalRealTest {
 
         checkAddOrder(alice, config, evals, 0, 0);
     }
+
+    /// order-counterparty() in an addOrder post-action must return address(0)
+    /// (no counterparty in an add-order context) rather than panicking with an
+    /// array OOB access. Fixes #2619.
+    /// forge-config: default.fuzz.runs = 10
+    function testAddOrderCounterpartyIsZeroAddress(address alice, OrderConfigV4 memory config) external {
+        LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
+
+        string memory usingWordsFrom = string.concat("using-words-from ", address(iSubParser).toHexString(), "\n");
+
+        bytes[] memory evals = new bytes[](1);
+        evals[0] = bytes(
+            string.concat(
+                usingWordsFrom,
+                ":ensure(equal-to(order-counterparty() ",
+                address(0).toHexString(),
+                ") \"order-counterparty zero\");"
+            )
+        );
+
+        checkAddOrder(alice, config, evals, 0, 0);
+    }
 }

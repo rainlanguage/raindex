@@ -368,7 +368,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
             LibRaindex.doPost(
                 LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
+                    LibBytes32Array.arrayFrom(
+                        orderHash, bytes32(uint256(uint160(msg.sender))), bytes32(uint256(uint160(address(0))))
+                    )
                 ),
                 post
             );
@@ -394,7 +396,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
             LibRaindex.doPost(
                 LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
+                    LibBytes32Array.arrayFrom(
+                        orderHash, bytes32(uint256(uint160(msg.sender))), bytes32(uint256(uint160(address(0))))
+                    )
                 ),
                 post
             );
