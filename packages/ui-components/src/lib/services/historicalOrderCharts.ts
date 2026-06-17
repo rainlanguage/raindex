@@ -48,7 +48,11 @@ export function prepareHistoricalOrderChartData(
         (acc, d) => acc + d.outputAmount,
         0,
       );
-      const ioratioAverage = ioratioSum / outputAmountSum;
+      const ioratioAverage =
+        outputAmountSum === 0
+          ? objectsWithSameTimestamp.reduce((acc, d) => acc + d.value, 0) /
+            objectsWithSameTimestamp.length
+          : ioratioSum / outputAmountSum;
       finalData.push({
         value: ioratioAverage,
         time: timestamp,
@@ -465,5 +469,87 @@ if (import.meta.vitest) {
 
     expect(result.length).toEqual(1);
     expect(result[0].value).toEqual(ioratioAverage);
+  });
+
+  it("falls back to unweighted mean when same-timestamp outputAmounts sum to zero", () => {
+    // outputVaultBalanceChange.amount (BigInt) = 0 for both trades → outputAmountSum = 0.
+    // outputVaultBalanceChange.formattedAmount = "100" (non-zero) so value is computable.
+    // Trade 1: value = |200/100| = 2, trade 2: value = |400/100| = 4.
+    // Fallback: unweighted mean = (2 + 4) / 2 = 3.
+    const makeZeroAmountTrade = (
+      id: string,
+      inputFormattedAmount: string,
+    ): RaindexTrade => ({
+      id,
+      timestamp: BigInt(1632000000),
+      transaction: {
+        id: "tx",
+        from: "0xsender",
+        timestamp: BigInt(1632000000),
+        blockNumber: BigInt(0),
+      } as unknown as RaindexTransaction,
+      outputVaultBalanceChange: {
+        amount: BigInt(0),
+        formattedAmount: "100",
+        vaultId: BigInt(1),
+        __typename: "Withdraw",
+        token: {
+          id: "tok",
+          address: "0xtok",
+          name: "tok",
+          symbol: "tok",
+          decimals: BigInt(1),
+        } as unknown as RaindexVaultToken,
+        newBalance: BigInt(0),
+        formattedNewBalance: "0",
+        oldBalance: BigInt(0),
+        formattedOldBalance: "0",
+        timestamp: BigInt(0),
+        transaction: {
+          id: "tx",
+          from: "0xsender",
+          timestamp: BigInt(1632000000),
+          blockNumber: BigInt(0),
+        } as unknown as RaindexTransaction,
+        raindex: "0x1",
+      } as unknown as RaindexVaultBalanceChange,
+      orderHash: "orderHash",
+      inputVaultBalanceChange: {
+        vaultId: BigInt(1),
+        token: {
+          id: "tok",
+          address: "0xtok",
+          name: "tok",
+          symbol: "tok",
+          decimals: BigInt(1),
+        } as unknown as RaindexVaultToken,
+        amount: BigInt(0),
+        formattedAmount: inputFormattedAmount,
+        __typename: "Withdraw",
+        newBalance: BigInt(0),
+        formattedNewBalance: "0",
+        oldBalance: BigInt(0),
+        formattedOldBalance: "0",
+        timestamp: BigInt(0),
+        transaction: {
+          id: "tx",
+          from: "0xsender",
+          timestamp: BigInt(1632000000),
+          blockNumber: BigInt(0),
+        } as unknown as RaindexTransaction,
+        raindex: "0x1",
+      } as unknown as RaindexVaultBalanceChange,
+      raindex: "0x00",
+    });
+
+    const takeOrderEntities: RaindexTrade[] = [
+      makeZeroAmountTrade("1", "200"),
+      makeZeroAmountTrade("2", "400"),
+    ];
+
+    const result = prepareHistoricalOrderChartData(takeOrderEntities, "dark");
+    expect(result.length).toEqual(1);
+    expect(isFinite(result[0].value)).toBe(true);
+    expect(result[0].value).toEqual(3);
   });
 }
