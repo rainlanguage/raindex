@@ -541,6 +541,16 @@ describe("Rain Raindex JS API Package Bindgen Tests - Builder", async function (
     },
   ] as const;
 
+  const multicallAbi = [
+    {
+      type: "function",
+      name: "multicall",
+      inputs: [{ name: "data", type: "bytes[]" }],
+      outputs: [],
+      stateMutability: "payable",
+    },
+  ] as const;
+
   it("should return available deployments", async () => {
     const result =
       await RaindexOrderBuilder.getDeploymentKeys(dotrainWithBuilder);
@@ -1522,6 +1532,45 @@ ${dotrain}`;
       );
     });
 
+    it("approves but does not deposit vaultless output amounts", async () => {
+      // decimal call
+      await mockServer
+        .forPost("/rpc-url")
+        .once()
+        .thenSendJsonRpcResult(
+          "0x0000000000000000000000000000000000000000000000000000000000000012",
+        );
+      // allowance - 1000 * 10^18
+      await mockServer
+        .forPost("/rpc-url")
+        .once()
+        .thenSendJsonRpcResult(
+          "0x00000000000000000000000000000000000000000000003635C9ADC5DEA00000",
+        );
+
+      builder.setVaultless("output", "token2", true);
+      await builder.setDeposit("token2", "5000");
+
+      const approvals = extractWasmEncodedData<ApprovalCalldataResult>(
+        await builder.generateApprovalCalldatas(
+          "0x1234567890abcdef1234567890abcdef12345678",
+        ),
+      );
+
+      // @ts-expect-error - result is valid
+      assert.equal(approvals.Calldatas.length, 1);
+      assert.equal(
+        // @ts-expect-error - result is valid
+        approvals.Calldatas[0].token,
+        "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+      );
+
+      const deposits = extractWasmEncodedData<DepositCalldataResult>(
+        await builder.generateDepositCalldatas(),
+      );
+      assert.equal(deposits, "NoDeposits");
+    });
+
     it("generates deposit calldatas", async () => {
       await mockServer
         .forPost("/rpc-url")
@@ -1797,7 +1846,16 @@ ${dotrainWithoutVaultIds}`;
       const calldata = extractWasmEncodedData<string>(
         await builder.generateDepositAndAddOrderCalldatas(),
       );
-      assert.equal(calldata.length, 3914);
+      const decoded = decodeFunctionData({
+        abi: multicallAbi,
+        data: calldata as `0x${string}`,
+      });
+      const [calls] = decoded.args as [`0x${string}`[]];
+      assert.equal(calls.length, 2);
+      assert.equal(
+        calls.filter((call) => call.startsWith("0x2fbc4ba0")).length,
+        1,
+      );
 
       const currentDeployment =
         extractWasmEncodedData<OrderBuilderDeploymentCfg>(

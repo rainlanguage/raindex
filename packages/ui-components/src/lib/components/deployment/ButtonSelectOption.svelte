@@ -2,7 +2,7 @@
 	import { Button } from 'flowbite-svelte';
 	export let active: boolean;
 	export let buttonText: string;
-	export let clickHandler: () => void;
+	export let clickHandler: () => void | Promise<void>;
 	export let dataTestId: string;
 </script>
 

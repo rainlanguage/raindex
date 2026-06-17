@@ -11,7 +11,7 @@
 	import type { TokenBalance } from '$lib/types/tokenBalance';
 
 	export let token: OrderBuilderSelectTokensCfg;
-	export let onSelectTokenSelect: (key: string) => void;
+	export let onSelectTokenSelect: (key: string) => void | Promise<void>;
 	export let tokenBalances: Map<string, TokenBalance> = new Map();
 
 	let inputValue: string | null = null;
@@ -32,7 +32,7 @@
 			tokenInfo = result.value;
 			if (result.value.address) {
 				inputValue = result.value.address;
-				onSelectTokenSelect(token.key);
+				await onSelectTokenSelect(token.key);
 			}
 		} catch {
 			// do nothing
@@ -43,7 +43,7 @@
 		inputValue = tokenInfo.address;
 	}
 
-	function setMode(mode: 'dropdown' | 'custom') {
+	async function setMode(mode: 'dropdown' | 'custom') {
 		selectionMode = mode;
 		error = '';
 
@@ -52,7 +52,7 @@
 			tokenInfo = null;
 			inputValue = '';
 			error = '';
-			clearTokenSelection();
+			await clearTokenSelection();
 		}
 	}
 
@@ -72,14 +72,14 @@
 			const errorMessage = (e as Error).message || 'Invalid token address.';
 			error = errorMessage;
 		} finally {
+			await onSelectTokenSelect(token.key);
 			checking = false;
-			onSelectTokenSelect(token.key);
 		}
 	}
 
-	function clearTokenSelection() {
+	async function clearTokenSelection() {
 		builder.unsetSelectToken(token.key);
-		onSelectTokenSelect(token.key);
+		await onSelectTokenSelect(token.key);
 	}
 
 	async function getInfoForSelectedToken() {
