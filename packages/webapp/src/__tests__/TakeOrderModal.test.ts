@@ -224,7 +224,7 @@ describe('TakeOrderModal', () => {
 		await fireEvent.input(amountInput, { target: { value: '10' } });
 		// 68 decimal places, one more than the maximum of 67.
 		await fireEvent.input(priceCapInput, {
-			target: { value: '0.00151160732710359471234567890123456789012345678901234567890123456' }
+			target: { value: '0.00151160732710359471234567890123456789012345678901234567890123456789' }
 		});
 
 		await waitFor(() => {
