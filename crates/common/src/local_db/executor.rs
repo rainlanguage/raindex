@@ -258,11 +258,19 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
 
     async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
         let db_path = self.db_path.clone();
+        let pool = Arc::clone(&self.pool);
         spawn_blocking(move || {
-            if db_path.exists() {
-                std::fs::remove_file(&db_path).map_err(|e| {
-                    LocalDbQueryError::database(format!("Failed to delete database file: {e}"))
-                })?;
+            pool.lock().unwrap_or_else(|e| e.into_inner()).clear();
+
+            for path in sqlite_file_paths(&db_path) {
+                if path.exists() {
+                    std::fs::remove_file(&path).map_err(|e| {
+                        LocalDbQueryError::database(format!(
+                            "Failed to delete database file {}: {e}",
+                            path.display()
+                        ))
+                    })?;
+                }
             }
             let conn = open_connection(&db_path)?;
             drop(conn);
@@ -271,6 +279,17 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
         .await
         .map_err(join_err)?
     }
+}
+
+fn sqlite_file_paths(db_path: &Path) -> Vec<PathBuf> {
+    ["", "-wal", "-shm"]
+        .into_iter()
+        .map(|suffix| {
+            let mut path = db_path.as_os_str().to_os_string();
+            path.push(suffix);
+            PathBuf::from(path)
+        })
+        .collect()
 }
 
 #[cfg(test)]

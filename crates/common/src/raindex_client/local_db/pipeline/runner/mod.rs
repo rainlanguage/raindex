@@ -19,9 +19,12 @@ use crate::local_db::{
             },
             RunOutcome, RunReport, TargetFailure, TargetSuccess,
         },
-        EventsPipeline, StatusBus, TokensPipeline, WindowPipeline,
+        EventsPipeline, StatusBus, SyncPhase, TokensPipeline, WindowPipeline,
     },
-    query::LocalDbQueryExecutor,
+    query::{
+        fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
+        LocalDbQueryExecutor,
+    },
     LocalDbError, RaindexIdentifier,
 };
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
@@ -110,9 +113,32 @@ where
         self.chain_id
     }
 
+    pub fn raindex_ids(&self) -> Vec<RaindexIdentifier> {
+        self.base_targets
+            .iter()
+            .map(|target| target.inputs.raindex_id.clone())
+            .collect()
+    }
+
+    pub fn needs_initial_provisioning(&self) -> bool {
+        !self.manifests_loaded || !self.has_provisioned_dumps
+    }
+
     pub async fn run<DB>(&mut self, db: &DB) -> Result<RunOutcome, LocalDbError>
     where
         DB: LocalDbQueryExecutor + ?Sized,
+    {
+        self.run_with_phase_callback(db, |_| {}).await
+    }
+
+    pub async fn run_with_phase_callback<DB, F>(
+        &mut self,
+        db: &DB,
+        on_phase: F,
+    ) -> Result<RunOutcome, LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+        F: Fn(SyncPhase),
     {
         if self.leadership_guard.is_none() {
             match self.leadership.acquire().await? {
@@ -122,6 +148,7 @@ where
         }
 
         if !self.manifests_loaded {
+            on_phase(SyncPhase::FetchingSyncManifest);
             self.manifest_map = match self
                 .environment
                 .fetch_manifests(&self.settings.raindexes)
@@ -161,7 +188,8 @@ where
         let needs_provisioning = !self.has_provisioned_dumps;
 
         if needs_provisioning {
-            let (provisioned, mut provisioning_failures) = self.provision_dumps(targets).await;
+            let (provisioned, mut provisioning_failures) =
+                self.provision_dumps(db, targets, &on_phase).await;
             let had_provisioning_failures = !provisioning_failures.is_empty();
             targets = provisioned;
 
@@ -186,21 +214,45 @@ where
         Ok(RunOutcome::Report(report))
     }
 
-    async fn provision_dumps(
+    async fn provision_dumps<DB, F>(
         &self,
+        db: &DB,
         targets: Vec<RunnerTarget>,
-    ) -> (Vec<RunnerTarget>, Vec<TargetFailure>) {
+        on_phase: &F,
+    ) -> (Vec<RunnerTarget>, Vec<TargetFailure>)
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+        F: Fn(SyncPhase),
+    {
         let manifest_map = &self.manifest_map;
         let environment = self.environment.clone();
         let futures = targets.into_iter().map(move |mut target| {
             let environment = environment.clone();
             async move {
                 if let Some(entry) = lookup_manifest_entry(manifest_map, &target) {
+                    let should_download_dump =
+                        match self.should_download_dump(db, &target, &entry).await {
+                            Ok(should_download_dump) => should_download_dump,
+                            Err(error) => {
+                                return Err(TargetFailure {
+                                    raindex_id: target.inputs.raindex_id.clone(),
+                                    raindex_key: Some(target.raindex_key.clone()),
+                                    stage: TargetStage::DumpDownload,
+                                    error,
+                                })
+                            }
+                        };
+                    target.inputs.manifest_end_block = entry.end_block;
+
+                    if !should_download_dump {
+                        return Ok(target);
+                    }
+
+                    on_phase(SyncPhase::DownloadingInitialDump);
                     let dump_sql = environment.download_dump(&entry.dump_url).await;
                     return match dump_sql {
                         Ok(sql) => {
                             target.inputs.dump_str = Some(sql);
-                            target.inputs.manifest_end_block = entry.end_block;
                             Ok(target)
                         }
                         Err(error) => Err(TargetFailure {
@@ -226,6 +278,25 @@ where
         }
 
         (provisioned, failures)
+    }
+
+    async fn should_download_dump<DB>(
+        &self,
+        db: &DB,
+        target: &RunnerTarget,
+        entry: &raindex_app_settings::local_db_manifest::ManifestRaindex,
+    ) -> Result<bool, LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+    {
+        let rows: Vec<TargetWatermarkRow> = db
+            .query_json(&fetch_target_watermark_stmt(&target.inputs.raindex_id))
+            .await?;
+
+        Ok(rows.first().is_none_or(|row| {
+            entry.end_block.saturating_sub(row.last_block)
+                > u64::from(target.inputs.block_number_threshold)
+        }))
     }
 
     async fn execute_targets<DB>(
@@ -1127,6 +1198,16 @@ raindexes:
         }
     }
 
+    fn target_watermark_row(target: &RunnerTarget, last_block: u64) -> TargetWatermarkRow {
+        TargetWatermarkRow {
+            chain_id: target.inputs.raindex_id.chain_id,
+            raindex_address: target.inputs.raindex_id.raindex_address,
+            last_block,
+            last_hash: Bytes::copy_from_slice(B256::ZERO.as_slice()),
+            updated_at: 1,
+        }
+    }
+
     fn engine_builder_for_behaviors(
         telemetry: Telemetry,
         behaviors: HashMap<String, EngineBehavior>,
@@ -1460,6 +1541,44 @@ raindexes:
             .expect("record for raindex-b");
         assert!(record_b.dump_sql.is_none());
         assert_eq!(record_b.latest_block, 0);
+    }
+
+    #[tokio::test]
+    async fn fresh_runner_skips_dump_when_existing_watermark_is_within_threshold() {
+        let telemetry = Telemetry::default();
+        let environment =
+            build_environment(manifest_for_a(), HashMap::new(), 1, 0, telemetry.clone());
+        let settings = single_raindex_settings_yaml();
+        let mut runner =
+            ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
+
+        let db = RecordingDb::default();
+        prepare_db_baseline(&db);
+        let target = runner.base_targets[0].clone();
+        db.set_json_value(
+            &fetch_target_watermark_stmt(&target.inputs.raindex_id),
+            [target_watermark_row(&target, 100)],
+        );
+        db.set_json_raw(
+            &fetch_store_addresses_stmt(&target.inputs.raindex_id),
+            json!([]),
+        );
+
+        let outcome = runner.run(&db).await.expect("run succeeds");
+        let report = unwrap_report(outcome);
+
+        assert_eq!(report.successes.len(), 1);
+        assert!(report.failures.is_empty());
+        assert!(runner.has_provisioned_dumps);
+        assert_eq!(telemetry.manifest_fetch_count(), 1);
+        assert!(
+            telemetry.dump_requests().is_empty(),
+            "existing local DB inside threshold must not re-download bootstrap dump"
+        );
+        let records = telemetry.bootstrap_records();
+        assert_eq!(records.len(), 1);
+        assert!(records[0].dump_sql.is_none());
+        assert_eq!(records[0].latest_block, 111);
     }
 
     #[tokio::test]

@@ -1205,43 +1205,20 @@ impl RaindexClient {
                 );
             }
 
-            let dotrain_started_at = Timing::now();
-            let orders = fetch_orders_dotrain_sources(all_orders)
-                .instrument(info_span!("orders.fetching_dotrain_sources"))
-                .await
-                .map_err(|err| {
-                    error!(
-                        local_rows,
-                        subgraph_rows,
-                        duration_ms = dotrain_started_at.elapsed_ms(),
-                        error = %err,
-                        "failed fetching order dotrain sources"
-                    );
-                    err
-                })?;
-            info!(
-                local_rows,
-                subgraph_rows,
-                returned_order_count = orders.len(),
-                total_count,
-                duration_ms = dotrain_started_at.elapsed_ms(),
-                "fetched order dotrain sources"
-            );
-
             info!(
                 query_source,
                 local_chain_ids_count,
                 subgraph_chain_ids_count,
                 local_rows,
                 subgraph_rows,
-                returned_order_count = orders.len(),
+                returned_order_count = all_orders.len(),
                 total_count,
                 duration_ms = started_at.elapsed_ms(),
                 "completed get_orders"
             );
 
             Ok(RaindexOrdersListResult {
-                orders,
+                orders: all_orders,
                 total_count,
             })
         }
@@ -2973,6 +2950,7 @@ mod tests {
             assert_eq!(result.orders().len(), 2);
             assert_eq!(result.total_count(), 2);
             assert!(logs_contain("completed get_orders"));
+            assert!(!logs_contain("fetched order dotrain sources"));
 
             let expected_order1 = RaindexOrder::try_from_sg_order(
                 Arc::new(raindex_client.clone()),
@@ -3037,6 +3015,7 @@ mod tests {
 
             assert_eq!(order1.raindex(), expected_order1.raindex());
             assert_eq!(order1.timestamp_added(), expected_order1.timestamp_added());
+            assert!(order1.dotrain_source().is_none());
 
             let order2 = result.orders()[1].clone();
             assert_eq!(order2.chain_id, 137);

@@ -22,6 +22,18 @@ mod tests {
     #[test]
     fn sync_phase_to_message_returns_correct_strings() {
         assert_eq!(
+            SyncPhase::PreparingLocalDatabase.to_message(),
+            "Preparing local database"
+        );
+        assert_eq!(
+            SyncPhase::FetchingSyncManifest.to_message(),
+            "Fetching sync manifest"
+        );
+        assert_eq!(
+            SyncPhase::DownloadingInitialDump.to_message(),
+            "Downloading initial dump"
+        );
+        assert_eq!(
             SyncPhase::FetchingLatestBlock.to_message(),
             "Fetching latest block"
         );
