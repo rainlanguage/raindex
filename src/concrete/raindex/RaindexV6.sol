@@ -1103,9 +1103,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// Calculates the clear state change given both order calculations for order
-    /// alice and order bob. The input of each is their output multiplied by
-    /// their IO ratio and the output of each is the smaller of their maximum
-    /// output and the counterparty IO * max output.
+    /// alice and bob. Each order's output is capped by the counterparty's max
+    /// output, and each order's input is derived from the IO ratio.
     /// @param aliceOrderIOCalculation Order calculation for Alice.
     /// @param bobOrderIOCalculation Order calculation for Bob.
     /// @return clearStateChange The clear state change with absolute inputs and
