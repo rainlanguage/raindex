@@ -1,6 +1,6 @@
 import { cachedWritableStore } from '@rainlanguage/ui-components';
 import { type Address, type Hex } from '@rainlanguage/raindex';
-import { get, writable } from 'svelte/store';
+import { writable } from 'svelte/store';
 
 /**
  * A persistent store that controls whether vaults with zero balance should be hidden in the UI.
@@ -65,11 +65,10 @@ export const validChainIds = writable<number[]>([]);
 
 validChainIds.subscribe((valid) => {
 	if (valid.length > 0) {
-		const current = get(selectedChainIds);
-		const filtered = current.filter((id) => valid.includes(id));
-		if (filtered.length !== current.length) {
-			selectedChainIds.set(filtered);
-		}
+		selectedChainIds.update((current) => {
+			const filtered = current.filter((id) => valid.includes(id));
+			return filtered.length !== current.length ? filtered : current;
+		});
 	}
 });
 
