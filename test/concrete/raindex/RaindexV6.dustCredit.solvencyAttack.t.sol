@@ -3,26 +3,12 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-
-/// @dev Same harness as the PR's test, exposing the internal helpers.
-contract RaindexV6DustCreditSolvencyAttackHarness is RaindexV6 {
-    function exposedPull(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pullTokens(account, token, amount);
-    }
-
-    function exposedPush(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pushTokens(account, token, amount);
-    }
-
-    function exposedDustCredit(address user, address token) external view returns (Float) {
-        return sDustCredit[user][token];
-    }
-}
+import {RaindexV6DustCreditSolvencyAttackHarness} from
+    "test/concrete/raindex/RaindexV6DustCreditSolvencyAttackHarness.sol";
 
 /// @title Adversarial solvency attack on the dust-credit ledger.
 /// @notice Tries to construct a sequence where realizing a credit pays out

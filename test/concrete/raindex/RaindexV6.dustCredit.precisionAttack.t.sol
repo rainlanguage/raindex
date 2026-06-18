@@ -3,49 +3,15 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
-import {ERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/ERC20.sol";
-
-contract RaindexV6DustCreditPrecisionAttackHarness is RaindexV6 {
-    function exposedPull(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pullTokens(account, token, amount);
-    }
-
-    function exposedPush(address account, address token, Float amount) external returns (uint256, uint8) {
-        return pushTokens(account, token, amount);
-    }
-
-    function exposedDustCredit(address user, address token) external view returns (Float) {
-        return sDustCredit[user][token];
-    }
-}
-
-/// @dev Token whose reported decimals can be flipped at runtime, to probe the
-/// TOFU decimals-change behaviour.
-contract PrecisionAttackMutableDecimalsToken is ERC20 {
-    uint8 public dec;
-
-    constructor(uint8 d) ERC20("Mut", "MUT") {
-        dec = d;
-    }
-
-    function setDecimals(uint8 d) external {
-        dec = d;
-    }
-
-    function decimals() public view override returns (uint8) {
-        return dec;
-    }
-
-    function mint(address to, uint256 amount) external {
-        _mint(to, amount);
-    }
-}
+import {RaindexV6DustCreditPrecisionAttackHarness} from
+    "test/concrete/raindex/RaindexV6DustCreditPrecisionAttackHarness.sol";
+import {PrecisionAttackMutableDecimalsToken} from
+    "test/concrete/raindex/PrecisionAttackMutableDecimalsToken.sol";
 
 contract RaindexV6DustCreditPrecisionAttackTest is Test {
     using LibDecimalFloat for Float;
