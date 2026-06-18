@@ -7,8 +7,9 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {RaindexV6DustCreditConservationAttackHarness} from
-    "test/concrete/raindex/RaindexV6DustCreditConservationAttackHarness.sol";
+import {
+    RaindexV6DustCreditConservationAttackHarness
+} from "test/concrete/raindex/RaindexV6DustCreditConservationAttackHarness.sol";
 
 /// @title Adversarial conservation attack on the dust-credit ledger.
 contract RaindexV6DustCreditConservationAttackTest is Test {

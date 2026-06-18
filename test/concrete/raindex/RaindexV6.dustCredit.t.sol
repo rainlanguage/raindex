@@ -7,8 +7,7 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {RaindexV6DustCreditHarness} from
-    "test/concrete/raindex/RaindexV6DustCreditHarness.sol";
+import {RaindexV6DustCreditHarness} from "test/concrete/raindex/RaindexV6DustCreditHarness.sol";
 
 /// @title RaindexV6DustCreditTest
 /// @notice L01 follow-up (#2673): every lossy float->fixed-decimal token move

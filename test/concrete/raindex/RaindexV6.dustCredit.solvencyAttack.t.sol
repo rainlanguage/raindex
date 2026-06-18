@@ -7,8 +7,9 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {RaindexV6DustCreditSolvencyAttackHarness} from
-    "test/concrete/raindex/RaindexV6DustCreditSolvencyAttackHarness.sol";
+import {
+    RaindexV6DustCreditSolvencyAttackHarness
+} from "test/concrete/raindex/RaindexV6DustCreditSolvencyAttackHarness.sol";
 
 /// @title Adversarial solvency attack on the dust-credit ledger.
 /// @notice Tries to construct a sequence where realizing a credit pays out

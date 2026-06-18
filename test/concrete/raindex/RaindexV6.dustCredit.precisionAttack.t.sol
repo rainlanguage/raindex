@@ -8,10 +8,10 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
-import {RaindexV6DustCreditPrecisionAttackHarness} from
-    "test/concrete/raindex/RaindexV6DustCreditPrecisionAttackHarness.sol";
-import {PrecisionAttackMutableDecimalsToken} from
-    "test/concrete/raindex/PrecisionAttackMutableDecimalsToken.sol";
+import {
+    RaindexV6DustCreditPrecisionAttackHarness
+} from "test/concrete/raindex/RaindexV6DustCreditPrecisionAttackHarness.sol";
+import {PrecisionAttackMutableDecimalsToken} from "test/concrete/raindex/PrecisionAttackMutableDecimalsToken.sol";
 
 contract RaindexV6DustCreditPrecisionAttackTest is Test {
     using LibDecimalFloat for Float;
