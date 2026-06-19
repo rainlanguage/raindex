@@ -343,7 +343,13 @@ raindexes:
         );
         assert_eq!(target_a.inputs.cfg.deployment_block, 111);
         assert_eq!(target_a.inputs.cfg.fetch.chunk_size(), 10);
+        assert_eq!(target_a.inputs.cfg.fetch.max_concurrent_requests(), 5);
+        assert_eq!(target_a.inputs.cfg.fetch.max_concurrent_blocks(), 5);
+        assert_eq!(target_a.inputs.cfg.fetch.max_retry_attempts(), 3);
+        assert_eq!(target_a.inputs.cfg.fetch.retry_delay_ms(), 100);
+        assert_eq!(target_a.inputs.cfg.fetch.rate_limit_delay_ms(), 50);
         assert_eq!(target_a.inputs.cfg.finality.depth, 12);
+        assert_eq!(target_a.inputs.block_number_threshold, 10000);
         assert!(target_a.inputs.cfg.window_overrides.start_block.is_none());
         assert_eq!(
             target_a.inputs.metadata_rpcs,

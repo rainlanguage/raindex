@@ -40,4 +40,87 @@ describe("InputTokenAmount", () => {
     await fireEvent.click(maxButton);
     expect(component.$$.ctx[component.$$.props.value].format().value).toBe("1");
   });
+
+  it("accepts 19 decimal places (Float supports up to 67)", async () => {
+    const { getByRole, queryByTestId, component } = render(InputTokenAmount, {
+      props: { value: Float.parse("0").value },
+    });
+    const input = getByRole("textbox");
+
+    // 19 decimal places — valid for Float; old 18-cap wrongly rejected this.
+    await fireEvent.input(input, {
+      target: { value: "0.0015116073271035947" },
+    });
+
+    expect(queryByTestId("decimals-error")).toBeNull();
+    expect(component.$$.ctx[component.$$.props.value].format().value).toBe(
+      "0.0015116073271035947",
+    );
+  });
+
+  it("shows a friendly error and resets the value when more than 67 decimals are entered", async () => {
+    const { getByRole, queryByTestId, component } = render(InputTokenAmount, {
+      props: { value: Float.parse("0").value },
+    });
+    const input = getByRole("textbox");
+
+    // 68 decimal places, one more than the Float parser limit.
+    await fireEvent.input(input, {
+      target: { value: "0." + "1".repeat(68) },
+    });
+
+    const error = queryByTestId("decimals-error");
+    expect(error).not.toBeNull();
+    expect(error?.textContent?.trim()).toBe(
+      "Too many decimal places. A maximum of 67 decimal places is allowed.",
+    );
+    // The invalid value must not propagate; it is reset to zero.
+    expect(component.$$.ctx[component.$$.props.value].format().value).toBe("0");
+  });
+
+  it("accepts exactly 18 decimals without showing an error", async () => {
+    const { getByRole, queryByTestId, component } = render(InputTokenAmount, {
+      props: { value: Float.parse("0").value },
+    });
+    const input = getByRole("textbox");
+
+    // 18 decimal places.
+    await fireEvent.input(input, {
+      target: { value: "0.001511607327103594" },
+    });
+
+    expect(queryByTestId("decimals-error")).toBeNull();
+    expect(component.$$.ctx[component.$$.props.value].format().value).toBe(
+      "0.001511607327103594",
+    );
+  });
+
+  it("accepts exactly 67 decimals without showing an error", async () => {
+    const { getByRole, queryByTestId } = render(InputTokenAmount, {
+      props: { value: Float.parse("0").value },
+    });
+    const input = getByRole("textbox");
+
+    // 67 decimal places — the Float parser limit.
+    await fireEvent.input(input, {
+      target: { value: "0." + "1".repeat(67) },
+    });
+
+    expect(queryByTestId("decimals-error")).toBeNull();
+  });
+
+  it("clears the decimals error once a valid value replaces an invalid one", async () => {
+    const { getByRole, queryByTestId } = render(InputTokenAmount, {
+      props: { value: Float.parse("0").value },
+    });
+    const input = getByRole("textbox");
+
+    await fireEvent.input(input, {
+      target: { value: "0." + "1".repeat(68) },
+    });
+    expect(queryByTestId("decimals-error")).not.toBeNull();
+
+    await fireEvent.input(input, { target: { value: "0.5" } });
+    expect(queryByTestId("decimals-error")).toBeNull();
+  });
 });

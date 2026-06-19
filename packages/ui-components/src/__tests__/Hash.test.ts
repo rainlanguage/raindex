@@ -1,9 +1,15 @@
-import { render } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import Hash from "../lib/components/Hash.svelte";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import userEvent from "@testing-library/user-event";
+import { scrub } from "../lib/storesGeneric/scrub";
 
 describe("Hash Component", () => {
+  afterEach(() => {
+    cleanup();
+    scrub.set(false);
+  });
+
   it("renders with shortened hash display", () => {
     const { getByText } = render(Hash, {
       props: {
@@ -61,5 +67,36 @@ describe("Hash Component", () => {
     await user.click(button);
     const clipboardText = await navigator.clipboard.readText();
     expect(clipboardText).toBe("");
+  });
+
+  it("does not mask the displayed value when scrub is off", () => {
+    scrub.set(false);
+    const { container } = render(Hash, {
+      props: { value: "abcdef1234567890", type: 1, shorten: true, sliceLen: 5 },
+    });
+    expect(
+      container.querySelector('[data-testid="sensitive-mask"]'),
+    ).toBeNull();
+    const content = container.querySelector(
+      '[data-testid="sensitive-content"]',
+    );
+    expect(content).not.toHaveClass("invisible");
+  });
+
+  it("masks the displayed value when scrub is on", () => {
+    scrub.set(true);
+    const { getByText, container } = render(Hash, {
+      props: { value: "abcdef1234567890", type: 1, shorten: true, sliceLen: 5 },
+    });
+    // The shortened value is still rendered (presentational only) ...
+    expect(getByText("abcde...67890")).toBeInTheDocument();
+    // ... but wrapped in an invisible Sensitive region with a grey mask over it.
+    expect(
+      container.querySelector('[data-testid="sensitive-mask"]'),
+    ).toBeInTheDocument();
+    const content = container.querySelector(
+      '[data-testid="sensitive-content"]',
+    );
+    expect(content).toHaveClass("invisible");
   });
 });

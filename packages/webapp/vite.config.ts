@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => ({
 	build: {
 		target: 'es2023'
 	},
+	ssr: {
+		noExternal: ['@tanstack/svelte-query', 'lodash', 'svelte-codemirror-editor']
+	},
 	optimizeDeps: {
 		exclude: ['@rainlanguage/sqlite-web']
 	},

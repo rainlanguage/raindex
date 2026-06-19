@@ -484,6 +484,10 @@ describe("OrderDetail", () => {
     const withdrawButton = screen.getAllByTestId("withdraw-button")[0];
     expect(withdrawButton).toHaveAttribute("title", "Withdraw from vault");
     expect(withdrawButton).toHaveAttribute("aria-label", "Withdraw from vault");
+
+    const refreshButton = screen.getByTestId("top-refresh");
+    expect(refreshButton).toHaveAttribute("title", "Refresh order");
+    expect(refreshButton).toHaveAttribute("aria-label", "Refresh order");
   });
 
   it("does not show Take Order button for inactive orders", async () => {
