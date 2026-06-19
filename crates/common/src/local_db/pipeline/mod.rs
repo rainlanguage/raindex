@@ -82,6 +82,9 @@ pub struct SyncOutcome {
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "snake_case")]
 pub enum SyncPhase {
+    PreparingLocalDatabase,
+    FetchingSyncManifest,
+    DownloadingInitialDump,
     FetchingLatestBlock,
     RunningBootstrap,
     ComputingSyncWindow,
@@ -101,6 +104,9 @@ impl_wasm_traits!(SyncPhase);
 impl SyncPhase {
     pub fn to_message(&self) -> &'static str {
         match self {
+            Self::PreparingLocalDatabase => "Preparing local database",
+            Self::FetchingSyncManifest => "Fetching sync manifest",
+            Self::DownloadingInitialDump => "Downloading initial dump",
             Self::FetchingLatestBlock => "Fetching latest block",
             Self::RunningBootstrap => "Running bootstrap",
             Self::ComputingSyncWindow => "Computing sync window",
