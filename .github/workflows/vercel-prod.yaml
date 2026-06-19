@@ -1,7 +1,19 @@
+##
+## SECURITY MODEL FOR VERCEL PRODUCTION DEPLOYS (READ BEFORE EDITING)
+##
+## This workflow runs on main pushes in this repository:
+##  - The wrapper (checkout, nix, caches, build, Vercel pull + deploy, security
+##    hardening) lives in the rainix `rainix-vercel.yaml` reusable workflow; this
+##    file is a thin caller that selects the production environment and maps
+##    secrets.
+##  - Secrets are passed only to the Vercel CLI steps inside the reusable
+##    workflow, never to the build step.
+##
+## WARNING: Changing any of the following may break the security model:
+##  - Triggers (the main push + webapp paths).
+##  - The reusable workflow ref / inputs.
+## If you modify this file, re-validate these invariants (and those in rainix).
 name: GitHub Actions Vercel Production Deployment
-env:
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_V6 }}
 on:
   push:
     branches:
@@ -19,17 +31,32 @@ on:
       - 'script/vercel-build.sh'
       - '.github/workflows/vercel-prod.yaml'
 jobs:
-  Deploy-Preview:
-    permissions:
-      id-token: write
-      contents: read
+  production:
+    uses: rainlanguage/rainix/.github/workflows/rainix-vercel.yaml@main
+    with:
+      environment: production
+      production: true
+      # Pin the canary Vercel CLI version for the deploy.
+      vercel-version: canary
+    secrets:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_V6 }}
+      WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+  # The npm-package blacklist check is intentionally kept out of the reusable
+  # Vercel workflow (it's a repo-specific policy gate, not part of the deploy
+  # wrapper), so it runs here as a separate job. The action needs an installed
+  # dependency tree (it runs `npm ls --all`), so install workspace deps first;
+  # no wasm/webapp build is required just to inspect the tree.
+  npm-blacklist:
     runs-on: ubuntu-latest
-    env:
-      COMMIT_SHA: ${{ github.sha }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v2
-      - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.1
+      - uses: actions/checkout@v4
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -42,31 +69,13 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           useDaemon: false
       - name: Restore and save Nix store
-        uses: nix-community/cache-nix-action@v6
+        uses: nix-community/cache-nix-action@v7
         with:
-          # restore and save a cache using this key
           primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          # if there's no cache hit, restore a cache by this prefix
           restore-prefixes-first-match: nix-${{ runner.os }}-
-          # collect garbage until the Nix store size (in bytes) is at most this number
-          # before trying to save a new cache
-          # 1G = 1073741824
-          gc-max-store-size-linux: 1G
-      - uses: Swatinem/rust-cache@v2
-        with:
-          # Stable shared-key (same in vercel-preview.yaml) so preview + prod
-          # share one warm wasm/cargo cache instead of a separate per-workflow one.
-          shared-key: vercel-webapp
-      - name: Cache npm
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: npm-${{ runner.os }}-${{ github.workflow }}-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: npm-${{ runner.os }}-
-      - run: ./script/vercel-build.sh
-        env:
-          PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.WALLETCONNECT_PROJECT_ID }}
-      # check for npm package blacklists pkgs across all packages
+          gc-max-store-size-linux: 8G
+      - name: Install npm dependencies
+        run: nix develop .#wasm-shell -c npm install --no-check
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
@@ -74,17 +83,3 @@ jobs:
       - uses: rainlanguage/github-chore/.github/actions/npm-blacklist@main
         with:
           working-directory: packages/ui-components
-      - name: Install Vercel CLI
-        run: npm install --global vercel@canary
-      - name: Pull Vercel Environment Information
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-      - name: Deploy Project Artifacts to Vercel
-        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }} packages/webapp
-      # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
-      - name: Forward CI Status
-        if: always()
-        uses: rainlanguage/github-chore/.github/actions/telegram-status-report@main
-        with:
-          status: ${{ job.status }}
-          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}

@@ -6,7 +6,7 @@ import {
 } from "$lib/services/validateAmount";
 
 const EXPECTED_ERROR =
-  "Too many decimal places. A maximum of 18 decimal places is allowed.";
+  "Too many decimal places. A maximum of 67 decimal places is allowed.";
 
 describe("countDecimalPlaces", () => {
   it("counts zero decimal places for an integer", () => {
@@ -48,26 +48,40 @@ describe("countDecimalPlaces", () => {
 });
 
 describe("validateAmount", () => {
-  it("exposes the documented maximum of 18 decimal places", () => {
-    expect(MAX_DECIMALS).toBe(18);
+  it("exposes the documented maximum of 67 decimal places", () => {
+    expect(MAX_DECIMALS).toBe(67);
   });
 
-  it("accepts exactly 18 decimal places (the issue's working value)", () => {
+  it("accepts 18 decimal places", () => {
     expect(validateAmount("0.001511607327103594")).toEqual({
       isValid: true,
       errorMessage: null,
     });
   });
 
-  it("rejects 19 decimal places (the issue's failing value) with a friendly message", () => {
+  it("accepts 19 decimal places (the value rejected by the old 18-cap)", () => {
     expect(validateAmount("0.0015116073271035947")).toEqual({
+      isValid: true,
+      errorMessage: null,
+    });
+  });
+
+  it("accepts exactly 67 decimal places (the Float parser limit)", () => {
+    expect(validateAmount("0." + "1".repeat(67))).toEqual({
+      isValid: true,
+      errorMessage: null,
+    });
+  });
+
+  it("rejects 68 decimal places with a friendly message", () => {
+    expect(validateAmount("0." + "1".repeat(68))).toEqual({
       isValid: false,
       errorMessage: EXPECTED_ERROR,
     });
   });
 
-  it("rejects a negative value with too many decimals", () => {
-    expect(validateAmount("-0.0000000000000000001")).toEqual({
+  it("rejects a negative value with more than 67 decimals", () => {
+    expect(validateAmount("-0." + "1".repeat(68))).toEqual({
       isValid: false,
       errorMessage: EXPECTED_ERROR,
     });
