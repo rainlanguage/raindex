@@ -211,7 +211,7 @@ describe('TakeOrderModal', () => {
 		});
 	});
 
-	it('rejects a price cap with more than 18 decimals and keeps submit disabled', async () => {
+	it('rejects a price cap with more than 67 decimals and keeps submit disabled', async () => {
 		render(TakeOrderModal, defaultProps);
 
 		await waitFor(() => {
@@ -222,12 +222,14 @@ describe('TakeOrderModal', () => {
 		const amountInput = inputs[0];
 		const priceCapInput = screen.getByTestId('price-cap-input');
 		await fireEvent.input(amountInput, { target: { value: '10' } });
-		// 19 decimal places, one more than the maximum.
-		await fireEvent.input(priceCapInput, { target: { value: '0.0015116073271035947' } });
+		// 68 decimal places, one more than the maximum of 67.
+		await fireEvent.input(priceCapInput, {
+			target: { value: '0.00151160732710359471234567890123456789012345678901234567890123456789' }
+		});
 
 		await waitFor(() => {
 			expect(screen.getByTestId('price-cap-error')).toHaveTextContent(
-				'Too many decimal places. A maximum of 18 decimal places is allowed.'
+				'Too many decimal places. A maximum of 67 decimal places is allowed.'
 			);
 		});
 		expect(screen.getByTestId('submit-button')).toBeDisabled();

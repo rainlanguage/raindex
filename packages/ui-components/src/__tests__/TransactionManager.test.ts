@@ -1009,6 +1009,39 @@ describe("TransactionManager", () => {
       });
     });
 
+    it("should wait up to 60 seconds for add-order indexing", async () => {
+      const mockTransaction = { execute: vi.fn() };
+      vi.mocked(TransactionStore).mockImplementation(
+        () => mockTransaction as unknown as TransactionStore,
+      );
+
+      await manager.createAddOrderTransaction(addOrderMockArgs);
+
+      const callArgs = vi.mocked(TransactionStore).mock.calls[0][0];
+      const mockContext: IndexingContext = {
+        updateState: vi.fn(),
+        onSuccess: vi.fn(),
+        onError: vi.fn(),
+        links: [],
+      };
+
+      vi.mocked(
+        mockRaindexClient.getAddOrdersForTransaction,
+      ).mockResolvedValueOnce({
+        value: [{ orderHash: "0xneworderhash" }],
+      } as unknown as WasmEncodedResult<RaindexOrder[]>);
+
+      await callArgs.awaitIndexingFn!(mockContext);
+
+      expect(mockRaindexClient.getAddOrdersForTransaction).toHaveBeenCalledWith(
+        addOrderMockArgs.chainId,
+        addOrderMockArgs.raindex,
+        addOrderMockArgs.txHash,
+        12,
+        5000,
+      );
+    });
+
     it("should handle failed transaction", async () => {
       const mockTransaction = { execute: vi.fn() };
       let onError: () => void;

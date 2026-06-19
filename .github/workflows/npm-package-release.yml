@@ -176,8 +176,10 @@ jobs:
           # the initial release instead of bumping it.
           if npm view @rainlanguage/raindex@latest version &>/dev/null; then
             npm version prerelease --preid alpha --no-git-tag-version  -w @rainlanguage/raindex
+            echo "FIRST_PUBLISH=false" >> $GITHUB_ENV
           else
             echo "@rainlanguage/raindex not yet on npm; publishing committed version as initial release"
+            echo "FIRST_PUBLISH=true" >> $GITHUB_ENV
           fi
           RAINDEX_NEW_VERSION=$(jq -r '.version' ./packages/raindex/package.json)
           echo "RAINDEX_NEW_VERSION=$RAINDEX_NEW_VERSION" >> $GITHUB_ENV
@@ -198,9 +200,19 @@ jobs:
       - name: Rename raindex NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: mv ${{ env.RAINDEX_NPM_PACKAGE }} raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+      # first publish raindex pkg to npm (uses NPM_TOKEN)
+      - name: First Publish raindex pkg To NPM
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
+        run: |
+          npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && && env.FIRST_PUBLISH == 'false'}}
         run: |
           npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
             --access public \
