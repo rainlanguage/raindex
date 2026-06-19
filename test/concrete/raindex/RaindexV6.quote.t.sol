@@ -149,7 +149,10 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
         checkQuote(
             owner,
             config,
-            "_ _:1 2;",
+            // The trailing `:;` is the (empty) handle IO source. The addOrder
+            // source-count guard requires both the calculate and handle IO
+            // sources; the empty handle IO does not change the quoted values.
+            "_ _:1 2;:;",
             depositAmount,
             LibDecimalFloat.packLossless(1, 0),
             LibDecimalFloat.packLossless(2, 0)
@@ -275,7 +278,9 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 12);
 
         bytes[] memory rainlangArray = new bytes[](1);
-        rainlangArray[0] = "_ _:1 2;";
+        // The trailing `:;` is the (empty) handle IO source required by the
+        // addOrder source-count guard; it does not change the quoted values.
+        rainlangArray[0] = "_ _:1 2;:;";
 
         Float[] memory expectedMaxOutputArray = new Float[](1);
         expectedMaxOutputArray[0] = LibDecimalFloat.packLossless(1, 0);

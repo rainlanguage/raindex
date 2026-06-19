@@ -14,7 +14,6 @@ import {
     TaskV2,
     Float
 } from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {SourceIndexOutOfBounds} from "rain-interpreter-interface-0.1.0/src/error/ErrBytecode.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
@@ -167,54 +166,6 @@ contract RaindexV6ClearHandleIORevertTest is RaindexV6ExternalRealTest {
 
         bytes memory aliceString = "_ _:1000000 1;:;";
         bytes memory bobString = "_ _:1000000 1;:;";
-
-        checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
-    }
-
-    /// Note that this error comes from the i9r so it is possible for a different
-    /// i9r to not have this error.
-    function testClearOrderAliceNoHandleIORevert() external {
-        bytes memory aliceString = "_ _:max-positive-value() 1;";
-        bytes memory bobString = "_ _:max-positive-value() 1;:;";
-
-        // This is a bit fragile but the error message includes the inner
-        // executable bytecode only, not the outer parsed bytecode.
-        bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
-        bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
-
-        checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
-    }
-
-    /// Note that this error comes from the i9r so it is possible for a different
-    /// i9r to not have this error.
-    function testClearOrderBobNoHandleIORevert() external {
-        bytes memory aliceString = "_ _:max-positive-value() 1;:;";
-        bytes memory bobString = "_ _:max-positive-value() 1;";
-
-        // This is a bit fragile but the error message includes the inner
-        // executable bytecode only, not the outer parsed bytecode.
-        bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
-        bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
-
-        checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
-    }
-
-    /// Note that this error comes from the i9r so it is possible for a different
-    /// i9r to not have this error.
-    function testClearOrderBothNoHandleIORevert() external {
-        bytes memory aliceString = "_ _:max-positive-value() 1;";
-        bytes memory bobString = "_ _:max-positive-value() 1;";
-
-        // This is a bit fragile but the error message includes the inner
-        // executable bytecode only, not the outer parsed bytecode.
-        bytes memory aliceErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
-        bytes memory bobErr =
-            abi.encodeWithSelector(SourceIndexOutOfBounds.selector, 1, hex"010000020200023610000001100000");
 
         checkClearOrderHandleIO(aliceString, bobString, aliceErr, bobErr);
     }

@@ -1,17 +1,27 @@
 use super::functions;
+use super::query::create_tables::RAINDEX_APPLICATION_ID;
 use super::query::{
     FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch, SqlValue,
 };
 use async_trait::async_trait;
+use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use rusqlite::{types::ValueRef, Connection};
 use serde_json::{json, Map, Value};
 use std::convert::TryFrom;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::spawn_blocking;
 
+/// Pool of idle SQLite connections, each already set up with WAL journal mode,
+/// a busy timeout, and the registered custom functions. Reusing them avoids
+/// paying the full `open_connection` setup cost on every query, which matters
+/// for bursts of concurrent order lookups.
+type ConnectionPool = Arc<Mutex<Vec<Connection>>>;
+
 pub struct RusqliteExecutor {
     db_path: PathBuf,
+    pool: ConnectionPool,
 }
 
 fn sqlvalue_to_rusqlite(v: SqlValue) -> rusqlite::types::Value {
@@ -30,7 +40,13 @@ impl RusqliteExecutor {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Self {
         Self {
             db_path: db_path.as_ref().to_path_buf(),
+            pool: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    #[cfg(test)]
+    fn pool_len(&self) -> usize {
+        self.pool.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     fn invoke_statement(conn: &Connection, stmt: &SqlStatement) -> Result<(), LocalDbQueryError> {
@@ -51,6 +67,24 @@ impl RusqliteExecutor {
     }
 }
 
+/// Take a ready-to-use connection: reuse an idle one from the pool if available,
+/// otherwise open (and fully set up) a fresh one. The mutex is held only for the
+/// brief pop, never across the open or the query, so concurrency is preserved.
+fn checkout(pool: &ConnectionPool, db_path: &Path) -> Result<Connection, LocalDbQueryError> {
+    let pooled = pool.lock().unwrap_or_else(|e| e.into_inner()).pop();
+    match pooled {
+        Some(conn) => Ok(conn),
+        None => open_connection(db_path),
+    }
+}
+
+/// Return a healthy connection to the pool for reuse. Only call this after the
+/// connection's work succeeded; a connection left in a bad state (e.g. mid
+/// failed transaction) must be dropped rather than released.
+fn release(pool: &ConnectionPool, conn: Connection) {
+    pool.lock().unwrap_or_else(|e| e.into_inner()).push(conn);
+}
+
 fn open_connection(db_path: &Path) -> Result<Connection, LocalDbQueryError> {
     let conn = Connection::open(db_path)
         .map_err(|e| LocalDbQueryError::database(format!("Failed to open database: {e}")))?;
@@ -61,7 +95,51 @@ fn open_connection(db_path: &Path) -> Result<Connection, LocalDbQueryError> {
     functions::register_all(&conn).map_err(|e| {
         LocalDbQueryError::database(format!("Failed to register sqlite functions: {e}"))
     })?;
+    verify_schema_guard(&conn)?;
     Ok(conn)
+}
+
+/// Structural schema-version guard read from the SQLite file header on every
+/// connection open. `application_id` labels the file as a raindex local-db and
+/// `user_version` carries the schema version; both are stamped by
+/// `create_tables` (see `query.sql`) and survive table corruption.
+///
+/// A brand-new file reports `application_id == 0` before any tables are
+/// created, so it is allowed through unverified to let bootstrap create and
+/// stamp the schema. Once stamped, a foreign file (wrong `application_id`) or a
+/// stale-version file (wrong `user_version`) is rejected up front rather than
+/// surfacing later as an opaque `no such column` error.
+fn verify_schema_guard(conn: &Connection) -> Result<(), LocalDbQueryError> {
+    let app_id: i32 = conn
+        .query_row("PRAGMA application_id", [], |row| row.get(0))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to read application_id: {e}")))?;
+
+    // An unstamped, freshly-created database header reads zero. Defer to
+    // bootstrap, which creates the tables and stamps the header.
+    if app_id == 0 {
+        return Ok(());
+    }
+
+    if app_id != RAINDEX_APPLICATION_ID {
+        return Err(LocalDbQueryError::NotARaindexDb {
+            expected: RAINDEX_APPLICATION_ID,
+            found: app_id,
+        });
+    }
+
+    let user_version: i32 = conn
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to read user_version: {e}")))?;
+
+    let expected = DB_SCHEMA_VERSION as i32;
+    if user_version != expected {
+        return Err(LocalDbQueryError::SchemaVersionMismatch {
+            expected,
+            found: user_version,
+        });
+    }
+
+    Ok(())
 }
 
 fn join_err(err: tokio::task::JoinError) -> LocalDbQueryError {
@@ -79,15 +157,17 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
         }
 
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let batch = batch.clone();
         spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             for stmt in &batch {
                 if let Err(err) = RusqliteExecutor::invoke_statement(&conn, stmt) {
                     let _ = conn.execute_batch("ROLLBACK");
                     return Err(err);
                 }
             }
+            release(&pool, conn);
             Ok(())
         })
         .await
@@ -96,10 +176,12 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
 
     async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let stmt = stmt.clone();
         spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             RusqliteExecutor::invoke_statement(&conn, &stmt)?;
+            release(&pool, conn);
             Ok(String::new())
         })
         .await
@@ -111,10 +193,11 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
         T: FromDbJson,
     {
         let db_path = self.db_path.clone();
+        let pool = self.pool.clone();
         let stmt = stmt.clone();
 
         let json_value = spawn_blocking(move || {
-            let conn = open_connection(&db_path)?;
+            let conn = checkout(&pool, &db_path)?;
             let mut s = conn.prepare(stmt.sql()).map_err(|e| {
                 LocalDbQueryError::database(format!("Failed to prepare query: {e}"))
             })?;
@@ -159,6 +242,11 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
                 out.push(v);
             }
 
+            // Drop the prepared statement (which borrows `conn`) before returning
+            // the connection to the pool for reuse.
+            drop(s);
+            release(&pool, conn);
+
             Ok::<_, LocalDbQueryError>(Value::Array(out))
         })
         .await
@@ -170,11 +258,19 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
 
     async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
         let db_path = self.db_path.clone();
+        let pool = Arc::clone(&self.pool);
         spawn_blocking(move || {
-            if db_path.exists() {
-                std::fs::remove_file(&db_path).map_err(|e| {
-                    LocalDbQueryError::database(format!("Failed to delete database file: {e}"))
-                })?;
+            pool.lock().unwrap_or_else(|e| e.into_inner()).clear();
+
+            for path in sqlite_file_paths(&db_path) {
+                if path.exists() {
+                    std::fs::remove_file(&path).map_err(|e| {
+                        LocalDbQueryError::database(format!(
+                            "Failed to delete database file {}: {e}",
+                            path.display()
+                        ))
+                    })?;
+                }
             }
             let conn = open_connection(&db_path)?;
             drop(conn);
@@ -185,10 +281,227 @@ impl LocalDbQueryExecutor for RusqliteExecutor {
     }
 }
 
+fn sqlite_file_paths(db_path: &Path) -> Vec<PathBuf> {
+    ["", "-wal", "-shm"]
+        .into_iter()
+        .map(|suffix| {
+            let mut path = db_path.as_os_str().to_os_string();
+            path.push(suffix);
+            PathBuf::from(path)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::local_db::query::create_tables::create_tables_stmt;
     use tempfile::TempDir;
+
+    #[test]
+    fn empty_db_passes_schema_guard() {
+        // A brand-new connection has application_id == 0 and must be allowed
+        // through so bootstrap can create and stamp the schema.
+        let conn = Connection::open_in_memory().unwrap();
+        verify_schema_guard(&conn).expect("unstamped db should pass the guard");
+    }
+
+    #[test]
+    fn stamped_db_passes_schema_guard() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        verify_schema_guard(&conn).expect("correctly stamped db should pass the guard");
+    }
+
+    #[test]
+    fn wrong_application_id_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Re-stamp the header with a foreign application_id (a SQLite file that
+        // is not a raindex local-db) while leaving user_version valid.
+        let foreign = RAINDEX_APPLICATION_ID + 1;
+        conn.pragma_update(None, "application_id", foreign)
+            .expect("override application_id");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::NotARaindexDb { expected, found }) => {
+                assert_eq!(expected, RAINDEX_APPLICATION_ID);
+                assert_eq!(found, foreign);
+            }
+            other => panic!("expected NotARaindexDb, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn negative_application_id_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // A foreign file whose application_id has the top bit set reads back as
+        // a negative i32. It is neither zero (unstamped) nor the raindex magic,
+        // so it must be rejected as NotARaindexDb rather than waved through.
+        let foreign = i32::MIN;
+        conn.pragma_update(None, "application_id", foreign)
+            .expect("override application_id");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::NotARaindexDb { expected, found }) => {
+                assert_eq!(expected, RAINDEX_APPLICATION_ID);
+                assert_eq!(found, foreign);
+            }
+            other => panic!("expected NotARaindexDb, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn wrong_user_version_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Keep the raindex application_id but advance user_version to a stale /
+        // future schema number.
+        let bumped = DB_SCHEMA_VERSION as i32 + 1;
+        conn.pragma_update(None, "user_version", bumped)
+            .expect("override user_version");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
+                assert_eq!(expected, DB_SCHEMA_VERSION as i32);
+                assert_eq!(found, bumped);
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stale_user_version_is_detected() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(create_tables_stmt().sql())
+            .expect("create tables stamps the header");
+        // Keep the raindex application_id but roll user_version back to an older
+        // schema number. A stale (lower) version must be rejected just like a
+        // future (higher) one.
+        let stale = DB_SCHEMA_VERSION as i32 - 1;
+        conn.pragma_update(None, "user_version", stale)
+            .expect("override user_version");
+
+        match verify_schema_guard(&conn) {
+            Err(LocalDbQueryError::SchemaVersionMismatch { expected, found }) => {
+                assert_eq!(expected, DB_SCHEMA_VERSION as i32);
+                assert_eq!(found, stale);
+            }
+            other => panic!("expected SchemaVersionMismatch, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn open_rejects_foreign_application_id_db() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("foreign.db");
+
+        // Build a stamped raindex db, then corrupt only the application_id label
+        // in the file header so a fresh open must reject it.
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.pragma_update(None, "application_id", RAINDEX_APPLICATION_ID + 7)
+                .unwrap();
+        }
+
+        let exec = RusqliteExecutor::new(&db_path);
+        let err = exec
+            .query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect_err("open of a foreign db must fail");
+        assert!(
+            matches!(err, LocalDbQueryError::NotARaindexDb { .. }),
+            "expected NotARaindexDb, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_rejects_stale_user_version_db() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("stale.db");
+
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.pragma_update(None, "user_version", DB_SCHEMA_VERSION as i32 + 1)
+                .unwrap();
+        }
+
+        let exec = RusqliteExecutor::new(&db_path);
+        let err = exec
+            .query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect_err("open of a stale-version db must fail");
+        assert!(
+            matches!(err, LocalDbQueryError::SchemaVersionMismatch { .. }),
+            "expected SchemaVersionMismatch, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn create_tables_stamps_header_and_open_succeeds() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("stamped.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+        // First open hits an empty file (application_id == 0) and stamps it.
+        exec.query_text(&create_tables_stmt()).await.unwrap();
+
+        // A subsequent open must read back the stamped header and succeed.
+        #[derive(serde::Deserialize)]
+        struct VersionRow {
+            user_version: i64,
+        }
+        let rows: Vec<VersionRow> = exec
+            .query_json(&SqlStatement::new("PRAGMA user_version;"))
+            .await
+            .unwrap();
+        assert_eq!(rows[0].user_version, DB_SCHEMA_VERSION as i64);
+
+        let conn = Connection::open(&db_path).unwrap();
+        let app_id: i32 = conn
+            .query_row("PRAGMA application_id", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app_id, RAINDEX_APPLICATION_ID);
+    }
+
+    #[tokio::test]
+    async fn data_only_dump_apply_preserves_header() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("dump.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+        exec.query_text(&create_tables_stmt()).await.unwrap();
+
+        // Apply a data-only insert batch (the shape produced by export_data_only).
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new(
+            "INSERT INTO db_metadata (id, db_schema_version) VALUES (1, 5);",
+        ));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap();
+
+        // The header guard must still pass after applying data rows.
+        exec.query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .expect("open after dump apply should still pass the guard");
+
+        let conn = Connection::open(&db_path).unwrap();
+        let app_id: i32 = conn
+            .query_row("PRAGMA application_id", [], |row| row.get(0))
+            .unwrap();
+        let user_version: i32 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(app_id, RAINDEX_APPLICATION_ID);
+        assert_eq!(user_version, DB_SCHEMA_VERSION as i32);
+    }
 
     #[tokio::test]
     async fn execute_batch_runs_all_statements() {
@@ -540,5 +853,170 @@ mod tests {
             .await
             .unwrap();
         assert!(rows.is_empty());
+    }
+
+    #[tokio::test]
+    async fn sequential_queries_reuse_a_single_pooled_connection() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("pool-reuse.db");
+
+        let exec = RusqliteExecutor::new(&db_path);
+
+        // Nothing has run yet, so the pool starts empty.
+        assert_eq!(exec.pool_len(), 0, "pool should start empty");
+
+        // A query_text seeds the pool with one reusable connection.
+        exec.query_text(&SqlStatement::new(
+            "CREATE TABLE nums (n INTEGER); INSERT INTO nums (n) VALUES (10), (20), (30);",
+        ))
+        .await
+        .unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "successful query_text must return its connection to the pool"
+        );
+
+        #[derive(serde::Deserialize)]
+        struct SumRow {
+            total: i64,
+        }
+
+        // Run several sequential queries on the same executor. Each one must
+        // check the single connection out and put it back, so the results stay
+        // correct AND the pool never grows past one (proving reuse, not churn).
+        for _ in 0..5 {
+            let rows: Vec<SumRow> = exec
+                .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+                .await
+                .unwrap();
+            assert_eq!(rows[0].total, 60);
+            assert_eq!(
+                exec.pool_len(),
+                1,
+                "sequential queries must reuse the one pooled connection"
+            );
+        }
+
+        // execute_batch participates in the same pool on success.
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new("INSERT INTO nums (n) VALUES (40);"));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "successful execute_batch must return its connection to the pool"
+        );
+
+        let rows: Vec<SumRow> = exec
+            .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+            .await
+            .unwrap();
+        assert_eq!(rows[0].total, 100);
+    }
+
+    #[tokio::test]
+    async fn failed_batch_does_not_return_connection_to_pool() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("pool-fail.db");
+        let exec = RusqliteExecutor::new(&db_path);
+
+        let mut setup = SqlStatementBatch::new();
+        setup.add(SqlStatement::new(
+            "CREATE TABLE uniq (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+        ));
+        let setup = setup.ensure_transaction();
+        exec.execute_batch(&setup).await.unwrap();
+        assert_eq!(exec.pool_len(), 1, "successful setup seeds the pool");
+
+        // A batch that violates the primary key fails mid-transaction. It checks
+        // the single pooled connection out, then drops it (rather than releasing
+        // it) because it could be left in a bad state. The pool therefore ends
+        // empty: the connection was taken and not returned.
+        let mut batch = SqlStatementBatch::new();
+        batch.add(SqlStatement::new(
+            "INSERT INTO uniq (id, value) VALUES (1, 'first');",
+        ));
+        batch.add(SqlStatement::new(
+            "INSERT INTO uniq (id, value) VALUES (1, 'duplicate');",
+        ));
+        let batch = batch.ensure_transaction();
+        exec.execute_batch(&batch).await.unwrap_err();
+        assert_eq!(
+            exec.pool_len(),
+            0,
+            "a failed batch must drop its connection, not return it to the pool"
+        );
+
+        // The next successful query opens a fresh connection and seeds the pool
+        // again, proving the executor recovers cleanly after a failure.
+        exec.query_text(&SqlStatement::new("SELECT 1;"))
+            .await
+            .unwrap();
+        assert_eq!(
+            exec.pool_len(),
+            1,
+            "a successful query after a failure re-seeds the pool"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_pool_access_does_not_deadlock() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("concurrent-pool.db");
+
+        let exec = std::sync::Arc::new(RusqliteExecutor::new(&db_path));
+
+        // Seed a small table so the concurrent readers have real rows to return.
+        exec.query_text(&SqlStatement::new(
+            "CREATE TABLE nums (n INTEGER); INSERT INTO nums (n) VALUES (1), (2), (3), (4), (5);",
+        ))
+        .await
+        .unwrap();
+
+        #[derive(serde::Deserialize)]
+        struct SumRow {
+            total: i64,
+        }
+
+        // Fire a large number of concurrent operations through the real executor
+        // API. Each one races to check a connection out of the shared pool, run
+        // its query, and release it back, so the pool mutex is hammered under
+        // heavy contention. A regression that held the lock across the query (or
+        // otherwise deadlocked checkout/release) would hang here and trip the
+        // timeout below rather than completing.
+        let mut handles = Vec::new();
+        for i in 0..200 {
+            let exec = exec.clone();
+            handles.push(tokio::spawn(async move {
+                // Interleave a few writes among the many reads so checkout/release
+                // is exercised from both query_json and execute_batch paths.
+                if i % 25 == 0 {
+                    let mut batch = SqlStatementBatch::new();
+                    batch.add(SqlStatement::new("INSERT INTO nums (n) VALUES (0);"));
+                    let batch = batch.ensure_transaction();
+                    exec.execute_batch(&batch).await.unwrap();
+                }
+                let rows: Vec<SumRow> = exec
+                    .query_json(&SqlStatement::new("SELECT SUM(n) AS total FROM nums;"))
+                    .await
+                    .unwrap();
+                // The seeded rows sum to 15; the interleaved zero-inserts never
+                // change that, so every read must observe at least the seed total.
+                assert!(rows[0].total >= 15, "unexpected sum {}", rows[0].total);
+            }));
+        }
+
+        // A deadlock or lock-held-across-query regression manifests as a hang, so
+        // bound the whole fan-out and assert it finishes well inside the budget.
+        let joined = futures::future::join_all(handles);
+        let results = tokio::time::timeout(std::time::Duration::from_secs(30), joined)
+            .await
+            .expect("concurrent pool access must not deadlock (timed out)");
+
+        for result in results {
+            result.expect("a concurrent operation panicked");
+        }
     }
 }

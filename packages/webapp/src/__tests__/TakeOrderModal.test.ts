@@ -134,6 +134,21 @@ describe('TakeOrderModal', () => {
 		});
 	});
 
+	it('shows hover title and aria-label on the refresh quote icon', async () => {
+		vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+			value: mockQuotes as never,
+			error: undefined
+		});
+
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			const refreshButton = screen.getByTestId('refresh-button');
+			expect(refreshButton).toHaveAttribute('title', 'Refresh quote');
+			expect(refreshButton).toHaveAttribute('aria-label', 'Refresh quote');
+		});
+	});
+
 	it('shows pair selector when multiple quotes are available', async () => {
 		const multiQuotes = [
 			...mockQuotes,
@@ -193,6 +208,50 @@ describe('TakeOrderModal', () => {
 
 		await waitFor(() => {
 			expect(screen.getByTestId('price-cap-input')).toBeInTheDocument();
+		});
+	});
+
+	it('rejects a price cap with more than 67 decimals and keeps submit disabled', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 68 decimal places, one more than the maximum of 67.
+		await fireEvent.input(priceCapInput, {
+			target: { value: '0.00151160732710359471234567890123456789012345678901234567890123456789' }
+		});
+
+		await waitFor(() => {
+			expect(screen.getByTestId('price-cap-error')).toHaveTextContent(
+				'Too many decimal places. A maximum of 67 decimal places is allowed.'
+			);
+		});
+		expect(screen.getByTestId('submit-button')).toBeDisabled();
+	});
+
+	it('accepts a price cap with exactly 18 decimals and enables submit', async () => {
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+
+		const inputs = screen.getAllByRole('textbox');
+		const amountInput = inputs[0];
+		const priceCapInput = screen.getByTestId('price-cap-input');
+		await fireEvent.input(amountInput, { target: { value: '10' } });
+		// 18 decimal places, exactly the maximum.
+		await fireEvent.input(priceCapInput, { target: { value: '0.001511607327103594' } });
+
+		await waitFor(() => {
+			expect(screen.queryByTestId('price-cap-error')).not.toBeInTheDocument();
+			expect(screen.getByTestId('submit-button')).not.toBeDisabled();
 		});
 	});
 

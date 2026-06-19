@@ -45,4 +45,18 @@ describe("ButtonVaultLink", () => {
       `token-info-${mockVault.vaultId}`,
     );
   });
+
+  it("should give the link a hover affordance so it reads as clickable", () => {
+    render(ButtonVaultLink, {
+      props: {
+        tokenVault: mockVault,
+        chainId: 1,
+        raindexAddress: "0x00",
+      },
+    });
+
+    const linkElement = screen.getByRole("link");
+    expect(linkElement).toHaveClass("text-blue-500");
+    expect(linkElement).toHaveClass("hover:underline");
+  });
 });
