@@ -9,7 +9,9 @@ use crate::local_db::pipeline::adapters::{
 };
 use crate::local_db::pipeline::runner::utils::ParsedRunnerSettings;
 use crate::local_db::pipeline::runner::RunOutcome;
+use crate::local_db::pipeline::SyncPhase;
 use crate::local_db::LocalDbError;
+use crate::local_db::RaindexIdentifier;
 use crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter;
 use crate::raindex_client::local_db::pipeline::status::{
     set_scheduler_state, set_status_callback, ClientStatusBus,
@@ -23,7 +25,7 @@ use js_sys::Function;
 use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use raindex_app_settings::network::NetworkCfg;
 use std::cell::Cell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -44,21 +46,32 @@ trait SchedulerRunner {
     fn run_once<'a>(
         &'a mut self,
         db_executor: &'a LocalDb,
+        on_phase: Rc<dyn Fn(SyncPhase) + 'a>,
     ) -> Pin<Box<dyn Future<Output = Result<RunOutcome, LocalDbError>> + 'a>>;
 
     fn chain_id(&self) -> Option<u32>;
+
+    fn raindex_ids(&self) -> Vec<RaindexIdentifier>;
 }
 
 impl SchedulerRunner for DefaultClientRunner {
     fn run_once<'a>(
         &'a mut self,
         db_executor: &'a LocalDb,
+        on_phase: Rc<dyn Fn(SyncPhase) + 'a>,
     ) -> Pin<Box<dyn Future<Output = Result<RunOutcome, LocalDbError>> + 'a>> {
-        Box::pin(async move { self.run(db_executor).await })
+        Box::pin(async move {
+            self.run_with_phase_callback(db_executor, |phase| on_phase(phase))
+                .await
+        })
     }
 
     fn chain_id(&self) -> Option<u32> {
         self.chain_id()
+    }
+
+    fn raindex_ids(&self) -> Vec<RaindexIdentifier> {
+        self.raindex_ids()
     }
 }
 
@@ -88,6 +101,7 @@ pub(crate) fn start(
     status_callback: Option<Function>,
     sync_readiness: SyncReadiness,
     status_store: LocalDbSyncStatusStore,
+    schema_initialized: bool,
 ) -> Result<SchedulerHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
     for raindex_cfg in settings.raindexes.values() {
@@ -119,21 +133,24 @@ pub(crate) fn start(
             return;
         }
 
-        if let Err(err) = bootstrap
-            .runner_run(&db_clone, Some(DB_SCHEMA_VERSION))
-            .await
-        {
-            for network in &networks_for_spawn {
-                emit_network_status(
-                    &status_store,
-                    callback.as_deref(),
-                    NetworkSyncStatus::failure(network.chain_id, err.to_readable_msg()),
-                );
-            }
-            return;
-        }
-
         set_status_callback(callback.clone());
+        emit_initial_sync_statuses(&settings_clone, &status_store, callback.as_deref());
+
+        if !schema_initialized {
+            if let Err(err) = bootstrap
+                .runner_run(&db_clone, Some(DB_SCHEMA_VERSION))
+                .await
+            {
+                for network in &networks_for_spawn {
+                    emit_network_status(
+                        &status_store,
+                        callback.as_deref(),
+                        NetworkSyncStatus::failure(network.chain_id, err.to_readable_msg()),
+                    );
+                }
+                return;
+            }
+        }
 
         for network in &networks_for_spawn {
             let config =
@@ -237,12 +254,20 @@ async fn run_network_loop<R>(
     R: SchedulerRunner + 'static,
 {
     let chain_id = runner.chain_id().unwrap_or(0);
+    let raindex_ids = runner.raindex_ids();
     let mut was_leader_last_cycle = false;
 
     emit_network_status(
         &status_store,
         callback.as_deref(),
         NetworkSyncStatus::syncing(chain_id),
+    );
+
+    emit_raindex_sync_statuses(
+        &status_store,
+        callback.as_deref(),
+        &raindex_ids,
+        SyncPhase::PreparingLocalDatabase,
     );
 
     loop {
@@ -258,7 +283,19 @@ async fn run_network_loop<R>(
             );
         }
 
-        match runner.run_once(&db).await {
+        let phase_status_store = status_store.clone();
+        let phase_callback = callback.clone();
+        let phase_raindex_ids = raindex_ids.clone();
+        let on_phase = Rc::new(move |phase| {
+            emit_raindex_sync_statuses(
+                &phase_status_store,
+                phase_callback.as_deref(),
+                &phase_raindex_ids,
+                phase,
+            );
+        });
+
+        match runner.run_once(&db, on_phase).await {
             Ok(outcome) => match outcome {
                 RunOutcome::Report(report) => {
                     was_leader_last_cycle = true;
@@ -267,6 +304,12 @@ async fn run_network_loop<R>(
                     if report.failures.is_empty() {
                         sync_readiness.mark_ready(chain_id);
                         status_store.record_chain_ready(chain_id);
+                        emit_raindex_active_statuses(
+                            &status_store,
+                            callback.as_deref(),
+                            &raindex_ids,
+                            SchedulerState::Leader,
+                        );
                         emit_network_status(
                             &status_store,
                             callback.as_deref(),
@@ -280,10 +323,11 @@ async fn run_network_loop<R>(
                             first.stage,
                             first.error.to_readable_msg()
                         );
-                        status_store.record_raindex_status(RaindexSyncStatus::failure(
-                            first.raindex_id.clone(),
-                            msg.clone(),
-                        ));
+                        emit_raindex_status(
+                            &status_store,
+                            callback.as_deref(),
+                            RaindexSyncStatus::failure(first.raindex_id.clone(), msg.clone()),
+                        );
                         emit_network_status(
                             &status_store,
                             callback.as_deref(),
@@ -296,6 +340,12 @@ async fn run_network_loop<R>(
                     set_scheduler_state(SchedulerState::NotLeader);
                     sync_readiness.mark_ready(chain_id);
                     status_store.record_chain_ready(chain_id);
+                    emit_raindex_active_statuses(
+                        &status_store,
+                        callback.as_deref(),
+                        &raindex_ids,
+                        SchedulerState::NotLeader,
+                    );
                     emit_network_status(
                         &status_store,
                         callback.as_deref(),
@@ -318,6 +368,74 @@ async fn run_network_loop<R>(
         }
 
         TimeoutFuture::new(interval_ms).await;
+    }
+}
+
+fn emit_initial_sync_statuses(
+    settings: &ParsedRunnerSettings,
+    status_store: &LocalDbSyncStatusStore,
+    callback: Option<&Function>,
+) {
+    let mut emitted_networks = HashSet::new();
+    for raindex in settings.raindexes.values() {
+        let chain_id = raindex.network.chain_id;
+        if !settings.syncs.contains_key(&raindex.network.key) {
+            continue;
+        }
+        if emitted_networks.insert(chain_id) {
+            emit_network_status(status_store, callback, NetworkSyncStatus::syncing(chain_id));
+        }
+        emit_raindex_status(
+            status_store,
+            callback,
+            RaindexSyncStatus::syncing(
+                RaindexIdentifier::new(chain_id, raindex.address),
+                SyncPhase::PreparingLocalDatabase,
+            ),
+        );
+    }
+}
+
+fn emit_raindex_sync_statuses(
+    status_store: &LocalDbSyncStatusStore,
+    callback: Option<&Function>,
+    raindex_ids: &[RaindexIdentifier],
+    phase: SyncPhase,
+) {
+    for raindex_id in raindex_ids {
+        emit_raindex_status(
+            status_store,
+            callback,
+            RaindexSyncStatus::syncing(raindex_id.clone(), phase),
+        );
+    }
+}
+
+fn emit_raindex_active_statuses(
+    status_store: &LocalDbSyncStatusStore,
+    callback: Option<&Function>,
+    raindex_ids: &[RaindexIdentifier],
+    scheduler_state: SchedulerState,
+) {
+    for raindex_id in raindex_ids {
+        emit_raindex_status(
+            status_store,
+            callback,
+            RaindexSyncStatus::active(raindex_id.clone(), scheduler_state),
+        );
+    }
+}
+
+fn emit_raindex_status(
+    status_store: &LocalDbSyncStatusStore,
+    callback: Option<&Function>,
+    status: RaindexSyncStatus,
+) {
+    status_store.record_raindex_status(status.clone());
+    if let Some(callback) = callback {
+        if let Ok(value) = serde_wasm_bindgen::to_value(&status) {
+            let _ = callback.call1(&JsValue::NULL, &value);
+        }
     }
 }
 
@@ -392,6 +510,7 @@ mod wasm_tests {
         fn run_once<'a>(
             &'a mut self,
             _db_executor: &'a LocalDb,
+            _on_phase: Rc<dyn Fn(SyncPhase) + 'a>,
         ) -> Pin<Box<dyn Future<Output = Result<RunOutcome, LocalDbError>> + 'a>> {
             let calls = Rc::clone(&self.calls);
             let failures = Rc::clone(&self.failures);
@@ -428,6 +547,10 @@ mod wasm_tests {
 
         fn chain_id(&self) -> Option<u32> {
             Some(self.chain_id)
+        }
+
+        fn raindex_ids(&self) -> Vec<RaindexIdentifier> {
+            Vec::new()
         }
     }
 
@@ -704,6 +827,7 @@ mod wasm_tests {
         fn run_once<'a>(
             &'a mut self,
             _db_executor: &'a LocalDb,
+            _on_phase: Rc<dyn Fn(SyncPhase) + 'a>,
         ) -> Pin<Box<dyn Future<Output = Result<RunOutcome, LocalDbError>> + 'a>> {
             let calls = Rc::clone(&self.calls);
             let delay_ms = self.delay_ms;
@@ -723,6 +847,10 @@ mod wasm_tests {
         fn chain_id(&self) -> Option<u32> {
             Some(self.chain_id)
         }
+
+        fn raindex_ids(&self) -> Vec<RaindexIdentifier> {
+            Vec::new()
+        }
     }
 
     #[wasm_bindgen_test]
@@ -737,6 +865,7 @@ mod wasm_tests {
             None,
             SyncReadiness::new(),
             LocalDbSyncStatusStore::new(),
+            false,
         )
         .expect("should start with valid yaml");
 

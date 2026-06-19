@@ -1,10 +1,10 @@
 /**
  * The maximum number of fractional (post-decimal-point) digits that the
- * underlying `Float` decimal parser accepts. A value with more than this many
- * decimal places (e.g. `0.0015116073271035947`, which has 19) is rejected
- * client-side with a friendly message.
+ * underlying `Float` decimal parser accepts without precision loss. A value
+ * with more than this many decimal places is rejected client-side with a
+ * friendly message.
  */
-export const MAX_DECIMALS = 18;
+export const MAX_DECIMALS = 67;
 
 export interface AmountDecimalsValidation {
   isValid: boolean;

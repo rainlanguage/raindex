@@ -1,3 +1,8 @@
+#[cfg(target_family = "wasm")]
+use crate::local_db::{
+    pipeline::adapters::bootstrap::BootstrapPipeline,
+    query::fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
+};
 use crate::local_db::{
     query::{
         fetch_last_synced_block::{fetch_last_synced_block_stmt, SyncStatusResponse},
@@ -36,6 +41,8 @@ use raindex_subgraph_client::{
     RaindexSubgraphClientError,
 };
 use serde::{Deserialize, Serialize};
+#[cfg(target_family = "wasm")]
+use std::collections::HashMap;
 #[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 #[cfg(target_family = "wasm")]
@@ -183,20 +190,32 @@ impl RaindexClient {
             None
         };
 
-        let scheduler = if has_syncs {
-            let db = local_db
-                .clone()
-                .expect("local_db should be set when has_syncs");
-            let settings =
+        let settings = if has_syncs {
+            Some(
                 crate::local_db::pipeline::runner::utils::parse_runner_settings_from_yaml(
                     &raindex_yaml,
-                )?;
+                )?,
+            )
+        } else {
+            None
+        };
+
+        if let (Some(db), Some(settings)) = (local_db.as_ref(), settings.as_ref()) {
+            initialize_local_db_readiness(db, settings, &sync_readiness, &sync_status_store)
+                .await?;
+        }
+
+        let scheduler = if has_syncs {
+            let (db, settings) = local_db.clone().zip(settings.clone()).ok_or_else(|| {
+                RaindexError::LocalDbSetupMissing("local_db settings".to_string())
+            })?;
             let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
                 settings,
                 db,
                 status_callback,
                 sync_readiness.clone(),
                 sync_status_store.clone(),
+                true,
             )?;
             Rc::new(RefCell::new(Some(handle)))
         } else {
@@ -552,6 +571,63 @@ impl From<serde_wasm_bindgen::Error> for RaindexError {
     fn from(err: serde_wasm_bindgen::Error) -> Self {
         RaindexError::SerdeError(err.into())
     }
+}
+
+#[cfg(target_family = "wasm")]
+async fn initialize_local_db_readiness(
+    db: &LocalDb,
+    settings: &crate::local_db::pipeline::runner::utils::ParsedRunnerSettings,
+    sync_readiness: &SyncReadiness,
+    sync_status_store: &LocalDbSyncStatusStore,
+) -> Result<(), RaindexError> {
+    crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter::new()
+        .runner_run(
+            db,
+            Some(raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION),
+        )
+        .await?;
+
+    sync_status_store.seed(settings);
+
+    let mut chain_raindexes = settings
+        .raindexes
+        .values()
+        .filter(|raindex| settings.syncs.contains_key(&raindex.network.key))
+        .fold(
+            HashMap::<u32, Vec<crate::local_db::RaindexIdentifier>>::new(),
+            |mut chain_raindexes, raindex| {
+                chain_raindexes
+                    .entry(raindex.network.chain_id)
+                    .or_default()
+                    .push(crate::local_db::RaindexIdentifier::new(
+                        raindex.network.chain_id,
+                        raindex.address,
+                    ));
+                chain_raindexes
+            },
+        );
+
+    for (chain_id, raindex_ids) in chain_raindexes.drain() {
+        let mut chain_ready = true;
+
+        for raindex_id in raindex_ids {
+            let rows: Vec<TargetWatermarkRow> = db
+                .query_json(&fetch_target_watermark_stmt(&raindex_id))
+                .await?;
+
+            if rows.is_empty() {
+                chain_ready = false;
+                break;
+            }
+        }
+
+        if chain_ready {
+            sync_readiness.mark_ready(chain_id);
+            sync_status_store.record_chain_ready(chain_id);
+        }
+    }
+
+    Ok(())
 }
 
 impl RaindexError {
