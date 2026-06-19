@@ -466,4 +466,79 @@ if (import.meta.vitest) {
     expect(result.length).toEqual(1);
     expect(result[0].value).toEqual(ioratioAverage);
   });
+
+  // Minimal trade builder: prepareHistoricalOrderChartData only reads
+  // timestamp, the two formattedAmount values and the output amount.
+  const makeTrade = (args: {
+    timestamp: number;
+    inputFormatted: string;
+    outputFormatted: string;
+    outputAmount: bigint;
+  }): RaindexTrade =>
+    ({
+      timestamp: BigInt(args.timestamp),
+      inputVaultBalanceChange: {
+        formattedAmount: args.inputFormatted,
+      } as unknown as RaindexVaultBalanceChange,
+      outputVaultBalanceChange: {
+        formattedAmount: args.outputFormatted,
+        amount: args.outputAmount,
+      } as unknown as RaindexVaultBalanceChange,
+    }) as unknown as RaindexTrade;
+
+  it("uses the light theme colour when colorTheme is not 'dark'", () => {
+    const trades = [
+      makeTrade({
+        timestamp: 1632000000,
+        inputFormatted: "50",
+        outputFormatted: "100",
+        outputAmount: BigInt(100),
+      }),
+    ];
+
+    const result = prepareHistoricalOrderChartData(trades, "light");
+
+    expect(result.length).toEqual(1);
+    expect(result[0].color).toEqual("#4E4AF6");
+  });
+
+  it("returns the absolute value of the io ratio (the output vault balance change is negative)", () => {
+    // The output vault balance change is debited, so its formattedAmount is negative;
+    // the raw input/output ratio is negative (50 / -100 = -0.5) and Math.abs yields
+    // the positive charted value.
+    const trades = [
+      makeTrade({
+        timestamp: 1632000000,
+        inputFormatted: "50",
+        outputFormatted: "-100",
+        outputAmount: BigInt(100),
+      }),
+    ];
+
+    const result = prepareHistoricalOrderChartData(trades, "dark");
+
+    expect(result.length).toEqual(1);
+    expect(result[0].value).toEqual(0.5);
+  });
+
+  it("keeps a single trade's value as-is even when its output amount is zero", () => {
+    // A lone trade at a timestamp must go through the single-trade branch and
+    // be preserved verbatim. The merge (weighted-average) branch would divide
+    // by the zero output amount and produce NaN, so a zero output amount
+    // distinguishes the two branches.
+    const trades = [
+      makeTrade({
+        timestamp: 1632000000,
+        inputFormatted: "50",
+        outputFormatted: "100",
+        outputAmount: BigInt(0),
+      }),
+    ];
+
+    const result = prepareHistoricalOrderChartData(trades, "dark");
+
+    expect(result.length).toEqual(1);
+    expect(result[0].value).toEqual(0.5);
+    expect(Number.isNaN(result[0].value)).toBe(false);
+  });
 }
