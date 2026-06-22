@@ -23,6 +23,7 @@
 		RaindexVault,
 		RaindexVaultsList,
 		type Address,
+		type RaindexVaultsListResult,
 		type RaindexCfg
 	} from '@rainlanguage/raindex';
 	import { QKEY_TOKENS, QKEY_VAULTS } from '../../queries/keys';
@@ -120,14 +121,15 @@
 						selectedRaindexAddresses.length > 0 ? selectedRaindexAddresses : undefined,
 					onlyActiveOrders: $hideInactiveOrdersVaults
 				},
-				pageParam + 1
+				pageParam + 1,
+				DEFAULT_PAGE_SIZE
 			);
 			if (result.error) throw new Error(result.error.readableMsg);
 			return result.value;
 		},
 		initialPageParam: 0,
 		getNextPageParam(lastPage, _allPages, lastPageParam) {
-			return lastPage.items.length === DEFAULT_PAGE_SIZE ? lastPageParam + 1 : undefined;
+			return lastPage.hasMore ? lastPageParam + 1 : undefined;
 		},
 		refetchInterval: DEFAULT_REFRESH_INTERVAL,
 		enabled: true
@@ -171,7 +173,7 @@
 			// otherwise it may break wasm reference
 			const filteredVaultListResults = pages.reduce(
 				(prev, cur) => {
-					const result = cur.pickByIds(selectedIds);
+					const result = cur.vaults.pickByIds(selectedIds);
 					if (result.error) {
 						throw new Error(result.error.readableMsg);
 					}
@@ -211,7 +213,7 @@
 	const isDisabled = (item: RaindexVault, chainId: number | null) => {
 		return !isSameChainId(item, chainId) || isZeroBalance(item);
 	};
-	const AppTable = TanstackAppTable<RaindexVault, RaindexVaultsList>;
+	const AppTable = TanstackAppTable<RaindexVault, RaindexVaultsListResult>;
 </script>
 
 {#if $query}
