@@ -1,5 +1,7 @@
-use crate::local_db::query::fetch_vaults::LocalDbVault;
-use crate::local_db::query::fetch_vaults::{build_fetch_vaults_stmt, FetchVaultsArgs};
+use crate::local_db::query::fetch_vaults::{
+    build_fetch_vaults_count_stmt, build_fetch_vaults_stmt, extract_vaults_count, FetchVaultsArgs,
+    LocalDbVault, LocalDbVaultsCountRow,
+};
 use crate::local_db::query::{LocalDbQueryError, LocalDbQueryExecutor};
 use crate::raindex_client::vaults::GetVaultsFilters;
 
@@ -12,6 +14,8 @@ impl FetchVaultsArgs {
             tokens: filters.tokens.unwrap_or_default(),
             hide_zero_balance: filters.hide_zero_balance,
             only_active_orders: filters.only_active_orders,
+            page: None,
+            page_size: None,
         }
     }
 }
@@ -28,6 +32,15 @@ pub async fn fetch_vaults<E: LocalDbQueryExecutor + ?Sized>(
 ) -> Result<Vec<LocalDbVault>, LocalDbQueryError> {
     let stmt = build_fetch_vaults_stmt(&args)?;
     exec.query_json(&stmt).await
+}
+
+pub async fn fetch_vaults_count<E: LocalDbQueryExecutor + ?Sized>(
+    exec: &E,
+    args: FetchVaultsArgs,
+) -> Result<u32, LocalDbQueryError> {
+    let stmt = build_fetch_vaults_count_stmt(&args)?;
+    let rows: Vec<LocalDbVaultsCountRow> = exec.query_json(&stmt).await?;
+    Ok(extract_vaults_count(&rows))
 }
 
 #[cfg(test)]
