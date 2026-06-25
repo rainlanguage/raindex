@@ -111,10 +111,11 @@ impl MultiRaindexSubgraphClient {
         Ok(total)
     }
 
-    pub async fn vaults_list(
+    async fn vaults_list_with_policy(
         &self,
         filter_args: SgVaultsListFilterArgs,
         pagination_args: SgPaginationArgs,
+        allow_partial: bool,
     ) -> Result<Vec<SgVaultWithSubgraphName>, RaindexSubgraphClientError> {
         let futures = self.subgraphs.iter().map(|subgraph| {
             let url = subgraph.url.clone();
@@ -144,13 +145,52 @@ impl MultiRaindexSubgraphClient {
                 Err(e) => last_error = Some(e),
             }
         }
-        if all_vaults.is_empty() {
+        if (all_vaults.is_empty() || !allow_partial) && last_error.is_some() {
             if let Some(e) = last_error {
                 return Err(e);
             }
         }
 
         Ok(all_vaults)
+    }
+
+    pub async fn vaults_list(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgVaultWithSubgraphName>, RaindexSubgraphClientError> {
+        self.vaults_list_with_policy(filter_args, pagination_args, true)
+            .await
+    }
+
+    pub async fn vaults_list_strict(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgVaultWithSubgraphName>, RaindexSubgraphClientError> {
+        self.vaults_list_with_policy(filter_args, pagination_args, false)
+            .await
+    }
+
+    pub async fn vaults_count(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+    ) -> Result<u32, RaindexSubgraphClientError> {
+        let futures = self.subgraphs.iter().map(|subgraph| {
+            let url = subgraph.url.clone();
+            let filter_args = filter_args.clone();
+            async move {
+                let client = self.get_raindex_subgraph_client(url);
+                client.vaults_count(filter_args).await
+            }
+        });
+
+        let results = join_all(futures).await;
+        let mut total: u32 = 0;
+        for result in results {
+            total += result?;
+        }
+        Ok(total)
     }
 
     pub async fn trades_by_transaction(
@@ -1987,6 +2027,41 @@ mod tests {
         assert_eq!(vaults.len(), 1);
         assert_eq!(vaults[0].vault.id, vault_a_s1.id);
         assert_eq!(vaults[0].subgraph_name, sg1_name);
+    }
+
+    #[tokio::test]
+    async fn test_vaults_list_strict_errors_when_one_subgraph_errors() {
+        let server1 = MockServer::start_async().await;
+        let sg1_url = Url::parse(&server1.url("")).unwrap();
+
+        let server2 = MockServer::start_async().await;
+        let sg2_url = Url::parse(&server2.url("")).unwrap();
+
+        let vault_a_s1 = sample_sg_vault("s1_VA");
+        server1.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(200)
+                .json_body(json!({"data": {"vaults": [vault_a_s1]}}));
+        });
+        server2.mock(|when, then| {
+            when.method(POST).path("/");
+            then.status(500);
+        });
+
+        let client = MultiRaindexSubgraphClient::new(vec![
+            MultiSubgraphArgs {
+                url: sg1_url,
+                name: "sg_v_one_ok".to_string(),
+            },
+            MultiSubgraphArgs {
+                url: sg2_url,
+                name: "sg_v_two_error".to_string(),
+            },
+        ]);
+        let result = client
+            .vaults_list_strict(default_vault_filter_args(), default_pagination_args())
+            .await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]

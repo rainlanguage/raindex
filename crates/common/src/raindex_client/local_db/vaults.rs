@@ -2,7 +2,8 @@ use super::super::RaindexError;
 use super::{
     query::fetch_all_tokens::fetch_all_tokens,
     query::fetch_vault_balance_changes::fetch_vault_balance_changes,
-    query::fetch_vaults::fetch_vaults, LocalDb, RaindexIdentifier,
+    query::fetch_vaults::{fetch_vaults, fetch_vaults_count},
+    LocalDb, RaindexIdentifier,
 };
 use crate::raindex_client::ClientRef;
 use crate::{
@@ -58,7 +59,8 @@ impl VaultsDataSource for LocalDbVaults<'_> {
         &self,
         chain_ids: Option<Vec<u32>>,
         filters: &GetVaultsFilters,
-        _page: Option<u16>,
+        page: Option<u16>,
+        page_size: Option<u16>,
     ) -> Result<Vec<RaindexVault>, RaindexError> {
         let mut fetch_args = FetchVaultsArgs::from_filters(filters.clone());
         if let Some(ids) = chain_ids {
@@ -66,9 +68,25 @@ impl VaultsDataSource for LocalDbVaults<'_> {
                 fetch_args.chain_ids = ids;
             }
         }
+        fetch_args.page = page;
+        fetch_args.page_size = page_size;
 
         let local_vaults = fetch_vaults(self.db, fetch_args).await?;
         self.convert_local_db_vaults(local_vaults, None)
+    }
+
+    async fn count(
+        &self,
+        chain_ids: Option<Vec<u32>>,
+        filters: &GetVaultsFilters,
+    ) -> Result<u32, RaindexError> {
+        let mut fetch_args = FetchVaultsArgs::from_filters(filters.clone());
+        if let Some(ids) = chain_ids {
+            if !ids.is_empty() {
+                fetch_args.chain_ids = ids;
+            }
+        }
+        Ok(fetch_vaults_count(self.db, fetch_args).await?)
     }
 
     async fn get_by_id(
@@ -233,7 +251,7 @@ mod tests {
                 .unwrap();
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
             let vaults = data_source
-                .list(Some(vec![42161]), &GetVaultsFilters::default(), None)
+                .list(Some(vec![42161]), &GetVaultsFilters::default(), None, None)
                 .await
                 .expect("local db vaults should load");
 
@@ -311,7 +329,7 @@ mod tests {
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let vaults = data_source
-                .list(None, &GetVaultsFilters::default(), None)
+                .list(None, &GetVaultsFilters::default(), None, None)
                 .await
                 .expect("should query without chain_ids");
 
@@ -343,7 +361,7 @@ mod tests {
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let vaults = data_source
-                .list(Some(vec![]), &GetVaultsFilters::default(), None)
+                .list(Some(vec![]), &GetVaultsFilters::default(), None, None)
                 .await
                 .expect("should query with empty chain_ids");
 
@@ -389,7 +407,7 @@ mod tests {
             };
 
             let vaults = data_source
-                .list(Some(vec![42161]), &filters, None)
+                .list(Some(vec![42161]), &filters, None, None)
                 .await
                 .expect("filtered vaults should load");
 
