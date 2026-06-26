@@ -1200,7 +1200,7 @@ impl RaindexVaultBalanceChange {
 
         let transaction = RaindexTransaction::from_local_parts(
             change.transaction_hash,
-            change.owner,
+            change.transaction_sender,
             change.block_number,
             change.block_timestamp,
         )?;
@@ -2376,6 +2376,7 @@ mod tests {
 
             let amount = Float::parse("1".to_string()).unwrap();
             let running_balance = Float::parse("5".to_string()).unwrap();
+            let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
             let balance_change = LocalDbVaultBalanceChange {
                 transaction_hash: b256!(
@@ -2385,6 +2386,7 @@ mod tests {
                 block_number: 1234,
                 block_timestamp: 5678,
                 owner,
+                transaction_sender,
                 change_type: "DEPOSIT".to_string(),
                 token,
                 vault_id: local_vault.vault_id.clone(),
@@ -2431,6 +2433,10 @@ mod tests {
             assert_eq!(
                 change.transaction().id(),
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
+            );
+            assert_eq!(
+                change.transaction().from().to_lowercase(),
+                transaction_sender.to_string()
             );
         }
 
