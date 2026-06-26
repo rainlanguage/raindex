@@ -13,14 +13,9 @@ impl RaindexSubgraphClient {
         Ok(vault)
     }
 
-    /// Fetch all vaults, paginated
-    pub async fn vaults_list(
-        &self,
-        filter_args: SgVaultsListFilterArgs,
-        pagination_args: SgPaginationArgs,
-    ) -> Result<Vec<SgVault>, RaindexSubgraphClientError> {
-        let pagination_variables = Self::parse_pagination_args(pagination_args);
-
+    fn vaults_list_filter(
+        filter_args: &SgVaultsListFilterArgs,
+    ) -> Option<SgVaultsListQueryFilters> {
         let balance_not = if filter_args.hide_zero_balance {
             Some(SgBytes(Float::default().get_inner().to_string()))
         } else {
@@ -50,7 +45,13 @@ impl RaindexSubgraphClient {
             None
         };
 
-        let filters = SgVaultsListQueryFilters {
+        let has_filters = !filter_args.owners.is_empty()
+            || filter_args.hide_zero_balance
+            || !filter_args.tokens.is_empty()
+            || !filter_args.raindexes.is_empty()
+            || filter_args.only_active_orders;
+
+        has_filters.then(|| SgVaultsListQueryFilters {
             owner_in: filter_args.owners.clone(),
             balance_not,
             token_in: filter_args.tokens.clone(),
@@ -58,18 +59,21 @@ impl RaindexSubgraphClient {
             orders_as_input_: None,
             orders_as_output_: None,
             or,
-        };
+        })
+    }
 
-        let has_filters = !filter_args.owners.is_empty()
-            || filter_args.hide_zero_balance
-            || !filter_args.tokens.is_empty()
-            || !filter_args.raindexes.is_empty()
-            || filter_args.only_active_orders;
+    /// Fetch all vaults, paginated
+    pub async fn vaults_list(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+        pagination_args: SgPaginationArgs,
+    ) -> Result<Vec<SgVault>, RaindexSubgraphClientError> {
+        let pagination_variables = Self::parse_pagination_args(pagination_args);
 
         let variables = SgVaultsListQueryVariables {
             first: pagination_variables.first,
             skip: pagination_variables.skip,
-            filters: if has_filters { Some(filters) } else { None },
+            filters: Self::vaults_list_filter(&filter_args),
         };
 
         let data = self
@@ -79,34 +83,71 @@ impl RaindexSubgraphClient {
         Ok(data.vaults)
     }
 
-    /// Fetch all pages of vaults_list query
-    pub async fn vaults_list_all(&self) -> Result<Vec<SgVault>, RaindexSubgraphClientError> {
+    async fn fetch_all_vaults_pages(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+    ) -> Result<Vec<SgVault>, RaindexSubgraphClientError> {
         let mut all_pages_merged = vec![];
         let mut page = 1;
 
         loop {
             let page_data = self
                 .vaults_list(
-                    SgVaultsListFilterArgs {
-                        owners: vec![],
-                        hide_zero_balance: true,
-                        tokens: vec![],
-                        raindexes: vec![],
-                        only_active_orders: false,
-                    },
+                    filter_args.clone(),
                     SgPaginationArgs {
                         page,
                         page_size: ALL_PAGES_QUERY_PAGE_SIZE,
                     },
                 )
                 .await?;
-            if page_data.is_empty() {
+            let batch_len = page_data.len();
+            all_pages_merged.extend(page_data);
+            if (batch_len as u16) < ALL_PAGES_QUERY_PAGE_SIZE {
                 break;
             }
-            all_pages_merged.extend(page_data);
-            page += 1
+            page += 1;
         }
         Ok(all_pages_merged)
+    }
+
+    /// Fetch all pages of vaults_list query
+    pub async fn vaults_list_all(&self) -> Result<Vec<SgVault>, RaindexSubgraphClientError> {
+        self.fetch_all_vaults_pages(SgVaultsListFilterArgs {
+            owners: vec![],
+            hide_zero_balance: true,
+            tokens: vec![],
+            raindexes: vec![],
+            only_active_orders: false,
+        })
+        .await
+    }
+
+    pub async fn vaults_count(
+        &self,
+        filter_args: SgVaultsListFilterArgs,
+    ) -> Result<u32, RaindexSubgraphClientError> {
+        let mut count = 0u32;
+        let mut page = 1;
+
+        loop {
+            let page_data = self
+                .vaults_list(
+                    filter_args.clone(),
+                    SgPaginationArgs {
+                        page,
+                        page_size: ALL_PAGES_QUERY_PAGE_SIZE,
+                    },
+                )
+                .await?;
+            let batch_len = page_data.len();
+            count += batch_len as u32;
+            if (batch_len as u16) < ALL_PAGES_QUERY_PAGE_SIZE {
+                break;
+            }
+            page += 1;
+        }
+
+        Ok(count)
     }
 
     /// Fetch all vault deposits + withdrawals merged paginated, for a single vault
@@ -407,6 +448,43 @@ mod tests {
         for (actual, expected) in vaults.iter().zip(expected_vaults.iter()) {
             assert_sg_vault_eq(actual, expected);
         }
+    }
+
+    #[tokio::test]
+    async fn test_vaults_count_fetches_all_pages() {
+        let sg_server = MockServer::start_async().await;
+        let client = setup_client(&sg_server);
+        let filter_args = SgVaultsListFilterArgs {
+            owners: vec![],
+            hide_zero_balance: false,
+            tokens: vec![],
+            raindexes: vec![],
+            only_active_orders: false,
+        };
+        let full_page: Vec<SgVault> = (0..ALL_PAGES_QUERY_PAGE_SIZE)
+            .map(|_| default_sg_vault())
+            .collect();
+        let final_page = vec![default_sg_vault(), default_sg_vault()];
+
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains("\"skip\":0")
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200)
+                .json_body(json!({"data": {"vaults": full_page}}));
+        });
+        sg_server.mock(|when, then| {
+            when.method(POST)
+                .path("/")
+                .body_contains(format!("\"skip\":{}", ALL_PAGES_QUERY_PAGE_SIZE))
+                .body_contains(format!("\"first\":{}", ALL_PAGES_QUERY_PAGE_SIZE));
+            then.status(200)
+                .json_body(json!({"data": {"vaults": final_page}}));
+        });
+
+        let count = client.vaults_count(filter_args).await.unwrap();
+        assert_eq!(count, ALL_PAGES_QUERY_PAGE_SIZE as u32 + 2);
     }
 
     #[tokio::test]
