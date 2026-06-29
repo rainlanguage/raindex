@@ -1,8 +1,12 @@
 name: NPM Packages Release
-on: [push]
+on:
+  push:
+    branches:
+      - main
 jobs:
   release:
     # skip this job if the commit was created by this workflow (prevents infinite loop)
+    if: ${{ github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -212,11 +216,70 @@ jobs:
       # first publish raindex pkg to npm (uses NPM_TOKEN)
       - name: First Publish raindex pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
+        uses: JS-DevTools/npm-publish@v3
+        with:
+          token: ${{ secrets.NPM_TOKEN }}
+          access: public
+          package: raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+          tag: latest
+      # publish raindex pkg to npm
+      - name: Publish raindex pkg To NPM
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'false' }}
         run: |
           npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
             --access public \
             --tag latest \
-            --verbose \
-            --dry-run
+            --verbose
+      # Create npm package tarball for ui-components
+      - name: Create ui-components NPM Package Tarball
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        run: echo "UC_NPM_PACKAGE=$(npm pack --silent -w @rainlanguage/ui-components)" >> $GITHUB_ENV
+      - name: Rename ui-components NPM Package Tarball
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        run: mv ${{ env.UC_NPM_PACKAGE }} ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
+      # publish ui-components to npm
+      - name: Publish ui-components To NPM
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        run: |
+          npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
+            --access public \
+            --tag latest \
+            --verbose
+      # Commit changes and tag
+      - name: Commit And Tag
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        run: |
+          git add "packages/raindex/package.json"
+          git add "packages/ui-components/package.json"
+          git add "package-lock.json"
+          git commit -m "NPM Package Release raindex v${{ env.RAINDEX_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}"
+          git tag "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
+      # Push the commit to remote
+      - name: Push Changes To Remote
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        run: |
+          git push origin
+          git push -u origin "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Create gitHub release with tarballs
+      - name: Create GitHub Release
+        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        id: gh_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}
+          name: NPM Package Release raindex v${{ env.RAINDEX_NEW_VERSION }} ui-components v${{ env.UC_NEW_VERSION }}
+          files: |
+            raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+            ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
+      - name: Forward CI Status
+        if: always()
+        uses: rainlanguage/github-chore/.github/actions/telegram-status-report@main
+        with:
+          status: ${{ job.status }}
+          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
