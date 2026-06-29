@@ -225,7 +225,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
-        if: ${{ env.OLD_HASH != env.NEW_HASH && && env.FIRST_PUBLISH == 'false'}}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'false' }}
         run: |
           npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
             --access public \
