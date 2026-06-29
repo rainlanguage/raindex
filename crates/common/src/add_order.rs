@@ -177,14 +177,14 @@ impl AddOrderArgs {
         Ok(DISPaiR::new(deployer, interpreter, store, parser))
     }
 
-    /// Call parser to parse rainlang into bytecode and constants.
-    async fn try_parse_rainlang(
+    /// Parse rainlang into bytecode using a pre-fetched DISPaiR.
+    /// Called by try_into_call to avoid redundant read_dispair round-trips.
+    async fn parse_bytecode_with_dispair(
         &self,
-        rpcs: Vec<String>,
-        rainlang: String,
+        rpcs: &[String],
+        rainlang: &str,
+        dispair: DISPaiR,
     ) -> Result<Vec<u8>, AddOrderArgsError> {
-        let dispair = self.read_dispair(&rpcs).await?;
-
         let urls = rpcs
             .iter()
             .map(|rpc| rpc.parse::<Url>())
@@ -193,11 +193,21 @@ impl AddOrderArgs {
         let provider = mk_read_provider(&urls)?;
         let parser: ParserV2 = dispair.into();
         let rainlang_parsed: parse2Return = parser
-            .parse_text(rainlang.as_str(), &provider)
+            .parse_text(rainlang, &provider)
             .await
             .map_err(AddOrderArgsError::ParserError)?;
-
         Ok(rainlang_parsed.bytecode.into())
+    }
+
+    /// Call parser to parse rainlang into bytecode and constants.
+    async fn try_parse_rainlang(
+        &self,
+        rpcs: Vec<String>,
+        rainlang: String,
+    ) -> Result<Vec<u8>, AddOrderArgsError> {
+        let dispair = self.read_dispair(&rpcs).await?;
+        self.parse_bytecode_with_dispair(&rpcs, &rainlang, dispair)
+            .await
     }
 
     /// Generate RainlangSource meta
@@ -252,24 +262,26 @@ impl AddOrderArgs {
         &self,
         rpcs: Vec<String>,
     ) -> Result<addOrder4Call, AddOrderArgsError> {
+        let dispair = self.read_dispair(&rpcs).await?;
+        let interpreter = dispair.interpreter;
+        let store = dispair.store;
+
         let rainlang = self.compose_to_rainlang()?;
         let bytecode = self
-            .try_parse_rainlang(rpcs.clone(), rainlang.clone())
+            .parse_bytecode_with_dispair(&rpcs, &rainlang, dispair.clone())
             .await?;
 
         let meta = self.try_generate_meta(rainlang)?;
 
-        let dispair = self.read_dispair(&rpcs).await?;
-
         // get the evaluable for the post action
         let post_rainlang = self.compose_addorder_post_task()?;
         let post_bytecode = self
-            .try_parse_rainlang(rpcs.clone(), post_rainlang.clone())
+            .parse_bytecode_with_dispair(&rpcs, &post_rainlang, dispair)
             .await?;
 
         let post_evaluable = EvaluableV4 {
-            interpreter: dispair.interpreter,
-            store: dispair.store,
+            interpreter,
+            store,
             bytecode: post_bytecode.into(),
         };
 
@@ -283,8 +295,8 @@ impl AddOrderArgs {
                 validInputs: self.inputs.clone(),
                 validOutputs: self.outputs.clone(),
                 evaluable: EvaluableV4 {
-                    interpreter: dispair.interpreter,
-                    store: dispair.store,
+                    interpreter,
+                    store,
                     bytecode: bytecode.into(),
                 },
                 meta: meta.into(),
@@ -921,6 +933,25 @@ _ _: 0 0;
 
         assert_eq!(add_order_call.tasks[0].evaluable.bytecode.len(), 111);
         assert_eq!(add_order_call.tasks[0].signedContext.len(), 0);
+
+        // Both config.evaluable and tasks[0].evaluable must use the same
+        // interpreter/store from one shared read_dispair call.
+        assert_eq!(
+            add_order_call.config.evaluable.interpreter,
+            *local_evm.interpreter.address()
+        );
+        assert_eq!(
+            add_order_call.config.evaluable.store,
+            *local_evm.store.address()
+        );
+        assert_eq!(
+            add_order_call.config.evaluable.interpreter,
+            add_order_call.tasks[0].evaluable.interpreter
+        );
+        assert_eq!(
+            add_order_call.config.evaluable.store,
+            add_order_call.tasks[0].evaluable.store
+        );
     }
 
     #[tokio::test]
