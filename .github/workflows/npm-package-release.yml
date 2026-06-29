@@ -214,7 +214,7 @@ jobs:
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: mv ${{ env.RAINDEX_NPM_PACKAGE }} raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
       # first publish raindex pkg to npm (uses NPM_TOKEN)
-      - name: Publish orderbook pkg To NPM
+      - name: First Publish raindex pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
         uses: JS-DevTools/npm-publish@v3
         with:
