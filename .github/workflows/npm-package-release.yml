@@ -3,10 +3,13 @@ on:
   push:
     branches:
       - main
+      # Temporary release-workflow test branches run in dry-run mode.
+      - arda/testable-npm-release-workflow
+      - release-workflow-test/**
 jobs:
   release:
     # skip this job if the commit was created by this workflow (prevents infinite loop)
-    if: ${{ github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
+    if: ${{ github.ref != 'refs/heads/main' || !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -24,6 +27,7 @@ jobs:
       CI_DEPLOY_FLARE_RPC_URL: ${{ secrets.CI_DEPLOY_FLARE_RPC_URL }}
       RPC_URL_ETHEREUM_FORK: ${{ secrets.RPC_URL_ETHEREUM_FORK }}
       COMMIT_SHA: ${{ github.sha }}
+      RELEASE_DRY_RUN: ${{ github.ref != 'refs/heads/main' }}
     outputs:
       version: ${{ env.NEW_VERSION }}
     steps:
@@ -213,24 +217,51 @@ jobs:
       - name: Rename raindex NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: mv ${{ env.RAINDEX_NPM_PACKAGE }} raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+      - name: Verify first-publish NPM token
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          npm whoami --registry=https://registry.npmjs.org
+          npm org ls rainlanguage --json
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "false"
       # first publish raindex pkg to npm (uses NPM_TOKEN)
       - name: First Publish raindex pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'true' }}
         run: |
-          npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
-            --access public \
-            --tag latest \
-            --verbose
+          unset ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_ID_TOKEN_REQUEST_TOKEN
+          if [ "${RELEASE_DRY_RUN}" = "true" ]; then
+            npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --dry-run \
+              --verbose
+          else
+            npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --verbose
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "false"
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'false' }}
         run: |
-          npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
-            --access public \
-            --tag latest \
-            --verbose
+          if [ "${RELEASE_DRY_RUN}" = "true" ]; then
+            npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --dry-run \
+              --verbose
+          else
+            npm publish raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --verbose
+          fi
       # Create npm package tarball for ui-components
       - name: Create ui-components NPM Package Tarball
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
@@ -242,13 +273,21 @@ jobs:
       - name: Publish ui-components To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH }}
         run: |
-          npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
-            --access public \
-            --tag latest \
-            --verbose
+          if [ "${RELEASE_DRY_RUN}" = "true" ]; then
+            npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --dry-run \
+              --verbose
+          else
+            npm publish ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz \
+              --access public \
+              --tag latest \
+              --verbose
+          fi
       # Commit changes and tag
       - name: Commit And Tag
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.RELEASE_DRY_RUN == 'false' }}
         run: |
           git add "packages/raindex/package.json"
           git add "packages/ui-components/package.json"
@@ -257,7 +296,7 @@ jobs:
           git tag "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
       # Push the commit to remote
       - name: Push Changes To Remote
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.RELEASE_DRY_RUN == 'false' }}
         run: |
           git push origin
           git push -u origin "npm-raindex-v${{ env.RAINDEX_NEW_VERSION }}-uc-v${{ env.UC_NEW_VERSION }}"
@@ -265,7 +304,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # Create gitHub release with tarballs
       - name: Create GitHub Release
-        if: ${{ env.OLD_HASH != env.NEW_HASH }}
+        if: ${{ env.OLD_HASH != env.NEW_HASH && env.RELEASE_DRY_RUN == 'false' }}
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
