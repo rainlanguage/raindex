@@ -218,4 +218,4 @@ jobs:
           access: public
           package: raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
           dry-run: true
-          tag: prerelease
+          tag: latest
