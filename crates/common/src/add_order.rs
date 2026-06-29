@@ -199,7 +199,7 @@ impl AddOrderArgs {
         Ok(rainlang_parsed.bytecode.into())
     }
 
-    /// Call parser to parse rainlang into bytecode and constants.
+    #[cfg(test)]
     async fn try_parse_rainlang(
         &self,
         rpcs: Vec<String>,
