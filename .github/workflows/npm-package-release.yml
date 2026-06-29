@@ -221,7 +221,6 @@ jobs:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
           package: raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
-          dry-run: true
           tag: latest
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
