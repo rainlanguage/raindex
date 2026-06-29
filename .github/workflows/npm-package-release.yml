@@ -1,12 +1,8 @@
 name: NPM Packages Release
-on:
-  push:
-    branches:
-      - main
+on: [push]
 jobs:
   release:
     # skip this job if the commit was created by this workflow (prevents infinite loop)
-    if: ${{ github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -221,6 +217,7 @@ jobs:
           token: ${{ secrets.NPM_TOKEN }}
           access: public
           package: raindex_npm_package_${{ env.RAINDEX_NEW_VERSION }}.tgz
+          dry-run: true
       # publish raindex pkg to npm
       - name: Publish raindex pkg To NPM
         if: ${{ env.OLD_HASH != env.NEW_HASH && env.FIRST_PUBLISH == 'false' }}
