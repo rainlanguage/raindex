@@ -20,6 +20,7 @@
 	import type { RaindexClient, RaindexVaultsList } from '@rainlanguage/raindex';
 	import { handleVaultsWithdrawAll } from '$lib/services/handleVaultsWithdrawAll';
 	import type { Hex } from 'viem';
+	import LocalDbSyncGate from '$lib/components/LocalDbSyncGate.svelte';
 
 	const { showInactiveOrders } = $page.data.stores;
 
@@ -46,14 +47,16 @@
 
 <PageHeader title="Vaults" pathname={$page.url.pathname} />
 
-<VaultsListTable
-	{orderHash}
-	{showInactiveOrders}
-	{hideZeroBalanceVaults}
-	{hideInactiveOrdersVaults}
-	{activeTokens}
-	{selectedChainIds}
-	{activeRaindexAddresses}
-	{ownerFilter}
-	{onWithdrawAll}
-/>
+<LocalDbSyncGate>
+	<VaultsListTable
+		{orderHash}
+		{showInactiveOrders}
+		{hideZeroBalanceVaults}
+		{hideInactiveOrdersVaults}
+		{activeTokens}
+		{selectedChainIds}
+		{activeRaindexAddresses}
+		{ownerFilter}
+		{onWithdrawAll}
+	/>
+</LocalDbSyncGate>

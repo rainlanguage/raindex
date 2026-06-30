@@ -486,6 +486,40 @@ describe("DeploymentSteps", () => {
     });
   });
 
+  it("does not fetch a balance when token info is missing", async () => {
+    const mockSelectTokens = [
+      { key: "token1", name: "Token 1", description: undefined },
+    ];
+
+    (mockBuilder.getSelectTokens as Mock).mockReturnValue({
+      value: mockSelectTokens,
+    });
+    (mockBuilder.getTokenInfo as Mock).mockResolvedValue({
+      error: { msg: "Key 'token1' not found" },
+    });
+
+    const accountStore = writable<`0x${string}` | null>("0x123");
+
+    render(DeploymentSteps, {
+      props: {
+        ...defaultProps,
+        account: accountStore,
+      },
+    });
+
+    await waitFor(() => {
+      expect(mockBuilder.getSelectTokens).toHaveBeenCalled();
+    });
+    vi.clearAllMocks();
+
+    accountStore.set("0x456");
+
+    await waitFor(() => {
+      expect(mockBuilder.getTokenInfo).toHaveBeenCalledWith("token1");
+    });
+    expect(mockBuilder.getAccountBalance).not.toHaveBeenCalled();
+  });
+
   it("clears token balances when account becomes null", async () => {
     const mockSelectTokens = [
       { key: "token1", name: "Token 1", description: undefined },
