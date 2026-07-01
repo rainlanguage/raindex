@@ -1,11 +1,16 @@
-use crate::local_db::query::SqlStatement;
+use crate::local_db::query::{SqlScript, SqlStatement, SqlStatementBatch};
 
 pub const CLEAR_TABLES_SQL: &str = include_str!("query.sql");
 
-/// Returns the SQL statement that drops all local database tables and performs
-/// cleanup (transaction + vacuum). No parameters are bound for this script.
-pub fn clear_tables_stmt() -> SqlStatement {
-    SqlStatement::new(CLEAR_TABLES_SQL)
+pub fn clear_tables_batch() -> SqlStatementBatch {
+    let mut statements = SqlScript::new(CLEAR_TABLES_SQL).statements();
+    statements.retain(|sql| !sql.trim().eq_ignore_ascii_case("VACUUM;"));
+
+    SqlStatementBatch::with_statements(statements.into_iter().map(SqlStatement::new).collect())
+}
+
+pub fn vacuum_stmt() -> SqlStatement {
+    SqlStatement::new("VACUUM;")
 }
 
 #[cfg(test)]
@@ -26,15 +31,23 @@ mod tests {
     }
 
     #[test]
-    fn stmt_is_static_and_param_free() {
-        let stmt = clear_tables_stmt();
-        assert_eq!(stmt.sql, CLEAR_TABLES_SQL);
-        assert!(stmt.params.is_empty());
-        let lower = stmt.sql.to_lowercase();
+    fn script_drops_tables_and_vacuums() {
+        let lower = CLEAR_TABLES_SQL.to_lowercase();
         assert!(lower.contains("begin transaction"));
         assert!(lower.contains("drop view if exists vault_deltas"));
         assert!(lower.contains("drop table if exists"));
         assert!(lower.contains("vacuum"));
+    }
+
+    #[test]
+    fn batch_excludes_vacuum_from_transaction() {
+        let batch = clear_tables_batch();
+        assert!(batch.is_transaction());
+        assert!(!batch
+            .statements()
+            .iter()
+            .any(|stmt| stmt.sql().trim().eq_ignore_ascii_case("VACUUM;")));
+        assert_eq!(vacuum_stmt().sql().trim(), "VACUUM;");
     }
 
     #[test]

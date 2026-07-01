@@ -203,8 +203,8 @@ mod tests {
 
     use super::*;
     use crate::local_db::query::clear_raindex_data::clear_raindex_data_batch;
-    use crate::local_db::query::clear_tables::clear_tables_stmt;
-    use crate::local_db::query::create_tables::create_tables_stmt;
+    use crate::local_db::query::clear_tables::{clear_tables_batch, vacuum_stmt};
+    use crate::local_db::query::create_tables::create_tables_batch;
     use crate::local_db::query::create_tables::REQUIRED_TABLES;
     use crate::local_db::query::create_views::create_views_batch;
     use crate::local_db::query::fetch_db_metadata::{fetch_db_metadata_stmt, DbMetadataRow};
@@ -243,6 +243,17 @@ mod tests {
             self.text_map
                 .insert(stmt.sql().to_string(), value.to_string());
             self
+        }
+        fn with_batch(self, batch: &SqlStatementBatch) -> Self {
+            batch
+                .statements()
+                .iter()
+                .fold(self, |db, stmt| db.with_text(stmt, "ok"))
+        }
+        fn with_reset_batches(self) -> Self {
+            self.with_batch(&clear_tables_batch())
+                .with_text(&vacuum_stmt(), "ok")
+                .with_batch(&create_tables_batch())
         }
         fn calls(&self) -> Vec<String> {
             self.calls_text.lock().unwrap().clone()
@@ -389,6 +400,29 @@ mod tests {
         .unwrap()
     }
 
+    fn reset_batch_sqls() -> Vec<String> {
+        let mut statements = clear_tables_batch().statements().to_vec();
+        statements.push(vacuum_stmt());
+        statements.extend(create_tables_batch().statements().iter().cloned());
+        statements
+            .iter()
+            .map(|stmt| stmt.sql().to_string())
+            .collect()
+    }
+
+    fn assert_reset_batches_were_called(calls: &[String]) {
+        let expected = reset_batch_sqls();
+        for sql in expected {
+            assert!(calls.contains(&sql), "missing reset SQL: {sql}");
+        }
+    }
+
+    fn insert_reset_text_map(text_map: &mut HashMap<String, String>) {
+        for sql in reset_batch_sqls() {
+            text_map.insert(sql, "ok".to_string());
+        }
+    }
+
     fn watermark_row(last_block: u64) -> TargetWatermarkRow {
         TargetWatermarkRow {
             chain_id: sample_ob_id().chain_id,
@@ -415,8 +449,7 @@ mod tests {
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&fetch_db_metadata_stmt(), json!([db_meta_row]))
             .with_required_schema_columns()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
         adapter
@@ -430,13 +463,16 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert_eq!(calls[0], clear_tables_stmt().sql().to_string());
-        assert_eq!(calls[1], create_tables_stmt().sql().to_string());
+        let expected_reset = reset_batch_sqls();
+        assert_eq!(&calls[..expected_reset.len()], expected_reset.as_slice());
         assert_eq!(
-            calls[2],
+            calls[expected_reset.len()],
             insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()
         );
-        assert_eq!(&calls[3..], expected_views.as_slice());
+        assert_eq!(
+            &calls[expected_reset.len() + 1..],
+            expected_views.as_slice()
+        );
     }
 
     #[tokio::test]
@@ -447,8 +483,7 @@ mod tests {
             .with_healthy_integrity()
             .with_json(&fetch_tables_stmt(), table_names_json(&["db_metadata"]))
             .with_json(&fetch_db_metadata_stmt(), json!([])) // triggers reset
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
         adapter
@@ -462,8 +497,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()));
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
@@ -489,8 +523,7 @@ mod tests {
                 &fetch_tables_stmt(),
                 required_tables_without_db_metadata_json(),
             )
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -505,8 +538,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()));
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
@@ -542,8 +574,7 @@ mod tests {
             .with_healthy_integrity()
             .with_json(&fetch_tables_stmt(), table_names_json(&["db_metadata"]))
             .with_json(&fetch_db_metadata_stmt(), json!([mismatched_row]))
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -558,8 +589,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_reset_batches_were_called(&calls);
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
             "missing view creation statements"
@@ -588,8 +618,7 @@ mod tests {
             .with_healthy_integrity()
             .with_json(&fetch_tables_stmt(), table_names_json(&["db_metadata"]))
             .with_json(&fetch_db_metadata_stmt(), json!([old_schema_row]))
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -604,8 +633,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()));
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
@@ -681,8 +709,7 @@ mod tests {
             .with_json(&fetch_tables_stmt(), required_tables_json())
             .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
             .with_required_schema_columns_missing("target_watermarks", "raindex_address")
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -697,8 +724,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()));
         assert!(
             expected_views.iter().all(|stmt| calls.contains(stmt)),
@@ -924,10 +950,7 @@ mod tests {
                 integrity_check_stmt().sql().to_string(),
                 json!([corrupted_row]).to_string(),
             );
-            db.text_map
-                .insert(clear_tables_stmt().sql().to_string(), "ok".to_string());
-            db.text_map
-                .insert(create_tables_stmt().sql().to_string(), "ok".to_string());
+            insert_reset_text_map(&mut db.text_map);
             db.text_map.insert(
                 insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string(),
                 "ok".to_string(),
@@ -1002,14 +1025,7 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert!(
-            calls.contains(&clear_tables_stmt().sql().to_string()),
-            "should have cleared tables"
-        );
-        assert!(
-            calls.contains(&create_tables_stmt().sql().to_string()),
-            "should have created tables"
-        );
+        assert_reset_batches_were_called(&calls);
         assert!(
             calls.contains(&insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()),
             "should have inserted db metadata"
@@ -1033,10 +1049,7 @@ mod tests {
                 calls_text: Mutex::new(Vec::new()),
                 wipe_called: Mutex::new(false),
             };
-            db.text_map
-                .insert(clear_tables_stmt().sql().to_string(), "ok".to_string());
-            db.text_map
-                .insert(create_tables_stmt().sql().to_string(), "ok".to_string());
+            insert_reset_text_map(&mut db.text_map);
             db.text_map.insert(
                 insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string(),
                 "ok".to_string(),
@@ -1106,14 +1119,7 @@ mod tests {
         );
 
         let calls = db.calls();
-        assert!(
-            calls.contains(&clear_tables_stmt().sql().to_string()),
-            "should have cleared tables when integrity check errors"
-        );
-        assert!(
-            calls.contains(&create_tables_stmt().sql().to_string()),
-            "should have created tables"
-        );
+        assert_reset_batches_were_called(&calls);
     }
 
     struct WipeFailsDb;

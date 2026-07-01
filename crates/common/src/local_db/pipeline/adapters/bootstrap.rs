@@ -1,6 +1,6 @@
 use crate::local_db::query::clear_raindex_data::clear_raindex_data_batch;
-use crate::local_db::query::clear_tables::clear_tables_stmt;
-use crate::local_db::query::create_tables::create_tables_stmt;
+use crate::local_db::query::clear_tables::{clear_tables_batch, vacuum_stmt};
+use crate::local_db::query::create_tables::create_tables_batch;
 use crate::local_db::query::create_tables::REQUIRED_TABLES;
 use crate::local_db::query::create_views::create_views_batch;
 use crate::local_db::query::fetch_db_metadata::{fetch_db_metadata_stmt, DbMetadataRow};
@@ -109,8 +109,9 @@ pub trait BootstrapPipeline {
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        db.query_text(&clear_tables_stmt()).await?;
-        db.query_text(&create_tables_stmt()).await?;
+        db.execute_batch(&clear_tables_batch()).await?;
+        db.query_text(&vacuum_stmt()).await?;
+        db.execute_batch(&create_tables_batch()).await?;
         db.query_text(&insert_db_metadata_stmt(
             db_schema_version.unwrap_or(DB_SCHEMA_VERSION),
         ))
@@ -166,6 +167,8 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::local_db::query::clear_tables::{clear_tables_batch, vacuum_stmt};
+    use crate::local_db::query::create_tables::create_tables_batch;
     use crate::local_db::query::create_views::create_views_batch;
     use crate::local_db::query::fetch_db_metadata::{fetch_db_metadata_stmt, DbMetadataRow};
     use crate::local_db::query::fetch_tables::{fetch_tables_stmt, TableResponse};
@@ -198,9 +201,25 @@ mod tests {
                 .iter()
                 .fold(self, |db, stmt| db.with_text(stmt, "ok"))
         }
+        fn with_batch(self, batch: &SqlStatementBatch) -> Self {
+            batch
+                .statements()
+                .iter()
+                .fold(self, |db, stmt| db.with_text(stmt, "ok"))
+        }
         fn calls(&self) -> Vec<String> {
             self.calls_text.lock().unwrap().clone()
         }
+    }
+
+    fn reset_prefix_sql() -> Vec<String> {
+        let mut statements = clear_tables_batch().statements().to_vec();
+        statements.push(vacuum_stmt());
+        statements.extend(create_tables_batch().statements().iter().cloned());
+        statements
+            .iter()
+            .map(|stmt| stmt.sql().to_string())
+            .collect()
     }
 
     struct RecordingTextExecutor {
@@ -602,8 +621,9 @@ mod tests {
     async fn reset_db_runs_clear_create_and_insert() {
         let adapter = TestBootstrapPipeline::new();
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_batch(&clear_tables_batch())
+            .with_text(&vacuum_stmt(), "ok")
+            .with_batch(&create_tables_batch())
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -618,26 +638,30 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
+        let expected_prefix = reset_prefix_sql();
         assert_eq!(
             calls.len(),
-            3 + expected_views.len(),
+            expected_prefix.len() + 1 + expected_views.len(),
             "unexpected number of executed statements"
         );
-        assert_eq!(calls[0], clear_tables_stmt().sql().to_string());
-        assert_eq!(calls[1], create_tables_stmt().sql().to_string());
+        assert_eq!(&calls[..expected_prefix.len()], expected_prefix.as_slice());
         assert_eq!(
-            calls[2],
+            calls[expected_prefix.len()],
             insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string()
         );
-        assert_eq!(&calls[3..], expected_views.as_slice());
+        assert_eq!(
+            &calls[expected_prefix.len() + 1..],
+            expected_views.as_slice()
+        );
     }
 
     #[tokio::test]
     async fn reset_db_uses_default_version_when_none() {
         let adapter = TestBootstrapPipeline::new();
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_batch(&clear_tables_batch())
+            .with_text(&vacuum_stmt(), "ok")
+            .with_batch(&create_tables_batch())
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -649,10 +673,16 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert_eq!(calls[0], clear_tables_stmt().sql());
-        assert_eq!(calls[1], create_tables_stmt().sql());
-        assert_eq!(calls[2], insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql());
-        assert_eq!(&calls[3..], expected_views.as_slice());
+        let expected_prefix = reset_prefix_sql();
+        assert_eq!(&calls[..expected_prefix.len()], expected_prefix.as_slice());
+        assert_eq!(
+            calls[expected_prefix.len()],
+            insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql()
+        );
+        assert_eq!(
+            &calls[expected_prefix.len() + 1..],
+            expected_views.as_slice()
+        );
     }
 
     #[tokio::test]
@@ -660,8 +690,9 @@ mod tests {
         let adapter = TestBootstrapPipeline::new();
         let custom_version = DB_SCHEMA_VERSION + 9;
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_batch(&clear_tables_batch())
+            .with_text(&vacuum_stmt(), "ok")
+            .with_batch(&create_tables_batch())
             .with_text(&insert_db_metadata_stmt(custom_version), "ok")
             .with_views();
 
@@ -673,17 +704,23 @@ mod tests {
             .iter()
             .map(|s| s.sql().to_string())
             .collect();
-        assert_eq!(calls[0], clear_tables_stmt().sql());
-        assert_eq!(calls[1], create_tables_stmt().sql());
-        assert_eq!(calls[2], insert_db_metadata_stmt(custom_version).sql());
-        assert_eq!(&calls[3..], expected_views.as_slice());
+        let expected_prefix = reset_prefix_sql();
+        assert_eq!(&calls[..expected_prefix.len()], expected_prefix.as_slice());
+        assert_eq!(
+            calls[expected_prefix.len()],
+            insert_db_metadata_stmt(custom_version).sql()
+        );
+        assert_eq!(
+            &calls[expected_prefix.len() + 1..],
+            expected_views.as_slice()
+        );
     }
 
     #[tokio::test]
     async fn reset_db_propagates_errors() {
         let adapter = TestBootstrapPipeline::new();
-        // Only the first statement is present; second will fail.
-        let db = MockDb::default().with_text(&clear_tables_stmt(), "ok");
+        // Only the clear transaction is present; vacuum will fail.
+        let db = MockDb::default().with_batch(&clear_tables_batch());
 
         let err = adapter.reset_db(&db, None).await.unwrap_err();
         match err {
@@ -692,9 +729,17 @@ mod tests {
         }
 
         let calls = db.calls();
-        assert_eq!(calls.len(), 2); // attempted clear and create
-        assert_eq!(calls[0], clear_tables_stmt().sql());
-        assert_eq!(calls[1], create_tables_stmt().sql());
+        assert_eq!(calls.len(), clear_tables_batch().len() + 1);
+        assert_eq!(
+            &calls[..clear_tables_batch().len()],
+            clear_tables_batch()
+                .statements()
+                .iter()
+                .map(|stmt| stmt.sql().to_string())
+                .collect::<Vec<_>>()
+                .as_slice()
+        );
+        assert_eq!(calls.last().unwrap(), vacuum_stmt().sql());
     }
 
     #[tokio::test]

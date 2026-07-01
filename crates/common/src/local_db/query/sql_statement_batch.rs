@@ -63,6 +63,14 @@ impl SqlStatementBatch {
         &self.statements
     }
 
+    pub fn inner_statements(&self) -> &[SqlStatement] {
+        if self.is_transaction() {
+            &self.statements[1..self.statements.len() - 1]
+        } else {
+            &self.statements
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.statements.len()
     }

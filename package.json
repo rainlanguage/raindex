@@ -72,7 +72,7 @@
   "dependencies": {
     "@fast-check/vitest": "0.2.0",
     "@rainlanguage/raindex": "workspace:*",
-    "@rainlanguage/sqlite-web": "^0.0.2",
+    "@rainlanguage/sqlite-web": "^0.0.3",
     "@rainlanguage/ui-components": "workspace:*",
     "@reown/appkit": "1.6.4",
     "@reown/appkit-adapter-wagmi": "1.6.4",

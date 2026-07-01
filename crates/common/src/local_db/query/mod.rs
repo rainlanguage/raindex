@@ -27,6 +27,7 @@ pub mod fetch_vault_balance_changes;
 pub mod fetch_vaults;
 pub mod insert_db_metadata;
 pub mod integrity_check;
+pub mod sql_script;
 pub mod sql_statement;
 pub mod sql_statement_batch;
 pub mod update_last_synced_block;
@@ -36,6 +37,7 @@ pub mod upsert_target_watermark;
 pub mod upsert_vault_balances;
 
 pub use executor::LocalDbQueryExecutor;
+pub use sql_script::SqlScript;
 pub use sql_statement::{SqlBuildError, SqlStatement, SqlValue};
 pub use sql_statement_batch::SqlStatementBatch;
 

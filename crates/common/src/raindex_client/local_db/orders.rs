@@ -232,7 +232,8 @@ mod tests {
         use super::*;
         use crate::local_db::query::{fetch_orders::LocalDbOrder, fetch_vaults::LocalDbVault};
         use crate::raindex_client::tests::{
-            get_local_db_test_yaml, new_test_client_with_db_callback,
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
         };
         use crate::raindex_client::ChainIds;
         use alloy::primitives::{address, b256, bytes, Bytes, U256};
@@ -392,9 +393,9 @@ mod tests {
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -575,9 +576,9 @@ mod tests {
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -631,9 +632,9 @@ mod tests {
             };
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161, 137],
             );
 
@@ -689,9 +690,9 @@ mod tests {
             };
 
             let callback = make_local_db_callback(vec![local_order.clone()]);
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161, 137],
             );
 

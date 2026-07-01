@@ -113,10 +113,8 @@ items:
 - High-level classes (selected)
   - `RaindexClient` — raindex queries (orders, trades, vaults, quotes,
     transactions) across configured networks/subgraphs. Constructor is async
-    (`await RaindexClient.new(...)`) and accepts optional `queryCallback` (for
-    applying fetched records to the local DB), `wipeCallback` (for cleaning up
-    stale data during full re-sync), and `statusCallback` (for reporting sync
-    progress/errors to the caller) args for local DB sync when the YAML has
+    (`await RaindexClient.new(...)`) and accepts an optional
+    `{ localDb, statusCallback }` object for local DB sync when the YAML has
     `local-db-sync` sections. The sync scheduler starts automatically when
     configured and shuts down via Drop.
   - `RaindexOrder`, `RaindexVault`, `RaindexTrade`, `RaindexTransaction`,

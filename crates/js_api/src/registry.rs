@@ -391,11 +391,10 @@ impl DotrainRegistry {
     /// ## Examples
     ///
     /// ```javascript
-    /// const clientResult = await registry.getRaindexClient(
-    ///   localDb.query.bind(localDb),
-    ///   localDb.wipeAndRecreate.bind(localDb),
-    ///   updateStatus,
-    /// );
+    /// const clientResult = await registry.getRaindexClient({
+    ///   localDb,
+    ///   statusCallback: updateStatus,
+    /// });
     /// if (clientResult.error) {
     ///   console.error("Failed to get RaindexClient:", clientResult.error.readableMsg);
     ///   return;
@@ -411,27 +410,15 @@ impl DotrainRegistry {
     pub async fn get_raindex_client(
         &self,
         #[wasm_export(
-            js_name = "queryCallback",
-            param_description = "Optional JavaScript function to execute local database queries"
+            js_name = "options",
+            param_description = "Optional setup object with localDb and statusCallback"
         )]
-        query_callback: Option<js_sys::Function>,
-        #[wasm_export(
-            js_name = "wipeCallback",
-            param_description = "Optional JavaScript function to wipe and recreate the database"
-        )]
-        wipe_callback: Option<js_sys::Function>,
-        #[wasm_export(
-            js_name = "statusCallback",
-            param_description = "Optional callback invoked with the current local DB sync status"
-        )]
-        status_callback: Option<js_sys::Function>,
+        options: Option<JsValue>,
     ) -> Result<raindex_common::raindex_client::RaindexClient, DotrainRegistryError> {
         let client = raindex_common::raindex_client::RaindexClient::new(
             vec![self.inner.settings()],
             None,
-            query_callback,
-            wipe_callback,
-            status_callback,
+            options,
         )
         .await
         .map_err(DotrainRegistryCoreError::from)?;

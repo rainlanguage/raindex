@@ -186,8 +186,10 @@ mod tests {
         use crate::local_db::query::fetch_vaults::LocalDbVault;
         use crate::raindex_client::local_db::executor::tests::create_sql_capturing_callback;
         use crate::raindex_client::local_db::LocalDb;
-        use crate::raindex_client::tests::get_local_db_test_yaml;
-        use crate::raindex_client::RaindexClient;
+        use crate::raindex_client::tests::{
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
+        };
         use alloy::primitives::{address, Address, Bytes, U256};
         use rain_math_float::Float;
         use serde_json;
@@ -244,11 +246,14 @@ mod tests {
                 make_local_vault("0x01", token, owner, Float::parse("1".to_string()).unwrap());
 
             let callback = make_local_db_vaults_callback(vec![vault]);
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
             let vaults = data_source
                 .list(Some(vec![42161]), &GetVaultsFilters::default(), None, None)
@@ -276,11 +281,14 @@ mod tests {
                 make_local_vault("0x02", token, owner, Float::parse("5".to_string()).unwrap());
 
             let callback = make_local_db_vaults_callback(vec![local_vault.clone()]);
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let rc_client = Rc::new(client.clone());
             let derived_vault =
                 RaindexVault::try_from_local_db(Rc::clone(&rc_client), local_vault, None)
@@ -321,11 +329,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let vaults = data_source
@@ -353,11 +364,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let vaults = data_source
@@ -391,11 +405,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![keep_vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let filters = GetVaultsFilters {
@@ -473,11 +490,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![token]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let tokens = data_source
@@ -512,11 +532,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![token]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let tokens = data_source
@@ -550,11 +573,14 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![token]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 
             let tokens = data_source
@@ -610,18 +636,20 @@ mod tests {
                 output_orders: None,
             };
 
-            let client = RaindexClient::new(vec![get_local_db_test_yaml()], None, None, None, None)
-                .await
-                .unwrap();
+            let json = serde_json::to_string(&vec![balance_change]).unwrap();
+            let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
+            let callback = create_sql_capturing_callback(&json, captured_sql.clone());
+            let local_db_value = local_db_object_from_query_callback(callback);
+            let local_db = LocalDb::from_js_local_db(local_db_value.clone()).unwrap();
+            let client = new_test_client_with_local_db(
+                vec![get_local_db_test_yaml()],
+                local_db_value,
+                vec![42161],
+            );
             let rc_client = Rc::new(client.clone());
             let raindex_vault =
                 RaindexVault::try_from_local_db(Rc::clone(&rc_client), local_vault, None)
                     .expect("should convert vault");
-
-            let json = serde_json::to_string(&vec![balance_change]).unwrap();
-            let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
-            let callback = create_sql_capturing_callback(&json, captured_sql.clone());
-            let local_db = LocalDb::from_js_callback(callback, None);
 
             let data_source = LocalDbVaults::new(&local_db, Rc::new(client));
 

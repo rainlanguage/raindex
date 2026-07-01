@@ -48,6 +48,8 @@ use std::sync::Arc;
 #[cfg(target_family = "wasm")]
 use std::{cell::RefCell, rc::Rc};
 use std::{collections::BTreeMap, fmt, num::ParseIntError, str::FromStr};
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_utils::prelude::js_sys::Reflect;
 
 #[cfg(target_family = "wasm")]
 pub(crate) type ClientRef = std::rc::Rc<RaindexClient>;
@@ -126,14 +128,11 @@ impl RaindexClient {
     /// // Subgraph-only (no local-db-sync in YAML)
     /// const result = await RaindexClient.new([yamlConfig]);
     ///
-    /// // With local DB (YAML has local-db-sync, pass callbacks)
-    /// const result = await RaindexClient.new(
-    ///   [yamlConfig],
-    ///   undefined,
-    ///   localDb.query.bind(localDb),
-    ///   localDb.wipeAndRecreate.bind(localDb),
-    ///   updateStatus,
-    /// );
+    /// // With local DB (YAML has local-db-sync)
+    /// const result = await RaindexClient.new([yamlConfig], undefined, {
+    ///   localDb,
+    ///   statusCallback: updateStatus,
+    /// });
     /// ```
     #[wasm_export(
         js_name = "new",
@@ -150,21 +149,12 @@ impl RaindexClient {
         raindex_yamls: Vec<String>,
         validate: Option<bool>,
         #[wasm_export(
-            js_name = "queryCallback",
-            param_description = "Optional JavaScript function to execute local database queries"
+            js_name = "options",
+            param_description = "Optional setup object with localDb and statusCallback"
         )]
-        query_callback: Option<js_sys::Function>,
-        #[wasm_export(
-            js_name = "wipeCallback",
-            param_description = "Optional JavaScript function to wipe and recreate the database"
-        )]
-        wipe_callback: Option<js_sys::Function>,
-        #[wasm_export(
-            js_name = "statusCallback",
-            param_description = "Optional callback invoked with the current local DB sync status"
-        )]
-        status_callback: Option<js_sys::Function>,
+        options: Option<JsValue>,
     ) -> Result<RaindexClient, RaindexError> {
+        let options = LocalDbClientOptions::parse(options)?;
         let mut raindex_yaml = RaindexYaml::new(
             raindex_yamls,
             match validate {
@@ -183,9 +173,10 @@ impl RaindexClient {
         }
 
         let local_db = if has_syncs {
-            let cb = query_callback
-                .ok_or_else(|| RaindexError::LocalDbSetupMissing("query_callback".to_string()))?;
-            Some(LocalDb::from_js_callback(cb, wipe_callback))
+            let local_db = options
+                .local_db
+                .ok_or_else(|| RaindexError::LocalDbSetupMissing("options.localDb".to_string()))?;
+            Some(LocalDb::from_js_local_db(local_db)?)
         } else {
             None
         };
@@ -212,7 +203,7 @@ impl RaindexClient {
             let handle = crate::raindex_client::local_db::pipeline::runner::scheduler::start(
                 settings,
                 db,
-                status_callback,
+                options.status_callback,
                 sync_readiness.clone(),
                 sync_status_store.clone(),
                 true,
@@ -235,6 +226,56 @@ impl RaindexClient {
             ),
         })
     }
+}
+
+#[cfg(target_family = "wasm")]
+#[derive(Default)]
+pub struct LocalDbClientOptions {
+    pub local_db: Option<JsValue>,
+    pub status_callback: Option<js_sys::Function>,
+}
+
+#[cfg(target_family = "wasm")]
+impl LocalDbClientOptions {
+    pub fn parse(options: Option<JsValue>) -> Result<Self, RaindexError> {
+        let Some(options) = options else {
+            return Ok(Self::default());
+        };
+
+        let local_db = optional_field(&options, "localDb")?;
+        let status_callback = optional_function_field(&options, "statusCallback")?;
+
+        Ok(Self {
+            local_db,
+            status_callback,
+        })
+    }
+}
+
+#[cfg(target_family = "wasm")]
+fn optional_field(options: &JsValue, name: &str) -> Result<Option<JsValue>, RaindexError> {
+    let value = Reflect::get(options, &JsValue::from_str(name)).map_err(|e| {
+        RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
+            "Failed to read options.{name}: {e:?}"
+        )))
+    })?;
+    Ok((!value.is_undefined() && !value.is_null()).then_some(value))
+}
+
+#[cfg(target_family = "wasm")]
+fn optional_function_field(
+    options: &JsValue,
+    name: &str,
+) -> Result<Option<js_sys::Function>, RaindexError> {
+    optional_field(options, name)?
+        .map(|value| {
+            value.dyn_into::<js_sys::Function>().map_err(|_| {
+                RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
+                    "options.{name} must be a function"
+                )))
+            })
+        })
+        .transpose()
 }
 
 #[wasm_export]
@@ -926,9 +967,30 @@ accounts:
     }
 
     #[cfg(target_family = "wasm")]
-    pub fn new_test_client_with_db_callback(
+    pub fn local_db_object_from_query_callback(query_callback: js_sys::Function) -> JsValue {
+        let local_db = js_sys::Object::new();
+        js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &query_callback).unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("wipeAndRecreate"),
+            &js_sys::Function::new_no_args(
+                "return Promise.resolve({ value: undefined, error: null });",
+            ),
+        )
+        .unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("transaction"),
+            &js_sys::Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
+        )
+        .unwrap();
+        local_db.into()
+    }
+
+    #[cfg(target_family = "wasm")]
+    pub fn new_test_client_with_local_db(
         yamls: Vec<String>,
-        query_callback: js_sys::Function,
+        local_db: JsValue,
         chain_ids: Vec<u32>,
     ) -> RaindexClient {
         let raindex_yaml = RaindexYaml::new(yamls, RaindexYamlValidation::default())
@@ -942,10 +1004,10 @@ accounts:
         RaindexClient {
             raindex_yaml,
             local_db_state: LocalDbState::new(
-                Some(super::local_db::LocalDb::from_js_callback(
-                    query_callback,
-                    None,
-                )),
+                Some(
+                    super::local_db::LocalDb::from_js_local_db(local_db)
+                        .expect("valid test local DB object"),
+                ),
                 Rc::new(RefCell::new(None)),
                 sync_readiness,
                 db_chain_ids,
@@ -1306,6 +1368,81 @@ accounts:
             )
         }
 
+        fn local_db_sync_yaml() -> String {
+            format!(
+                r#"
+version: {spec_version}
+networks:
+    arbitrum:
+        rpcs:
+            - https://arb.example/rpc
+        chain-id: 42161
+        label: Arbitrum
+        network-id: 42161
+        currency: ETH
+subgraphs:
+    arbitrum: https://arb.example/subgraph
+local-db-remotes:
+    remote: https://remote.example/manifest
+local-db-sync:
+    arbitrum:
+        batch-size: 10
+        max-concurrent-batches: 2
+        retry-attempts: 1
+        retry-delay-ms: 1
+        rate-limit-delay-ms: 1
+        finality-depth: 12
+        bootstrap-block-threshold: 100
+        sync-interval-ms: 5000
+raindexes:
+    arbitrum-raindex:
+        address: 0x2f209e5b67A33B8fE96E28f24628dF6Da301c8eB
+        network: arbitrum
+        subgraph: arbitrum
+        local-db-remote: remote
+        deployment-block: 1
+"#,
+                spec_version = SpecVersion::current()
+            )
+        }
+
+        fn local_db_options(include_transaction: bool) -> JsValue {
+            let query = js_sys::Function::new_with_args(
+                "sql",
+                r#"
+                var value = '[]';
+                if (sql && sql.toLowerCase().includes('quick_check')) {
+                    value = '[{"quick_check":"ok"}]';
+                }
+                return Promise.resolve({ value: value, error: null });
+                "#,
+            );
+            let local_db = js_sys::Object::new();
+            js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &query).unwrap();
+            js_sys::Reflect::set(
+                &local_db,
+                &JsValue::from_str("wipeAndRecreate"),
+                &js_sys::Function::new_no_args(
+                    "return Promise.resolve({ value: undefined, error: null });",
+                ),
+            )
+            .unwrap();
+            if include_transaction {
+                js_sys::Reflect::set(
+                    &local_db,
+                    &JsValue::from_str("transaction"),
+                    &js_sys::Function::new_no_args(
+                        "return Promise.resolve({ value: '', error: null });",
+                    ),
+                )
+                .unwrap();
+            }
+
+            let options = js_sys::Object::new();
+            js_sys::Reflect::set(&options, &JsValue::from_str("localDb"), &local_db).unwrap();
+            options.into()
+        }
+
         #[wasm_bindgen_test]
         async fn test_raindex_client_new_success() {
             let client = RaindexClient::new(
@@ -1317,8 +1454,6 @@ accounts:
                 )],
                 None,
                 None,
-                None,
-                None,
             )
             .await
             .unwrap();
@@ -1327,7 +1462,7 @@ accounts:
 
         #[wasm_bindgen_test]
         async fn test_raindex_client_new_invalid_yaml() {
-            let err = RaindexClient::new(vec![get_invalid_yaml()], Some(true), None, None, None)
+            let err = RaindexClient::new(vec![get_invalid_yaml()], Some(true), None)
                 .await
                 .unwrap_err();
             assert!(matches!(
@@ -1341,10 +1476,38 @@ accounts:
 
         #[wasm_bindgen_test]
         async fn test_raindex_client_new_empty_yaml() {
-            let err = RaindexClient::new(vec!["".to_string()], None, None, None, None)
+            let err = RaindexClient::new(vec!["".to_string()], None, None)
                 .await
                 .unwrap_err();
             assert!(matches!(err, RaindexError::YamlError(YamlError::EmptyFile)));
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_raindex_client_new_with_local_db_options() {
+            let client = RaindexClient::new(
+                vec![local_db_sync_yaml()],
+                None,
+                Some(local_db_options(true)),
+            )
+            .await
+            .unwrap();
+
+            assert!(client.local_db_state.local_db().is_some());
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_raindex_client_new_requires_transaction_method() {
+            let err = RaindexClient::new(
+                vec![local_db_sync_yaml()],
+                None,
+                Some(local_db_options(false)),
+            )
+            .await
+            .unwrap_err();
+
+            assert!(err
+                .to_string()
+                .contains("localDb.transaction must be a function"));
         }
 
         #[wasm_bindgen_test]
@@ -1356,8 +1519,6 @@ accounts:
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
-                None,
-                None,
                 None,
                 None,
             )
@@ -1382,8 +1543,6 @@ accounts:
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
-                None,
-                None,
                 None,
                 None,
             )
@@ -1413,8 +1572,6 @@ accounts:
                 )],
                 None,
                 None,
-                None,
-                None,
             )
             .await
             .unwrap();
@@ -1436,8 +1593,6 @@ accounts:
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
-                None,
-                None,
                 None,
                 None,
             )
@@ -1473,8 +1628,6 @@ accounts:
                     "http://localhost:3000/rpc1",
                     "http://localhost:3000/rpc2",
                 )],
-                None,
-                None,
                 None,
                 None,
             )
@@ -1526,9 +1679,7 @@ accounts:
                 spec_version = SpecVersion::current()
             );
 
-            let client = RaindexClient::new(vec![yaml], None, None, None, None)
-                .await
-                .unwrap();
+            let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
             let err = client.get_multi_subgraph_args(None).unwrap_err();
             assert!(matches!(
