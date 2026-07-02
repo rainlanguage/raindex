@@ -7,13 +7,15 @@ import {
 	updateNetworkStatus,
 	updateRaindexStatus,
 	updateStatus,
-	aggregateStatus
+	aggregateStatus,
+	localDbSyncGate,
+	resetLocalDbStatus,
+	seedLocalDbSyncSnapshot
 } from '../lib/stores/localDbStatus';
 
 describe('localDbStatus store', () => {
 	beforeEach(() => {
-		networkStatuses.set(new Map());
-		raindexStatuses.set(new Map());
+		resetLocalDbStatus();
 	});
 
 	describe('networkStatuses', () => {
@@ -557,6 +559,264 @@ describe('localDbStatus store', () => {
 
 			result = get(aggregateStatus);
 			expect(result.status).toBe('failure');
+		});
+	});
+
+	describe('localDbSyncGate', () => {
+		it('is idle before any configured sync status has been observed', () => {
+			expect(get(localDbSyncGate)).toEqual({ status: 'idle' });
+		});
+
+		it('does not block data views for non-destructive initial sync phases', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Fetching latest block'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('blocks data views while the initial dump is downloading', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Downloading initial dump'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Downloading initial dump'
+			});
+		});
+
+		it('blocks data views while bootstrap is running', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Running bootstrap'
+			});
+		});
+
+		it('keeps blocking after a destructive phase until the database becomes active', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Downloading initial dump'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Downloading initial dump'
+			});
+
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Fetching latest block'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Downloading initial dump'
+			});
+
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'active',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'active',
+				schedulerState: 'leader'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('shows failure if the initial destructive sync fails after it started', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'failure',
+				schedulerState: 'leader',
+				error: 'bootstrap failed'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'failure',
+				error: 'bootstrap failed'
+			});
+		});
+
+		it('unblocks data views once all observed statuses become active', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'active',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'active',
+				schedulerState: 'leader'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('does not block data views during later background syncs after initial readiness', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'active',
+				schedulerState: 'leader'
+			});
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'syncing',
+				schedulerState: 'leader'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('shows initial sync failure before data views are ready', () => {
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'failure',
+				schedulerState: 'leader',
+				error: 'dump failed'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({
+				status: 'failure',
+				error: 'dump failed'
+			});
+		});
+
+		it('seeds observed statuses from the client sync snapshot', () => {
+			seedLocalDbSyncSnapshot({
+				configured: true,
+				healthy: true,
+				status: 'active',
+				schedulerState: 'leader',
+				networks: [
+					{
+						chainId: 137,
+						networkKey: 'polygon',
+						status: 'active',
+						schedulerState: 'leader',
+						raindexCount: 1,
+						ready: true
+					}
+				],
+				raindexes: [
+					{
+						raindexId: {
+							chainId: 137,
+							raindexAddress: '0x1234567890123456789012345678901234567890'
+						},
+						raindexKey: 'polygon-raindex',
+						networkKey: 'polygon',
+						status: 'active',
+						schedulerState: 'leader',
+						ready: true
+					}
+				]
+			});
+
+			expect(get(networkStatuses).get(137)?.status).toBe('active');
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
 		});
 	});
 });

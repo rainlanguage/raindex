@@ -6,11 +6,13 @@ use crate::local_db::{
         fetch_table_columns::{fetch_table_columns_stmt, TableColumnResponse},
         fetch_tables::{fetch_tables_stmt, TableResponse},
         fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
-        LocalDbQueryExecutor,
+        LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
     },
     LocalDbError, RaindexIdentifier,
 };
 use std::collections::HashSet;
+
+const BOOTSTRAP_CACHE_SIZE_SQL: &str = "PRAGMA cache_size = -25000";
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ClientBootstrapAdapter;
@@ -100,6 +102,20 @@ impl ClientBootstrapAdapter {
             .await?;
         Ok(rows.is_empty())
     }
+
+    async fn apply_dump<DB>(
+        &self,
+        db: &DB,
+        dump_stmt: &SqlStatementBatch,
+    ) -> Result<(), LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+    {
+        db.query_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL))
+            .await?;
+        db.execute_batch(dump_stmt).await?;
+        Ok(())
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -114,7 +130,7 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
 
         if let Some(dump_stmt) = config.dump_stmt.as_ref() {
             if self.is_fresh_db(db, &config.raindex_id).await? {
-                db.execute_batch(dump_stmt).await?;
+                self.apply_dump(db, dump_stmt).await?;
                 return Ok(());
             }
 
@@ -126,7 +142,7 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
                 Ok(_) => {}
                 Err(_) => {
                     self.clear_raindex_data(db, &config.raindex_id).await?;
-                    db.execute_batch(dump_stmt).await?;
+                    self.apply_dump(db, dump_stmt).await?;
                 }
             }
         }
@@ -731,11 +747,18 @@ mod tests {
         let db = MockDb::default()
             .with_json(&fetch_tables_stmt(), tables_json)
             .with_json(&fetch_target_watermark_stmt(&cfg.raindex_id), json!([]))
+            .with_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL), "ok")
             .with_text(&dump_stmt, "ok");
 
         adapter.engine_run(&db, &cfg).await.unwrap();
 
-        assert_eq!(db.calls(), vec![dump_stmt.sql().to_string()]);
+        assert_eq!(
+            db.calls(),
+            vec![
+                BOOTSTRAP_CACHE_SIZE_SQL.to_string(),
+                dump_stmt.sql().to_string()
+            ]
+        );
     }
 
     #[tokio::test]
@@ -765,6 +788,7 @@ mod tests {
         for stmt in clear_batch.statements() {
             db = db.with_text(stmt, "cleared");
         }
+        db = db.with_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL), "ok");
 
         adapter.engine_run(&db, &cfg).await.unwrap();
 
@@ -774,6 +798,7 @@ mod tests {
             .iter()
             .map(|stmt| stmt.sql().to_string())
             .collect();
+        expected.push(BOOTSTRAP_CACHE_SIZE_SQL.to_string());
         expected.push(dump_stmt.sql().to_string());
         assert_eq!(calls, expected);
     }
