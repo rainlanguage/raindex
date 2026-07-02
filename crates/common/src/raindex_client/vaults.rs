@@ -729,6 +729,28 @@ impl RaindexVault {
         Ok(RaindexVaultAllowance(allowance))
     }
 
+    /// Normalizes an amount to the largest token-decimal amount that can be withdrawn.
+    ///
+    /// Converts the provided [`Float`] through this vault token's fixed-decimal
+    /// precision, truncating any sub-token-base-unit dust, then returns it as a
+    /// [`Float`] that can be safely encoded for withdraw calldata.
+    #[wasm_export(
+        js_name = "tokenSafeWithdrawAmount",
+        return_description = "Float amount normalized to this vault token's withdrawable precision",
+        unchecked_return_type = "Float",
+        preserve_js_class
+    )]
+    pub fn token_safe_withdraw_amount(
+        &self,
+        #[wasm_export(param_description = "Amount in Float value")] amount: &Float,
+    ) -> Result<Float, RaindexError> {
+        let (fixed_amount, _) = amount.to_fixed_decimal_lossy(self.token.decimals)?;
+        Ok(Float::from_fixed_decimal(
+            fixed_amount,
+            self.token.decimals,
+        )?)
+    }
+
     /// Fetches the balance of the owner for this vault
     ///
     /// Retrieves the current balance of the vault owner.
