@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use wasm_bindgen_utils::prelude::*;
 
-use crate::raindex_client::vaults::RaindexVault;
+use crate::raindex_client::{vaults::RaindexVault, RaindexError};
 use once_cell::sync::Lazy;
 
 static ZERO_FLOAT: Lazy<Float> = Lazy::new(|| Float::parse("0".to_string()).unwrap());
@@ -18,11 +18,18 @@ impl RaindexVaultsList {
     pub fn new(vaults: Vec<RaindexVault>) -> Self {
         Self(vaults)
     }
-    pub fn get_withdrawable_vaults(&self) -> Vec<&RaindexVault> {
+    pub fn get_withdrawable_vaults(&self) -> Result<Vec<&RaindexVault>, VaultsListError> {
         self.0
             .iter()
-            .filter(|vault| vault.balance().gt(*ZERO_FLOAT).unwrap_or(false))
-            .collect()
+            .map(|vault| {
+                vault
+                    .token_safe_withdraw_amount(&vault.balance())
+                    .and_then(|amount| amount.gt(*ZERO_FLOAT).map_err(RaindexError::from))
+                    .map(|is_withdrawable| is_withdrawable.then_some(vault))
+                    .map_err(|e| VaultsListError::WithdrawAmountError(e.to_readable_msg()))
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(|vaults| vaults.into_iter().flatten().collect())
     }
 
     pub fn pick_by_ids(&self, ids: Vec<String>) -> RaindexVaultsList {
@@ -46,7 +53,7 @@ impl RaindexVaultsList {
 
     pub async fn get_withdraw_calldata(&self) -> Result<Bytes, VaultsListError> {
         let mut calldatas: Vec<Bytes> = Vec::new();
-        let vaults_to_withdraw = self.get_withdrawable_vaults();
+        let vaults_to_withdraw = self.get_withdrawable_vaults()?;
         // If no vaults to withdraw, return error
         if vaults_to_withdraw.is_empty() {
             return Err(VaultsListError::NoWithdrawableVaults);
@@ -60,7 +67,10 @@ impl RaindexVaultsList {
         }
         // Generate multicall calldata for all vaults
         for vault in vaults_to_withdraw {
-            match vault.build_withdraw_calldata(&vault.balance()).await {
+            let withdraw_amount = vault
+                .token_safe_withdraw_amount(&vault.balance())
+                .map_err(|e| VaultsListError::WithdrawMulticallError(e.to_readable_msg()))?;
+            match vault.build_withdraw_calldata(&withdraw_amount).await {
                 Ok(calldata) => calldatas.push(calldata),
                 Err(e) => return Err(VaultsListError::WithdrawMulticallError(e.to_readable_msg())),
             }
@@ -115,13 +125,13 @@ impl RaindexVaultsList {
     /// ```
     #[wasm_export(
         js_name = "getWithdrawableVaults",
-        return_description = "Array of vaults with non-zero balance",
+        return_description = "Array of vaults with non-zero token-withdrawable balance",
         unchecked_return_type = "RaindexVault[]",
         preserve_js_class
     )]
     pub fn get_withdrawable_vaults_wasm(&self) -> Result<Vec<RaindexVault>, VaultsListError> {
         Ok(self
-            .get_withdrawable_vaults()
+            .get_withdrawable_vaults()?
             .into_iter()
             .cloned()
             .collect())
@@ -208,6 +218,8 @@ impl RaindexVaultsList {
 pub enum VaultsListError {
     #[error("Failed to get withdraw multicall: {0}")]
     WithdrawMulticallError(String),
+    #[error("Failed to normalize withdraw amount: {0}")]
+    WithdrawAmountError(String),
     #[error("No withdrawable vaults available")]
     NoWithdrawableVaults,
     #[error("All vaults must share the same raindex for batch withdrawal")]
@@ -219,6 +231,9 @@ impl VaultsListError {
         match self {
             VaultsListError::WithdrawMulticallError(err) => {
                 format!("Failed to generate withdraw multicall: {}", err)
+            }
+            VaultsListError::WithdrawAmountError(err) => {
+                format!("Failed to normalize withdraw amount: {}", err)
             }
             VaultsListError::NoWithdrawableVaults => "No withdrawable vaults available".to_string(),
             VaultsListError::MultipleRaindexesUsed => {
@@ -251,7 +266,9 @@ mod tests {
     mod non_wasm_tests {
         use super::*;
         use crate::raindex_client::{tests::get_test_yaml, RaindexClient};
+        use alloy::{primitives::U256, sol_types::SolCall};
         use httpmock::MockServer;
+        use raindex_bindings::IRaindexV6::withdraw4Call;
         use serde_json::{json, Value};
 
         fn get_vault1_json() -> Value {
@@ -298,13 +315,13 @@ mod tests {
             })
         }
 
-        async fn get_vaults() -> Vec<RaindexVault> {
+        async fn get_vaults_for(vault1: Value, vault2: Value) -> Vec<RaindexVault> {
             let sg_server = MockServer::start_async().await;
             sg_server.mock(|when, then| {
                 when.path("/sg1");
                 then.status(200).json_body_obj(&json!({
                     "data": {
-                        "vaults": [get_vault1_json()]
+                        "vaults": [vault1]
                     }
                 }));
             });
@@ -312,7 +329,7 @@ mod tests {
                 when.path("/sg2");
                 then.status(200).json_body_obj(&json!({
                     "data": {
-                        "vaults": [get_vault2_json()]
+                        "vaults": [vault2]
                     }
                 }));
             });
@@ -330,8 +347,15 @@ mod tests {
             )
             .await
             .unwrap();
-            let vaults = raindex_client.get_vaults(None, None, None).await.unwrap();
+            let vaults = raindex_client
+                .get_vaults(None, None, None, None)
+                .await
+                .unwrap();
             vaults.items()
+        }
+
+        async fn get_vaults() -> Vec<RaindexVault> {
+            get_vaults_for(get_vault1_json(), get_vault2_json()).await
         }
 
         #[tokio::test]
@@ -343,9 +367,29 @@ mod tests {
         #[tokio::test]
         async fn test_get_withdrawable_vaults() {
             let vaults_list = RaindexVaultsList::new(get_vaults().await);
-            let withdrawable_vaults = vaults_list.get_withdrawable_vaults();
+            let withdrawable_vaults = vaults_list.get_withdrawable_vaults().unwrap();
             assert_eq!(withdrawable_vaults.len(), 1);
-            assert_eq!(withdrawable_vaults[0].id().to_string(), "0x0234"); // vault2 has non-zero balance
+            assert_eq!(withdrawable_vaults[0].id().to_string(), "0x0234"); // vault2 has non-zero token-withdrawable balance
+        }
+
+        #[tokio::test]
+        async fn test_get_withdrawable_vaults_skips_token_dust() {
+            let mut dust_vault = get_vault2_json();
+            dust_vault["balance"] = Value::String(
+                Float::from_fixed_decimal(U256::from(1), 7)
+                    .unwrap()
+                    .as_hex(),
+            );
+            dust_vault["token"]["decimals"] = Value::String("6".to_string());
+
+            let vaults_list =
+                RaindexVaultsList::new(get_vaults_for(get_vault1_json(), dust_vault).await);
+
+            assert!(vaults_list.get_withdrawable_vaults().unwrap().is_empty());
+            assert!(matches!(
+                vaults_list.get_withdraw_calldata().await,
+                Err(VaultsListError::NoWithdrawableVaults)
+            ));
         }
 
         #[tokio::test]
@@ -356,6 +400,29 @@ mod tests {
             let calldata = result.unwrap();
             assert!(!calldata.is_empty());
             assert!(calldata.len() > 2); // should contain vault2's ID
+        }
+
+        #[tokio::test]
+        async fn test_get_withdraw_calldata_truncates_to_token_decimals() {
+            let mut vault = get_vault2_json();
+            vault["balance"] = Value::String(
+                Float::from_fixed_decimal(U256::from(1234567), 9)
+                    .unwrap()
+                    .as_hex(),
+            );
+            vault["token"]["decimals"] = Value::String("6".to_string());
+            let vaults_list =
+                RaindexVaultsList::new(get_vaults_for(get_vault1_json(), vault).await);
+
+            let calldata = vaults_list.get_withdraw_calldata().await.unwrap();
+            let decoded = withdraw4Call::abi_decode(&calldata).unwrap();
+
+            assert_eq!(
+                decoded.targetAmount,
+                Float::from_fixed_decimal(U256::from(1234), 6)
+                    .unwrap()
+                    .get_inner()
+            );
         }
 
         #[tokio::test]

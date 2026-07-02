@@ -158,4 +158,5 @@ WHERE 1=1
 /*TOKENS_CLAUSE*/
 /*HIDE_ZERO_BALANCE*/
 /*ONLY_ACTIVE_ORDERS_CLAUSE*/
-ORDER BY o.chain_id, o.raindex_address, o.owner, o.token, o.vault_id;
+ORDER BY o.chain_id, o.raindex_address, o.owner, o.token, o.vault_id
+/*PAGINATION_CLAUSE*/;

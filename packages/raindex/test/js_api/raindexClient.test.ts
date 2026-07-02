@@ -1863,7 +1863,7 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       const raindexClient = extractWasmEncodedData(
         await RaindexClient.new([YAML]),
       );
-      const result = extractWasmEncodedData(
+      const vaultsResult = extractWasmEncodedData(
         await raindexClient.getVaults(
           undefined,
           {
@@ -1871,9 +1871,15 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
             hideZeroBalance: false,
           },
           1,
+          100,
         ),
-      ).items;
+      );
+      const result = vaultsResult.items;
 
+      assert.equal(vaultsResult.page, 1);
+      assert.equal(vaultsResult.pageSize, 100);
+      assert.equal(vaultsResult.totalItems, 2);
+      assert.equal(vaultsResult.hasMore, false);
       assert.equal(result.length, 2);
       assert.equal(result[0].vaultId, BigInt(vault1.vaultId));
       assert.equal(result[0].owner, vault1.owner);
