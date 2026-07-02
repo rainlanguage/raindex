@@ -38,12 +38,58 @@ use raindex_subgraph_client::{
     MultiRaindexSubgraphClient, RaindexSubgraphClient, RaindexSubgraphClientError,
     SgPaginationArgs,
 };
-use std::str::FromStr;
+use std::{collections::BTreeMap, str::FromStr};
 use wasm_bindgen_utils::impl_wasm_traits;
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::prelude::js_sys::BigInt;
 
 const DEFAULT_PAGE_SIZE: u16 = 100;
+
+fn sort_vaults_for_pagination(vaults: &mut [RaindexVault]) {
+    vaults.sort_by(|a, b| {
+        a.chain_id
+            .cmp(&b.chain_id)
+            .then_with(|| a.raindex.cmp(&b.raindex))
+            .then_with(|| a.owner.cmp(&b.owner))
+            .then_with(|| a.token.address.cmp(&b.token.address))
+            .then_with(|| a.vault_id.cmp(&b.vault_id))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+}
+
+fn page_vaults(vaults: Vec<RaindexVault>, page: u16, page_size: u16) -> Vec<RaindexVault> {
+    let offset = ((page - 1) as usize) * page_size as usize;
+    vaults
+        .into_iter()
+        .skip(offset)
+        .take(page_size as usize)
+        .collect()
+}
+
+fn add_vaults_to_totals(
+    totals: &mut BTreeMap<(u32, Address), RaindexVaultTotal>,
+    vaults: Vec<RaindexVault>,
+    zero: Float,
+) -> Result<(), RaindexError> {
+    for vault in vaults {
+        if !vault.balance.gt(zero)? {
+            continue;
+        }
+        let key = (vault.chain_id, vault.token.address);
+        let total = totals.entry(key).or_insert_with(|| RaindexVaultTotal {
+            chain_id: vault.chain_id,
+            token: vault.token.clone(),
+            balance: zero,
+            balance_hex: zero.as_hex(),
+            formatted_balance: "0".to_string(),
+        });
+        total.balance = (total.balance + vault.balance)?;
+        total.balance_hex = total.balance.as_hex();
+        total.formatted_balance = total.balance.format()?;
+    }
+
+    Ok(())
+}
 
 pub(crate) struct SubgraphVaults<'a> {
     client: &'a RaindexClient,
@@ -62,7 +108,14 @@ pub(crate) trait VaultsDataSource {
         chain_ids: Option<Vec<u32>>,
         filters: &GetVaultsFilters,
         page: Option<u16>,
+        page_size: Option<u16>,
     ) -> Result<Vec<RaindexVault>, RaindexError>;
+
+    async fn count(
+        &self,
+        chain_ids: Option<Vec<u32>>,
+        filters: &GetVaultsFilters,
+    ) -> Result<u32, RaindexError>;
 
     async fn get_by_id(
         &self,
@@ -81,6 +134,141 @@ pub(crate) trait VaultsDataSource {
         &self,
         chain_ids: Option<Vec<u32>>,
     ) -> Result<Vec<RaindexVaultToken>, RaindexError>;
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexVaultsListResult {
+    vaults: RaindexVaultsList,
+    page: u16,
+    page_size: u16,
+    total_items: u32,
+    has_more: bool,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexVaultsListResult {
+    #[wasm_bindgen(getter)]
+    pub fn items(&self) -> Vec<RaindexVault> {
+        self.vaults.items()
+    }
+
+    #[wasm_bindgen(getter, unchecked_return_type = "RaindexVaultsList")]
+    pub fn vaults(&self) -> RaindexVaultsList {
+        self.vaults.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn page(&self) -> u16 {
+        self.page
+    }
+
+    #[wasm_bindgen(getter, js_name = "pageSize")]
+    pub fn page_size(&self) -> u16 {
+        self.page_size
+    }
+
+    #[wasm_bindgen(getter, js_name = "totalItems")]
+    pub fn total_items(&self) -> u32 {
+        self.total_items
+    }
+
+    #[wasm_bindgen(getter, js_name = "hasMore")]
+    pub fn has_more(&self) -> bool {
+        self.has_more
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexVaultsListResult {
+    pub fn items(&self) -> Vec<RaindexVault> {
+        self.vaults.items()
+    }
+
+    pub fn vaults(&self) -> RaindexVaultsList {
+        self.vaults.clone()
+    }
+
+    pub fn page(&self) -> u16 {
+        self.page
+    }
+
+    pub fn page_size(&self) -> u16 {
+        self.page_size
+    }
+
+    pub fn total_items(&self) -> u32 {
+        self.total_items
+    }
+
+    pub fn has_more(&self) -> bool {
+        self.has_more
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+#[wasm_bindgen]
+pub struct RaindexVaultTotal {
+    chain_id: u32,
+    token: RaindexVaultToken,
+    balance: Float,
+    balance_hex: String,
+    formatted_balance: String,
+}
+
+#[cfg(target_family = "wasm")]
+#[wasm_bindgen]
+impl RaindexVaultTotal {
+    #[wasm_bindgen(getter = chainId)]
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn token(&self) -> RaindexVaultToken {
+        self.token.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn balance(&self) -> Float {
+        self.balance
+    }
+
+    #[wasm_bindgen(getter = balanceHex, unchecked_return_type = "Hex")]
+    pub fn balance_hex(&self) -> String {
+        self.balance_hex.clone()
+    }
+
+    #[wasm_bindgen(getter = formattedBalance)]
+    pub fn formatted_balance(&self) -> String {
+        self.formatted_balance.clone()
+    }
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexVaultTotal {
+    pub fn chain_id(&self) -> u32 {
+        self.chain_id
+    }
+
+    pub fn token(&self) -> RaindexVaultToken {
+        self.token.clone()
+    }
+
+    pub fn balance(&self) -> Float {
+        self.balance
+    }
+
+    pub fn balance_hex(&self) -> String {
+        self.balance_hex.clone()
+    }
+
+    pub fn formatted_balance(&self) -> String {
+        self.formatted_balance.clone()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Tsify)]
@@ -539,6 +727,28 @@ impl RaindexVault {
     pub async fn get_allowance(&self) -> Result<RaindexVaultAllowance, RaindexError> {
         let allowance = self.read_allowance().await?;
         Ok(RaindexVaultAllowance(allowance))
+    }
+
+    /// Normalizes an amount to the largest token-decimal amount that can be withdrawn.
+    ///
+    /// Converts the provided [`Float`] through this vault token's fixed-decimal
+    /// precision, truncating any sub-token-base-unit dust, then returns it as a
+    /// [`Float`] that can be safely encoded for withdraw calldata.
+    #[wasm_export(
+        js_name = "tokenSafeWithdrawAmount",
+        return_description = "Float amount normalized to this vault token's withdrawable precision",
+        unchecked_return_type = "Float",
+        preserve_js_class
+    )]
+    pub fn token_safe_withdraw_amount(
+        &self,
+        #[wasm_export(param_description = "Amount in Float value")] amount: &Float,
+    ) -> Result<Float, RaindexError> {
+        let (fixed_amount, _) = amount.to_fixed_decimal_lossy(self.token.decimals)?;
+        Ok(Float::from_fixed_decimal(
+            fixed_amount,
+            self.token.decimals,
+        )?)
     }
 
     /// Fetches the balance of the owner for this vault
@@ -1012,7 +1222,7 @@ impl RaindexVaultBalanceChange {
 
         let transaction = RaindexTransaction::from_local_parts(
             change.transaction_hash,
-            change.owner,
+            change.transaction_sender,
             change.block_number,
             change.block_timestamp,
         )?;
@@ -1276,10 +1486,7 @@ impl RaindexVaultVolumeDetails {
 
 #[wasm_export]
 impl RaindexClient {
-    /// Fetches vault data from multiple subgraphs across different networks
-    ///
-    /// Queries multiple subgraphs simultaneously to retrieve vault information
-    /// across different networks.
+    /// Fetches a page of vault data from multiple networks with pagination metadata.
     ///
     /// ## Examples
     ///
@@ -1294,12 +1501,13 @@ impl RaindexClient {
     ///   console.error("Error fetching vaults:", result.error.readableMsg);
     ///   return;
     /// }
-    /// const vaults = result.value;
+    /// const { items, totalItems, hasMore } = result.value;
     /// // Do something with the vaults
     /// ```
     #[wasm_export(
         js_name = "getVaults",
-        return_description = "Array of raindex vault instances",
+        return_description = "Vault list result with pagination metadata",
+        unchecked_return_type = "RaindexVaultsListResult",
         preserve_js_class
     )]
     pub async fn get_vaults(
@@ -1316,32 +1524,160 @@ impl RaindexClient {
         #[wasm_export(param_description = "Optional page number (defaults to 1)")] page: Option<
             u16,
         >,
-    ) -> Result<RaindexVaultsList, RaindexError> {
+        #[wasm_export(
+            js_name = "pageSize",
+            param_description = "Number of vaults per page (optional, defaults to 100)"
+        )]
+        page_size: Option<u16>,
+    ) -> Result<RaindexVaultsListResult, RaindexError> {
         let filters = filters.unwrap_or_default();
-        let page_number = page.unwrap_or(1);
+        let page_number = page.unwrap_or(1).max(1);
+        let page_size = page_size.unwrap_or(DEFAULT_PAGE_SIZE).max(1);
         let ids = chain_ids.map(|ChainIds(ids)| ids);
-
         let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+        let has_subgraph_sources = !sg_ids.is_empty();
+        let has_local_source = local_db.is_some();
+        let subgraph_source_count = if has_subgraph_sources {
+            self.get_multi_subgraph_args(Some(sg_ids.clone()))?
+                .values()
+                .map(Vec::len)
+                .sum::<usize>()
+        } else {
+            0
+        };
+        let use_source_pagination =
+            !(has_local_source && has_subgraph_sources) && subgraph_source_count <= 1;
 
         let mut all_vaults = Vec::new();
+        let mut total_items = 0u32;
 
         if let Some(db) = local_db {
             let local_source = LocalDbVaults::new(&db, ClientRef::new(self.clone()));
-            let vaults = local_source
-                .list(Some(local_ids), &filters, Some(page_number))
+            total_items += local_source
+                .count(Some(local_ids.clone()), &filters)
                 .await?;
-            all_vaults.extend(vaults);
+            all_vaults.extend(
+                local_source
+                    .list(
+                        Some(local_ids),
+                        &filters,
+                        use_source_pagination.then_some(page_number),
+                        use_source_pagination.then_some(page_size),
+                    )
+                    .await?,
+            );
         }
 
         if !sg_ids.is_empty() {
             let subgraph_source = SubgraphVaults::new(self);
-            let vaults = subgraph_source
-                .list(Some(sg_ids), &filters, Some(page_number))
+            total_items += subgraph_source
+                .count(Some(sg_ids.clone()), &filters)
                 .await?;
-            all_vaults.extend(vaults);
+            all_vaults.extend(
+                subgraph_source
+                    .list(
+                        Some(sg_ids),
+                        &filters,
+                        use_source_pagination.then_some(page_number),
+                        use_source_pagination.then_some(page_size),
+                    )
+                    .await?,
+            );
         }
 
-        Ok(RaindexVaultsList::new(all_vaults))
+        if !use_source_pagination {
+            sort_vaults_for_pagination(&mut all_vaults);
+            all_vaults = page_vaults(all_vaults, page_number, page_size);
+        }
+        let has_more = u32::from(page_number) * u32::from(page_size) < total_items;
+
+        Ok(RaindexVaultsListResult {
+            vaults: RaindexVaultsList::new(all_vaults),
+            page: page_number,
+            page_size,
+            total_items,
+            has_more,
+        })
+    }
+
+    /// Aggregates non-zero vault balances by chain and token.
+    #[wasm_export(
+        js_name = "getVaultTotals",
+        return_description = "Non-zero vault balance totals grouped by token",
+        unchecked_return_type = "RaindexVaultTotal[]",
+        preserve_js_class
+    )]
+    pub async fn get_vault_totals(
+        &self,
+        #[wasm_export(
+            js_name = "chainIds",
+            param_description = "Specific networks to query (optional)"
+        )]
+        chain_ids: Option<ChainIds>,
+    ) -> Result<Vec<RaindexVaultTotal>, RaindexError> {
+        let filters = GetVaultsFilters {
+            owners: vec![],
+            hide_zero_balance: true,
+            tokens: None,
+            raindex_addresses: None,
+            only_active_orders: false,
+        };
+        let page_size = 1000u16;
+        let zero = Float::zero()?;
+        let mut totals: BTreeMap<(u32, Address), RaindexVaultTotal> = BTreeMap::new();
+        let ids = chain_ids.map(|ChainIds(ids)| ids);
+        let (local_db, local_ids, sg_ids) = self.classify_chains(ids)?;
+
+        if let Some(db) = local_db {
+            let local_source = LocalDbVaults::new(&db, ClientRef::new(self.clone()));
+            let mut page = 1u16;
+
+            loop {
+                let vaults = local_source
+                    .list(
+                        Some(local_ids.clone()),
+                        &filters,
+                        Some(page),
+                        Some(page_size),
+                    )
+                    .await?;
+                let batch_len = vaults.len();
+                add_vaults_to_totals(&mut totals, vaults, zero)?;
+
+                if batch_len < page_size as usize {
+                    break;
+                }
+                page = page.checked_add(1).ok_or_else(|| {
+                    RaindexError::PreflightError(
+                        "Vault totals local pagination exhausted u16 page range".to_string(),
+                    )
+                })?;
+            }
+        }
+
+        if !sg_ids.is_empty() {
+            let subgraph_source = SubgraphVaults::new(self);
+            let mut page = 1u16;
+
+            loop {
+                let vaults = subgraph_source
+                    .list(Some(sg_ids.clone()), &filters, Some(page), Some(page_size))
+                    .await?;
+                let batch_len = vaults.len();
+                add_vaults_to_totals(&mut totals, vaults, zero)?;
+
+                if batch_len < page_size as usize {
+                    break;
+                }
+                page = page.checked_add(1).ok_or_else(|| {
+                    RaindexError::PreflightError(
+                        "Vault totals subgraph pagination exhausted u16 page range".to_string(),
+                    )
+                })?;
+            }
+        }
+
+        Ok(totals.into_values().collect())
     }
 
     /// Fetches detailed information for a specific vault
@@ -1495,6 +1831,7 @@ impl VaultsDataSource for SubgraphVaults<'_> {
         chain_ids: Option<Vec<u32>>,
         filters: &GetVaultsFilters,
         page: Option<u16>,
+        page_size: Option<u16>,
     ) -> Result<Vec<RaindexVault>, RaindexError> {
         let raindex_client = ClientRef::new(self.client.clone());
         let multi_subgraph_args = self.client.get_multi_subgraph_args(chain_ids)?;
@@ -1502,15 +1839,40 @@ impl VaultsDataSource for SubgraphVaults<'_> {
             multi_subgraph_args.values().flatten().cloned().collect(),
         );
 
-        let vaults = client
-            .vaults_list(
-                filters.clone().try_into()?,
-                SgPaginationArgs {
-                    page: page.unwrap_or(1),
-                    page_size: DEFAULT_PAGE_SIZE,
-                },
-            )
-            .await?;
+        let sg_filters = filters.clone().try_into()?;
+        let vaults = if let Some(page) = page {
+            client
+                .vaults_list_strict(
+                    sg_filters,
+                    SgPaginationArgs {
+                        page,
+                        page_size: page_size.unwrap_or(DEFAULT_PAGE_SIZE),
+                    },
+                )
+                .await?
+        } else {
+            let mut vaults = Vec::new();
+            let mut page = 1u16;
+            let page_size = DEFAULT_PAGE_SIZE;
+
+            loop {
+                let page_vaults = client
+                    .vaults_list_strict(sg_filters.clone(), SgPaginationArgs { page, page_size })
+                    .await?;
+                let batch_len = page_vaults.len();
+                vaults.extend(page_vaults);
+                if batch_len < page_size as usize {
+                    break;
+                }
+                page = page.checked_add(1).ok_or_else(|| {
+                    RaindexError::PreflightError(
+                        "Subgraph vault pagination exhausted u16 page range".to_string(),
+                    )
+                })?;
+            }
+
+            vaults
+        };
 
         let vaults = vaults
             .iter()
@@ -1536,6 +1898,18 @@ impl VaultsDataSource for SubgraphVaults<'_> {
             .collect::<Result<Vec<RaindexVault>, RaindexError>>()?;
 
         Ok(vaults)
+    }
+
+    async fn count(
+        &self,
+        chain_ids: Option<Vec<u32>>,
+        filters: &GetVaultsFilters,
+    ) -> Result<u32, RaindexError> {
+        let multi_subgraph_args = self.client.get_multi_subgraph_args(chain_ids)?;
+        let client = MultiRaindexSubgraphClient::new(
+            multi_subgraph_args.values().flatten().cloned().collect(),
+        );
+        Ok(client.vaults_count(filters.clone().try_into()?).await?)
     }
 
     async fn get_by_id(
@@ -1951,7 +2325,7 @@ mod tests {
             );
 
             let vaults = client
-                .get_vaults(Some(ChainIds(vec![42161])), None, None)
+                .get_vaults(Some(ChainIds(vec![42161])), None, None, None)
                 .await
                 .expect("local db vaults should load");
 
@@ -2024,6 +2398,7 @@ mod tests {
 
             let amount = Float::parse("1".to_string()).unwrap();
             let running_balance = Float::parse("5".to_string()).unwrap();
+            let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
             let balance_change = LocalDbVaultBalanceChange {
                 transaction_hash: b256!(
@@ -2033,6 +2408,7 @@ mod tests {
                 block_number: 1234,
                 block_timestamp: 5678,
                 owner,
+                transaction_sender,
                 change_type: "DEPOSIT".to_string(),
                 token,
                 vault_id: local_vault.vault_id.clone(),
@@ -2080,6 +2456,10 @@ mod tests {
                 change.transaction().id(),
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
             );
+            assert_eq!(
+                change.transaction().from().to_lowercase(),
+                transaction_sender.to_string()
+            );
         }
 
         #[wasm_bindgen_test]
@@ -2114,7 +2494,7 @@ mod tests {
             };
 
             let vaults = client
-                .get_vaults(Some(ChainIds(vec![42161])), Some(filters), None)
+                .get_vaults(Some(ChainIds(vec![42161])), Some(filters), None, None)
                 .await
                 .expect("filtered vaults should load");
 
@@ -2173,8 +2553,14 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm {
         use super::*;
-        use crate::raindex_client::tests::get_test_yaml;
-        use crate::raindex_client::tests::CHAIN_ID_1_RAINDEX_ADDRESS;
+        use crate::local_db::query::{
+            fetch_vaults::LocalDbVaultsCountRow, FromDbJson, LocalDbQueryError,
+            LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
+        };
+        use crate::raindex_client::local_db::LocalDb;
+        use crate::raindex_client::tests::{
+            get_test_yaml, new_with_local_db, CHAIN_ID_1_RAINDEX_ADDRESS,
+        };
         use alloy::hex::encode_prefixed;
         use alloy::primitives::{address, b256};
         use alloy::sol_types::SolCall;
@@ -2187,6 +2573,59 @@ mod tests {
         use serde_json::{json, Value};
         use std::sync::Arc;
         use LocalDbVault;
+
+        #[derive(Clone)]
+        struct StaticVaultDbExec {
+            vaults: Vec<LocalDbVault>,
+        }
+
+        #[async_trait::async_trait]
+        impl LocalDbQueryExecutor for StaticVaultDbExec {
+            async fn execute_batch(&self, _: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+
+            async fn query_json<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
+            where
+                T: FromDbJson,
+            {
+                let value = if stmt.sql.contains("vaults_count") {
+                    serde_json::to_value(vec![LocalDbVaultsCountRow {
+                        vaults_count: self.vaults.len() as u32,
+                    }])
+                } else {
+                    serde_json::to_value(&self.vaults)
+                }
+                .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))?;
+
+                serde_json::from_value(value)
+                    .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
+            }
+
+            async fn query_text(&self, _: &SqlStatement) -> Result<String, LocalDbQueryError> {
+                Ok(String::new())
+            }
+
+            async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
+                Ok(())
+            }
+        }
+
+        fn make_native_local_vault(vault_id: u64, token: &str) -> LocalDbVault {
+            LocalDbVault {
+                chain_id: 1,
+                vault_id: U256::from(vault_id),
+                token: Address::from_str(token).unwrap(),
+                owner: address!("0x0000000000000000000000000000000000000000"),
+                raindex_address: Address::from_str(CHAIN_ID_1_RAINDEX_ADDRESS).unwrap(),
+                token_name: "Local Token".to_string(),
+                token_symbol: "LTKN".to_string(),
+                token_decimals: 18,
+                balance: F1.as_hex(),
+                input_orders: None,
+                output_orders: None,
+            }
+        }
 
         #[test]
         fn test_try_from_local_trade_side_with_running_balance() {
@@ -2438,7 +2877,7 @@ mod tests {
             .unwrap();
 
             let result = raindex_client
-                .get_vaults(None, None, None)
+                .get_vaults(None, None, None, None)
                 .await
                 .unwrap()
                 .items();
@@ -2475,6 +2914,343 @@ mod tests {
                 vault2.raindex,
                 Address::from_str("0x0000000000000000000000000000000000000000").unwrap()
             );
+        }
+
+        #[tokio::test]
+        async fn test_get_vaults_returns_metadata_and_uses_page_size() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json(), get_vault2_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":1")
+                    .body_contains("\"first\":1");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault2_json()]
+                    }
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let result = raindex_client
+                .get_vaults(Some(ChainIds(vec![1])), None, Some(2), Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(result.page(), 2);
+            assert_eq!(result.page_size(), 1);
+            assert_eq!(result.total_items(), 2);
+            assert!(!result.has_more());
+            let items = result.vaults().items();
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].id, Bytes::from_str("0x0234").unwrap());
+        }
+
+        #[tokio::test]
+        async fn test_get_vaults_has_more() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json(), get_vault2_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":1");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json()]
+                    }
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let result = raindex_client
+                .get_vaults(Some(ChainIds(vec![1])), None, Some(1), Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(result.total_items(), 2);
+            assert!(result.has_more());
+            assert_eq!(result.vaults().items().len(), 1);
+        }
+
+        #[tokio::test]
+        async fn test_get_vaults_multiple_subgraphs_slices_after_merge() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault2_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":100");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":100");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault2_json()]
+                    }
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let result = raindex_client
+                .get_vaults(None, None, Some(1), Some(1))
+                .await
+                .unwrap();
+
+            assert_eq!(result.total_items(), 2);
+            assert!(result.has_more());
+            assert_eq!(result.vaults().items().len(), 1);
+        }
+
+        #[tokio::test]
+        async fn test_get_vaults_subgraph_list_errors_if_any_source_errors() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": []
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":100");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":100");
+                then.status(500);
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let result = raindex_client
+                .get_vaults(None, None, Some(1), Some(1))
+                .await;
+
+            assert!(result.is_err());
+        }
+
+        #[tokio::test]
+        async fn test_get_vaults_mixed_sources_slices_after_merge() {
+            let sg_server = MockServer::start_async().await;
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault2_json()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg2")
+                    .body_contains("\"skip\":0")
+                    .body_contains("\"first\":100");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault2_json()]
+                    }
+                }));
+            });
+
+            let local_db = LocalDb::new(StaticVaultDbExec {
+                vaults: vec![
+                    make_native_local_vault(1, "0x0000000000000000000000000000000000000001"),
+                    make_native_local_vault(2, "0x0000000000000000000000000000000000000002"),
+                ],
+            });
+            let raindex_client = new_with_local_db(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                local_db,
+                vec![1],
+            )
+            .await;
+
+            let result = raindex_client
+                .get_vaults(None, None, Some(1), Some(2))
+                .await
+                .unwrap();
+
+            assert_eq!(result.page(), 1);
+            assert_eq!(result.page_size(), 2);
+            assert_eq!(result.total_items(), 3);
+            assert!(result.has_more());
+            let items = result.vaults().items();
+            assert_eq!(items.len(), 2);
+            assert!(items.iter().all(|vault| vault.chain_id() == 1));
+        }
+
+        #[tokio::test]
+        async fn test_get_vault_totals_aggregates_and_skips_zero_balances() {
+            let sg_server = MockServer::start_async().await;
+            let mut zero_vault = get_vault2_json();
+            zero_vault["balance"] = Value::String(F0.as_hex());
+
+            let count_mock = sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"balance_not\"")
+                    .body_contains("\"first\":200");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json(), zero_vault.clone()]
+                    }
+                }));
+            });
+            sg_server.mock(|when, then| {
+                when.path("/sg1")
+                    .body_contains("\"balance_not\"")
+                    .body_contains("\"first\":1000");
+                then.status(200).json_body_obj(&json!({
+                    "data": {
+                        "vaults": [get_vault1_json(), zero_vault]
+                    }
+                }));
+            });
+
+            let raindex_client = RaindexClient::new(
+                vec![get_test_yaml(
+                    &sg_server.url("/sg1"),
+                    &sg_server.url("/sg2"),
+                    &sg_server.url("/rpc1"),
+                    &sg_server.url("/rpc2"),
+                )],
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+
+            let totals = raindex_client
+                .get_vault_totals(Some(ChainIds(vec![1])))
+                .await
+                .unwrap();
+
+            assert_eq!(totals.len(), 1);
+            assert_eq!(count_mock.hits(), 0);
+            assert_eq!(
+                totals[0].token().address(),
+                Address::from_str("0x1d80c49bbbcd1c0911346656b529df9e5c2f783d").unwrap()
+            );
+            assert!(totals[0].balance().eq(F1).unwrap());
+            assert_eq!(totals[0].balance_hex(), F1.as_hex());
+            assert_eq!(totals[0].formatted_balance(), "1");
         }
 
         #[tokio::test]
@@ -3465,7 +4241,7 @@ mod tests {
             };
 
             let result = raindex_client
-                .get_vaults(None, Some(filters), None)
+                .get_vaults(None, Some(filters), None, None)
                 .await
                 .unwrap()
                 .items();
@@ -3524,7 +4300,7 @@ mod tests {
             };
 
             let result = raindex_client
-                .get_vaults(None, Some(filters), None)
+                .get_vaults(None, Some(filters), None, None)
                 .await
                 .unwrap()
                 .items();

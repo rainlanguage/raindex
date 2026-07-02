@@ -130,7 +130,10 @@ describe("VaultsListTable", () => {
         error: undefined,
       })),
     });
-    mockGetVaults.mockResolvedValue({ value: { items: [] }, error: undefined });
+    mockGetVaults.mockResolvedValue({
+      value: { items: [], vaults: { items: [] }, hasMore: false },
+      error: undefined,
+    });
     mockGetTokens.mockResolvedValue({ value: [], error: undefined });
   });
   it("displays vault information correctly", async () => {
@@ -418,7 +421,15 @@ describe("VaultsListTable", () => {
     mockQuery.createInfiniteQuery = vi.fn(() => ({
       subscribe: (fn: (value: any) => void) => {
         fn({
-          data: { pages: [mockVaultsListMultiple] },
+          data: {
+            pages: [
+              {
+                items: mockVaultsListMultiple.items,
+                vaults: mockVaultsListMultiple,
+                hasMore: false,
+              },
+            ],
+          },
           status: "success",
           isFetching: false,
           isFetched: true,
@@ -499,7 +510,9 @@ describe("VaultsListTable", () => {
       return {
         subscribe: (fn: (value: any) => void) => {
           fn({
-            data: { pages: [{ items: [] }] },
+            data: {
+              pages: [{ items: [], vaults: { items: [] }, hasMore: false }],
+            },
             status: "success",
             isFetching: false,
             isFetched: true,
@@ -518,6 +531,7 @@ describe("VaultsListTable", () => {
           raindexAddresses: [raindexAddress],
         }),
         expect.anything(),
+        expect.anything(),
       );
     });
   });
@@ -533,7 +547,9 @@ describe("VaultsListTable", () => {
       return {
         subscribe: (fn: (value: any) => void) => {
           fn({
-            data: { pages: [{ items: [] }] },
+            data: {
+              pages: [{ items: [], vaults: { items: [] }, hasMore: false }],
+            },
             status: "success",
             isFetching: false,
             isFetched: true,
@@ -551,6 +567,7 @@ describe("VaultsListTable", () => {
         expect.objectContaining({
           raindexAddresses: undefined,
         }),
+        expect.anything(),
         expect.anything(),
       );
     });
