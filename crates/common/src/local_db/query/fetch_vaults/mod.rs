@@ -28,6 +28,8 @@ pub struct FetchVaultsArgs {
     pub tokens: Vec<Address>,
     pub hide_zero_balance: bool,
     pub only_active_orders: bool,
+    pub page: Option<u16>,
+    pub page_size: Option<u16>,
 }
 
 const OWNERS_CLAUSE: &str = "/*OWNERS_CLAUSE*/";
@@ -65,6 +67,14 @@ const OIO_CHAIN_IDS_CLAUSE: &str = "/*OIO_CHAIN_IDS_CLAUSE*/";
 const OIO_CHAIN_IDS_BODY: &str = "AND io.chain_id IN ({list})";
 const OIO_RAINDEXES_CLAUSE: &str = "/*OIO_RAINDEXES_CLAUSE*/";
 const OIO_RAINDEXES_BODY: &str = "AND io.raindex_address IN ({list})";
+const PAGINATION_CLAUSE: &str = "/*PAGINATION_CLAUSE*/";
+const ORDER_BY_CLAUSE: &str =
+    "ORDER BY o.chain_id, o.raindex_address, o.owner, o.token, o.vault_id";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LocalDbVaultsCountRow {
+    pub vaults_count: u32,
+}
 
 pub fn build_fetch_vaults_stmt(args: &FetchVaultsArgs) -> Result<SqlStatement, SqlBuildError> {
     let mut stmt = SqlStatement::new(QUERY_TEMPLATE);
@@ -119,7 +129,42 @@ pub fn build_fetch_vaults_stmt(args: &FetchVaultsArgs) -> Result<SqlStatement, S
         stmt.replace(ONLY_ACTIVE_ORDERS_CLAUSE, "")?;
     }
 
+    if let (Some(page), Some(page_size)) = (args.page, args.page_size) {
+        let offset = (page.saturating_sub(1) as u64) * (page_size as u64);
+        let limit_placeholder = format!("?{}", stmt.params.len() + 1);
+        let offset_placeholder = format!("?{}", stmt.params.len() + 2);
+        let pagination = format!("LIMIT {} OFFSET {}", limit_placeholder, offset_placeholder);
+        stmt.replace(PAGINATION_CLAUSE, &pagination)?;
+        stmt.push(SqlValue::U64(page_size as u64));
+        stmt.push(SqlValue::U64(offset));
+    } else {
+        stmt.replace(PAGINATION_CLAUSE, "")?;
+    }
+
     Ok(stmt)
+}
+
+pub fn build_fetch_vaults_count_stmt(
+    args: &FetchVaultsArgs,
+) -> Result<SqlStatement, SqlBuildError> {
+    let count_args = FetchVaultsArgs {
+        page: None,
+        page_size: None,
+        ..args.clone()
+    };
+    let mut stmt = build_fetch_vaults_stmt(&count_args)?;
+    let inner_sql = stmt
+        .sql
+        .replace(ORDER_BY_CLAUSE, "")
+        .trim_end()
+        .trim_end_matches(';')
+        .to_string();
+    stmt.sql = format!("SELECT COUNT(*) AS vaults_count FROM ({inner_sql})");
+    Ok(stmt)
+}
+
+pub fn extract_vaults_count(rows: &[LocalDbVaultsCountRow]) -> u32 {
+    rows.first().map(|row| row.vaults_count).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -143,6 +188,7 @@ mod tests {
         assert!(!stmt.sql.contains(ONLY_ACTIVE_ORDERS_CLAUSE));
         assert!(!stmt.sql.contains(OIO_CHAIN_IDS_CLAUSE));
         assert!(!stmt.sql.contains(OIO_RAINDEXES_CLAUSE));
+        assert!(!stmt.sql.contains(PAGINATION_CLAUSE));
         assert!(stmt.params.is_empty());
     }
 
@@ -264,5 +310,38 @@ mod tests {
         args.only_active_orders = true;
         let stmt = build_fetch_vaults_stmt(&args).unwrap();
         assert!(stmt.sql.contains("oii.owner = o.owner"));
+    }
+
+    #[test]
+    fn pagination_clause_uses_page_and_page_size() {
+        let mut args = mk_args();
+        args.page = Some(3);
+        args.page_size = Some(25);
+        let stmt = build_fetch_vaults_stmt(&args).unwrap();
+        assert!(stmt.sql.contains("LIMIT ?1 OFFSET ?2"));
+        assert_eq!(stmt.params, vec![SqlValue::U64(25), SqlValue::U64(50)]);
+    }
+
+    #[test]
+    fn count_query_omits_pagination_and_counts_wrapped_vaults() {
+        let mut args = mk_args();
+        args.page = Some(2);
+        args.page_size = Some(10);
+        let stmt = build_fetch_vaults_count_stmt(&args).unwrap();
+        assert!(stmt
+            .sql
+            .starts_with("SELECT COUNT(*) AS vaults_count FROM ("));
+        assert!(!stmt.sql.contains(ORDER_BY_CLAUSE));
+        assert!(!stmt.sql.contains("LIMIT"));
+        assert!(stmt.params.is_empty());
+    }
+
+    #[test]
+    fn extract_vaults_count_returns_zero_for_empty_rows() {
+        assert_eq!(extract_vaults_count(&[]), 0);
+        assert_eq!(
+            extract_vaults_count(&[LocalDbVaultsCountRow { vaults_count: 7 }]),
+            7
+        );
     }
 }

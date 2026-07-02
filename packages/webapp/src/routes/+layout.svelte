@@ -24,6 +24,7 @@
 	import { REGISTRY_URL } from '$lib/constants';
 	import { onMount } from 'svelte';
 	import type { RaindexClient } from '@rainlanguage/raindex';
+	import { seedLocalDbSyncSnapshot } from '$lib/stores/localDbStatus';
 
 	const { errorMessage, registryWarning, localDb, raindexClient, registry } = $page.data;
 	const registryManager = new RegistryManager(REGISTRY_URL);
@@ -40,12 +41,23 @@
 
 	onMount(() => {
 		if (!browser || !raindexClient || !registry) return;
-		let client = raindexClient as RaindexClient;
+		const client = raindexClient as RaindexClient;
 
 		const uniqueChainIds = client.getUniqueChainIds();
 		if (!uniqueChainIds.error) {
 			validChainIds.set(uniqueChainIds.value);
 		}
+
+		client
+			.getLocalDbSyncSnapshot()
+			.then((snapshotResult) => {
+				if (!snapshotResult.error) {
+					seedLocalDbSyncSnapshot(snapshotResult.value);
+				}
+			})
+			.catch(() => {
+				// The live status callback will continue to update the sidebar and data gate.
+			});
 	});
 
 	$: if (browser && window.navigator) {
