@@ -28,6 +28,7 @@
 	import { handleVaultDeposit } from '$lib/services/handleVaultDeposit';
 	import { handleVaultsWithdrawAll } from '$lib/services/handleVaultsWithdrawAll';
 	import { handleTakeOrder } from '$lib/services/handleTakeOrder';
+	import LocalDbSyncGate from '$lib/components/LocalDbSyncGate.svelte';
 
 	const { orderHash, chainId, raindex } = $page.params;
 	const parsedOrderHash = orderHash as Hex;
@@ -100,15 +101,17 @@
 
 <PageHeader title="Order" pathname={$page.url.pathname} />
 
-<OrderDetail
-	chainId={parsedChainId}
-	{raindexAddress}
-	orderHash={parsedOrderHash}
-	{lightweightChartsTheme}
-	{codeMirrorTheme}
-	{onRemove}
-	{onDeposit}
-	{onWithdraw}
-	{onWithdrawAll}
-	{onTakeOrder}
-/>
+<LocalDbSyncGate>
+	<OrderDetail
+		chainId={parsedChainId}
+		{raindexAddress}
+		orderHash={parsedOrderHash}
+		{lightweightChartsTheme}
+		{codeMirrorTheme}
+		{onRemove}
+		{onDeposit}
+		{onWithdraw}
+		{onWithdrawAll}
+		{onTakeOrder}
+	/>
+</LocalDbSyncGate>

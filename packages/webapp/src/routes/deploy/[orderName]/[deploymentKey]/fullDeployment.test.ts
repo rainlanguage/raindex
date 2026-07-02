@@ -1,6 +1,6 @@
 import { vi, describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import Page from './+page.svelte';
-import { render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import {
 	useAccount,
@@ -200,6 +200,12 @@ describe('Builder deployment args isolation tests', () => {
 });
 
 describe('Full Deployment Tests', () => {
+	interface TokenSelectionQueries {
+		getAllByTestId: (id: string) => HTMLElement[];
+		getAllByPlaceholderText: (text: string) => HTMLElement[];
+		getByTestId: (id: string) => HTMLElement;
+	}
+
 	function findLockRegion(a: string, b: string): { prefixEnd: number; suffixEnd: number } {
 		expect(a.length).toEqual(b.length);
 		const length = a.length;
@@ -214,6 +220,27 @@ describe('Full Deployment Tests', () => {
 			suffixEnd--;
 		}
 		return { prefixEnd, suffixEnd };
+	}
+
+	async function selectTokenByAddress(
+		screen: TokenSelectionQueries,
+		tokenIndex: number,
+		address: string,
+		successTestId: string
+	) {
+		await userEvent.click(screen.getAllByTestId('custom-mode-button')[tokenIndex]);
+		const addressInputs = screen.getAllByPlaceholderText(
+			'Enter token address (0x...)'
+		) as HTMLInputElement[];
+		await fireEvent.input(addressInputs[tokenIndex], {
+			target: { value: address }
+		});
+		await waitFor(
+			() => {
+				expect(screen.getByTestId(successTestId)).toBeInTheDocument();
+			},
+			{ timeout: 30000 }
+		);
 	}
 
 	beforeEach(async () => {
@@ -280,26 +307,10 @@ describe('Full Deployment Tests', () => {
 				},
 				{ timeout: 30000 }
 			);
-			const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
-
-			await userEvent.click(tokenSelectionButtons[0]);
-			await userEvent.click(screen.getByText('Cortex'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-token1')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 0, TOKEN1_ADDRESS, 'select-token-success-token1');
 			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-			await userEvent.click(tokenSelectionButtons[1]);
-			await userEvent.click(screen.getByText('NANI'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-token2')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 1, TOKEN2_ADDRESS, 'select-token-success-token2');
 			// Wait for field definitions to render after token selection
 			let customValueInput!: HTMLElement;
 			await waitFor(
@@ -437,26 +448,10 @@ describe('Full Deployment Tests', () => {
 				},
 				{ timeout: 30000 }
 			);
-			const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
-
-			await userEvent.click(tokenSelectionButtons[0]);
-			await userEvent.click(screen.getByText('Cortex'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-output')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 0, TOKEN1_ADDRESS, 'select-token-success-output');
 			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-			await userEvent.click(tokenSelectionButtons[1]);
-			await userEvent.click(screen.getByText('NANI'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-input')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 1, TOKEN2_ADDRESS, 'select-token-success-input');
 			// Allow async WASM operations (getTokenInfo, getAccountBalance) to
 			// settle so their &self borrows are released before setFieldValue
 			// takes &mut self.
@@ -621,26 +616,10 @@ describe('Full Deployment Tests', () => {
 				},
 				{ timeout: 30000 }
 			);
-			const tokenSelectionButtons = screen.getAllByRole('button', { name: /chevron down solid/i });
-
-			await userEvent.click(tokenSelectionButtons[0]);
-			await userEvent.click(screen.getByText('Cortex'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-token1')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 0, TOKEN1_ADDRESS, 'select-token-success-token1');
 			await new Promise((resolve) => setTimeout(resolve, 2000));
 
-			await userEvent.click(tokenSelectionButtons[1]);
-			await userEvent.click(screen.getByText('NANI'));
-			await waitFor(
-				() => {
-					expect(screen.getByTestId('select-token-success-token2')).toBeInTheDocument();
-				},
-				{ timeout: 30000 }
-			);
+			await selectTokenByAddress(screen, 1, TOKEN2_ADDRESS, 'select-token-success-token2');
 			// Allow async WASM operations (getTokenInfo, getAccountBalance) to
 			// settle so their &self borrows are released before setFieldValue
 			// takes &mut self.
