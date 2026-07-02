@@ -159,7 +159,10 @@
 	async function getTokenInfoAndFetchBalance(key: string) {
 		const tokenInfoResult = await builder.getTokenInfo(key);
 		if (tokenInfoResult.error) {
-			throw new Error(tokenInfoResult.error.msg);
+			const balances = tokenBalances;
+			balances.delete(key);
+			tokenBalances = balances;
+			return;
 		}
 		const tokenInfo = tokenInfoResult.value;
 		if (!tokenInfo || !tokenInfo.address) {
