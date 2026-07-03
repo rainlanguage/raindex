@@ -140,11 +140,8 @@ impl LocalDb {
         }
     }
 
-    pub(crate) fn from_js_callback(
-        query_callback: js_sys::Function,
-        wipe_callback: Option<js_sys::Function>,
-    ) -> Self {
-        Self::new(JsCallbackExecutor::new(query_callback, wipe_callback))
+    pub(crate) fn from_js_local_db(local_db: JsValue) -> Result<Self, LocalDbQueryError> {
+        Ok(Self::new(JsCallbackExecutor::new(local_db)?))
     }
 }
 
@@ -426,6 +423,26 @@ raindexes:
         )
     }
 
+    fn test_local_db(query: js_sys::Function) -> JsValue {
+        let local_db = js_sys::Object::new();
+        js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &query).unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("wipeAndRecreate"),
+            &js_sys::Function::new_no_args(
+                "return Promise.resolve({ value: undefined, error: null });",
+            ),
+        )
+        .unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("transaction"),
+            &js_sys::Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
+        )
+        .unwrap();
+        local_db.into()
+    }
+
     fn recording_status_callback(
         store: Rc<RefCell<Vec<LocalDbStatusSnapshot>>>,
     ) -> js_sys::Function {
@@ -441,8 +458,8 @@ raindexes:
     }
 
     #[wasm_bindgen_test]
-    async fn local_db_from_js_callback_executes_queries() {
-        let db = LocalDb::from_js_callback(success_callback(), None);
+    async fn local_db_from_js_object_executes_queries() {
+        let db = LocalDb::from_js_local_db(test_local_db(success_callback())).unwrap();
 
         let stmt = SqlStatement::new("SELECT 1");
         let rows: Vec<String> = db.query_json(&stmt).await.unwrap();
@@ -453,7 +470,7 @@ raindexes:
     }
 
     #[wasm_bindgen_test]
-    async fn local_db_from_js_callback_surfaces_errors() {
+    async fn local_db_from_js_object_surfaces_errors() {
         let error = WasmEncodedResult::Err::<String> {
             value: None,
             error: WasmEncodedError {
@@ -470,7 +487,7 @@ raindexes:
                 .unwrap()
         ));
 
-        let db = LocalDb::from_js_callback(callback, None);
+        let db = LocalDb::from_js_local_db(test_local_db(callback)).unwrap();
         let stmt = SqlStatement::new("SELECT 1");
         let err = db.query_text(&stmt).await.unwrap_err();
         assert!(matches!(err, LocalDbQueryError::Database { .. }));
