@@ -1906,6 +1906,11 @@
     },
     {
       "type": "error",
+      "name": "TokenSelfTrade",
+      "inputs": []
+    },
+    {
+      "type": "error",
       "name": "ZeroDepositAmount",
       "inputs": [
         {
