@@ -29,6 +29,13 @@
 	let errorMessage = '';
 	let isCheckingCalldata = false;
 
+	function getTokenSafeMaxWithdrawAmount(): Float {
+		const amount = vault.tokenSafeWithdrawAmount(vault.balance);
+		if (amount.error) return Float.parse('0').value as Float;
+
+		return amount.value;
+	}
+
 	const getUserBalance = async () => {
 		const balance = await vault.getOwnerBalance();
 		if (balance.error) {
@@ -85,7 +92,11 @@
 				<p>Connect your wallet to continue.</p>
 			{/if}
 		</div>
-		<InputTokenAmount bind:value={amount} symbol={vault.token.symbol} maxValue={vault.balance} />
+		<InputTokenAmount
+			bind:value={amount}
+			symbol={vault.token.symbol}
+			maxValue={getTokenSafeMaxWithdrawAmount()}
+		/>
 		<div class="flex flex-col justify-end gap-2">
 			<div class="flex gap-2">
 				<Button color="alternative" on:click={handleClose}>Cancel</Button>

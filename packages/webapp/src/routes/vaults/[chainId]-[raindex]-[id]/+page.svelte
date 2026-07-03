@@ -12,6 +12,7 @@
 	// import { lightweightChartsTheme } from '$lib/darkMode';
 	import { handleVaultWithdraw } from '$lib/services/handleVaultWithdraw';
 	import { handleVaultDeposit } from '$lib/services/handleVaultDeposit';
+	import LocalDbSyncGate from '$lib/components/LocalDbSyncGate.svelte';
 
 	const { id, chainId, raindex } = $page.params;
 	const parsedId = id as Hex;
@@ -49,4 +50,6 @@
 
 <PageHeader title="Vault" pathname={$page.url.pathname} />
 
-<VaultDetail id={parsedId} {raindexAddress} chainId={parsedChainId} {onDeposit} {onWithdraw} />
+<LocalDbSyncGate>
+	<VaultDetail id={parsedId} {raindexAddress} chainId={parsedChainId} {onDeposit} {onWithdraw} />
+</LocalDbSyncGate>

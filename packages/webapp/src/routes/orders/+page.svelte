@@ -21,6 +21,7 @@
 	import { handleTakeOrder } from '$lib/services/handleTakeOrder';
 	import type { RaindexOrder } from '@rainlanguage/raindex';
 	import type { Hex } from 'viem';
+	import LocalDbSyncGate from '$lib/components/LocalDbSyncGate.svelte';
 
 	const { hideZeroBalanceVaults, hideInactiveOrdersVaults }: AppStoresInterface = $page.data.stores;
 
@@ -45,14 +46,16 @@
 
 <PageHeader title={'Orders'} pathname={$page.url.pathname} />
 
-<OrdersListTable
-	{selectedChainIds}
-	{showInactiveOrders}
-	{orderHash}
-	{hideZeroBalanceVaults}
-	{hideInactiveOrdersVaults}
-	{activeTokens}
-	{activeRaindexAddresses}
-	{ownerFilter}
-	handleTakeOrderModal={onTakeOrderCallback}
-/>
+<LocalDbSyncGate>
+	<OrdersListTable
+		{selectedChainIds}
+		{showInactiveOrders}
+		{orderHash}
+		{hideZeroBalanceVaults}
+		{hideInactiveOrdersVaults}
+		{activeTokens}
+		{activeRaindexAddresses}
+		{ownerFilter}
+		handleTakeOrderModal={onTakeOrderCallback}
+	/>
+</LocalDbSyncGate>

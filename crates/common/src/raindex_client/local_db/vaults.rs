@@ -588,6 +588,7 @@ mod tests {
                 block_number: 12345,
                 block_timestamp: 1700000000,
                 owner,
+                transaction_sender: owner,
                 change_type: "Deposit".to_string(),
                 token,
                 vault_id,
