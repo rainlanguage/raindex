@@ -5,13 +5,13 @@ pragma solidity ^0.8.19;
 import {ERC165, IERC165} from "@openzeppelin-contracts-5.6.1/utils/introspection/ERC165.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts-5.6.1/utils/ReentrancyGuard.sol";
 import {IERC20, SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
-import {IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRaindexV6ArbOrderTaker, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6ArbOrderTaker.sol";
-import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {IRaindexV6} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+import {IRaindexV6ArbOrderTaker, TaskV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6ArbOrderTaker.sol";
+import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
-import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
+import {IRaindexV6OrderTaker} from "raindex-interface-0.1.3/src/interface/IRaindexV6OrderTaker.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 
 /// Thrown when `arb5` is called with a `raindex` that is not the trusted

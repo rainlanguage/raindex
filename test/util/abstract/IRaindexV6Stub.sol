@@ -13,9 +13,9 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IERC3156FlashLender} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashLender.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+import {IERC3156FlashLender} from "raindex-interface-0.1.3/src/interface/ierc3156/IERC3156FlashLender.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.3/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 
 abstract contract IRaindexV6Stub is IRaindexV6 {
     /// @inheritdoc IRaindexV6

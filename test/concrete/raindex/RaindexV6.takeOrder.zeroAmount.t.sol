@@ -6,7 +6,7 @@ import {Vm} from "forge-std-1.16.1/src/Test.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 

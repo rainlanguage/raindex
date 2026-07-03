@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotRainMetaV1, META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.0/src/interface/unstable/IMetaV1_2.sol";
 import {LibMeta} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";

@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {OrderIOCalculationV4} from "src/concrete/raindex/RaindexV6.sol";
-import {ClearStateChangeV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {OrderV4} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {ClearStateChangeV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+import {OrderV4} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {StateNamespace} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {RaindexV6ClearStateChangeHarness} from "test/util/concrete/RaindexV6ClearStateChangeHarness.sol";

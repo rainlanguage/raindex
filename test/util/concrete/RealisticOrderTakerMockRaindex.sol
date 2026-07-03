@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
-import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
+import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+import {IRaindexV6OrderTaker} from "raindex-interface-0.1.3/src/interface/IRaindexV6OrderTaker.sol";
 import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
 
 /// @dev Mock raindex with real takeOrders4 transfers and onTakeOrders2

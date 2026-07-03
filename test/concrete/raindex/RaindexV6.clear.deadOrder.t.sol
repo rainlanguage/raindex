@@ -7,7 +7,7 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 
 /// @title RaindexV6ClearDeadOrderTest
