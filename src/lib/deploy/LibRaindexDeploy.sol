@@ -765,12 +765,12 @@ library LibRaindexDeploy {
     /// The deployed address of the `RaindexV6` contract at the published `0.1.13`
     /// tag. (Changed in 0.1.13 — order-counterparty() returns address(0) in
     /// post-actions.)
-    address constant RAINDEX_DEPLOYED_ADDRESS_0_1_13 = 0xF634958cD5F0583ad00a60eE6408638481954eD1;
+    address constant RAINDEX_DEPLOYED_ADDRESS_0_1_13 = 0xb34DeEe2bC438EA29F628Ff90b9E32Dd87d66D1C;
 
     /// The runtime code hash of the `RaindexV6` contract at the published `0.1.13`
     /// tag.
     bytes32 constant RAINDEX_DEPLOYED_CODEHASH_0_1_13 =
-        0x0b448817be97eb10589c6c01724ff1af889d25f577368c2a11e0da3a02cc1200;
+        0xd0711f500c23ae50a69f67814b7b8bca0f0314a70e25690a5b68b3bbde51b7ee;
 
     /// The deployed address of the `RaindexV6SubParser` contract at the
     /// published `0.1.13` tag. (Unchanged from `0.1.2`.)
