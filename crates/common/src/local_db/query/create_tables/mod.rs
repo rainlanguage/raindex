@@ -1,4 +1,4 @@
-use crate::local_db::query::SqlStatement;
+use crate::local_db::query::{SqlScript, SqlStatementBatch};
 
 pub const CREATE_TABLES_SQL: &str = include_str!("query.sql");
 
@@ -41,8 +41,8 @@ pub fn create_tables_sql() -> &'static str {
     CREATE_TABLES_SQL
 }
 
-pub fn create_tables_stmt() -> SqlStatement {
-    SqlStatement::new(CREATE_TABLES_SQL)
+pub fn create_tables_batch() -> SqlStatementBatch {
+    SqlScript::new(CREATE_TABLES_SQL).statement_batch()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
