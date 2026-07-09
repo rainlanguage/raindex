@@ -295,7 +295,7 @@ fn sqlite_file_paths(db_path: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::local_db::query::create_tables::create_tables_stmt;
+    use crate::local_db::query::create_tables::{create_tables_batch, create_tables_sql};
     use tempfile::TempDir;
 
     #[test]
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn stamped_db_passes_schema_guard() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(create_tables_stmt().sql())
+        conn.execute_batch(create_tables_sql())
             .expect("create tables stamps the header");
         verify_schema_guard(&conn).expect("correctly stamped db should pass the guard");
     }
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn wrong_application_id_is_detected() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(create_tables_stmt().sql())
+        conn.execute_batch(create_tables_sql())
             .expect("create tables stamps the header");
         // Re-stamp the header with a foreign application_id (a SQLite file that
         // is not a raindex local-db) while leaving user_version valid.
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn negative_application_id_is_detected() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(create_tables_stmt().sql())
+        conn.execute_batch(create_tables_sql())
             .expect("create tables stamps the header");
         // A foreign file whose application_id has the top bit set reads back as
         // a negative i32. It is neither zero (unstamped) nor the raindex magic,
@@ -358,7 +358,7 @@ mod tests {
     #[test]
     fn wrong_user_version_is_detected() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(create_tables_stmt().sql())
+        conn.execute_batch(create_tables_sql())
             .expect("create tables stamps the header");
         // Keep the raindex application_id but advance user_version to a stale /
         // future schema number.
@@ -378,7 +378,7 @@ mod tests {
     #[test]
     fn stale_user_version_is_detected() {
         let conn = Connection::open_in_memory().unwrap();
-        conn.execute_batch(create_tables_stmt().sql())
+        conn.execute_batch(create_tables_sql())
             .expect("create tables stamps the header");
         // Keep the raindex application_id but roll user_version back to an older
         // schema number. A stale (lower) version must be rejected just like a
@@ -405,7 +405,7 @@ mod tests {
         // in the file header so a fresh open must reject it.
         {
             let conn = Connection::open(&db_path).unwrap();
-            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.execute_batch(create_tables_sql()).unwrap();
             conn.pragma_update(None, "application_id", RAINDEX_APPLICATION_ID + 7)
                 .unwrap();
         }
@@ -428,7 +428,7 @@ mod tests {
 
         {
             let conn = Connection::open(&db_path).unwrap();
-            conn.execute_batch(create_tables_stmt().sql()).unwrap();
+            conn.execute_batch(create_tables_sql()).unwrap();
             conn.pragma_update(None, "user_version", DB_SCHEMA_VERSION as i32 + 1)
                 .unwrap();
         }
@@ -451,7 +451,7 @@ mod tests {
 
         let exec = RusqliteExecutor::new(&db_path);
         // First open hits an empty file (application_id == 0) and stamps it.
-        exec.query_text(&create_tables_stmt()).await.unwrap();
+        exec.execute_batch(&create_tables_batch()).await.unwrap();
 
         // A subsequent open must read back the stamped header and succeed.
         #[derive(serde::Deserialize)]
@@ -477,7 +477,7 @@ mod tests {
         let db_path = temp_dir.path().join("dump.db");
 
         let exec = RusqliteExecutor::new(&db_path);
-        exec.query_text(&create_tables_stmt()).await.unwrap();
+        exec.execute_batch(&create_tables_batch()).await.unwrap();
 
         // Apply a data-only insert batch (the shape produced by export_data_only).
         let mut batch = SqlStatementBatch::new();

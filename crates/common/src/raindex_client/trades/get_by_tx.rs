@@ -219,7 +219,8 @@ mod tests {
     #[cfg(target_family = "wasm")]
     mod wasm {
         use crate::raindex_client::tests::{
-            get_local_db_test_yaml, new_test_client_with_db_callback,
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
         };
         use crate::raindex_client::trades::test_helpers::{
             build_local_trade_fixture, make_local_db_trades_callback,
@@ -242,9 +243,9 @@ mod tests {
                 vec![fixture.trade],
                 4,
             );
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 

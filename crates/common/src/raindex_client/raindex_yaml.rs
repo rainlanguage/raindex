@@ -254,9 +254,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.get_unique_chain_ids().unwrap();
 
         assert!(!result.is_empty());
@@ -273,9 +271,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.get_all_networks().unwrap();
 
         assert_eq!(result.len(), 2);
@@ -299,9 +295,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
         let mainnet = client.get_network_by_chain_id(1).unwrap();
         assert_eq!(mainnet.chain_id, 1);
@@ -323,9 +317,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
 
         let mainnet_address = "0x1234567890123456789012345678901234567890".to_string();
         let mainnet_raindex = client
@@ -362,9 +354,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.is_sentry_enabled().unwrap();
 
         assert!(!result);
@@ -378,9 +368,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.get_all_accounts().unwrap();
 
         assert_eq!(result.len(), 3);
@@ -415,9 +403,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.get_all_tokens().unwrap();
 
         assert_eq!(result.len(), 2);
@@ -451,9 +437,7 @@ mod tests {
             "http://localhost:3003",
             "http://localhost:3004",
         );
-        let client = RaindexClient::new(vec![yaml], None, None, None, None)
-            .await
-            .unwrap();
+        let client = RaindexClient::new(vec![yaml], None, None).await.unwrap();
         let result = client.get_all_raindexes().unwrap();
 
         assert_eq!(result.len(), 2);
