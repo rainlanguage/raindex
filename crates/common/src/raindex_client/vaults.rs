@@ -729,6 +729,28 @@ impl RaindexVault {
         Ok(RaindexVaultAllowance(allowance))
     }
 
+    /// Normalizes an amount to the largest token-decimal amount that can be withdrawn.
+    ///
+    /// Converts the provided [`Float`] through this vault token's fixed-decimal
+    /// precision, truncating any sub-token-base-unit dust, then returns it as a
+    /// [`Float`] that can be safely encoded for withdraw calldata.
+    #[wasm_export(
+        js_name = "tokenSafeWithdrawAmount",
+        return_description = "Float amount normalized to this vault token's withdrawable precision",
+        unchecked_return_type = "Float",
+        preserve_js_class
+    )]
+    pub fn token_safe_withdraw_amount(
+        &self,
+        #[wasm_export(param_description = "Amount in Float value")] amount: &Float,
+    ) -> Result<Float, RaindexError> {
+        let (fixed_amount, _) = amount.to_fixed_decimal_lossy(self.token.decimals)?;
+        Ok(Float::from_fixed_decimal(
+            fixed_amount,
+            self.token.decimals,
+        )?)
+    }
+
     /// Fetches the balance of the owner for this vault
     ///
     /// Retrieves the current balance of the vault owner.
@@ -1200,7 +1222,7 @@ impl RaindexVaultBalanceChange {
 
         let transaction = RaindexTransaction::from_local_parts(
             change.transaction_hash,
-            change.owner,
+            change.transaction_sender,
             change.block_number,
             change.block_timestamp,
         )?;
@@ -2198,7 +2220,8 @@ mod tests {
         use crate::local_db::query::fetch_vault_balance_changes::LocalDbVaultBalanceChange;
         use crate::raindex_client::local_db::executor::tests::create_sql_capturing_callback;
         use crate::raindex_client::tests::{
-            get_local_db_test_yaml, new_test_client_with_db_callback,
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
         };
         use alloy::primitives::{address, b256, Address, Bytes};
         use rain_math_float::Float;
@@ -2296,9 +2319,9 @@ mod tests {
 
             let callback = make_local_db_vaults_callback(vec![vault]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2330,9 +2353,9 @@ mod tests {
 
             let callback = make_local_db_vaults_callback(vec![local_vault.clone()]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2376,6 +2399,7 @@ mod tests {
 
             let amount = Float::parse("1".to_string()).unwrap();
             let running_balance = Float::parse("5".to_string()).unwrap();
+            let transaction_sender = address!("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
 
             let balance_change = LocalDbVaultBalanceChange {
                 transaction_hash: b256!(
@@ -2385,6 +2409,7 @@ mod tests {
                 block_number: 1234,
                 block_timestamp: 5678,
                 owner,
+                transaction_sender,
                 change_type: "DEPOSIT".to_string(),
                 token,
                 vault_id: local_vault.vault_id.clone(),
@@ -2397,9 +2422,9 @@ mod tests {
                 vec![balance_change],
             );
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2432,6 +2457,10 @@ mod tests {
                 change.transaction().id(),
                 "0x00000000000000000000000000000000000000000000000000000000deadbeef"
             );
+            assert_eq!(
+                change.transaction().from().to_lowercase(),
+                transaction_sender.to_string()
+            );
         }
 
         #[wasm_bindgen_test]
@@ -2451,9 +2480,9 @@ mod tests {
             let json = serde_json::to_string(&vec![keep_vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 

@@ -32,6 +32,16 @@ describe('WithdrawModal', () => {
 				formattedBalance: '1'
 			}
 		}),
+		tokenSafeWithdrawAmount: vi.fn(function (
+			this: RaindexVault,
+			amount: Float
+		) {
+			const decimals = Number(this.token.decimals);
+			const fixedAmount = amount.toFixedDecimalLossy(decimals);
+			if (fixedAmount.error) return fixedAmount;
+
+			return Float.fromFixedDecimal(BigInt(fixedAmount.value.value), decimals);
+		}),
 		vaultId: '1',
 		balance: Float.parse('1').value as Float,
 		formattedBalance: '1'
@@ -63,7 +73,9 @@ describe('WithdrawModal', () => {
 		render(WithdrawModal, defaultProps);
 
 		await waitFor(() => {
-			expect(screen.getByText('Balance of connected wallet')).toBeInTheDocument();
+			expect(
+				screen.getByText('Balance of connected wallet')
+			).toBeInTheDocument();
 		});
 
 		const amountInput = screen.getByRole('textbox');
@@ -75,6 +87,45 @@ describe('WithdrawModal', () => {
 		expect(defaultProps.onSubmit).toHaveBeenCalledTimes(1);
 		const actualArg = mockOnSubmit.mock.calls[0][0];
 		expect(actualArg.format().value).toBe('1');
+	});
+
+	it('fills MAX with a token-decimal-safe amount', async () => {
+		const mockVaultWithDust = {
+			...mockVault,
+			token: {
+				...mockVault.token,
+				decimals: '6'
+			},
+			balance: Float.fromFixedDecimal(BigInt(1123456789), 9).value as Float,
+			formattedBalance: '1.123456789'
+		} as unknown as RaindexVault;
+
+		render(WithdrawModal, {
+			...defaultProps,
+			args: {
+				...defaultProps.args,
+				vault: mockVaultWithDust
+			}
+		});
+
+		await waitFor(() => {
+			expect(
+				screen.getByText('Balance of connected wallet')
+			).toBeInTheDocument();
+		});
+
+		await fireEvent.click(screen.getByText('MAX'));
+
+		const amountInput = screen.getByRole('textbox') as HTMLInputElement;
+		expect(amountInput.value).toBe('1.123456');
+		expect(mockVaultWithDust.tokenSafeWithdrawAmount).toHaveBeenCalledWith(
+			mockVaultWithDust.balance
+		);
+
+		await fireEvent.click(screen.getByTestId('withdraw-button'));
+
+		expect(defaultProps.onSubmit).toHaveBeenCalledTimes(1);
+		expect(mockOnSubmit.mock.calls[0][0].format().value).toBe('1.123456');
 	});
 
 	it('shows error when amount exceeds balance', async () => {
@@ -92,7 +143,9 @@ describe('WithdrawModal', () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText('Balance of connected wallet')).toBeInTheDocument();
+			expect(
+				screen.getByText('Balance of connected wallet')
+			).toBeInTheDocument();
 		});
 
 		const amountInput = screen.getByRole('textbox');
@@ -107,7 +160,9 @@ describe('WithdrawModal', () => {
 		render(WithdrawModal, defaultProps);
 
 		await waitFor(() => {
-			expect(screen.getByText('Balance of connected wallet')).toBeInTheDocument();
+			expect(
+				screen.getByText('Balance of connected wallet')
+			).toBeInTheDocument();
 		});
 
 		const amountInput = screen.getByRole('textbox');
@@ -132,7 +187,9 @@ describe('WithdrawModal', () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText('Balance of connected wallet')).toBeInTheDocument();
+			expect(
+				screen.getByText('Balance of connected wallet')
+			).toBeInTheDocument();
 		});
 
 		const amountInput = screen.getByRole('textbox');
@@ -198,7 +255,9 @@ describe('WithdrawModal', () => {
 
 		await waitFor(() => {
 			expect(
-				screen.getByText(truncateEthAddress('0x0000000000000000000000000000000000000000'))
+				screen.getByText(
+					truncateEthAddress('0x0000000000000000000000000000000000000000')
+				)
 			).toBeInTheDocument();
 		});
 	});
@@ -224,7 +283,9 @@ describe('WithdrawModal', () => {
 		});
 
 		await waitFor(() => {
-			expect(screen.getByText('Connect your wallet to continue.')).toBeInTheDocument();
+			expect(
+				screen.getByText('Connect your wallet to continue.')
+			).toBeInTheDocument();
 			expect(screen.queryByTestId('withdraw-button')).not.toBeInTheDocument();
 		});
 	});

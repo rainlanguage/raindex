@@ -18,6 +18,7 @@ pub struct LocalDbVaultBalanceChange {
     pub block_number: u64,
     pub block_timestamp: u64,
     pub owner: Address,
+    pub transaction_sender: Address,
     pub change_type: String,
     pub token: Address,
     pub vault_id: U256,
@@ -76,8 +77,11 @@ mod tests {
         .unwrap();
         assert!(stmt.sql.contains("params AS"));
         assert!(stmt.sql.contains("?1 AS chain_id"));
+        assert!(stmt.sql.contains("AS transactionSender"));
+        assert!(stmt.sql.contains("FROM take_orders t"));
+        assert!(stmt.sql.contains("FROM clear_v3_events c"));
         assert_eq!(stmt.params.len(), 5);
-        assert!(!stmt.sql.contains("change_type IN"));
+        assert!(!stmt.sql.contains("AND vbc.change_type IN (?"));
     }
 
     #[test]
@@ -156,6 +160,6 @@ mod tests {
         .unwrap();
         assert!(stmt.sql.contains("params AS"));
         assert_eq!(stmt.params.len(), 5);
-        assert!(!stmt.sql.contains("change_type IN"));
+        assert!(!stmt.sql.contains("AND vbc.change_type IN (?"));
     }
 }
