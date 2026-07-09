@@ -232,17 +232,14 @@ const client = clientResult.value;
 Pass `true` as the second argument to `RaindexClient.new` when you want strict
 schema validation.
 
-When the YAML includes `local-db-sync` sections, pass optional callbacks to wire
+When the YAML includes `local-db-sync` sections, pass a local DB object to wire
 up a local SQLite cache:
 
 ```ts
-const clientResult = await RaindexClient.new(
-  [RAINDEX_SETTINGS],
-  undefined,
-  localDb.query.bind(localDb),
-  localDb.wipeAndRecreate.bind(localDb),
-  updateStatusCallback,
-);
+const clientResult = await RaindexClient.new([RAINDEX_SETTINGS], undefined, {
+  localDb,
+  statusCallback: updateStatusCallback,
+});
 ```
 
 The client will automatically start the sync scheduler and route queries to the
@@ -882,10 +879,10 @@ if (!postTaskResult.error) console.log(postTaskResult.value);
   Automatically fetches remote tokens from `using-tokens-from` URLs.
 - `RaindexClient.getAllAccounts()` / `getAllVaultTokens()` – introspect accounts
   and ERC20 metadata defined in your YAML or discovered via subgraphs.
-- Local DB sync – pass `queryCallback`, `wipeCallback`, and `statusCallback` to
-  `RaindexClient.new()` when YAML has `local-db-sync` sections to enable an
-  offline-capable persistent cache. The scheduler starts automatically and
-  queries route to the local DB once the first sync cycle completes.
+- Local DB sync – pass `{ localDb, statusCallback }` to `RaindexClient.new()`
+  when YAML has `local-db-sync` sections to enable an offline-capable persistent
+  cache. The scheduler starts automatically and queries route to the local DB
+  once the first sync cycle completes.
 - `RaindexVaultsList.getWithdrawCalldata()` – multicall builder that withdraws
   every vault with a balance.
 - `RaindexOrder.convertToSgOrder()` – convert WASM order representations back

@@ -122,9 +122,12 @@ export const load: LayoutLoad<LayoutData> = async ({ url }) => {
 	try {
 		if (!errorMessage && registry) {
 			const raindexClientRes = await registry.getRaindexClient(
-				localDb?.query?.bind(localDb),
-				localDb?.wipeAndRecreate?.bind(localDb),
-				updateStatus
+				localDb
+					? {
+							localDb,
+							statusCallback: updateStatus
+						}
+					: undefined
 			);
 			if (raindexClientRes.error) {
 				errorMessage = raindexClientRes.error.readableMsg;
@@ -213,7 +216,7 @@ if (import.meta.vitest) {
 			};
 			mockInit.mockResolvedValue(undefined);
 			mockLocalDbNew.mockReturnValue({
-				value: { db: true, query: vi.fn(), wipeAndRecreate: vi.fn() }
+				value: { db: true, query: vi.fn(), wipeAndRecreate: vi.fn(), transaction: vi.fn() }
 			});
 		});
 
@@ -267,8 +270,9 @@ if (import.meta.vitest) {
 			mockRegistryNew.mockResolvedValueOnce({
 				value: mockRegistry
 			});
+			const localDb = { db: true, query: vi.fn(), wipeAndRecreate: vi.fn(), transaction: vi.fn() };
 			mockLocalDbNew.mockReturnValue({
-				value: { db: true, query: vi.fn(), wipeAndRecreate: vi.fn() }
+				value: localDb
 			});
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -277,6 +281,10 @@ if (import.meta.vitest) {
 			expect(result.errorMessage).toBeUndefined();
 			expect(result.stores).not.toBeNull();
 			expect(result.registry).toEqual(mockRegistry);
+			expect(mockGetRaindexClient).toHaveBeenCalledWith({
+				localDb,
+				statusCallback: updateStatus
+			});
 		});
 
 		it('should reset a failing custom registry from localStorage, retry the default, and warn', async () => {

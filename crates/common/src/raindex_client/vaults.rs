@@ -2220,7 +2220,8 @@ mod tests {
         use crate::local_db::query::fetch_vault_balance_changes::LocalDbVaultBalanceChange;
         use crate::raindex_client::local_db::executor::tests::create_sql_capturing_callback;
         use crate::raindex_client::tests::{
-            get_local_db_test_yaml, new_test_client_with_db_callback,
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
         };
         use alloy::primitives::{address, b256, Address, Bytes};
         use rain_math_float::Float;
@@ -2318,9 +2319,9 @@ mod tests {
 
             let callback = make_local_db_vaults_callback(vec![vault]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2352,9 +2353,9 @@ mod tests {
 
             let callback = make_local_db_vaults_callback(vec![local_vault.clone()]);
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2421,9 +2422,9 @@ mod tests {
                 vec![balance_change],
             );
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
@@ -2479,9 +2480,9 @@ mod tests {
             let json = serde_json::to_string(&vec![keep_vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
 
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 
