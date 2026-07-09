@@ -474,7 +474,21 @@ mod wasm_tests {
     }
 
     fn noop_local_db() -> LocalDb {
-        LocalDb::from_js_callback(noop_callback(), None)
+        let local_db = js_sys::Object::new();
+        js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &noop_callback()).unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("wipeAndRecreate"),
+            &Function::new_no_args("return Promise.resolve({ value: undefined, error: null });"),
+        )
+        .unwrap();
+        js_sys::Reflect::set(
+            &local_db,
+            &JsValue::from_str("transaction"),
+            &Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
+        )
+        .unwrap();
+        LocalDb::from_js_local_db(local_db.into()).unwrap()
     }
 
     impl SchedulerHandle {
