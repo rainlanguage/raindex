@@ -990,7 +990,8 @@ mod test_helpers {
     mod wasm_tests {
         use super::*;
         use crate::raindex_client::tests::{
-            get_local_db_test_yaml, new_test_client_with_db_callback,
+            get_local_db_test_yaml, local_db_object_from_query_callback,
+            new_test_client_with_local_db,
         };
         use raindex_subgraph_client::utils::float::{F1, F2, F3, NEG2};
         use wasm_bindgen_test::wasm_bindgen_test;
@@ -1009,9 +1010,9 @@ mod test_helpers {
                 vec![fixture.trade.clone()],
                 4,
             );
-            let client = new_test_client_with_db_callback(
+            let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],
-                callback,
+                local_db_object_from_query_callback(callback),
                 vec![42161],
             );
 

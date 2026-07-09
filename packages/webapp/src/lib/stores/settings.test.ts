@@ -58,6 +58,26 @@ describe('settings store', () => {
 			validChainIds.set([1, 42161]);
 			expect(get(selectedChainIds)).toEqual([1, 42161]);
 		});
+
+		it('seeds selectedChainIds with all validChainIds when selectedChainIds is empty', () => {
+			// Fresh user: no prior chain selection.
+			// When the client discovers which chains are available, select them all so
+			// orders are visible without requiring a wallet connection first.
+			validChainIds.set([1, 137, 42161]);
+
+			expect(get(selectedChainIds)).toEqual([1, 137, 42161]);
+		});
+
+		it('does not re-seed selectedChainIds when validChainIds updates and selectedChainIds is already set', () => {
+			// Returning user: their explicit selection must not be clobbered when
+			// validChainIds is refreshed (e.g. after a re-init).
+			selectedChainIds.set([1, 42161]);
+
+			validChainIds.set([1, 137, 42161]);
+
+			// 137 must NOT be auto-added; user chose 1 and 42161.
+			expect(get(selectedChainIds)).toEqual([1, 42161]);
+		});
 	});
 
 	describe('selectedChainIds localStorage persistence', () => {

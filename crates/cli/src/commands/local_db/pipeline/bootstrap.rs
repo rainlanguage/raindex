@@ -45,8 +45,8 @@ mod tests {
     use alloy::primitives::Address;
     use async_trait::async_trait;
     use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
-    use raindex_common::local_db::query::clear_tables::clear_tables_stmt;
-    use raindex_common::local_db::query::create_tables::create_tables_stmt;
+    use raindex_common::local_db::query::clear_tables::{clear_tables_batch, vacuum_stmt};
+    use raindex_common::local_db::query::create_tables::create_tables_batch;
     use raindex_common::local_db::query::insert_db_metadata::insert_db_metadata_stmt;
     use raindex_common::local_db::query::{
         FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
@@ -78,6 +78,48 @@ mod tests {
                 .iter()
                 .fold(self, |db, stmt| db.with_text(stmt, "ok"))
         }
+
+        fn with_batch(self, batch: &SqlStatementBatch) -> Self {
+            batch
+                .statements()
+                .iter()
+                .fold(self, |db, stmt| db.with_text(stmt, "ok"))
+        }
+
+        fn with_reset_batches(self) -> Self {
+            self.with_batch(&clear_tables_batch())
+                .with_text(&vacuum_stmt(), "ok")
+                .with_batch(&create_tables_batch())
+        }
+    }
+
+    fn reset_batch_sqls() -> Vec<String> {
+        let mut statements = clear_tables_batch().statements().to_vec();
+        statements.push(vacuum_stmt());
+        statements.extend(create_tables_batch().statements().iter().cloned());
+        statements
+            .iter()
+            .map(|stmt| stmt.sql().to_string())
+            .collect()
+    }
+
+    fn assert_reset_batches_were_called(calls: &[String]) {
+        for sql in reset_batch_sqls() {
+            assert!(calls.contains(&sql), "missing reset SQL: {sql}");
+        }
+    }
+
+    fn first_reset_sql() -> String {
+        clear_tables_batch().statements()[0].sql().to_string()
+    }
+
+    fn last_reset_sql() -> String {
+        create_tables_batch()
+            .statements()
+            .last()
+            .unwrap()
+            .sql()
+            .to_string()
     }
 
     #[cfg_attr(target_family = "wasm", async_trait(?Send))]
@@ -119,8 +161,7 @@ mod tests {
     async fn engine_run_resets_and_does_not_import_when_no_dump() {
         let adapter = ProducerBootstrapAdapter::new();
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -135,27 +176,23 @@ mod tests {
         adapter.engine_run(&db, &cfg).await.unwrap();
 
         let calls = db.calls();
-        // Presence assertions
-        let clear = clear_tables_stmt().sql().to_string();
-        let create = create_tables_stmt().sql().to_string();
+        let reset_start = first_reset_sql();
+        let reset_end = last_reset_sql();
         let insert = insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string();
 
-        assert!(calls.contains(&clear));
-        assert!(calls.contains(&create));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert));
 
-        // Ordering: clear -> create -> insert
         let idx = |s: &String| calls.iter().position(|c| c == s).unwrap();
-        assert!(idx(&clear) < idx(&create));
-        assert!(idx(&create) < idx(&insert));
+        assert!(idx(&reset_start) < idx(&reset_end));
+        assert!(idx(&reset_end) < idx(&insert));
     }
 
     #[tokio::test]
     async fn engine_run_executes_view_creation() {
         let adapter = ProducerBootstrapAdapter::new();
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -187,8 +224,7 @@ mod tests {
         let adapter = ProducerBootstrapAdapter::new();
         let dump_stmt = SqlStatement::new("--dump-sql");
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_text(&dump_stmt, "ok")
             .with_views();
@@ -204,21 +240,18 @@ mod tests {
         adapter.engine_run(&db, &cfg).await.unwrap();
 
         let calls = db.calls();
-        // Presence assertions
-        let clear = clear_tables_stmt().sql().to_string();
-        let create = create_tables_stmt().sql().to_string();
+        let reset_start = first_reset_sql();
+        let reset_end = last_reset_sql();
         let insert = insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string();
         let dump = dump_stmt.sql().to_string();
 
-        assert!(calls.contains(&clear));
-        assert!(calls.contains(&create));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert));
         assert!(calls.contains(&dump));
 
-        // Ordering: clear -> create -> insert -> dump
         let idx = |s: &String| calls.iter().position(|c| c == s).unwrap();
-        assert!(idx(&clear) < idx(&create));
-        assert!(idx(&create) < idx(&insert));
+        assert!(idx(&reset_start) < idx(&reset_end));
+        assert!(idx(&reset_end) < idx(&insert));
         assert!(idx(&insert) < idx(&dump));
     }
 
@@ -227,8 +260,7 @@ mod tests {
         let adapter = ProducerBootstrapAdapter::new();
         let dump_stmt = SqlStatement::new("--dump-sql-missing");
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
-            .with_text(&create_tables_stmt(), "ok")
+            .with_reset_batches()
             .with_text(&insert_db_metadata_stmt(DB_SCHEMA_VERSION), "ok")
             .with_views();
 
@@ -245,20 +277,18 @@ mod tests {
         assert!(result.is_err());
 
         let calls = db.calls();
-        let clear = clear_tables_stmt().sql().to_string();
-        let create = create_tables_stmt().sql().to_string();
+        let reset_start = first_reset_sql();
+        let reset_end = last_reset_sql();
         let insert = insert_db_metadata_stmt(DB_SCHEMA_VERSION).sql().to_string();
         let dump = dump_stmt.sql().to_string();
 
-        assert!(calls.contains(&clear));
-        assert!(calls.contains(&create));
+        assert_reset_batches_were_called(&calls);
         assert!(calls.contains(&insert));
         assert!(calls.contains(&dump));
 
-        // Ordering: clear -> create -> insert -> dump (dump last attempted and fails)
         let idx = |s: &String| calls.iter().position(|c| c == s).unwrap();
-        assert!(idx(&clear) < idx(&create));
-        assert!(idx(&create) < idx(&insert));
+        assert!(idx(&reset_start) < idx(&reset_end));
+        assert!(idx(&reset_end) < idx(&insert));
         assert!(idx(&insert) < idx(&dump));
     }
 
@@ -266,7 +296,7 @@ mod tests {
     async fn engine_run_propagates_reset_error() {
         let adapter = ProducerBootstrapAdapter::new();
         let db = MockDb::default()
-            .with_text(&clear_tables_stmt(), "ok")
+            .with_batch(&clear_tables_batch())
             .with_views();
 
         let cfg = BootstrapConfig {
@@ -284,8 +314,8 @@ mod tests {
         }
 
         let calls = db.calls();
-        assert!(calls.contains(&clear_tables_stmt().sql().to_string()));
-        assert!(calls.contains(&create_tables_stmt().sql().to_string()));
+        assert_eq!(calls.len(), clear_tables_batch().len() + 1);
+        assert_eq!(calls.last().unwrap(), vacuum_stmt().sql());
     }
 
     #[tokio::test]
