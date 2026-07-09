@@ -762,6 +762,62 @@ library LibRaindexDeploy {
     bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH_0_1_12 =
         0x03cde49152f7b5e29826ea8c561481b747b86be1f5cb4136fa064be6e4ac1c0d;
 
+    /// The deployed address of the `RaindexV6` contract at the published `0.1.13`
+    /// tag. (Unchanged from `0.1.12`.)
+    address constant RAINDEX_DEPLOYED_ADDRESS_0_1_13 = 0x37FC0EFec37D19f8A221aa4F8F7600C9ba2AcD20;
+
+    /// The runtime code hash of the `RaindexV6` contract at the published `0.1.13`
+    /// tag.
+    bytes32 constant RAINDEX_DEPLOYED_CODEHASH_0_1_13 =
+        0x6dccd7018126439bb9bceec4cd37f5bcfdd5319979fbf70f9faf41450da10b6f;
+
+    /// The deployed address of the `RaindexV6SubParser` contract at the
+    /// published `0.1.13` tag. (Changed in 0.1.13 — mask signer row operand to
+    /// low byte.)
+    address constant SUB_PARSER_DEPLOYED_ADDRESS_0_1_13 = 0x420f597688A249eC28aBA121960ada4d9091cbAa;
+
+    /// The runtime code hash of the `RaindexV6SubParser` contract at the
+    /// published `0.1.13` tag.
+    bytes32 constant SUB_PARSER_DEPLOYED_CODEHASH_0_1_13 =
+        0x5ed1e395258ca9cdb61cffd06d89dae19fc5043a5e14bd4cdae7cb11b9588216;
+
+    /// The deployed address of the `RouteProcessor4` contract at the published
+    /// `0.1.13` tag. (Unchanged from `0.1.0`.)
+    address constant ROUTE_PROCESSOR_DEPLOYED_ADDRESS_0_1_13 = 0x6E2d0e71d900474b262E545Bc4C98b71ab368d21;
+
+    /// The runtime code hash of the `RouteProcessor4` contract at the published
+    /// `0.1.13` tag. (Unchanged from `0.1.0`.)
+    bytes32 constant ROUTE_PROCESSOR_DEPLOYED_CODEHASH_0_1_13 =
+        0xeb3745a79c6ba48e8767b9c355b8e7b79f9d6edeca004e4bb91be4de515a7eeb;
+
+    /// The deployed address of the `GenericPoolRaindexV6ArbOrderTaker` contract
+    /// at the published `0.1.13` tag. (Unchanged from `0.1.12`.)
+    address constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_13 = 0xE84c106B0A89A164d2D65205B9EBAE37c15Fd84a;
+
+    /// The runtime code hash of the `GenericPoolRaindexV6ArbOrderTaker` contract
+    /// at the published `0.1.13` tag.
+    bytes32 constant GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_13 =
+        0x02b17ab238a36ebcedee19fa5a374d6122865be8fff61bf45ad15822c8482030;
+
+    /// The deployed address of the `RouteProcessorRaindexV6ArbOrderTaker`
+    /// contract at the published `0.1.13` tag. (Unchanged from `0.1.12`.)
+    address constant ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS_0_1_13 =
+        0x1350420cbf3E9eb8F1734bbe466e0F303579eE24;
+
+    /// The runtime code hash of the `RouteProcessorRaindexV6ArbOrderTaker`
+    /// contract at the published `0.1.13` tag.
+    bytes32 constant ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH_0_1_13 =
+        0x9a0d64fd312dc16761f28a7e13e48a8e8ad2f0ba5995c16710514e7524f43ee2;
+
+    /// The deployed address of the `GenericPoolRaindexV6FlashBorrower` contract
+    /// at the published `0.1.13` tag. (Unchanged from `0.1.12`.)
+    address constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS_0_1_13 = 0x032d9D94A79909F3b337ECFE6f73f4e86bA79c7E;
+
+    /// The runtime code hash of the `GenericPoolRaindexV6FlashBorrower` contract
+    /// at the published `0.1.13` tag.
+    bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH_0_1_13 =
+        0x03cde49152f7b5e29826ea8c561481b747b86be1f5cb4136fa064be6e4ac1c0d;
+
     uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 473899359;
     uint256 constant RAINDEX_START_BLOCK_BASE = 47387582;
     uint256 constant RAINDEX_START_BLOCK_FLARE = 63011168;

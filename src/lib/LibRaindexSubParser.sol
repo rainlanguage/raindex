@@ -277,14 +277,15 @@ library LibRaindexSubParser {
     }
 
     /// @dev Maps the "signers" word to the signed context signers column.
-    /// Uses the operand to select the row.
+    /// The low byte of the operand selects the row.
     function subParserSigners(uint256, uint256, OperandV2 operand)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
+        uint256 row = uint256(OperandV2.unwrap(operand)) & 0xFF;
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, uint256(OperandV2.unwrap(operand)));
+        return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, row);
     }
 
     /// @dev Maps the "deposit-token" word to the calling context column.

@@ -72,4 +72,20 @@ contract RaindexV6SubParserSignersTest is OpTest {
 
         checkUnhappyParse2(rainlang, abi.encodeWithSelector(StackAllocationMismatch.selector, 2, 1));
     }
+
+    /// signer<256>() must resolve to the same row as signer<0>(): the row
+    /// operand is masked to its low byte so 256 wraps to 0.
+    function testSubParserContextSignerRowMaskLowByte() external view {
+        address subParserAddress = LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
+
+        StackItem[] memory expectedStack = new StackItem[](1);
+        expectedStack[0] = StackItem.wrap(keccak256(bytes("signer-0")));
+
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<256>();"));
+
+        checkHappy(
+            rainlang, LibRaindexSubParserContextFixture.hashedNamesContext(), expectedStack, "signer-256-wraps-to-0"
+        );
+    }
 }
