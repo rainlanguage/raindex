@@ -48,15 +48,11 @@ export function prepareHistoricalOrderChartData(
         (acc, d) => acc + d.outputAmount,
         0,
       );
-      const finiteValues = objectsWithSameTimestamp
-        .map((d) => d.value)
-        .filter((v) => isFinite(v));
+      // A zero output sum means every merged trade had zero output amount,
+      // so there is no meaningful weighted ratio for the bucket; chart it
+      // as zero rather than dividing by zero.
       const ioratioAverage =
-        outputAmountSum === 0
-          ? finiteValues.length > 0
-            ? finiteValues.reduce((acc, v) => acc + v, 0) / finiteValues.length
-            : 0
-          : ioratioSum / outputAmountSum;
+        outputAmountSum === 0 ? 0 : ioratioSum / outputAmountSum;
       finalData.push({
         value: ioratioAverage,
         time: timestamp,
@@ -475,10 +471,9 @@ if (import.meta.vitest) {
     expect(result[0].value).toEqual(ioratioAverage);
   });
 
-  it("falls back to zero when same-timestamp outputAmounts sum to zero and all ioratios are non-finite", () => {
-    // outputVaultBalanceChange.amount (BigInt) = 0 for both trades → outputAmountSum = 0.
-    // outputVaultBalanceChange.formattedAmount = "0" (consistent with amount = 0) → value = Infinity (non-finite).
-    // Fallback: filter non-finite values → empty → return 0.
+  it("charts zero when same-timestamp outputAmounts sum to zero", () => {
+    // outputVaultBalanceChange.amount (BigInt) = 0 for both trades → outputAmountSum = 0,
+    // so the bucket has no meaningful weighted ratio and its value is 0.
     const makeZeroAmountTrade = (
       id: `0x${string}`,
       inputFormattedAmount: string,
