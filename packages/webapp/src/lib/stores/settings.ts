@@ -66,6 +66,7 @@ export const validChainIds = writable<number[]>([]);
 validChainIds.subscribe((valid) => {
 	if (valid.length > 0) {
 		selectedChainIds.update((current) => {
+			if (current.length === 0) return [...valid];
 			const filtered = current.filter((id) => valid.includes(id));
 			return filtered.length !== current.length ? filtered : current;
 		});

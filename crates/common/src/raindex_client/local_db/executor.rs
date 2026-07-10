@@ -4,29 +4,46 @@ use crate::local_db::query::{
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use js_sys::{Array, BigInt};
+use js_sys::{Array, BigInt, Object, Reflect};
 use std::rc::Rc;
 use wasm_bindgen_utils::prelude::wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_utils::prelude::JsCast;
 use wasm_bindgen_utils::result::WasmEncodedResult;
 
 #[derive(Clone)]
 pub struct JsCallbackExecutor {
+    local_db: JsValue,
     query_callback: js_sys::Function,
-    wipe_callback: Option<js_sys::Function>,
+    wipe_callback: js_sys::Function,
+    transaction_callback: js_sys::Function,
     serialize: Rc<Mutex<()>>,
 }
 
 impl JsCallbackExecutor {
-    pub fn new(query_callback: js_sys::Function, wipe_callback: Option<js_sys::Function>) -> Self {
-        Self {
+    pub fn new(local_db: JsValue) -> Result<Self, LocalDbQueryError> {
+        let query_callback = method(&local_db, "query")?;
+        let wipe_callback = method(&local_db, "wipeAndRecreate")?;
+        let transaction_callback = method(&local_db, "transaction")?;
+
+        Ok(Self {
+            local_db,
             query_callback,
             wipe_callback,
+            transaction_callback,
             serialize: Rc::new(Mutex::new(())),
-        }
+        })
     }
 
     pub fn from_ref(query_callback: &js_sys::Function) -> Self {
-        Self::new(query_callback.clone(), None)
+        let local_db = Object::new();
+        Reflect::set(&local_db, &JsValue::from_str("query"), query_callback).unwrap();
+        Self {
+            local_db: local_db.into(),
+            query_callback: query_callback.clone(),
+            wipe_callback: js_sys::Function::new_no_args("return undefined"),
+            transaction_callback: js_sys::Function::new_no_args("return undefined"),
+            serialize: Rc::new(Mutex::new(())),
+        }
     }
 
     fn function(&self) -> &js_sys::Function {
@@ -39,27 +56,17 @@ impl JsCallbackExecutor {
     ) -> Result<String, LocalDbQueryError> {
         // If there are no parameters, pass `undefined` to the JS callback
         // instead of an empty array to match the SDK's expected semantics.
-        let js_params_val = if stmt.params.is_empty() {
+        let js_params_val = if stmt.params().is_empty() {
             JsValue::UNDEFINED
         } else {
-            let array = Array::new();
-            for param in stmt.params() {
-                let js_param = match param {
-                    SqlValue::Text(text) => JsValue::from_str(text),
-                    SqlValue::I64(value) => JsValue::from(BigInt::from(*value)),
-                    SqlValue::U64(value) => JsValue::from(BigInt::from(*value)),
-                    SqlValue::Null => JsValue::NULL,
-                };
-                array.push(&js_param);
-            }
-            JsValue::from(array)
+            sql_params_to_js(stmt.params())
         };
 
         let result = self
             .function()
             .call2(
-                &JsValue::NULL,
-                &JsValue::from_str(&stmt.sql),
+                &self.local_db,
+                &JsValue::from_str(stmt.sql()),
                 &js_params_val,
             )
             .map_err(|e| {
@@ -90,6 +97,79 @@ impl JsCallbackExecutor {
         let _guard = self.serialize.lock().await;
         self.invoke_statement_unlocked(stmt).await
     }
+
+    async fn invoke_transaction_unlocked(
+        &self,
+        batch: &SqlStatementBatch,
+    ) -> Result<(), LocalDbQueryError> {
+        let statements = Array::new();
+        batch.inner_statements().iter().try_for_each(|stmt| {
+            statements.push(&transaction_statement(stmt.sql(), stmt.params())?.into());
+            Ok::<(), LocalDbQueryError>(())
+        })?;
+
+        let result = self
+            .transaction_callback
+            .call1(&self.local_db, &statements)
+            .map_err(|e| {
+                LocalDbQueryError::database(format!(
+                    "JavaScript transaction callback invocation failed: {:?}",
+                    e
+                ))
+            })?;
+
+        let promise = js_sys::Promise::resolve(&result);
+        let future = JsFuture::from(promise);
+        let js_result = future.await.map_err(|e| {
+            LocalDbQueryError::database(format!("Transaction promise resolution failed: {:?}", e))
+        })?;
+
+        let wasm_result: WasmEncodedResult<String> = serde_wasm_bindgen::from_value(js_result)
+            .map_err(|_| LocalDbQueryError::invalid_response())?;
+
+        match wasm_result {
+            WasmEncodedResult::Success { .. } => Ok(()),
+            WasmEncodedResult::Err { error, .. } => {
+                Err(LocalDbQueryError::database(error.readable_msg))
+            }
+        }
+    }
+}
+
+fn transaction_statement(sql: &str, params: &[SqlValue]) -> Result<Object, LocalDbQueryError> {
+    let item = Object::new();
+    Reflect::set(&item, &JsValue::from_str("sql"), &JsValue::from_str(sql))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to set SQL: {:?}", e)))?;
+    if !params.is_empty() {
+        Reflect::set(
+            &item,
+            &JsValue::from_str("params"),
+            &sql_params_to_js(params),
+        )
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to set params: {:?}", e)))?;
+    }
+    Ok(item)
+}
+
+fn method(local_db: &JsValue, name: &str) -> Result<js_sys::Function, LocalDbQueryError> {
+    Reflect::get(local_db, &JsValue::from_str(name))
+        .map_err(|e| LocalDbQueryError::database(format!("Failed to read localDb.{name}: {e:?}")))?
+        .dyn_into::<js_sys::Function>()
+        .map_err(|_| LocalDbQueryError::database(format!("localDb.{name} must be a function")))
+}
+
+fn sql_params_to_js(params: &[SqlValue]) -> JsValue {
+    let array = Array::new();
+    params.iter().for_each(|param| {
+        let js_param = match param {
+            SqlValue::Text(text) => JsValue::from_str(text),
+            SqlValue::I64(value) => JsValue::from(BigInt::from(*value)),
+            SqlValue::U64(value) => JsValue::from(BigInt::from(*value)),
+            SqlValue::Null => JsValue::NULL,
+        };
+        array.push(&js_param);
+    });
+    JsValue::from(array)
 }
 
 // SAFETY: WASM builds run on a single thread; the wrapped JavaScript callback is only invoked on
@@ -107,14 +187,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
             ));
         }
 
-        for stmt in batch {
-            if let Err(err) = self.invoke_statement_unlocked(stmt).await {
-                let rollback_stmt = SqlStatement::new("ROLLBACK");
-                let _ = self.invoke_statement_unlocked(&rollback_stmt).await;
-                return Err(err);
-            }
-        }
-        Ok(())
+        self.invoke_transaction_unlocked(batch).await
     }
 
     async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
@@ -132,11 +205,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
 
     async fn wipe_and_recreate(&self) -> Result<(), LocalDbQueryError> {
         let _guard = self.serialize.lock().await;
-        let wipe_callback = self.wipe_callback.as_ref().ok_or_else(|| {
-            LocalDbQueryError::database("wipe_and_recreate callback not configured")
-        })?;
-
-        let result = wipe_callback.call0(&JsValue::NULL).map_err(|e| {
+        let result = self.wipe_callback.call0(&self.local_db).map_err(|e| {
             LocalDbQueryError::database(format!(
                 "JavaScript wipe callback invocation failed: {:?}",
                 e
@@ -224,6 +293,32 @@ pub mod tests {
             let func: Function = closure.as_ref().clone().unchecked_into();
             closure.forget();
             func
+        }
+
+        fn create_local_db(
+            query: Option<Function>,
+            wipe: Option<Function>,
+            transaction: Option<Function>,
+        ) -> JsValue {
+            let local_db = js_sys::Object::new();
+            if let Some(query) = query {
+                Reflect::set(&local_db, &JsValue::from_str("query"), &query).unwrap();
+            }
+            if let Some(wipe) = wipe {
+                Reflect::set(&local_db, &JsValue::from_str("wipeAndRecreate"), &wipe).unwrap();
+            }
+            if let Some(transaction) = transaction {
+                Reflect::set(&local_db, &JsValue::from_str("transaction"), &transaction).unwrap();
+            }
+            local_db.into()
+        }
+
+        fn success_wipe_callback() -> Function {
+            Function::new_no_args("return { value: undefined, error: null };")
+        }
+
+        fn success_transaction_callback() -> Function {
+            Function::new_no_args("return { value: '', error: null };")
         }
 
         #[wasm_bindgen_test]
@@ -321,27 +416,31 @@ pub mod tests {
         }
 
         #[wasm_bindgen_test]
-        async fn execute_batch_invokes_all_statements_in_order() {
+        async fn execute_batch_uses_transaction_callback_with_inner_statements() {
             use std::cell::RefCell;
             use std::rc::Rc;
             use wasm_bindgen::prelude::Closure;
 
-            let calls: Rc<RefCell<Vec<(String, JsValue)>>> = Rc::new(RefCell::new(Vec::new()));
+            let calls: Rc<RefCell<Vec<JsValue>>> = Rc::new(RefCell::new(Vec::new()));
             let calls_clone = calls.clone();
-            let closure = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
-                calls_clone.borrow_mut().push((sql, params.clone()));
+            let closure = Closure::wrap(Box::new(move |statements: JsValue| -> JsValue {
+                calls_clone.borrow_mut().push(statements);
                 let result = WasmEncodedResult::Success::<String> {
                     value: String::new(),
                     error: None,
                 };
                 serde_wasm_bindgen::to_value(&result).unwrap()
-            })
-                as Box<dyn FnMut(String, JsValue) -> JsValue>);
+            }) as Box<dyn FnMut(JsValue) -> JsValue>);
 
             let callback: Function = closure.as_ref().clone().unchecked_into();
             closure.forget();
 
-            let exec = JsCallbackExecutor::from_ref(&callback);
+            let exec = JsCallbackExecutor::new(create_local_db(
+                Some(create_success_callback("[]")),
+                Some(success_wipe_callback()),
+                Some(callback),
+            ))
+            .unwrap();
 
             let mut batch = SqlStatementBatch::new();
             batch.add(SqlStatement::new("CREATE TABLE example (val INTEGER)"));
@@ -355,194 +454,87 @@ pub mod tests {
             exec.execute_batch(&batch).await.unwrap();
 
             let calls = calls.borrow();
-            assert_eq!(calls.len(), 5);
+            assert_eq!(calls.len(), 1);
+            let statements = Array::from(&calls[0]);
+            assert_eq!(statements.length(), 3);
 
-            assert_eq!(calls[0].0, "BEGIN TRANSACTION");
-            assert!(calls[0].1.is_undefined());
+            let first = js_sys::Object::from(statements.get(0));
+            assert_eq!(
+                Reflect::get(&first, &JsValue::from_str("sql"))
+                    .unwrap()
+                    .as_string()
+                    .unwrap(),
+                "CREATE TABLE example (val INTEGER)"
+            );
+            assert!(Reflect::get(&first, &JsValue::from_str("params"))
+                .unwrap()
+                .is_undefined());
 
-            assert_eq!(calls[1].0, "CREATE TABLE example (val INTEGER)");
-            assert!(calls[1].1.is_undefined());
-
-            assert_eq!(calls[2].0, "INSERT INTO example (val) VALUES (?1)");
-            let params_value = calls[2].1.clone();
-
-            assert_eq!(calls[3].0, "DELETE FROM example WHERE val = 0");
-            assert!(calls[3].1.is_undefined());
-
-            assert_eq!(calls[4].0, "COMMIT");
-            assert!(calls[4].1.is_undefined());
-            drop(calls);
-
+            let second = js_sys::Object::from(statements.get(1));
+            assert_eq!(
+                Reflect::get(&second, &JsValue::from_str("sql"))
+                    .unwrap()
+                    .as_string()
+                    .unwrap(),
+                "INSERT INTO example (val) VALUES (?1)"
+            );
+            let params_value = Reflect::get(&second, &JsValue::from_str("params")).unwrap();
             assert!(Array::is_array(&params_value));
             let decoded = Array::from(&params_value);
             assert_eq!(decoded.length(), 1);
             let first = decoded.get(0).dyn_into::<BigInt>().unwrap();
             assert_eq!(first.to_string(10).unwrap().as_string().unwrap(), "42");
+
+            let third = js_sys::Object::from(statements.get(2));
+            assert_eq!(
+                Reflect::get(&third, &JsValue::from_str("sql"))
+                    .unwrap()
+                    .as_string()
+                    .unwrap(),
+                "DELETE FROM example WHERE val = 0"
+            );
+            assert!(Reflect::get(&third, &JsValue::from_str("params"))
+                .unwrap()
+                .is_undefined());
         }
 
         #[wasm_bindgen_test]
-        async fn execute_batch_rolls_back_on_failure_without_params() {
+        async fn execute_batch_propagates_transaction_error() {
             use std::cell::RefCell;
             use std::rc::Rc;
             use wasm_bindgen::prelude::Closure;
-            use wasm_bindgen_utils::prelude::JsValue;
 
-            let calls: Rc<RefCell<Vec<(String, JsValue)>>> = Rc::new(RefCell::new(Vec::new()));
+            let calls: Rc<RefCell<usize>> = Rc::new(RefCell::new(0));
             let calls_clone = calls.clone();
-            let closure = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
-                calls_clone.borrow_mut().push((sql.clone(), params));
-                let result: WasmEncodedResult<String> =
-                    if sql == "INSERT INTO rollback_test (value) VALUES ('fail')" {
-                        WasmEncodedResult::Err {
-                            value: None,
-                            error: WasmEncodedError {
-                                msg: "boom".to_string(),
-                                readable_msg: "boom".to_string(),
-                            },
-                        }
-                    } else {
-                        WasmEncodedResult::Success {
-                            value: String::new(),
-                            error: None,
-                        }
-                    };
+            let closure = Closure::wrap(Box::new(move |_statements: JsValue| -> JsValue {
+                *calls_clone.borrow_mut() += 1;
+                let result = WasmEncodedResult::Err::<String> {
+                    value: None,
+                    error: WasmEncodedError {
+                        msg: "boom".to_string(),
+                        readable_msg: "boom readable".to_string(),
+                    },
+                };
                 serde_wasm_bindgen::to_value(&result).unwrap()
-            })
-                as Box<dyn FnMut(String, JsValue) -> JsValue>);
+            }) as Box<dyn FnMut(JsValue) -> JsValue>);
             let callback: Function = closure.as_ref().clone().unchecked_into();
             closure.forget();
 
-            let exec = JsCallbackExecutor::from_ref(&callback);
+            let exec = JsCallbackExecutor::new(create_local_db(
+                Some(create_success_callback("[]")),
+                Some(success_wipe_callback()),
+                Some(callback),
+            ))
+            .unwrap();
 
             let mut batch = SqlStatementBatch::new();
-            batch.add(SqlStatement::new("CREATE TABLE rollback_test (value TEXT)"));
-            batch.add(SqlStatement::new(
-                "INSERT INTO rollback_test (value) VALUES ('ok')",
-            ));
-            batch.add(SqlStatement::new(
-                "INSERT INTO rollback_test (value) VALUES ('fail')",
-            ));
+            batch.add(SqlStatement::new("INSERT INTO rollback_test VALUES (1)"));
             let batch = batch.ensure_transaction();
 
             let err = exec.execute_batch(&batch).await.unwrap_err();
             assert!(matches!(err, LocalDbQueryError::Database { .. }));
-
-            let calls = calls.borrow();
-            assert_eq!(calls.len(), 5);
-            assert_eq!(calls[0].0, "BEGIN TRANSACTION");
-            assert_eq!(calls[1].0, "CREATE TABLE rollback_test (value TEXT)");
-            assert_eq!(
-                calls[2].0,
-                "INSERT INTO rollback_test (value) VALUES ('ok')"
-            );
-            assert_eq!(
-                calls[3].0,
-                "INSERT INTO rollback_test (value) VALUES ('fail')"
-            );
-            assert_eq!(calls[4].0, "ROLLBACK");
-            assert!(!calls.iter().any(|(sql, _)| sql == "COMMIT"));
-        }
-
-        #[wasm_bindgen_test]
-        async fn execute_batch_rolls_back_on_failure_with_params() {
-            use std::cell::RefCell;
-            use std::rc::Rc;
-            use wasm_bindgen::prelude::Closure;
-            use wasm_bindgen_utils::prelude::JsValue;
-
-            let calls: Rc<RefCell<Vec<(String, JsValue)>>> = Rc::new(RefCell::new(Vec::new()));
-            let calls_clone = calls.clone();
-            let seen_insert = Rc::new(RefCell::new(false));
-            let seen_insert_clone = seen_insert.clone();
-            let closure = Closure::wrap(Box::new(move |sql: String, params: JsValue| -> JsValue {
-                calls_clone.borrow_mut().push((sql.clone(), params.clone()));
-                let result: WasmEncodedResult<String> =
-                    if sql == "INSERT INTO rollback_param (id, value) VALUES (?1, ?2)" {
-                        let mut seen = seen_insert_clone.borrow_mut();
-                        if !*seen {
-                            *seen = true;
-                            WasmEncodedResult::Success {
-                                value: String::new(),
-                                error: None,
-                            }
-                        } else {
-                            WasmEncodedResult::Err {
-                                value: None,
-                                error: WasmEncodedError {
-                                    msg: "boom".to_string(),
-                                    readable_msg: "boom".to_string(),
-                                },
-                            }
-                        }
-                    } else {
-                        WasmEncodedResult::Success {
-                            value: String::new(),
-                            error: None,
-                        }
-                    };
-                serde_wasm_bindgen::to_value(&result).unwrap()
-            })
-                as Box<dyn FnMut(String, JsValue) -> JsValue>);
-            let callback: Function = closure.as_ref().clone().unchecked_into();
-            closure.forget();
-
-            let exec = JsCallbackExecutor::from_ref(&callback);
-
-            let mut batch = SqlStatementBatch::new();
-            batch.add(SqlStatement::new(
-                "CREATE TABLE rollback_param (id INTEGER PRIMARY KEY, value TEXT)",
-            ));
-
-            let mut insert_ok =
-                SqlStatement::new("INSERT INTO rollback_param (id, value) VALUES (?1, ?2)");
-            insert_ok.push(1i64);
-            insert_ok.push("ok");
-            batch.add(insert_ok);
-
-            let mut insert_fail =
-                SqlStatement::new("INSERT INTO rollback_param (id, value) VALUES (?1, ?2)");
-            insert_fail.push(2i64);
-            insert_fail.push("fail");
-            batch.add(insert_fail);
-
-            let batch = batch.ensure_transaction();
-
-            let err = exec.execute_batch(&batch).await.unwrap_err();
-            assert!(matches!(err, LocalDbQueryError::Database { .. }));
-
-            let calls = calls.borrow();
-            assert_eq!(calls.len(), 5);
-            assert_eq!(calls[0].0, "BEGIN TRANSACTION");
-            assert_eq!(
-                calls[1].0,
-                "CREATE TABLE rollback_param (id INTEGER PRIMARY KEY, value TEXT)"
-            );
-            assert_eq!(
-                calls[2].0,
-                "INSERT INTO rollback_param (id, value) VALUES (?1, ?2)"
-            );
-            assert!(Array::is_array(&calls[2].1));
-            let params_ok = Array::from(&calls[2].1);
-            assert_eq!(params_ok.length(), 2);
-            let first = params_ok.get(0).dyn_into::<BigInt>().unwrap();
-            assert_eq!(first.to_string(10).unwrap().as_string().unwrap(), "1");
-            let second = params_ok.get(1);
-            assert_eq!(second.as_string().unwrap(), "ok");
-            assert_eq!(
-                calls[3].0,
-                "INSERT INTO rollback_param (id, value) VALUES (?1, ?2)"
-            );
-            assert!(Array::is_array(&calls[3].1));
-            let params_fail = Array::from(&calls[3].1);
-            assert_eq!(params_fail.length(), 2);
-            let first = params_fail.get(0).dyn_into::<BigInt>().unwrap();
-            assert_eq!(first.to_string(10).unwrap().as_string().unwrap(), "2");
-            let second = params_fail.get(1);
-            assert_eq!(second.as_string().unwrap(), "fail");
-            assert_eq!(calls[4].0, "ROLLBACK");
-            assert!(!calls.iter().any(|(sql, _)| sql == "COMMIT"));
-
-            assert!(*seen_insert.borrow());
+            assert!(err.to_string().contains("boom readable"));
+            assert_eq!(*calls.borrow(), 1);
         }
 
         #[wasm_bindgen_test]
@@ -629,16 +621,21 @@ pub mod tests {
         }
 
         #[wasm_bindgen_test]
-        async fn wipe_and_recreate_returns_error_when_no_callback() {
+        async fn constructor_requires_wipe_callback() {
             let callback = create_success_callback("[]");
-            let exec = JsCallbackExecutor::from_ref(&callback);
+            let result = JsCallbackExecutor::new(create_local_db(
+                Some(callback),
+                None,
+                Some(success_transaction_callback()),
+            ));
 
-            let result = exec.wipe_and_recreate().await;
-            assert!(matches!(result, Err(LocalDbQueryError::Database { .. })));
-            assert!(result
-                .unwrap_err()
+            let Err(err) = result else {
+                panic!("constructor should reject missing wipe callback");
+            };
+            assert!(matches!(err, LocalDbQueryError::Database { .. }));
+            assert!(err
                 .to_string()
-                .contains("wipe_and_recreate callback not configured"));
+                .contains("localDb.wipeAndRecreate must be a function"));
         }
 
         #[wasm_bindgen_test]
@@ -661,7 +658,12 @@ pub mod tests {
             wipe_closure.forget();
 
             let callback = create_success_callback("[]");
-            let exec = JsCallbackExecutor::new(callback, Some(wipe_callback));
+            let exec = JsCallbackExecutor::new(create_local_db(
+                Some(callback),
+                Some(wipe_callback),
+                Some(success_transaction_callback()),
+            ))
+            .unwrap();
 
             exec.wipe_and_recreate().await.unwrap();
 
@@ -692,7 +694,12 @@ pub mod tests {
             });
 
             let callback = create_success_callback("[]");
-            let exec = JsCallbackExecutor::new(callback, Some(wipe_callback));
+            let exec = JsCallbackExecutor::new(create_local_db(
+                Some(callback),
+                Some(wipe_callback),
+                Some(success_transaction_callback()),
+            ))
+            .unwrap();
 
             let result = exec.wipe_and_recreate().await;
             assert!(matches!(result, Err(LocalDbQueryError::Database { .. })));
