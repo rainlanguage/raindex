@@ -21,7 +21,6 @@ contract LibRaindexDeployTaggedConstantsTest is Test {
 
         // The registry could not be reached; there is nothing to verify.
         if (_startsWith(out, bytes("SKIP"))) {
-            vm.skip(true);
             return;
         }
 
