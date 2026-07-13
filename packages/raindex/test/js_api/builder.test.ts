@@ -1421,28 +1421,16 @@ ${dotrain}`;
     });
 
     it("generates approval calldatas", async () => {
-      // decimal call
-      await mockServer
-        .forPost("/rpc-url")
-        .once()
-        .thenSendJsonRpcResult(
-          "0x0000000000000000000000000000000000000000000000000000000000000012",
-        );
-      // allowance - 1000 * 10^18
+      // Decimals come from the deposits map, so the only RPC per token is the
+      // allowance read: one mocked response per deposited token.
+      // token1 allowance - 1000 * 10^18
       await mockServer
         .forPost("/rpc-url")
         .once()
         .thenSendJsonRpcResult(
           "0x00000000000000000000000000000000000000000000003635C9ADC5DEA00000",
         );
-      // decimal call
-      await mockServer
-        .forPost("/rpc-url")
-        .once()
-        .thenSendJsonRpcResult(
-          "0x0000000000000000000000000000000000000000000000000000000000000012",
-        );
-      // allowance - 1000 * 10^18
+      // token2 allowance - 1000 * 10^18
       await mockServer
         .forPost("/rpc-url")
         .once()
@@ -1484,14 +1472,8 @@ ${dotrain}`;
     });
 
     it("overwrites approvals when allowance is higher than deposit", async () => {
-      // decimal call
-      await mockServer
-        .forPost("/rpc-url")
-        .once()
-        .thenSendJsonRpcResult(
-          "0x0000000000000000000000000000000000000000000000000000000000000012",
-        );
-      // allowance - 5000 * 10^18
+      // Decimals come from the deposits map, so the only RPC is the token2
+      // allowance read - 5000 * 10^18
       await mockServer
         .forPost("/rpc-url")
         .once()
