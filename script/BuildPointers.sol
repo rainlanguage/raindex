@@ -161,10 +161,15 @@ contract BuildPointers is Script {
 
     /// @notice Freeze the just-generated flat pointers into a per-release snapshot
     /// dir `src/generated/<tag>/` so each published tag keeps its own immutable
-    /// deploy pins (`LibRaindexDeployTaggedConstants.t.sol` reads these). Historical
-    /// tags are never regenerated; a release bump writes a new `<tag>/` snapshot
-    /// beside them. The flat `src/generated/*.pointers.sol` stay the current-release
-    /// source consumed across the codebase.
+    /// deploy pins (`LibRaindexDeployTaggedConstants.t.sol` reads these). Only the
+    /// CURRENT `deployTag()` dir is ever written — older tags are never touched.
+    /// An existing `<tag>/` snapshot is treated as immutable: rewriting it with
+    /// IDENTICAL content is a harmless no-op, but a DIFFERENT payload reverts. That
+    /// only happens when a contract changed without a `[package].version` bump — the
+    /// change must bump the version so a NEW `<tag>/` dir is written beside the
+    /// frozen ones, rather than corrupting the history the tests pin. The flat
+    /// `src/generated/*.pointers.sol` stay the current-release source consumed
+    /// across the codebase.
     function freezeSnapshot() internal {
         string memory tag = deployTag();
         vm.createDir(string.concat("src/generated/", tag), true);
@@ -176,10 +181,15 @@ contract BuildPointers is Script {
         names[4] = "RouteProcessorRaindexV6ArbOrderTaker";
         names[5] = "GenericPoolRaindexV6FlashBorrower";
         for (uint256 i = 0; i < names.length; i++) {
-            vm.writeFile(
-                string.concat("src/generated/", tag, "/", names[i], ".pointers.sol"),
-                vm.readFile(string.concat("src/generated/", names[i], ".pointers.sol"))
-            );
+            string memory frozenPath = string.concat("src/generated/", tag, "/", names[i], ".pointers.sol");
+            string memory content = vm.readFile(string.concat("src/generated/", names[i], ".pointers.sol"));
+            if (vm.exists(frozenPath)) {
+                require(
+                    keccak256(bytes(vm.readFile(frozenPath))) == keccak256(bytes(content)),
+                    "BuildPointers: frozen snapshot would change; bump [package].version for a new release"
+                );
+            }
+            vm.writeFile(frozenPath, content);
         }
     }
 
