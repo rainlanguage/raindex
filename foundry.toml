@@ -37,6 +37,8 @@ fs_permissions = [
   { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta" },
   { access = "read-write", path = "src/generated" },
   { access = "read", path = "./subgraph" },
+  # BuildPointers reads `[package].version` to name the frozen per-release snapshot dir.
+  { access = "read", path = "foundry.toml" },
 ]
 
 remappings = [
