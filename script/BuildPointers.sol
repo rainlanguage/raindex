@@ -146,6 +146,43 @@ contract BuildPointers is Script {
         );
     }
 
+    /// @notice The canonical release tag: `foundry.toml` `[package].version` with
+    /// dots converted to underscores (`0.1.13` -> `0_1_13`) for the Solidity dir
+    /// form — the single source of truth for the frozen-snapshot dir name.
+    function deployTag() internal view returns (string memory) {
+        string memory version = vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version");
+        bytes memory b = bytes(version);
+        bytes memory out = new bytes(b.length);
+        for (uint256 i = 0; i < b.length; i++) {
+            out[i] = b[i] == "." ? bytes1("_") : b[i];
+        }
+        return string(out);
+    }
+
+    /// @notice Freeze the just-generated flat pointers into a per-release snapshot
+    /// dir `src/generated/<tag>/` so each published tag keeps its own immutable
+    /// deploy pins (`LibRaindexDeployTaggedConstants.t.sol` reads these). Historical
+    /// tags are never regenerated; a release bump writes a new `<tag>/` snapshot
+    /// beside them. The flat `src/generated/*.pointers.sol` stay the current-release
+    /// source consumed across the codebase.
+    function freezeSnapshot() internal {
+        string memory tag = deployTag();
+        vm.createDir(string.concat("src/generated/", tag), true);
+        string[6] memory names;
+        names[0] = "RaindexV6";
+        names[1] = "RaindexV6SubParser";
+        names[2] = "RouteProcessor4";
+        names[3] = "GenericPoolRaindexV6ArbOrderTaker";
+        names[4] = "RouteProcessorRaindexV6ArbOrderTaker";
+        names[5] = "GenericPoolRaindexV6FlashBorrower";
+        for (uint256 i = 0; i < names.length; i++) {
+            vm.writeFile(
+                string.concat("src/generated/", tag, "/", names[i], ".pointers.sol"),
+                vm.readFile(string.concat("src/generated/", names[i], ".pointers.sol"))
+            );
+        }
+    }
+
     function run() external {
         LibRainDeploy.etchZoltuFactory(vm);
 
@@ -155,5 +192,7 @@ contract BuildPointers is Script {
         buildGenericPoolArbOrderTakerPointers();
         buildRouteProcessorArbOrderTakerPointers();
         buildGenericPoolFlashBorrowerPointers();
+
+        freezeSnapshot();
     }
 }
