@@ -41,8 +41,8 @@ address + codehash. Do the whole cascade without asking:
 
 1. **Regenerate artifacts** — the canonical `rainix-copy-artifacts` sequence, in
    `nix develop github:rainlanguage/rainix#sol-shell`: `forge soldeer install` →
-   `script/build-meta.sh` → `forge script script/BuildPointers.sol` →
-   `forge build` → `forge script script/CopyArtifacts.sol --ffi` (if present) →
+   `script/build-meta.sh` → `forge script script/Build.sol` → `forge build` →
+   `forge script script/CopyArtifacts.sol --ffi` (if present) →
    `./script/build.sh` → `forge fmt`. Stage **all** changed artifacts (pointers,
    `crates/*/abis`, subgraph, meta) or `copy-artifacts` drifts red.
 2. **Deploy each changed suite**:
