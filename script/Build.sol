@@ -15,7 +15,7 @@ import {GenericPoolRaindexV6ArbOrderTaker} from "../src/concrete/arb/GenericPool
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 
-contract BuildPointers is Script {
+contract Build is Script {
     function addressConstantString(address addr) internal pure returns (string memory) {
         return string.concat(
             "\n",
@@ -186,7 +186,7 @@ contract BuildPointers is Script {
             if (vm.exists(frozenPath)) {
                 require(
                     keccak256(bytes(vm.readFile(frozenPath))) == keccak256(bytes(content)),
-                    "BuildPointers: frozen snapshot would change; bump [package].version for a new release"
+                    "Build: frozen snapshot would change; bump [package].version for a new release"
                 );
             }
             vm.writeFile(frozenPath, content);
