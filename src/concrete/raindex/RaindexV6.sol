@@ -376,14 +376,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 emit MetaV1_2(order.owner, orderHash, orderConfig.meta);
             }
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(
-                        orderHash, bytes32(uint256(uint160(msg.sender))), bytes32(uint256(uint160(address(0))))
-                    )
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
 
         return stateChange;
@@ -404,22 +397,20 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             sOrders[orderHash] = ORDER_DEAD;
             emit RemoveOrderV3(msg.sender, orderHash, order);
 
-            LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
-                    LibBytes32Array.arrayFrom(
-                        orderHash, bytes32(uint256(uint160(msg.sender))), bytes32(uint256(uint160(address(0))))
-                    )
-                ),
-                post
-            );
+            _doOrderPost(orderHash, post);
         }
     }
 
     /// @dev Runs the post tasks for an order mutation (`addOrder4` / `removeOrder3`)
-    /// with a context of the order hash and the caller.
+    /// with a context of the order hash, the caller, and the counterparty. Order
+    /// mutations have no counterparty so it is always the zero address.
     function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
         LibRaindex.doPost(
-            LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
+            LibBytes32Matrix.matrixFrom(
+                LibBytes32Array.arrayFrom(
+                    orderHash, bytes32(uint256(uint160(msg.sender))), bytes32(uint256(uint160(address(0))))
+                )
+            ),
             post
         );
     }

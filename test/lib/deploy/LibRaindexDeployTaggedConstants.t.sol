@@ -284,6 +284,34 @@ import {
     BYTECODE_HASH as GENERIC_POOL_FB_HASH_0_1_13,
     RUNTIME_CODE as GENERIC_POOL_FB_RUNTIME_0_1_13
 } from "../../../src/generated/0_1_13/GenericPoolRaindexV6FlashBorrower.pointers.sol";
+import {
+    BYTECODE_HASH as RAINDEX_HASH_0_1_14,
+    RUNTIME_CODE as RAINDEX_RUNTIME_0_1_14,
+    DEPLOYED_ADDRESS as RAINDEX_ADDR_0_1_14,
+    CREATION_CODE as RAINDEX_CREATION_0_1_14
+} from "../../../src/generated/0_1_14/RaindexV6.pointers.sol";
+import {
+    BYTECODE_HASH as SUB_PARSER_HASH_0_1_14,
+    RUNTIME_CODE as SUB_PARSER_RUNTIME_0_1_14,
+    DEPLOYED_ADDRESS as SUB_PARSER_ADDR_0_1_14,
+    CREATION_CODE as SUB_PARSER_CREATION_0_1_14
+} from "../../../src/generated/0_1_14/RaindexV6SubParser.pointers.sol";
+import {
+    BYTECODE_HASH as ROUTE_PROCESSOR_HASH_0_1_14,
+    RUNTIME_CODE as ROUTE_PROCESSOR_RUNTIME_0_1_14
+} from "../../../src/generated/0_1_14/RouteProcessor4.pointers.sol";
+import {
+    BYTECODE_HASH as GENERIC_POOL_ARB_HASH_0_1_14,
+    RUNTIME_CODE as GENERIC_POOL_ARB_RUNTIME_0_1_14
+} from "../../../src/generated/0_1_14/GenericPoolRaindexV6ArbOrderTaker.pointers.sol";
+import {
+    BYTECODE_HASH as RP_ARB_HASH_0_1_14,
+    RUNTIME_CODE as RP_ARB_RUNTIME_0_1_14
+} from "../../../src/generated/0_1_14/RouteProcessorRaindexV6ArbOrderTaker.pointers.sol";
+import {
+    BYTECODE_HASH as GENERIC_POOL_FB_HASH_0_1_14,
+    RUNTIME_CODE as GENERIC_POOL_FB_RUNTIME_0_1_14
+} from "../../../src/generated/0_1_14/GenericPoolRaindexV6FlashBorrower.pointers.sol";
 
 /// @title LibRaindexDeployTaggedConstantsTest
 /// @notice Each frozen per-tag pointer snapshot under `src/generated/<tag>/`
@@ -772,5 +800,53 @@ contract LibRaindexDeployTaggedConstantsTest is Test {
     /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for GenericPoolRaindexV6FlashBorrower 0.1.13 - the pin is internally consistent.
     function testGenericPoolRaindexV6FlashBorrower_0_1_13_RuntimeHashesToBytecodeHash() external pure {
         assertEq(keccak256(GENERIC_POOL_FB_RUNTIME_0_1_13), GENERIC_POOL_FB_HASH_0_1_13);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for RaindexV6 0.1.14 - the pin is internally consistent.
+    function testRaindexV6_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(RAINDEX_RUNTIME_0_1_14), RAINDEX_HASH_0_1_14);
+    }
+
+    /// Zoltu-deploying the frozen CREATION_CODE for RaindexV6 0.1.14 reproduces its recorded address + codehash.
+    function testRaindexV6_0_1_14_CreationDeploysToPinnedAddress() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        address deployed = LibRainDeploy.deployZoltu(RAINDEX_CREATION_0_1_14);
+        assertEq(deployed, RAINDEX_ADDR_0_1_14);
+        assertEq(deployed.codehash, RAINDEX_HASH_0_1_14);
+        assertEq(keccak256(deployed.code), RAINDEX_HASH_0_1_14);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for RaindexV6SubParser 0.1.14 - the pin is internally consistent.
+    function testRaindexV6SubParser_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(SUB_PARSER_RUNTIME_0_1_14), SUB_PARSER_HASH_0_1_14);
+    }
+
+    /// Zoltu-deploying the frozen CREATION_CODE for RaindexV6SubParser 0.1.14 reproduces its recorded address + codehash.
+    function testRaindexV6SubParser_0_1_14_CreationDeploysToPinnedAddress() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        address deployed = LibRainDeploy.deployZoltu(SUB_PARSER_CREATION_0_1_14);
+        assertEq(deployed, SUB_PARSER_ADDR_0_1_14);
+        assertEq(deployed.codehash, SUB_PARSER_HASH_0_1_14);
+        assertEq(keccak256(deployed.code), SUB_PARSER_HASH_0_1_14);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for RouteProcessor4 0.1.14 - the pin is internally consistent.
+    function testRouteProcessor4_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(ROUTE_PROCESSOR_RUNTIME_0_1_14), ROUTE_PROCESSOR_HASH_0_1_14);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for GenericPoolRaindexV6ArbOrderTaker 0.1.14 - the pin is internally consistent.
+    function testGenericPoolRaindexV6ArbOrderTaker_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(GENERIC_POOL_ARB_RUNTIME_0_1_14), GENERIC_POOL_ARB_HASH_0_1_14);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for RouteProcessorRaindexV6ArbOrderTaker 0.1.14 - the pin is internally consistent.
+    function testRouteProcessorRaindexV6ArbOrderTaker_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(RP_ARB_RUNTIME_0_1_14), RP_ARB_HASH_0_1_14);
+    }
+
+    /// keccak256(RUNTIME_CODE) == BYTECODE_HASH for GenericPoolRaindexV6FlashBorrower 0.1.14 - the pin is internally consistent.
+    function testGenericPoolRaindexV6FlashBorrower_0_1_14_RuntimeHashesToBytecodeHash() external pure {
+        assertEq(keccak256(GENERIC_POOL_FB_RUNTIME_0_1_14), GENERIC_POOL_FB_HASH_0_1_14);
     }
 }
