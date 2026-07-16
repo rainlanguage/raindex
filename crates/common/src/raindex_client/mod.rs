@@ -133,6 +133,11 @@ impl RaindexClient {
     ///   localDb,
     ///   statusCallback: updateStatus,
     /// });
+    ///
+    /// // Ignore local-db-sync and use subgraphs only
+    /// const result = await RaindexClient.new([yamlConfig], undefined, {
+    ///   disableLocalDb: true,
+    /// });
     /// ```
     #[wasm_export(
         js_name = "new",
@@ -150,7 +155,7 @@ impl RaindexClient {
         validate: Option<bool>,
         #[wasm_export(
             js_name = "options",
-            param_description = "Optional setup object with localDb and statusCallback"
+            param_description = "Optional setup object with localDb, statusCallback, and disableLocalDb"
         )]
         options: Option<JsValue>,
     ) -> Result<RaindexClient, RaindexError> {
@@ -164,7 +169,10 @@ impl RaindexClient {
         )?;
         raindex_yaml.fetch_remote_data().await?;
 
-        let sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
+        let mut sync_configured_chains = LocalDbState::compute_chain_ids(&raindex_yaml);
+        if options.disable_local_db {
+            sync_configured_chains.clear();
+        }
         let sync_readiness = SyncReadiness::new();
         let sync_status_store = LocalDbSyncStatusStore::new();
         let has_syncs = !sync_configured_chains.is_empty();
@@ -233,6 +241,7 @@ impl RaindexClient {
 pub struct LocalDbClientOptions {
     pub local_db: Option<JsValue>,
     pub status_callback: Option<js_sys::Function>,
+    pub disable_local_db: bool,
 }
 
 #[cfg(target_family = "wasm")]
@@ -244,10 +253,12 @@ impl LocalDbClientOptions {
 
         let local_db = optional_field(&options, "localDb")?;
         let status_callback = optional_function_field(&options, "statusCallback")?;
+        let disable_local_db = optional_bool_field(&options, "disableLocalDb")?.unwrap_or(false);
 
         Ok(Self {
             local_db,
             status_callback,
+            disable_local_db,
         })
     }
 }
@@ -272,6 +283,19 @@ fn optional_function_field(
             value.dyn_into::<js_sys::Function>().map_err(|_| {
                 RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
                     "options.{name} must be a function"
+                )))
+            })
+        })
+        .transpose()
+}
+
+#[cfg(target_family = "wasm")]
+fn optional_bool_field(options: &JsValue, name: &str) -> Result<Option<bool>, RaindexError> {
+    optional_field(options, name)?
+        .map(|value| {
+            value.as_bool().ok_or_else(|| {
+                RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
+                    "options.{name} must be a boolean"
                 )))
             })
         })
@@ -1443,6 +1467,17 @@ raindexes:
             options.into()
         }
 
+        fn disable_local_db_options() -> JsValue {
+            let options = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &options,
+                &JsValue::from_str("disableLocalDb"),
+                &JsValue::TRUE,
+            )
+            .unwrap();
+            options.into()
+        }
+
         #[wasm_bindgen_test]
         async fn test_raindex_client_new_success() {
             let client = RaindexClient::new(
@@ -1493,6 +1528,35 @@ raindexes:
             .unwrap();
 
             assert!(client.local_db_state.local_db().is_some());
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_raindex_client_new_can_disable_yaml_local_db_sync() {
+            let client = RaindexClient::new(
+                vec![local_db_sync_yaml()],
+                None,
+                Some(disable_local_db_options()),
+            )
+            .await
+            .unwrap();
+
+            assert!(client.local_db_state.local_db().is_none());
+            assert!(client.local_db_state.sync_configured_chains.is_empty());
+
+            let snapshot = client.get_local_db_sync_snapshot().await.unwrap();
+            assert!(!snapshot.configured);
+        }
+
+        #[wasm_bindgen_test]
+        async fn test_raindex_client_new_requires_local_db_without_opt_out() {
+            let err = RaindexClient::new(vec![local_db_sync_yaml()], None, None)
+                .await
+                .unwrap_err();
+
+            assert!(matches!(err, RaindexError::LocalDbSetupMissing(_)));
+            assert!(err
+                .to_readable_msg()
+                .contains("no options.localDb was provided"));
         }
 
         #[wasm_bindgen_test]

@@ -245,6 +245,16 @@ const clientResult = await RaindexClient.new([RAINDEX_SETTINGS], undefined, {
 The client will automatically start the sync scheduler and route queries to the
 local DB for configured chains once the first sync cycle completes.
 
+To consume the same canonical YAML without setting up a local database, opt out
+explicitly. The client leaves the YAML unchanged and routes queries through the
+configured subgraphs:
+
+```ts
+const clientResult = await RaindexClient.new([RAINDEX_SETTINGS], undefined, {
+  disableLocalDb: true,
+});
+```
+
 ### 2. Query orders with filters & pagination
 
 Here we scope the query by chain IDs and typical filters (owner, token, activity
@@ -646,6 +656,15 @@ const client = clientResult.value;
 const ordersResult = await client.getOrders([8453]);
 ```
 
+If the registry settings include `local-db-sync` but this consumer does not use
+a local database, pass the same opt-out to the registry helper:
+
+```ts
+const clientResult = await registry.getRaindexClient({
+  disableLocalDb: true,
+});
+```
+
 ### Build a deployment order builder
 
 Any dotrain file that includes a `builder:` block plus the usual settings YAML
@@ -882,7 +901,8 @@ if (!postTaskResult.error) console.log(postTaskResult.value);
 - Local DB sync – pass `{ localDb, statusCallback }` to `RaindexClient.new()`
   when YAML has `local-db-sync` sections to enable an offline-capable persistent
   cache. The scheduler starts automatically and queries route to the local DB
-  once the first sync cycle completes.
+  once the first sync cycle completes. Pass `{ disableLocalDb: true }` to keep
+  the same YAML but use subgraphs only.
 - `RaindexVaultsList.getWithdrawCalldata()` – multicall builder that withdraws
   every vault with a balance.
 - `RaindexOrder.convertToSgOrder()` – convert WASM order representations back

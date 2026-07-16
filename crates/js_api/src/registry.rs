@@ -395,6 +395,11 @@ impl DotrainRegistry {
     ///   localDb,
     ///   statusCallback: updateStatus,
     /// });
+    ///
+    /// // Keep the registry YAML unchanged but use subgraphs instead of local DB
+    /// const clientResult = await registry.getRaindexClient({
+    ///   disableLocalDb: true,
+    /// });
     /// if (clientResult.error) {
     ///   console.error("Failed to get RaindexClient:", clientResult.error.readableMsg);
     ///   return;
@@ -411,7 +416,7 @@ impl DotrainRegistry {
         &self,
         #[wasm_export(
             js_name = "options",
-            param_description = "Optional setup object with localDb and statusCallback"
+            param_description = "Optional setup object with localDb, statusCallback, and disableLocalDb"
         )]
         options: Option<JsValue>,
     ) -> Result<raindex_common::raindex_client::RaindexClient, DotrainRegistryError> {

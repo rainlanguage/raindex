@@ -626,5 +626,54 @@ test-order http://localhost:8231/order.rain`;
 
       assert.ok(raindexClient, "RaindexClient instance should be returned");
     });
+
+    it("should allow opting out of local DB configured by registry settings", async () => {
+      const registryContent = `http://localhost:8231/settings.yaml
+test-order http://localhost:8231/order.rain`;
+      const settingsWithLocalDbSync = `${MOCK_SETTINGS_CONTENT}
+local-db-remotes:
+  remote: https://example.com/local-db/manifest
+local-db-sync:
+  flare:
+    batch-size: 10
+    max-concurrent-batches: 2
+    retry-attempts: 1
+    retry-delay-ms: 1
+    rate-limit-delay-ms: 1
+    finality-depth: 12
+    bootstrap-block-threshold: 100
+    sync-interval-ms: 5000
+`;
+
+      await mockServer.forGet("/registry.txt").thenReply(200, registryContent);
+      await mockServer
+        .forGet("/settings.yaml")
+        .thenReply(200, settingsWithLocalDbSync);
+      await mockServer
+        .forGet("/order.rain")
+        .thenReply(200, MOCK_DOTRAIN_SIMPLE);
+
+      const registry = extractWasmEncodedData(
+        await DotrainRegistry.new("http://localhost:8231/registry.txt"),
+      );
+
+      const localDbRequiredResult = await registry.getRaindexClient();
+      assert.ok(localDbRequiredResult.error);
+      assert.ok(
+        localDbRequiredResult.error.readableMsg.includes(
+          "no options.localDb was provided",
+        ),
+      );
+
+      const raindexClient = extractWasmEncodedData(
+        await registry.getRaindexClient({ disableLocalDb: true }),
+      );
+      const snapshot = extractWasmEncodedData(
+        await raindexClient.getLocalDbSyncSnapshot(),
+      );
+
+      assert.ok(raindexClient, "RaindexClient instance should be returned");
+      assert.strictEqual(snapshot.configured, false);
+    });
   });
 });

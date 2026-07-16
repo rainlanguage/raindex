@@ -114,9 +114,10 @@ items:
   - `RaindexClient` — raindex queries (orders, trades, vaults, quotes,
     transactions) across configured networks/subgraphs. Constructor is async
     (`await RaindexClient.new(...)`) and accepts an optional
-    `{ localDb, statusCallback }` object for local DB sync when the YAML has
-    `local-db-sync` sections. The sync scheduler starts automatically when
-    configured and shuts down via Drop.
+    `{ localDb, statusCallback, disableLocalDb }` object. Local DB sync starts
+    automatically when the YAML has `local-db-sync` sections, unless the caller
+    explicitly sets `disableLocalDb: true` to use subgraphs without changing the
+    YAML. The sync scheduler shuts down via Drop.
   - `RaindexOrder`, `RaindexVault`, `RaindexTrade`, `RaindexTransaction`,
     `RaindexVaultsList`, etc.
   - `DotrainOrder`, `RaindexOrderBuilder`, `DotrainRegistry` — dotrain parsing,
