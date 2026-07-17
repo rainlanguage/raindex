@@ -1,12 +1,9 @@
 name: NPM Packages Release
-on:
-  push:
-    branches:
-      - main
+on: [push]
 jobs:
   release:
     # skip this job if the commit was created by this workflow (prevents infinite loop)
-    if: ${{ github.ref == 'refs/heads/main' && !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'NPM Package Release') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -275,11 +272,3 @@ jobs:
             ui_components_npm_package_${{ env.UC_NEW_VERSION }}.tgz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # forwards status to telegram chat if this ci fails or gets canceled, only runs for default branch
-      - name: Forward CI Status
-        if: always()
-        uses: rainlanguage/github-chore/.github/actions/telegram-status-report@main
-        with:
-          status: ${{ job.status }}
-          telegram-bot-token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          telegram-chat-id: ${{ secrets.TELEGRAM_CHAT_ID }}
