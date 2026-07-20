@@ -1421,19 +1421,22 @@ ${dotrain}`;
     });
 
     it("generates approval calldatas", async () => {
-      // Decimals come from the deposits map, so the only RPC per token is the
-      // allowance read: one mocked response per deposited token.
-      // token1 allowance - 1000 * 10^18
+      // Decimals come from the deposits map (token1: 6, token2: 18 per the
+      // yaml records), so the only RPC per token is the allowance read. Each
+      // mock is pinned to its token address since map order is unspecified.
+      // token1 allowance - 1000 * 10^6: equals the deposit, no approval.
       await mockServer
         .forPost("/rpc-url")
         .once()
+        .withBodyIncluding("0xc2132d05d31c914a87c6611c10748aeb04b58e8f")
         .thenSendJsonRpcResult(
-          "0x00000000000000000000000000000000000000000000003635C9ADC5DEA00000",
+          "0x000000000000000000000000000000000000000000000000000000003b9aca00",
         );
-      // token2 allowance - 1000 * 10^18
+      // token2 allowance - 1000 * 10^18: deposit is 5000, approval needed.
       await mockServer
         .forPost("/rpc-url")
         .once()
+        .withBodyIncluding("0x8f3cf7ad23cd3cadbd9735aff958023239c6a063")
         .thenSendJsonRpcResult(
           "0x00000000000000000000000000000000000000000000003635C9ADC5DEA00000",
         );
