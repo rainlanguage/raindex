@@ -18,7 +18,9 @@ function makeStub(name: string): any {
 			if (prop === Symbol.toPrimitive || prop === 'toString' || prop === 'valueOf') {
 				return () => `[raindex-stub ${name}]`;
 			}
-			if (prop === Symbol.iterator) return undefined;
+			// `then`/`Symbol.iterator` return undefined so a stub is never mistaken
+			// for a thenable (would hang `await`/`Promise.resolve`) or an iterable.
+			if (prop === Symbol.iterator || prop === 'then') return undefined;
 			if (prop in target) return (target as any)[prop];
 			return makeStub(`${name}.${String(prop)}`);
 		},

@@ -97,7 +97,7 @@ erased and need nothing). Add new `$app/*` or third-party stubs the same way.
 
 ## Layout
 
-```
+```text
 harness/
   index.html        vite entry, #app mount point
   main.ts           reads ?scene=<name>, mounts the scene
@@ -124,7 +124,7 @@ directly.
 
 ## Notes
 
-- `screenshot.sh` uses `--headless=old --virtual-time-budget` so the component's
+- `screenshot.sh` uses `--headless=new --virtual-time-budget` so the component's
   `onMount` work and Svelte transitions settle before capture, and
   `--force-device-scale-factor=2` for crisp text.
 - The driver writes a minimal `.svelte-kit/tsconfig.json` if one is absent, so

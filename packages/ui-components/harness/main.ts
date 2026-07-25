@@ -23,11 +23,14 @@ if (!target) {
 }
 
 if (!Component) {
-	target.innerHTML =
-		`<pre style="color:#b91c1c;padding:1rem;font:14px monospace">` +
+	// Build the diagnostic with DOM APIs and textContent so the query-derived
+	// `name` is never interpolated into markup (no innerHTML sink).
+	const error = document.createElement('pre');
+	error.style.cssText = 'color:#b91c1c;padding:1rem;font:14px monospace';
+	error.textContent =
 		`Unknown scene: ${name}\n\nAvailable scenes:\n  ` +
-		Object.keys(scenes).join('\n  ') +
-		`</pre>`;
+		Object.keys(scenes).join('\n  ');
+	target.replaceChildren(error);
 	// Mark ready so the screenshot script fails fast with a visible error frame
 	// instead of hanging on a wait selector that will never appear.
 	document.body.setAttribute('data-harness-error', name ?? '');

@@ -161,7 +161,7 @@ async function main() {
   await mkdir(path.dirname(outAbs), { recursive: true });
 
   const args = [
-    "--headless=old",
+    "--headless=new",
     "--disable-gpu",
     "--no-sandbox",
     "--hide-scrollbars",
