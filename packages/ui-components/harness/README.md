@@ -63,10 +63,10 @@ in `scenes/` and are registered by a short, url-safe key in `scenes/index.ts`.
 2. Register it in `scenes/index.ts`:
 
    ```ts
-   import MyScene from './MyScene.svelte';
+   import MyScene from "./MyScene.svelte";
    export const scenes = {
-     'toast-error-decoded': ToastErrorDecoded,
-     'my-scene': MyScene
+     "toast-error-decoded": ToastErrorDecoded,
+     "my-scene": MyScene,
    };
    ```
 
@@ -83,13 +83,13 @@ Rendering an unknown scene prints the list of registered scenes.
 `vite.config.ts` uses an alias **array** (order matters — specific stubs before
 the `$lib` prefix):
 
-| import                    | replaced with                        | why                                                    |
-| ------------------------- | ------------------------------------ | ------------------------------------------------------ |
-| `$app/stores`             | `stubs/app-stores.ts`                | SvelteKit page/navigating/updated stores (no router)   |
-| `$app/navigation`         | `stubs/app-navigation.ts`            | `goto`/`invalidate` no-ops                             |
-| `$app/environment`        | `stubs/app-environment.ts`           | `browser = true`                                       |
-| `@rainlanguage/raindex`   | `stubs/raindex.ts`                   | inert no-op for the wasm bindings (no wasm init)        |
-| `$lib`                    | `../src/lib`                         | the real component source                              |
+| import                  | replaced with              | why                                                  |
+| ----------------------- | -------------------------- | ---------------------------------------------------- |
+| `$app/stores`           | `stubs/app-stores.ts`      | SvelteKit page/navigating/updated stores (no router) |
+| `$app/navigation`       | `stubs/app-navigation.ts`  | `goto`/`invalidate` no-ops                           |
+| `$app/environment`      | `stubs/app-environment.ts` | `browser = true`                                     |
+| `@rainlanguage/raindex` | `stubs/raindex.ts`         | inert no-op for the wasm bindings (no wasm init)     |
+| `$lib`                  | `../src/lib`               | the real component source                            |
 
 When a new scene imports a runtime value from `@rainlanguage/raindex` that isn't
 already exported by `stubs/raindex.ts`, add it there (type-only imports are
@@ -115,11 +115,12 @@ harness/
 
 The same `harness/` pattern ports to `packages/webapp`: copy this directory to
 `packages/webapp/harness`, point the `$lib` alias at `webapp/src/lib`, and
-alias-stub webapp's own stores (`$lib/stores/wagmi`, `$lib/stores/localDbStatus`,
-...) the same way `stubs/` does here. That is what the webapp-only
-close-candidate components need — e.g. `DepositModal` (#550), `WithdrawModal`
-(#570), `Sidebar`. Components that live in `ui-components` (e.g. `OrderDetail`
-for the order-page IO ratio, #588) are added as scenes here directly.
+alias-stub webapp's own stores (`$lib/stores/wagmi`,
+`$lib/stores/localDbStatus`, ...) the same way `stubs/` does here. That is what
+the webapp-only close-candidate components need — e.g. `DepositModal` (#550),
+`WithdrawModal` (#570), `Sidebar`. Components that live in `ui-components` (e.g.
+`OrderDetail` for the order-page IO ratio, #588) are added as scenes here
+directly.
 
 ## Notes
 
