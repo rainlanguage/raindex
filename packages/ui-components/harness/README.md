@@ -101,6 +101,16 @@ harness/
   examples/         reference PNGs produced by the harness
 ```
 
+## Other packages (webapp)
+
+The same `harness/` pattern ports to `packages/webapp`: copy this directory to
+`packages/webapp/harness`, point the `$lib` alias at `webapp/src/lib`, and
+alias-stub webapp's own stores (`$lib/stores/wagmi`, `$lib/stores/localDbStatus`,
+...) the same way `stubs/` does here. That is what the webapp-only
+close-candidate components need — e.g. `DepositModal` (#550), `WithdrawModal`
+(#570), `Sidebar`. Components that live in `ui-components` (e.g. `OrderDetail`
+for the order-page IO ratio, #588) are added as scenes here directly.
+
 ## Notes
 
 - `screenshot.sh` uses `--headless=old --virtual-time-budget` so the component's
