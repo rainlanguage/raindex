@@ -22,12 +22,28 @@ HEIGHT="${4:-360}"
 HARNESS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HARNESS_DIR/../../.." && pwd)"
 
-echo "[harness] resolving chromium + fonts via nix..."
-CHROMIUM_OUT="$(nix build --no-link --print-out-paths "nixpkgs#chromium")"
-DEJAVU_OUT="$(nix build --no-link --print-out-paths "nixpkgs#dejavu_fonts")"
+# Chromium: prefer an explicit override, then a binary already on PATH, then
+# nix-provision one. `nixpkgs#chromium` on a cold machine is a large first-time
+# download; a pre-set $CHROMIUM or a system chromium avoids it.
+if [ -z "${CHROMIUM:-}" ]; then
+	if command -v chromium >/dev/null 2>&1; then
+		CHROMIUM="$(command -v chromium)"
+	elif command -v chromium-browser >/dev/null 2>&1; then
+		CHROMIUM="$(command -v chromium-browser)"
+	elif command -v google-chrome-stable >/dev/null 2>&1; then
+		CHROMIUM="$(command -v google-chrome-stable)"
+	else
+		echo "[harness] resolving chromium via nix (first run downloads it)..."
+		CHROMIUM="$(nix build --no-link --print-out-paths "nixpkgs#chromium")/bin/chromium"
+	fi
+fi
+export CHROMIUM
 
-export CHROMIUM="$CHROMIUM_OUT/bin/chromium"
-export HARNESS_FONT_DIR="$DEJAVU_OUT/share/fonts/truetype"
+# DejaVu fonts so text renders in headless Chromium (this closure is small).
+if [ -z "${HARNESS_FONT_DIR:-}" ]; then
+	HARNESS_FONT_DIR="$(nix build --no-link --print-out-paths "nixpkgs#dejavu_fonts")/share/fonts/truetype"
+fi
+export HARNESS_FONT_DIR
 
 # Node/npm come from the repo's webapp devShell (nodejs_20). Run the driver
 # there so `vite` resolves from the repo-root node_modules.

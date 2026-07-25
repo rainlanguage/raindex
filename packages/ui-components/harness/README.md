@@ -30,6 +30,16 @@ Prerequisite: dependencies installed for `ui-components`
 (`cd packages/ui-components && npm i`, exactly what the CI `ui-components` task
 does). `node_modules` is hoisted to the repo root.
 
+`screenshot.sh` prefers a chromium already on `$PATH` or one named in
+`$CHROMIUM`, and only falls back to `nix build nixpkgs#chromium` (a large
+first-run download) when neither is present. Point it at an existing browser to
+skip that:
+
+```sh
+CHROMIUM=/path/to/chromium \
+packages/ui-components/harness/screenshot.sh toast-error-decoded /tmp/toast.png
+```
+
 ## Rendering an arbitrary component (add a scene)
 
 A **scene** is a small Svelte component that composes a real component from
