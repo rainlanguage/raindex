@@ -1,6 +1,6 @@
 use alloy::primitives::{Address, Bytes, FixedBytes, U256};
 use alloy::sol_types::SolValue;
-use futures::{stream, StreamExt};
+use futures::{stream::FuturesUnordered, StreamExt};
 use once_cell::sync::{Lazy, OnceCell};
 use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
@@ -107,26 +107,23 @@ impl From<OracleResponse> for SignedContextV1 {
 pub(crate) struct OracleClient {
     client: Client,
     request_semaphores: Arc<OracleRequestSemaphores>,
-    // Consumed by the concurrent quote sweep in the immediately upstack PR.
-    #[allow(dead_code)]
     concurrency_limit: NonZeroUsize,
 }
 
-/// One independent oracle POST prepared for bounded execution.
-// Consumed by the concurrent quote sweep in the immediately upstack PR.
-#[allow(dead_code)]
-pub(crate) struct OracleRequest {
-    url: Url,
+/// One batch oracle POST prepared for bounded execution.
+pub(crate) struct OracleBatchRequest {
+    url: String,
     body: Vec<u8>,
+    expected_count: usize,
 }
 
-#[allow(dead_code)]
-impl OracleRequest {
-    pub(crate) fn new(url: String, body: Vec<u8>) -> Result<Self, OracleError> {
-        Ok(Self {
-            url: validate_oracle_url(&url)?,
+impl OracleBatchRequest {
+    pub(crate) fn new(url: String, body: Vec<u8>, expected_count: usize) -> Self {
+        Self {
+            url,
             body,
-        })
+            expected_count,
+        }
     }
 }
 
@@ -241,21 +238,23 @@ impl OracleClient {
         Ok(response.into())
     }
 
-    /// Fetch signed contexts for several independent pair requests.
+    /// Fetch signed contexts from several independent batch endpoints.
     ///
-    /// Results remain aligned with `requests`; a failed request is returned in
-    /// only its own slot. Requests run through the caller and per-origin
-    /// concurrency limits.
-    // Consumed by the concurrent quote sweep in the immediately upstack PR.
-    #[allow(dead_code)]
-    pub(crate) async fn fetch_signed_contexts(
+    /// Each request is one HTTP POST containing all pair requests for its exact
+    /// endpoint URL. Different endpoint batches execute concurrently through
+    /// the caller and per-origin limits, while results remain aligned with the
+    /// input batch order.
+    pub(crate) async fn fetch_signed_context_batches(
         &self,
-        requests: Vec<OracleRequest>,
-    ) -> Vec<Result<SignedContextV1, OracleError>> {
-        let requests = requests.into_iter().map(|request| async move {
-            self.fetch_signed_context_at(&request.url, request.body)
-                .await
-        });
+        requests: Vec<OracleBatchRequest>,
+    ) -> Vec<Result<Vec<SignedContextV1>, OracleError>> {
+        let requests = requests
+            .into_iter()
+            .map(|request| async move {
+                self.fetch_signed_context_batch(&request.url, request.body, request.expected_count)
+                    .await
+            })
+            .collect::<Vec<_>>();
 
         collect_bounded(requests, self.concurrency_limit).await
     }
@@ -287,23 +286,33 @@ fn build_http_client() -> Result<Client, reqwest::Error> {
     Client::builder().build()
 }
 
-// Consumed by the concurrent quote sweep in the immediately upstack PR.
-#[allow(dead_code)]
-async fn collect_bounded<F, T>(futures: impl IntoIterator<Item = F>, limit: NonZeroUsize) -> Vec<T>
+async fn collect_bounded<F, T>(futures: Vec<F>, limit: NonZeroUsize) -> Vec<T>
 where
     F: Future<Output = T>,
 {
-    let mut results = stream::iter(
-        futures
-            .into_iter()
-            .enumerate()
-            .map(|(index, future)| async move { (index, future.await) }),
-    )
-    .buffer_unordered(limit.get())
-    .collect::<Vec<_>>()
-    .await;
+    let mut pending = futures.into_iter().enumerate();
+    let mut in_flight = FuturesUnordered::new();
+    for (index, future) in pending.by_ref().take(limit.get()) {
+        in_flight.push(await_indexed(index, future));
+    }
+
+    let mut results = Vec::new();
+    while let Some(result) = in_flight.next().await {
+        results.push(result);
+        if let Some((index, future)) = pending.next() {
+            in_flight.push(await_indexed(index, future));
+        }
+    }
+
     results.sort_unstable_by_key(|(index, _)| *index);
     results.into_iter().map(|(_, result)| result).collect()
+}
+
+async fn await_indexed<F, T>(index: usize, future: F) -> (usize, T)
+where
+    F: Future<Output = T>,
+{
+    (index, future.await)
 }
 
 /// Encode the POST body for a single oracle request.
@@ -502,22 +511,19 @@ mod tests {
         mock.assert_async().await;
     }
 
-    #[test]
-    fn test_oracle_request_validates_url_at_construction() {
-        assert!(OracleRequest::new("not-a-url".to_owned(), vec![]).is_err());
-        assert!(
-            OracleRequest::new("https://oracle.example.com/context".to_owned(), vec![]).is_ok()
-        );
-    }
-
     #[cfg(not(target_family = "wasm"))]
     #[tokio::test]
-    async fn test_fetch_signed_contexts_preserves_request_positions_and_failures() {
+    async fn test_fetch_signed_context_batches_preserves_batch_positions_and_failures() {
         let server = MockServer::start_async().await;
         let first_response = OracleResponse {
             signer: address!("0x1111111111111111111111111111111111111111"),
             context: vec![FixedBytes::with_last_byte(1)],
             signature: vec![0xaa].into(),
+        };
+        let second_response = OracleResponse {
+            signer: address!("0x2222222222222222222222222222222222222222"),
+            context: vec![FixedBytes::with_last_byte(2)],
+            signature: vec![0xbb].into(),
         };
         let third_response = OracleResponse {
             signer: address!("0x3333333333333333333333333333333333333333"),
@@ -528,7 +534,7 @@ mod tests {
             .mock_async(|when, then| {
                 when.method(POST).path("/first");
                 then.status(200)
-                    .json_body_obj(&vec![first_response.clone()]);
+                    .json_body_obj(&vec![first_response.clone(), second_response.clone()]);
             })
             .await;
         let failing_mock = server
@@ -544,24 +550,29 @@ mod tests {
                     .json_body_obj(&vec![third_response.clone()]);
             })
             .await;
-        let requests = ["/first", "/failing", "/third"]
-            .into_iter()
-            .map(|path| OracleRequest::new(server.url(path), vec![]).unwrap())
-            .collect();
+        let requests = vec![
+            OracleBatchRequest::new(server.url("/first"), vec![], 2),
+            OracleBatchRequest::new(server.url("/failing"), vec![], 1),
+            OracleBatchRequest::new(server.url("/third"), vec![], 1),
+        ];
 
         let results = OracleClient::new()
             .unwrap()
-            .fetch_signed_contexts(requests)
+            .fetch_signed_context_batches(requests)
             .await;
 
         assert_eq!(results.len(), 3);
         assert_eq!(
-            results[0].as_ref().unwrap().signer,
+            results[0].as_ref().unwrap()[0].signer,
             address!("0x1111111111111111111111111111111111111111")
+        );
+        assert_eq!(
+            results[0].as_ref().unwrap()[1].signer,
+            address!("0x2222222222222222222222222222222222222222")
         );
         assert!(results[1].is_err());
         assert_eq!(
-            results[2].as_ref().unwrap().signer,
+            results[2].as_ref().unwrap()[0].signer,
             address!("0x3333333333333333333333333333333333333333")
         );
         first_mock.assert_async().await;
@@ -628,7 +639,8 @@ mod tests {
             }
         });
 
-        let results = collect_bounded(requests, NonZeroUsize::new(TEST_LIMIT).unwrap()).await;
+        let results =
+            collect_bounded(requests.collect(), NonZeroUsize::new(TEST_LIMIT).unwrap()).await;
 
         assert_eq!(maximum.load(Ordering::SeqCst), TEST_LIMIT);
         assert_eq!(started.load(Ordering::SeqCst), REQUEST_COUNT);
@@ -658,7 +670,7 @@ mod tests {
                 index
             }
         });
-        let results = collect_bounded(requests, NonZeroUsize::new(TEST_LIMIT).unwrap());
+        let results = collect_bounded(requests.collect(), NonZeroUsize::new(TEST_LIMIT).unwrap());
         tokio::pin!(results);
 
         tokio::select! {
@@ -726,7 +738,11 @@ mod tests {
             }
         });
 
-        collect_bounded(requests, NonZeroUsize::new(REQUEST_COUNT).unwrap()).await;
+        collect_bounded(
+            requests.collect(),
+            NonZeroUsize::new(REQUEST_COUNT).unwrap(),
+        )
+        .await;
 
         assert_eq!(
             maximum.load(Ordering::SeqCst),
