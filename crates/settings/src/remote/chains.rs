@@ -72,6 +72,16 @@ impl ChainId {
         if self.rpc.is_empty() {
             return Err(ChainIdError::NoRpc);
         }
+        let block_explorer = self
+            .explorers
+            .as_ref()
+            .and_then(|explorers| {
+                explorers.iter().find(|explorer| {
+                    explorer.standard.eq_ignore_ascii_case("EIP3091")
+                        && matches!(explorer.url.scheme(), "http" | "https")
+                })
+            })
+            .map(|explorer| explorer.url.clone());
         for rpc in &self.rpc {
             if !rpc.path().contains("API_KEY") && !rpc.scheme().starts_with("ws") {
                 return Ok(NetworkCfg {
@@ -82,6 +92,7 @@ impl ChainId {
                     label: Some(self.name),
                     network_id: Some(self.network_id),
                     currency: Some(self.native_currency.symbol),
+                    block_explorer,
                 });
             }
         }

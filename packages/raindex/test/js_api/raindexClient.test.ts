@@ -32,6 +32,7 @@ networks:
         chain-id: 1
         network-id: 1
         currency: ETH
+        block-explorer: https://etherscan.io
     other-network:
         rpcs:
             - http://localhost:8230/rpc2
@@ -2362,7 +2363,12 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       const result = extractWasmEncodedData(raindexClient.getAllNetworks());
       assert.equal(result.size, 2);
       assert.equal(result.get("some-network")?.chainId, 1);
+      assert.equal(
+        result.get("some-network")?.blockExplorer,
+        "https://etherscan.io/",
+      );
       assert.equal(result.get("other-network")?.chainId, 2);
+      assert.equal(result.get("other-network")?.blockExplorer, undefined);
     });
 
     it("should get network by chain id", async () => {

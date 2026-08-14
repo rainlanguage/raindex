@@ -1,19 +1,23 @@
 use super::*;
+use alloy::primitives::Address;
 use rain_metadata::types::dotrain::{
     order_builder_state_v1::{OrderBuilderStateV1, ShortenedTokenCfg, ValueCfg},
     source_v1::DotrainSourceV1,
 };
 use raindex_app_settings::{
+    network::NetworkCfg,
     order::{OrderIOCfg, VaultType},
     order_builder::OrderBuilderDepositCfg,
     token::TokenCfg,
 };
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
 use strict_yaml_rust::StrictYaml;
+use url::Url;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -29,10 +33,92 @@ pub struct AllBuilderConfig {
 struct SerializedBuilderState {
     field_values: BTreeMap<String, OrderBuilderPresetCfg>,
     deposits: BTreeMap<String, OrderBuilderPresetCfg>,
-    select_tokens: BTreeMap<String, TokenCfg>,
+    select_tokens: BTreeMap<String, SerializedTokenCfg>,
     vault_ids: BTreeMap<(VaultType, String), Option<String>>,
     dotrain_hash: String,
     selected_deployment: String,
+}
+
+// Keep the legacy bincode shape stable when NetworkCfg gains optional fields.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+struct SerializedNetworkCfg {
+    key: String,
+    rpcs: Vec<Url>,
+    chain_id: u32,
+    label: Option<String>,
+    network_id: Option<u32>,
+    currency: Option<String>,
+}
+
+impl From<&NetworkCfg> for SerializedNetworkCfg {
+    fn from(network: &NetworkCfg) -> Self {
+        Self {
+            key: network.key.clone(),
+            rpcs: network.rpcs.clone(),
+            chain_id: network.chain_id,
+            label: network.label.clone(),
+            network_id: network.network_id,
+            currency: network.currency.clone(),
+        }
+    }
+}
+
+impl From<SerializedNetworkCfg> for NetworkCfg {
+    fn from(network: SerializedNetworkCfg) -> Self {
+        Self {
+            key: network.key,
+            rpcs: network.rpcs,
+            chain_id: network.chain_id,
+            label: network.label,
+            network_id: network.network_id,
+            currency: network.currency,
+            block_explorer: None,
+            ..Default::default()
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+struct SerializedTokenCfg {
+    key: String,
+    network: Arc<SerializedNetworkCfg>,
+    address: Address,
+    decimals: Option<u8>,
+    label: Option<String>,
+    symbol: Option<String>,
+    logo_uri: Option<Url>,
+    extensions: Option<HashMap<String, Value>>,
+}
+
+impl From<TokenCfg> for SerializedTokenCfg {
+    fn from(token: TokenCfg) -> Self {
+        Self {
+            key: token.key,
+            network: Arc::new(SerializedNetworkCfg::from(token.network.as_ref())),
+            address: token.address,
+            decimals: token.decimals,
+            label: token.label,
+            symbol: token.symbol,
+            logo_uri: token.logo_uri,
+            extensions: token.extensions,
+        }
+    }
+}
+
+impl From<SerializedTokenCfg> for TokenCfg {
+    fn from(token: SerializedTokenCfg) -> Self {
+        Self {
+            key: token.key,
+            network: Arc::new(Arc::unwrap_or_clone(token.network).into()),
+            address: token.address,
+            decimals: token.decimals,
+            label: token.label,
+            symbol: token.symbol,
+            logo_uri: token.logo_uri,
+            extensions: token.extensions,
+            ..Default::default()
+        }
+    }
 }
 
 impl RaindexOrderBuilder {
@@ -216,7 +302,7 @@ impl RaindexOrderBuilder {
             deposits.insert(k.clone(), preset);
         }
 
-        let mut select_tokens: BTreeMap<String, TokenCfg> = BTreeMap::new();
+        let mut select_tokens: BTreeMap<String, SerializedTokenCfg> = BTreeMap::new();
         if let Some(st) = OrderBuilderCfg::parse_select_tokens(
             self.dotrain_order.dotrain_yaml().documents.clone(),
             &self.selected_deployment,
@@ -227,7 +313,7 @@ impl RaindexOrderBuilder {
                     .raindex_yaml()
                     .get_token(&select_token.key)
                 {
-                    select_tokens.insert(select_token.key, token);
+                    select_tokens.insert(select_token.key, token.into());
                 }
             }
         }
@@ -314,6 +400,7 @@ impl RaindexOrderBuilder {
             &state.selected_deployment,
         )?;
         for (key, token) in state.select_tokens {
+            let token: TokenCfg = token.into();
             let select_tokens = deployment_select_tokens
                 .as_ref()
                 .ok_or(RaindexOrderBuilderError::SelectTokensNotSet)?;
@@ -629,7 +716,7 @@ mod tests {
         let serialized_state = encode_state(&SerializedBuilderState {
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
-            select_tokens: BTreeMap::from([("token1".to_string(), token)]),
+            select_tokens: BTreeMap::from([("token1".to_string(), token.into())]),
             vault_ids: BTreeMap::new(),
             dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),
@@ -687,7 +774,10 @@ mod tests {
         let serialized_state = encode_state(&SerializedBuilderState {
             field_values: BTreeMap::new(),
             deposits: BTreeMap::new(),
-            select_tokens: BTreeMap::from([("token3".to_string(), replacement_token.clone())]),
+            select_tokens: BTreeMap::from([(
+                "token3".to_string(),
+                replacement_token.clone().into(),
+            )]),
             vault_ids: BTreeMap::new(),
             dotrain_hash: RaindexOrderBuilder::compute_state_hash(&dotrain_order).unwrap(),
             selected_deployment: "select-token-deployment".to_string(),

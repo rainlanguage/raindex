@@ -15,7 +15,14 @@ use url::{ParseError, Url};
 #[cfg(target_family = "wasm")]
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 
-const ALLOWED_NETWORK_KEYS: [&str; 5] = ["rpcs", "chain-id", "label", "network-id", "currency"];
+const ALLOWED_NETWORK_KEYS: [&str; 6] = [
+    "rpcs",
+    "chain-id",
+    "label",
+    "network-id",
+    "currency",
+    "block-explorer",
+];
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
@@ -33,6 +40,8 @@ pub struct NetworkCfg {
     pub network_id: Option<u32>,
     #[cfg_attr(target_family = "wasm", tsify(optional))]
     pub currency: Option<String>,
+    #[cfg_attr(target_family = "wasm", tsify(optional, type = "string"))]
+    pub block_explorer: Option<Url>,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(NetworkCfg);
@@ -47,6 +56,7 @@ impl NetworkCfg {
             label: None,
             network_id: None,
             currency: None,
+            block_explorer: None,
         }
     }
 
@@ -62,6 +72,16 @@ impl NetworkCfg {
         value
             .parse::<u32>()
             .map_err(ParseNetworkConfigSourceError::NetworkIdParseError)
+    }
+    pub fn validate_block_explorer(value: &str) -> Result<Url, ParseNetworkConfigSourceError> {
+        let url =
+            Url::parse(value).map_err(ParseNetworkConfigSourceError::BlockExplorerParseError)?;
+        if !matches!(url.scheme(), "http" | "https") {
+            return Err(ParseNetworkConfigSourceError::BlockExplorerSchemeError(
+                url.scheme().to_string(),
+            ));
+        }
+        Ok(url)
     }
 
     pub fn update_rpcs(&mut self, rpcs: Vec<String>) -> Result<Self, YamlError> {
@@ -218,6 +238,16 @@ impl YamlParsableHash for NetworkCfg {
                         })?;
 
                     let currency = optional_string(network_yaml, "currency");
+                    let block_explorer = if network_yaml["block-explorer"].is_badvalue() {
+                        None
+                    } else {
+                        let value = require_string(
+                            network_yaml,
+                            Some("block-explorer"),
+                            Some(location.clone()),
+                        )?;
+                        Some(NetworkCfg::validate_block_explorer(&value)?)
+                    };
 
                     let network = NetworkCfg {
                         document: document.clone(),
@@ -227,6 +257,7 @@ impl YamlParsableHash for NetworkCfg {
                         label,
                         network_id,
                         currency,
+                        block_explorer,
                     };
 
                     if networks.contains_key(&network_key) {
@@ -323,6 +354,7 @@ impl PartialEq for NetworkCfg {
             && self.label == other.label
             && self.network_id == other.network_id
             && self.currency == other.currency
+            && self.block_explorer == other.block_explorer
     }
 }
 
@@ -334,6 +366,10 @@ pub enum ParseNetworkConfigSourceError {
     ChainIdParseError(ParseIntError),
     #[error("Failed to parse network_id: {0}")]
     NetworkIdParseError(ParseIntError),
+    #[error("Failed to parse block explorer: {0}")]
+    BlockExplorerParseError(ParseError),
+    #[error("Block explorer URL must use http or https, found: {0}")]
+    BlockExplorerSchemeError(String),
     #[error("Remote network key shadowing: {0}")]
     RemoteNetworkKeyShadowing(String),
 }
@@ -352,6 +388,14 @@ impl ParseNetworkConfigSourceError {
             ParseNetworkConfigSourceError::NetworkIdParseError(err) => format!(
                 "The network ID in your network configuration must be a valid number: {}",
                 err
+            ),
+            ParseNetworkConfigSourceError::BlockExplorerParseError(err) => format!(
+                "The block explorer URL in your network configuration is invalid: {}",
+                err
+            ),
+            ParseNetworkConfigSourceError::BlockExplorerSchemeError(scheme) => format!(
+                "The block explorer URL in your network configuration must use HTTP or HTTPS, not '{}'",
+                scheme
             ),
             ParseNetworkConfigSourceError::RemoteNetworkKeyShadowing(key) => format!(
                 "The remote network key '{}' is already defined in network configuration",
@@ -471,6 +515,7 @@ networks:
             - https://mainnet.infura.io
             - https://mainnet.infura.io/v3/1234567890
         chain-id: 1
+        block-explorer: https://etherscan.io
     testnet:
         rpcs:
             - https://testnet.infura.io
@@ -495,6 +540,11 @@ networks:
 
         assert_eq!(networks.len(), 4);
         assert_eq!(
+            networks.get("mainnet").unwrap().block_explorer,
+            Some(Url::parse("https://etherscan.io").unwrap())
+        );
+        assert_eq!(networks.get("testnet").unwrap().block_explorer, None);
+        assert_eq!(
             networks.get("mainnet").unwrap().rpcs,
             vec![
                 Url::parse("https://mainnet.infura.io").unwrap(),
@@ -512,6 +562,61 @@ networks:
         assert_eq!(
             networks.get("network-two").unwrap().rpcs,
             vec![Url::parse("https://network-two.infura.io").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_parse_network_block_explorer_validation() {
+        let invalid_url = r#"
+networks:
+    mainnet:
+        rpcs:
+            - https://mainnet.infura.io
+        chain-id: 1
+        block-explorer: not-a-url
+"#;
+        assert_eq!(
+            NetworkCfg::parse_all_from_yaml(vec![get_document(invalid_url)], None).unwrap_err(),
+            YamlError::ParseNetworkConfigSourceError(
+                ParseNetworkConfigSourceError::BlockExplorerParseError(
+                    ParseError::RelativeUrlWithoutBase
+                )
+            )
+        );
+
+        let invalid_scheme = r#"
+networks:
+    mainnet:
+        rpcs:
+            - https://mainnet.infura.io
+        chain-id: 1
+        block-explorer: ftp://etherscan.io
+"#;
+        assert_eq!(
+            NetworkCfg::parse_all_from_yaml(vec![get_document(invalid_scheme)], None).unwrap_err(),
+            YamlError::ParseNetworkConfigSourceError(
+                ParseNetworkConfigSourceError::BlockExplorerSchemeError("ftp".to_string())
+            )
+        );
+
+        let invalid_type = r#"
+networks:
+    mainnet:
+        rpcs:
+            - https://mainnet.infura.io
+        chain-id: 1
+        block-explorer:
+            - https://etherscan.io
+"#;
+        assert_eq!(
+            NetworkCfg::parse_all_from_yaml(vec![get_document(invalid_type)], None).unwrap_err(),
+            YamlError::Field {
+                kind: FieldErrorKind::InvalidType {
+                    field: "block-explorer".to_string(),
+                    expected: "a string".to_string(),
+                },
+                location: "network 'mainnet'".to_string(),
+            }
         );
     }
 
@@ -624,6 +729,7 @@ networks:
         label: Mainnet
         network-id: 1
         currency: ETH
+        block-explorer: https://etherscan.io
         unknown-key: should-be-dropped
         another-unknown: also-dropped
 "#;
@@ -652,9 +758,10 @@ networks:
         assert!(mainnet_hash.contains_key(&StrictYaml::String("label".to_string())));
         assert!(mainnet_hash.contains_key(&StrictYaml::String("network-id".to_string())));
         assert!(mainnet_hash.contains_key(&StrictYaml::String("currency".to_string())));
+        assert!(mainnet_hash.contains_key(&StrictYaml::String("block-explorer".to_string())));
         assert!(!mainnet_hash.contains_key(&StrictYaml::String("unknown-key".to_string())));
         assert!(!mainnet_hash.contains_key(&StrictYaml::String("another-unknown".to_string())));
-        assert_eq!(mainnet_hash.len(), 5);
+        assert_eq!(mainnet_hash.len(), 6);
     }
 
     #[test]
@@ -666,6 +773,7 @@ networks:
         network-id: 1
         label: Mainnet
         chain-id: 1
+        block-explorer: https://etherscan.io
         rpcs:
             - https://mainnet.infura.io
         extra: dropped
@@ -696,7 +804,14 @@ networks:
             .collect();
         assert_eq!(
             keys,
-            vec!["rpcs", "chain-id", "label", "network-id", "currency"]
+            vec![
+                "rpcs",
+                "chain-id",
+                "label",
+                "network-id",
+                "currency",
+                "block-explorer"
+            ]
         );
     }
 

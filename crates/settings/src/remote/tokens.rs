@@ -108,6 +108,7 @@ mod tests {
                 label: None,
                 network_id: None,
                 currency: None,
+                block_explorer: None,
             },
         )])
     }

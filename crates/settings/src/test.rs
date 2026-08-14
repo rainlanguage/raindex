@@ -15,6 +15,7 @@ pub fn mock_network() -> Arc<NetworkCfg> {
         label: Some("Local Testnet".into()),
         network_id: Some(1),
         currency: Some("ETH".into()),
+        block_explorer: None,
     })
 }
 

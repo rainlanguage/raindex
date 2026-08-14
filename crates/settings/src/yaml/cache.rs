@@ -61,6 +61,7 @@ mod tests {
             label: Some(format!("Test Label for {}", key)),
             network_id: Some(chain_id + 100), // Arbitrary distinct value
             currency: Some("TEST_ETH".to_string()),
+            block_explorer: None,
         }
     }
 
