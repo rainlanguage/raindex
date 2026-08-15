@@ -59,7 +59,9 @@ Partial commits are OK during the session. Before your final commit of the
 session, fully mirror CI:
 
 ```bash
-./prep-all.sh
+# Bootstrap — if either of these fails, jump to the fallback below.
+nix develop -c forge soldeer install
+nix develop -c forge build
 nix develop -c npm run lint-format-check:all
 nix develop -c npm run build:raindex   # if Rust/raindex changed
 nix develop -c npm run build:ui
@@ -78,22 +80,39 @@ nix develop -c npm run test
 nix develop -c cargo test --workspace
 ```
 
-## Fallback if end-of-session `./prep-all.sh` fails early
+## Fallback if the end-of-session gate fails early
 
-If the end-of-session gate fails during `./prep-all.sh`, run these steps
-sequentially so dependencies still build:
+If the gate dies before it reaches the tests, the dependency tree is not in
+place. Rebuild it from scratch, one workspace at a time, so you can see which
+step breaks:
 
 ```bash
-nix develop -c forge install
-nix develop -c bash -c '(cd lib/rain.interpreter && rainix-sol-prelude && rainix-rs-prelude && rainlang-prelude)'
-nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.interpreter.interface/lib/rain.math.float && rainix-sol-prelude && rainix-rs-prelude)'
-nix develop -c bash -c '(cd lib/rain.interpreter/lib/rain.metadata && rainix-sol-prelude && rainix-rs-prelude)'
-nix develop -c rainix-sol-prelude && nix develop -c rainix-rs-prelude && nix develop -c raindex-prelude
+nix develop -c forge soldeer install
+nix develop -c forge build
 nix develop -c raindex-ui-components-prelude
-nix develop -c npm run build -w @rainlanguage/raindex
-nix develop -c npm run build -w @rainlanguage/ui-components
-nix develop -c npm run build -w @rainlanguage/webapp
+nix develop .#wasm-shell -c bash -c '
+  set -euxo pipefail
+  npm install --no-check
+  npm run build -w @rainlanguage/raindex
+  npm run build -w @rainlanguage/ui-components
+  npm run build -w @rainlanguage/webapp
+'
 ```
+
+Solidity dependencies are Soldeer packages, resolved into `dependencies/` by
+`forge soldeer install` (`foundry.toml` sets `libs = ['dependencies']`). They
+are plain source drops — there is nothing to prepare or build inside one, so
+there is no per-dependency step here.
+
+`npm install --no-check` must run from the workspace root, and `.#wasm-shell` is
+a slim shell whose `shellHook` does not run it for you — hence the explicit
+first line inside the `bash -c`. `forge` and `raindex-ui-components-prelude`
+come from the default `nix develop -c` shell; `.#wasm-shell` has neither.
+
+If the problem is stale committed artifacts (`meta/`, `src/generated/`,
+`crates/*/abis`, `subgraph/`) rather than a build that will not run, that is the
+`copy-artifacts` regen cascade and not this bootstrap — follow the runbook in
+the root `CLAUDE.md`.
 
 Goal: all CI checks in `.github/workflows` pass. Be patient with long
 builds/tests and never commit with failing lint/tests.
