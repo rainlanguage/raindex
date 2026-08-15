@@ -1,6 +1,6 @@
 use crate::utils::timing::Timing;
 use alloy::network::TransactionBuilder;
-use alloy::primitives::{Address, Bytes, U256};
+use alloy::primitives::{Address, Bytes, B256, U256};
 use alloy::providers::Provider;
 use alloy::rpc::types::TransactionRequest;
 use alloy::serde::WithOtherFields;
@@ -220,39 +220,57 @@ pub async fn find_failing_order_index(
     config: &TakeOrdersConfigV5,
     block_number: Option<u64>,
 ) -> Option<usize> {
+    match diagnose_take_orders_failure(provider, raindex, taker, config, block_number).await {
+        TakeOrdersFailureDiagnosis::FailingOrder(index) => Some(index),
+        TakeOrdersFailureDiagnosis::Recovered | TakeOrdersFailureDiagnosis::Unidentified => None,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TakeOrdersFailureDiagnosis {
+    FailingOrder(usize),
+    Recovered,
+    Unidentified,
+}
+
+pub(crate) async fn diagnose_take_orders_failure(
+    provider: &ReadProvider,
+    raindex: Address,
+    taker: Address,
+    config: &TakeOrdersConfigV5,
+    block_number: Option<u64>,
+) -> TakeOrdersFailureDiagnosis {
     let started_at = Timing::now();
     if config.orders.is_empty() {
         debug!(raindex = %raindex, "cannot find failing order in empty config");
-        return None;
+        return TakeOrdersFailureDiagnosis::Unidentified;
     }
 
     if config.orders.len() == 1 {
-        let result = simulate_take_orders(provider, raindex, taker, config, block_number).await;
-        if result.is_err() {
+        let first_retry =
+            simulate_take_orders(provider, raindex, taker, config, block_number).await;
+        if first_retry.is_err()
+            && simulate_take_orders(provider, raindex, taker, config, block_number)
+                .await
+                .is_err()
+        {
             warn!(
                 raindex = %raindex,
                 taker = %taker,
                 block_number = ?block_number,
                 failing_order_index = 0usize,
-                simulations_run = 1usize,
+                simulations_run = 2usize,
                 duration_ms = started_at.elapsed_ms(),
                 "identified failing order"
             );
-            return Some(0);
+            return TakeOrdersFailureDiagnosis::FailingOrder(0);
         }
-        return None;
+        return TakeOrdersFailureDiagnosis::Recovered;
     }
 
     let mut simulations_run = 0usize;
     for idx in 0..config.orders.len() {
-        let single_order_config = TakeOrdersConfigV5 {
-            minimumIO: config.minimumIO,
-            maximumIO: config.maximumIO,
-            maximumIORatio: config.maximumIORatio,
-            IOIsInput: config.IOIsInput,
-            orders: vec![config.orders[idx].clone()],
-            data: config.data.clone(),
-        };
+        let single_order_config = single_order_probe_config(config, idx);
 
         let result =
             simulate_take_orders(provider, raindex, taker, &single_order_config, block_number)
@@ -260,17 +278,38 @@ pub async fn find_failing_order_index(
         simulations_run += 1;
 
         if result.is_err() {
-            warn!(
-                raindex = %raindex,
-                taker = %taker,
-                block_number = ?block_number,
-                failing_order_index = idx,
-                simulations_run,
-                duration_ms = started_at.elapsed_ms(),
-                "identified failing order"
-            );
-            return Some(idx);
+            let retry =
+                simulate_take_orders(provider, raindex, taker, &single_order_config, block_number)
+                    .await;
+            simulations_run += 1;
+            if retry.is_err() {
+                warn!(
+                    raindex = %raindex,
+                    taker = %taker,
+                    block_number = ?block_number,
+                    failing_order_index = idx,
+                    simulations_run,
+                    duration_ms = started_at.elapsed_ms(),
+                    "identified failing order"
+                );
+                return TakeOrdersFailureDiagnosis::FailingOrder(idx);
+            }
         }
+    }
+
+    if simulate_take_orders(provider, raindex, taker, config, block_number)
+        .await
+        .is_ok()
+    {
+        info!(
+            raindex = %raindex,
+            taker = %taker,
+            block_number = ?block_number,
+            simulations_run,
+            duration_ms = started_at.elapsed_ms(),
+            "take-orders preflight recovered during failure diagnosis"
+        );
+        return TakeOrdersFailureDiagnosis::Recovered;
     }
 
     warn!(
@@ -281,12 +320,27 @@ pub async fn find_failing_order_index(
         duration_ms = started_at.elapsed_ms(),
         "could not identify failing order"
     );
-    None
+    TakeOrdersFailureDiagnosis::Unidentified
+}
+
+fn single_order_probe_config(config: &TakeOrdersConfigV5, idx: usize) -> TakeOrdersConfigV5 {
+    TakeOrdersConfigV5 {
+        // `minimumIO` is an aggregate constraint. Keeping the batch minimum
+        // when probing one leg would make healthy partial legs fail in exact
+        // modes and incorrectly identify them as the cause of the revert.
+        minimumIO: B256::ZERO,
+        maximumIO: config.maximumIO,
+        maximumIORatio: config.maximumIORatio,
+        IOIsInput: config.IOIsInput,
+        orders: vec![config.orders[idx].clone()],
+        data: config.data.clone(),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use raindex_bindings::IRaindexV6::TakeOrderConfigV4;
 
     #[test]
     fn test_preflight_error_display() {
@@ -347,6 +401,28 @@ mod tests {
         let decoded = decoded.unwrap();
         assert_eq!(decoded.spender, spender);
         assert_eq!(decoded.amount, amount);
+    }
+
+    #[test]
+    fn single_order_probe_drops_aggregate_minimum_io() {
+        let order = TakeOrderConfigV4::default();
+        let config = TakeOrdersConfigV5 {
+            minimumIO: U256::from(10).into(),
+            maximumIO: U256::from(20).into(),
+            maximumIORatio: U256::from(2).into(),
+            IOIsInput: true,
+            orders: vec![order.clone(), TakeOrderConfigV4::default()],
+            data: Bytes::from(vec![1]),
+        };
+
+        let probe = single_order_probe_config(&config, 0);
+
+        assert_eq!(probe.minimumIO, B256::ZERO);
+        assert_eq!(probe.maximumIO, config.maximumIO);
+        assert_eq!(probe.maximumIORatio, config.maximumIORatio);
+        assert_eq!(probe.IOIsInput, config.IOIsInput);
+        assert_eq!(probe.orders, vec![order]);
+        assert_eq!(probe.data, config.data);
     }
 }
 
