@@ -82,9 +82,13 @@ nix develop -c cargo test --workspace
 
 ## Fallback if the end-of-session gate fails early
 
-If the gate dies before it reaches the tests, the dependency tree is not in
-place. Rebuild it from scratch, one workspace at a time, so you can see which
-step breaks:
+Use this when a step fails because the dependency tree is not in place, rather
+than because your change is wrong. That is not only the two bootstrap lines:
+`lint-format-check:all` runs `@rainlanguage/raindex`'s `check`, which is `tsc`
+over `dist/`, and `build:ui` builds `@rainlanguage/ui-components` against that
+same `dist/`, so on a tree that has never been built both die on missing files
+rather than on anything you wrote. Rebuild from scratch, one workspace at a
+time, so you can see which step breaks:
 
 ```bash
 nix develop -c forge soldeer install
@@ -98,6 +102,10 @@ nix develop .#wasm-shell -c bash -c '
   npm run build -w @rainlanguage/webapp
 '
 ```
+
+A failure that names your own code — a lint rule, a type error in a file you
+touched, a failing assertion — is a real failure, and reinstalling will not
+change it. Debug it where it is reported.
 
 Solidity dependencies are Soldeer packages, resolved into `dependencies/` by
 `forge soldeer install` (`foundry.toml` sets `libs = ['dependencies']`). They
