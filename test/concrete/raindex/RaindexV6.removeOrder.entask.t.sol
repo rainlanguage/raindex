@@ -177,6 +177,10 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
         assert(iRaindex.orderExists(order.hash()));
     }
 
+    /// The post tasks of a live order removal run with a context of the
+    /// raindex contract, the order hash, the order owner, and the
+    /// counterparty. An order removal has no counterparty so
+    /// `order-counterparty()` is always the zero address.
     /// forge-config: default.fuzz.runs = 100
     function testRemoveOrderContext(address alice, OrderConfigV4 memory config) external {
         // Need this conform here so that the order doesn't get mutated and
@@ -188,7 +192,7 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
         bytes32 orderHash = order.hash();
 
-        bytes[] memory evals = new bytes[](3);
+        bytes[] memory evals = new bytes[](4);
         evals[0] = bytes(
             string.concat(
                 usingWordsFrom, ":ensure(equal-to(raindex() ", address(iRaindex).toHexString(), ") \"raindex\");"
@@ -204,7 +208,23 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
                 usingWordsFrom, ":ensure(equal-to(order-owner() ", address(alice).toHexString(), ") \"order-owner\");"
             )
         );
+        evals[3] = bytes(
+            string.concat(
+                usingWordsFrom,
+                ":ensure(equal-to(order-counterparty() ",
+                address(0).toHexString(),
+                ") \"order-counterparty zero\");"
+            )
+        );
 
-        checkRemoveOrder(alice, config, evals, 0, 0, false);
+        // The order must be live for the removal to run the post tasks, so
+        // add it first without any tasks.
+        vm.startPrank(alice);
+        bool added = iRaindex.addOrder4(config, new TaskV2[](0));
+        assert(added);
+
+        bool stateChanged = iRaindex.removeOrder3(order, evalsToActions(evals));
+        vm.stopPrank();
+        assert(stateChanged);
     }
 }
