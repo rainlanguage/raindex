@@ -276,13 +276,12 @@ call, collecting interpreter traces, and decoding any revert reason.
 - `alloy` primitives and `sol_types`: ABI encode/decode, EVM types, and contract
   call modeling.
 - `raindex_bindings`: contract bindings (`IRaindexV6`, provider helpers like
-  `mk_read_provider`).
+  `mk_read_provider`, which builds an alloy provider with fallback across
+  multiple HTTP RPCs).
 - `raindex_subgraph_client`: GraphQL client and types; provides `order_detail`
   and `batch_order_detail`.
 - `rain-error-decoding`: decodes revert selectors (known/unknown) into
   structured errors.
-- `alloy-ethers-typecast::ReadableClient`: convenience for fetching block number
-  across multiple HTTP RPCs.
 - `rain_math_float::Float`: canonical numeric type used in quotes; serializes to
   hex strings and provides safe equality/formatting.
 - `wasm-bindgen-utils`: `Tsify` derives and helper macros (`impl_wasm_traits!`,
