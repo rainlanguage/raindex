@@ -4,15 +4,15 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
+    IRaindexV6,
     OrderConfigV4,
     OrderV4,
     TaskV2,
     TakeOrderConfigV4,
     SignedContextV1,
     TakeOrdersConfigV5
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {TokenSelfTrade} from "../../../src/concrete/raindex/RaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
 contract RaindexV6TakeOrderSameTokenTest is RaindexV6ExternalRealTest {
@@ -42,7 +42,7 @@ contract RaindexV6TakeOrderSameTokenTest is RaindexV6ExternalRealTest {
             data: ""
         });
 
-        vm.expectRevert(abi.encodeWithSelector(TokenSelfTrade.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
         iRaindex.takeOrders4(takeOrdersConfig);
     }
 }

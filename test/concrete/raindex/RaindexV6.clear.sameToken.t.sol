@@ -4,15 +4,15 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
+    IRaindexV6,
     OrderConfigV4,
     OrderV4,
     EvaluableV4,
     ClearConfigV2,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {TokenSelfTrade} from "../../../src/concrete/raindex/RaindexV6.sol";
 
 contract RaindexV6ClearSameTokenTest is RaindexV6ExternalRealTest {
     /// forge-config: default.fuzz.runs = 10
@@ -42,7 +42,7 @@ contract RaindexV6ClearSameTokenTest is RaindexV6ExternalRealTest {
         vm.prank(bob);
         iRaindex.addOrder4(configBob, new TaskV2[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(TokenSelfTrade.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
         iRaindex.clear3(
             orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
         );

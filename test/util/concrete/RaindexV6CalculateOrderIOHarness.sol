@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {RaindexV6, OrderIOCalculationV4} from "src/concrete/raindex/RaindexV6.sol";
 import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {OrderV4, SignedContextV1} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {OrderV4, SignedContextV1} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 

@@ -16,7 +16,7 @@ import {
     IInterpreterV4,
     TaskV2,
     Float
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotOrderOwner, StackItem, NegativeBounty, ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
 import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";

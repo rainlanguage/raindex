@@ -3,12 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {
-    RaindexV6,
-    OrderIOCalculationV4,
-    UnsupportedCalculateOutputs,
-    TokenSelfTrade
-} from "src/concrete/raindex/RaindexV6.sol";
+import {RaindexV6, OrderIOCalculationV4, UnsupportedCalculateOutputs} from "src/concrete/raindex/RaindexV6.sol";
 import {
     CONTEXT_CALLING_CONTEXT_COLUMN,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH,
@@ -35,7 +30,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {IInterpreterV4, EvalV4, StackItem} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
@@ -555,7 +550,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
         QuoteV2 memory quoteConfig =
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        vm.expectRevert(abi.encodeWithSelector(TokenSelfTrade.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
         IRaindexV6(address(harness)).quote2(quoteConfig);
     }
 }

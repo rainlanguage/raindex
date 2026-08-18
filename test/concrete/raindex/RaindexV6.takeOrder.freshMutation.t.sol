@@ -13,7 +13,7 @@ import {
     TakeOrdersConfigV5,
     TaskV2,
     IRaindexV6
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
@@ -328,7 +328,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         config.maximumIO = LibDecimalFloat.packLossless(5, 0);
 
         vm.prank(bob);
-        // selector for TokenSelfTrade() is the src-level error.
+        // selector for TokenSelfTrade() as declared on IRaindexV6.
         vm.expectRevert(bytes4(keccak256("TokenSelfTrade()")));
         iRaindex.takeOrders4(config);
     }

@@ -46,8 +46,8 @@ import {
     QuoteV2,
     Float,
     IOV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRaindexV6OrderTaker} from "raindex-interface-0.1.1/src/interface/IRaindexV6OrderTaker.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+import {IRaindexV6OrderTaker} from "raindex-interface-0.1.3/src/interface/IRaindexV6OrderTaker.sol";
 import {LibOrder} from "../../lib/LibOrder.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
@@ -76,9 +76,6 @@ error NotOrderOwner(address owner);
 
 /// Thrown when the input and output tokens don't match, in either direction.
 error TokenMismatch();
-
-/// Thrown when the input token is the output token.
-error TokenSelfTrade();
 
 /// Thrown when the minimum input is not met.
 /// @param minimumIO The minimum io required.

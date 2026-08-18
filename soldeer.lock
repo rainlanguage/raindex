@@ -105,10 +105,10 @@ integrity = "9e1fccf893dd0d90aeb445c78f9eee3904bc50287ff1da30b954508f18412cd2"
 
 [[dependencies]]
 name = "raindex-interface"
-version = "0.1.1"
-url = "https://soldeer-revisions.s3.amazonaws.com/raindex-interface/0_1_1_21-05-2026_18:36:45_raindex.zip"
-checksum = "d744aec8e9dc1bcce58de546d1a419f7eb87610e1541ce5459a140fd45626c99"
-integrity = "df40e42221d1ecd4e6e6ae6a3511b00fc182e1a46f99401f564d94f299d63730"
+version = "0.1.3"
+url = "https://soldeer-revisions.s3.amazonaws.com/raindex-interface/0_1_3_03-07-2026_11:20:58_raindex.zip"
+checksum = "5c4149dc0898b5db4036f5cac04614b98f204c062c694477fecc0f870a96907c"
+integrity = "5f69dc4e1234d15f27d74be29e287c8619c08cb354de9d8a3d30f42df13a0269"
 
 [[dependencies]]
 name = "rainlang"

@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {stdError} from "forge-std-1.16.1/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE, CONSOLE_ADDRESS} from "test/util/lib/LibTestConstants.sol";
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {TaskV2, EvaluableV4, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TaskV2, EvaluableV4, IRaindexV6} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";

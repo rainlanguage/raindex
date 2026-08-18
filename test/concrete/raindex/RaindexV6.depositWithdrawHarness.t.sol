@@ -8,7 +8,7 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TaskV2, IRaindexV6} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";

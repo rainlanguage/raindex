@@ -10,7 +10,7 @@ import {
     EvaluableV4,
     TaskV2,
     SignedContextV1
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.0/src/interface/unstable/IMetaV1_2.sol";
 import {META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
