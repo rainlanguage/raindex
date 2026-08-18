@@ -343,8 +343,8 @@ are provided so frontends can submit via their own providers.
 - `rain_error_decoding` — ABI error decoding to readable types/names.
 - `rain_math_float` — Arbitrary‑precision floats with hex encoding for on‑chain
   compatibility and pretty formatting.
-- `alloy` & `alloy_ethers_typecast` — EVM primitives, providers, signers
-  (Ledger), and Read/Write contract helpers.
+- `alloy` — EVM primitives, providers, signers (Ledger), and transaction
+  building/sending.
 - `wasm_bindgen_utils`, `tsify` — WASM/JS interop helpers and type generation.
 
 ## Typical End‑to‑End Flows
