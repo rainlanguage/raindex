@@ -4,9 +4,9 @@ file.
 # Merge / Publish / Deploy runbook
 
 The full cause-and-effect chain for a contract change: edit source → **deploy**
-the new bytecode to its new CREATE2 address → that source change **publishes** a
-new soldeer version → which needs its deploy constants pinned → **merge**. All
-of it is routine and pre-authorized; don't stop to ask about address/codehash
+the new bytecode to its new CREATE2 address → **merge**. Publishing to soldeer
+is a separate, manual tag release (below), not a side effect of merging. All of
+it is routine and pre-authorized; don't stop to ask about address/codehash
 churn.
 
 ## Merging a PR
@@ -71,32 +71,19 @@ address + codehash. Do the whole cascade without asking:
    the new addresses have code on-chain. After deploying, re-trigger PR CI with
    an empty commit.
 
-## Publishing to soldeer (autopublish)
+## Publishing to soldeer (tag release)
 
-- `package-release.yaml` calls rainix `rainix-autopublish.yaml@main` on every
-  `main` push. It content-gates the soldeer package (normalized hash of
-  `forge soldeer push --dry-run` zip vs the published revision), auto-bumps
-  `foundry.toml [package].version`, tags `sol-vX`, and publishes — **only** when
-  the published `src/` content actually changed (a workflow/CI-only change does
-  not publish).
-- Every published version must carry a full pinned deploy-constant suite in
-  `LibRaindexDeploy`: `*_DEPLOYED_{ADDRESS,CODEHASH}_<x>_<y>_<z>` (address +
-  codehash for all six deployed contracts).
-  `testAllPublishedSoldeerTagsHaveAFullConstantSuite` (via
-  `script/check-published-deploy-constants.sh`, which queries the live registry)
-  reds **main and every PR** on any published tag missing them. Values come from
-  the current `src/generated/*.pointers.sol`; contracts unchanged since the
-  prior version reuse its values. No new deploy is needed if `testProdDeploy*`
-  is already green (the contracts were deployed by their own PRs).
-- The content gate **strips** the pinned `*_<ver>` constant blocks before
-  hashing — so pinning a version's constants is not itself a content change
-  (otherwise pinning would publish the next version, which would need its own
-  constants pinned: an endless bump → pin → bump loop). Only real bytecode
-  changes publish.
-- **To avoid a red-main follow-up**, pre-pin the _next_ version's constants in
-  the same contract-change PR.
-  `next = patch(max(foundry.toml version,
-  registry-latest)) + 1`. The
-  pre-pinned constants are harmless before the publish (the test only checks
-  _published_ tags) and satisfy it the instant the version lands — so the fix,
-  the redeploy, and the constant pin ship as one PR with no red main.
+- Publishing is a manual tag release via rainix `rainix-tag-release.yaml@main`
+  (`package-release.yaml`, `sol-v*` tags). Merges to main do NOT publish.
+- To cut a release: deploy any changed suites first (above), then open a PR that
+  runs `forge script ./script/Build.sol --sig 'cutRelease()'` — freezing the
+  candidate pins as `src/generated/<tag>/` — and bumps
+  `foundry.toml [external.package].version` to match, in one commit. Merge it,
+  then push tag `sol-v<version>`.
+- The tag re-runs the fork suite and `release-guard`: version == tag, the frozen
+  `src/generated/<tag>/` present and byte-identical to `candidate/`, clean tree
+  after regeneration, no later tag frozen. Then it publishes `raindex~<version>`
+  to soldeer and cuts the GitHub release.
+- `src/generated/<tag>/` snapshots are append-only — the
+  `frozen-snapshots-append-only` gate in `rainix-sol-static` reds any PR that
+  edits or deletes one.

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
@@ -12,17 +12,17 @@ import {
     CREATION_CODE as RAINDEX_CREATION_CODE,
     RUNTIME_CODE as RAINDEX_RUNTIME_CODE,
     DEPLOYED_ADDRESS as RAINDEX_GENERATED_ADDRESS
-} from "../../../src/generated/RaindexV6.pointers.sol";
+} from "../../../src/generated/candidate/RaindexV6.sol";
 import {
     CREATION_CODE as SUB_PARSER_CREATION_CODE,
     RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE,
     DEPLOYED_ADDRESS as SUB_PARSER_GENERATED_ADDRESS
-} from "../../../src/generated/RaindexV6SubParser.pointers.sol";
+} from "../../../src/generated/candidate/RaindexV6SubParser.sol";
 import {
     RUNTIME_CODE as ROUTE_PROCESSOR_RUNTIME_CODE,
     DEPLOYED_ADDRESS as ROUTE_PROCESSOR_GENERATED_ADDRESS,
     BYTECODE_HASH as ROUTE_PROCESSOR_GENERATED_CODEHASH
-} from "../../../src/generated/RouteProcessor4.pointers.sol";
+} from "../../../src/generated/candidate/RouteProcessor4.sol";
 import {ROUTE_PROCESSOR_4_CREATION_CODE} from "../../../src/lib/deploy/LibRouteProcessor4CreationCode.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
@@ -31,17 +31,17 @@ import {
     RUNTIME_CODE as GENERIC_POOL_ARB_OT_RUNTIME_CODE,
     DEPLOYED_ADDRESS as GENERIC_POOL_ARB_OT_GENERATED_ADDRESS,
     BYTECODE_HASH as GENERIC_POOL_ARB_OT_GENERATED_CODEHASH
-} from "../../../src/generated/GenericPoolRaindexV6ArbOrderTaker.pointers.sol";
+} from "../../../src/generated/candidate/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
     RUNTIME_CODE as RP_ARB_OT_RUNTIME_CODE,
     DEPLOYED_ADDRESS as RP_ARB_OT_GENERATED_ADDRESS,
     BYTECODE_HASH as RP_ARB_OT_GENERATED_CODEHASH
-} from "../../../src/generated/RouteProcessorRaindexV6ArbOrderTaker.pointers.sol";
+} from "../../../src/generated/candidate/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {
     RUNTIME_CODE as GENERIC_POOL_FB_RUNTIME_CODE,
     DEPLOYED_ADDRESS as GENERIC_POOL_FB_GENERATED_ADDRESS,
     BYTECODE_HASH as GENERIC_POOL_FB_GENERATED_CODEHASH
-} from "../../../src/generated/GenericPoolRaindexV6FlashBorrower.pointers.sol";
+} from "../../../src/generated/candidate/GenericPoolRaindexV6FlashBorrower.sol";
 
 contract LibRaindexDeployTest is Test {
     /// Deploying RaindexV6 via Zoltu MUST produce the expected address and

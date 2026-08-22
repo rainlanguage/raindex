@@ -67,7 +67,7 @@ import {
     PARSE_META as SUB_PARSER_PARSE_META,
     SUB_PARSER_WORD_PARSERS,
     OPERAND_HANDLER_FUNCTION_POINTERS as SUB_PARSER_OPERAND_HANDLERS
-} from "../../generated/RaindexV6SubParser.pointers.sol";
+} from "../../generated/RaindexV6SubParserPointers.sol";
 import {IDescribedByMetaV1} from "rain-metadata-0.1.0/src/interface/IDescribedByMetaV1.sol";
 import {ISubParserToolingV1} from "rain-sol-codegen-0.1.0/src/interface/ISubParserToolingV1.sol";
 

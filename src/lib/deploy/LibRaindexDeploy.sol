@@ -2,27 +2,27 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {BYTECODE_HASH as RAINDEX_HASH, DEPLOYED_ADDRESS as RAINDEX_ADDR} from "../../generated/RaindexV6.pointers.sol";
+import {BYTECODE_HASH as RAINDEX_HASH, DEPLOYED_ADDRESS as RAINDEX_ADDR} from "../../generated/candidate/RaindexV6.sol";
 import {
     BYTECODE_HASH as SUB_PARSER_HASH,
     DEPLOYED_ADDRESS as SUB_PARSER_ADDR
-} from "../../generated/RaindexV6SubParser.pointers.sol";
+} from "../../generated/candidate/RaindexV6SubParser.sol";
 import {
     BYTECODE_HASH as ROUTE_PROCESSOR_HASH,
     DEPLOYED_ADDRESS as ROUTE_PROCESSOR_ADDR
-} from "../../generated/RouteProcessor4.pointers.sol";
+} from "../../generated/candidate/RouteProcessor4.sol";
 import {
     BYTECODE_HASH as GENERIC_POOL_ARB_OT_HASH,
     DEPLOYED_ADDRESS as GENERIC_POOL_ARB_OT_ADDR
-} from "../../generated/GenericPoolRaindexV6ArbOrderTaker.pointers.sol";
+} from "../../generated/candidate/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
     BYTECODE_HASH as RP_ARB_OT_HASH,
     DEPLOYED_ADDRESS as RP_ARB_OT_ADDR
-} from "../../generated/RouteProcessorRaindexV6ArbOrderTaker.pointers.sol";
+} from "../../generated/candidate/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {
     BYTECODE_HASH as GENERIC_POOL_FB_HASH,
     DEPLOYED_ADDRESS as GENERIC_POOL_FB_ADDR
-} from "../../generated/GenericPoolRaindexV6FlashBorrower.pointers.sol";
+} from "../../generated/candidate/GenericPoolRaindexV6FlashBorrower.sol";
 
 /// @title LibRaindexDeploy
 /// @notice A library containing the deployed address and code hash of the

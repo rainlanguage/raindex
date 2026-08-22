@@ -40,5 +40,5 @@ jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6.sol/R
 jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6SubParser.sol/RaindexV6SubParser.json > crates/test_fixtures/abis/RaindexV6SubParser.json
 
 mkdir -p crates/test_fixtures/contracts
-cp dependencies/forge-std-1.16.1/src/interfaces/IMulticall3.sol crates/test_fixtures/contracts/IMulticall3.sol
+cp dependencies/forge-std-1.16.2/src/interfaces/IMulticall3.sol crates/test_fixtures/contracts/IMulticall3.sol
 '

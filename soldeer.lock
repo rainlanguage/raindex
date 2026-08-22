@@ -7,17 +7,17 @@ integrity = "bce03af7ada1eee21a7fff393f238bcd7cd75a022a4db55ffb6b0dbb32433d35"
 
 [[dependencies]]
 name = "forge-std"
-version = "1.16.1"
-url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_16_1_08-05-2026_08:51:16_forge-std-1.16.zip"
-checksum = "839b61832925c7152c7b6dffbfa4998d9e606211179bd8f604733124e8a7cb57"
-integrity = "60e55d10150354ca4a1e2985c5456c834b92b82ef85ab0e1d92a7786cddbd219"
+version = "1.16.2"
+url = "https://soldeer-revisions.s3.amazonaws.com/forge-std/1_16_2_03-07-2026_07:37:45_forge-std-1.16.zip"
+checksum = "405dccc9d60d753f6abc412b4adf0359f4390f65dbadbbb277a12b4946ed8969"
+integrity = "5fb4325b60d7d4194bd0481e2f94398cf1d9c6561dd12a66fb2748ef4a68205f"
 
 [[dependencies]]
 name = "rain-deploy"
-version = "0.1.2"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-deploy/0_1_2_09-05-2026_19:49:20_rain.zip"
-checksum = "94d3daf2f9f90062d2e676077c2b4ccd2bdd66201665a2209e98016e155f619a"
-integrity = "10bff708d9e5d8b77655b8a8fc0c755cef8e3fc876cc3ff100425d27b08294a0"
+version = "0.1.7"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-deploy/0_1_7_19-08-2026_05:57:12_rain.zip"
+checksum = "d0e868184ad16fc6abb704bb1dddab57ebf2beb042529690e030568f5c81a9b3"
+integrity = "e51da6f2b3a0f427a0aac5d7714bed2027f5cf0f39b31f0692e9623ceeaa47f2"
 
 [[dependencies]]
 name = "rain-interpreter-interface"
@@ -77,10 +77,10 @@ integrity = "f17f10aa50e9e2b254c689c83f41b3cabab81c95bad06424b9b3e9c92d02e577"
 
 [[dependencies]]
 name = "rain-sol-codegen"
-version = "0.1.0"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_0_09-05-2026_20:30:25_rain.sol.zip"
-checksum = "6b5abd394c5db86ac64214262b7a5115158f480b2fbd74442672dfe52bb67310"
-integrity = "e22748ce2ba7eca3ce71e23b2271d1c0f370b989507e784b0a4850a7a9e52157"
+version = "0.1.36"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_36_18-08-2026_09:20:33_rain.sol.zip"
+checksum = "b5d101d46941a95fee441224e101004139814ae9afa2793138874bd7e93991ff"
+integrity = "164e2655ac8b66bcf52c799421706d3dfaab987addaaeadd74574e70fd2eb6ed"
 
 [[dependencies]]
 name = "rain-solmem"
