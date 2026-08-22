@@ -3,7 +3,7 @@
 pragma solidity ^0.8.19;
 
 import {AuthoringMetaV2, OperandV2} from "rain-interpreter-interface-0.1.0/src/interface/ISubParserV4.sol";
-import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
+import {LibUint256Matrix} from "rain-solmem-0.1.26/src/lib/LibUint256Matrix.sol";
 import {LibSubParse} from "rainlang-0.1.5/src/lib/parse/LibSubParse.sol";
 import {
     CONTEXT_BASE_COLUMN,

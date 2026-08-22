@@ -19,8 +19,8 @@ import {
     StackItem,
     EvalV4
 } from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {LibUint256Array} from "rain-solmem-0.1.3/src/lib/LibUint256Array.sol";
-import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
+import {LibUint256Array} from "rain-solmem-0.1.26/src/lib/LibUint256Array.sol";
+import {LibUint256Matrix} from "rain-solmem-0.1.26/src/lib/LibUint256Matrix.sol";
 import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
 import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
 import {LibMeta} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
@@ -61,8 +61,8 @@ import {
     CONTEXT_VAULT_IO_VAULT_ID
 } from "../../lib/LibRaindex.sol";
 import {RaindexV6FlashLender} from "../../abstract/RaindexV6FlashLender.sol";
-import {LibBytes32Array} from "rain-solmem-0.1.3/src/lib/LibBytes32Array.sol";
-import {LibBytes32Matrix} from "rain-solmem-0.1.3/src/lib/LibBytes32Matrix.sol";
+import {LibBytes32Array} from "rain-solmem-0.1.26/src/lib/LibBytes32Array.sol";
+import {LibBytes32Matrix} from "rain-solmem-0.1.26/src/lib/LibBytes32Matrix.sol";
 
 import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
 
