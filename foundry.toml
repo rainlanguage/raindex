@@ -84,6 +84,18 @@ remappings = [
   # `etchZoltuFactory`/`deployZoltu`, which are unchanged in 0.1.7. Test-only:
   # nothing under `src/` reaches rain-deploy, so no contract bytecode moves.
   "rain-deploy-0.1.2/=dependencies/rain-deploy-0.1.7/",
+  # Same, for `rain-solmem`. This repo is on 0.1.26, while `rainlang` 0.1.5,
+  # `rain-interpreter-interface` 0.1.0, `rain-intorastring` 0.1.0 and
+  # `rain-lib-memkv` 0.1.0 still import solmem under the
+  # `rain-solmem-0.1.3/` prefix. Unlike the aliases above this one is NOT
+  # bytecode-neutral: solmem internals changed between 0.1.3 and 0.1.26, so
+  # the rolling `src/generated/candidate/` snapshot moves with it (the
+  # rolling-candidate model's job; regenerated in the same change as this
+  # alias). 0.1.26 deleted `LibStackPointer.sol`, but the only files under
+  # the old prefix that import it are two `rainlang` concrete test files
+  # (`LibOpBlockNumber.t.sol`, `LibOpBlockTimestamp.t.sol`) that nothing in
+  # this repo's compilation reaches.
+  "rain-solmem-0.1.3/=dependencies/rain-solmem-0.1.26/",
 ]
 
 [dependencies]
@@ -99,7 +111,7 @@ raindex-interface = "0.1.3"
 rain-metadata = "0.1.0"
 rain-intorastring = "0.1.0"
 rain-sol-codegen = "0.1.36"
-rain-solmem = "0.1.3"
+rain-solmem = "0.1.26"
 rain-math-float = "0.1.1"
 rain-tofu-erc20-decimals = "0.1.1"
 rain-deploy = "0.1.7"
