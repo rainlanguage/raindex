@@ -13,9 +13,23 @@ on:
           - arb-generic-pool-order-taker
           - arb-route-processor-order-taker
           - arb-generic-pool-flash-borrower
+      script:
+        description: >-
+          Forge script target to run. The default deploys the selected suite; script/DescribeSubParser.sol:DescribeSubParser emits the sub-parser's described-by meta on the network named by `network` (suite is ignored there).
+        required: false
+        type: string
+        default: script/Deploy.sol:Deploy
+      network:
+        description: >-
+          Passed through as DEPLOYMENT_NETWORK. Required by DescribeSubParser; the default deploy script ignores it and broadcasts to its own network set.
+        required: false
+        type: string
+        default: ''
 jobs:
   deploy:
     uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
     with:
       suite: ${{ inputs.suite }}
+      script: ${{ inputs.script }}
+      network: ${{ inputs.network }}
     secrets: inherit

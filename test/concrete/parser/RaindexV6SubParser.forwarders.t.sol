@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
-import {DESCRIBED_BY_META_HASH} from "../../../src/generated/RaindexV6SubParser.pointers.sol";
+import {DESCRIBED_BY_META_HASH} from "../../../src/generated/RaindexV6SubParserPointers.sol";
 
 /// @title RaindexV6SubParserForwardersTest
 /// @notice Pins the small external view/pure entrypoints of
