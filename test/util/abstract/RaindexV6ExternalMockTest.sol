@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
-import {IMetaV1_2} from "rain-metadata-0.1.0/src/lib/LibMeta.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.7/src/lib/LibMeta.sol";
 
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";

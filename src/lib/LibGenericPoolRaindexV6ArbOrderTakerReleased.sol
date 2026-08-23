@@ -14,6 +14,14 @@ import {
     DEPENDENCIES as GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPENDENCIES
 } from "../generated/0_1_14/GenericPoolRaindexV6ArbOrderTaker.sol";
 
+import {
+    DEPLOYED_ADDRESS as GenericPoolRaindexV6ArbOrderTaker_0_1_15_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as GenericPoolRaindexV6ArbOrderTaker_0_1_15_BYTECODE_HASH,
+    CREATION_CODE as GenericPoolRaindexV6ArbOrderTaker_0_1_15_CREATION_CODE,
+    RUNTIME_CODE as GenericPoolRaindexV6ArbOrderTaker_0_1_15_RUNTIME_CODE,
+    DEPENDENCIES as GenericPoolRaindexV6ArbOrderTaker_0_1_15_DEPENDENCIES
+} from "../generated/0_1_15/GenericPoolRaindexV6ArbOrderTaker.sol";
+
 /// @title LibGenericPoolRaindexV6ArbOrderTakerReleased
 /// @notice Every frozen release of `GenericPoolRaindexV6ArbOrderTaker`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -34,7 +42,7 @@ library LibGenericPoolRaindexV6ArbOrderTakerReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](1);
+        DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
             suite: "arb-generic-pool-order-taker@0_1_14",
             creationCode: GenericPoolRaindexV6ArbOrderTaker_0_1_14_CREATION_CODE,
@@ -43,6 +51,15 @@ library LibGenericPoolRaindexV6ArbOrderTakerReleased {
             storedRuntimeCode: GenericPoolRaindexV6ArbOrderTaker_0_1_14_RUNTIME_CODE,
             artifactPath: "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
             dependencies: abi.decode(GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPENDENCIES, (address[]))
+        });
+        suites[1] = DeploySuite({
+            suite: "arb-generic-pool-order-taker@0_1_15",
+            creationCode: GenericPoolRaindexV6ArbOrderTaker_0_1_15_CREATION_CODE,
+            storedDeployedAddress: GenericPoolRaindexV6ArbOrderTaker_0_1_15_DEPLOYED_ADDRESS,
+            storedBytecodeHash: GenericPoolRaindexV6ArbOrderTaker_0_1_15_BYTECODE_HASH,
+            storedRuntimeCode: GenericPoolRaindexV6ArbOrderTaker_0_1_15_RUNTIME_CODE,
+            artifactPath: "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
+            dependencies: abi.decode(GenericPoolRaindexV6ArbOrderTaker_0_1_15_DEPENDENCIES, (address[]))
         });
         return suites;
     }

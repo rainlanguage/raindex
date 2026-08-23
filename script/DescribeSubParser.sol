@@ -3,9 +3,9 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.2/src/Script.sol";
-import {IMetaBoardV1_2} from "rain-metadata-0.1.0/src/interface/unstable/IMetaBoardV1_2.sol";
-import {LibDescribedByMeta} from "rain-metadata-0.1.0/src/lib/LibDescribedByMeta.sol";
-import {LibMetaBoardDeploy} from "rain-metadata-0.1.0/src/lib/deploy/LibMetaBoardDeploy.sol";
+import {IMetaBoardV1_2} from "rain-metadata-0.1.7/src/interface/unstable/IMetaBoardV1_2.sol";
+import {LibDescribedByMeta} from "rain-metadata-0.1.7/src/lib/LibDescribedByMeta.sol";
+import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.0/src/lib/LibMetaBoardDeploy.sol";
 import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
 import {LibRaindexDeploy} from "../src/lib/deploy/LibRaindexDeploy.sol";
 
@@ -30,7 +30,7 @@ contract DescribeSubParser is Script {
         bytes memory subParserDescribedByMeta = vm.readFileBinary("meta/RaindexV6SubParser.rain.meta");
 
         vm.createSelectFork(network);
-        IMetaBoardV1_2 metaboard = IMetaBoardV1_2(LibMetaBoardDeploy.METABOARD_DEPLOYED_ADDRESS);
+        IMetaBoardV1_2 metaboard = IMetaBoardV1_2(LibMetaBoardDeploy.META_BOARD_DEPLOYED_ADDRESS);
         vm.startBroadcast(deployerPrivateKey);
         LibDescribedByMeta.emitForDescribedAddress(
             metaboard, RaindexV6SubParser(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS), subParserDescribedByMeta
