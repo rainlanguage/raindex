@@ -13,7 +13,7 @@ import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
 import {LibDecimalFloatDeploy} from "rain-math-float-0.1.1/src/lib/deploy/LibDecimalFloatDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.0/src/lib/LibMetaBoardDeploy.sol";
+import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.1/src/lib/LibMetaBoardDeploy.sol";
 import {
     CREATION_CODE as RAINDEX_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as RAINDEX_RUNTIME_CODE_CANDIDATE
