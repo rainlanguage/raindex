@@ -6,6 +6,14 @@ pragma solidity ^0.8.25;
 
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 
+import {
+    DEPLOYED_ADDRESS as GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as GenericPoolRaindexV6ArbOrderTaker_0_1_14_BYTECODE_HASH,
+    CREATION_CODE as GenericPoolRaindexV6ArbOrderTaker_0_1_14_CREATION_CODE,
+    RUNTIME_CODE as GenericPoolRaindexV6ArbOrderTaker_0_1_14_RUNTIME_CODE,
+    DEPENDENCIES as GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPENDENCIES
+} from "../generated/0_1_14/GenericPoolRaindexV6ArbOrderTaker.sol";
+
 /// @title LibGenericPoolRaindexV6ArbOrderTakerReleased
 /// @notice Every frozen release of `GenericPoolRaindexV6ArbOrderTaker`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -26,7 +34,16 @@ library LibGenericPoolRaindexV6ArbOrderTakerReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "arb-generic-pool-order-taker@0_1_14",
+            creationCode: GenericPoolRaindexV6ArbOrderTaker_0_1_14_CREATION_CODE,
+            storedDeployedAddress: GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPLOYED_ADDRESS,
+            storedBytecodeHash: GenericPoolRaindexV6ArbOrderTaker_0_1_14_BYTECODE_HASH,
+            storedRuntimeCode: GenericPoolRaindexV6ArbOrderTaker_0_1_14_RUNTIME_CODE,
+            artifactPath: "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
+            dependencies: abi.decode(GenericPoolRaindexV6ArbOrderTaker_0_1_14_DEPENDENCIES, (address[]))
+        });
         return suites;
     }
 }

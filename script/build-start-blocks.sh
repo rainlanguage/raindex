@@ -22,7 +22,7 @@ set -euo pipefail
 LIB="src/lib/deploy/LibRaindexDeploy.sol"
 NET="subgraph/networks.json"
 YAML="subgraph/subgraph.yaml"
-PTR="src/generated/RaindexV6.pointers.sol"
+PTR="src/generated/candidate/RaindexV6.sol"
 
 ARB_RPC="${ARBITRUM_RPC_URL:-https://arbitrum.drpc.org}"
 BASE_RPC="${BASE_RPC_URL:-https://mainnet.base.org}"

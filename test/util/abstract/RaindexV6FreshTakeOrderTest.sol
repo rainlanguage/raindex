@@ -9,7 +9,7 @@ import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 /// @title RaindexV6FreshTakeOrderTest
 /// @notice Base for take-order tests that must observe mutations to
 /// `src/concrete/raindex/RaindexV6.sol`. `RaindexV6ExternalRealTest` etches the
-/// COMMITTED `src/generated/RaindexV6.pointers.sol` runtime bytecode (via
+/// COMMITTED `src/generated/candidate/RaindexV6.sol` runtime bytecode (via
 /// `LibEtchRaindex`) at `RAINDEX_DEPLOYED_ADDRESS`, which is blind to source
 /// edits. This base re-etches that address with the FRESH-COMPILED
 /// `type(RaindexV6).runtimeCode`, so a mutation to the take/skip loop is live in

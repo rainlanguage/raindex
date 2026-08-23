@@ -6,6 +6,14 @@ pragma solidity ^0.8.25;
 
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 
+import {
+    DEPLOYED_ADDRESS as RaindexV6SubParser_0_1_14_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as RaindexV6SubParser_0_1_14_BYTECODE_HASH,
+    CREATION_CODE as RaindexV6SubParser_0_1_14_CREATION_CODE,
+    RUNTIME_CODE as RaindexV6SubParser_0_1_14_RUNTIME_CODE,
+    DEPENDENCIES as RaindexV6SubParser_0_1_14_DEPENDENCIES
+} from "../generated/0_1_14/RaindexV6SubParser.sol";
+
 /// @title LibRaindexV6SubParserReleased
 /// @notice Every frozen release of `RaindexV6SubParser`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -26,7 +34,16 @@ library LibRaindexV6SubParserReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "subparser@0_1_14",
+            creationCode: RaindexV6SubParser_0_1_14_CREATION_CODE,
+            storedDeployedAddress: RaindexV6SubParser_0_1_14_DEPLOYED_ADDRESS,
+            storedBytecodeHash: RaindexV6SubParser_0_1_14_BYTECODE_HASH,
+            storedRuntimeCode: RaindexV6SubParser_0_1_14_RUNTIME_CODE,
+            artifactPath: "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
+            dependencies: abi.decode(RaindexV6SubParser_0_1_14_DEPENDENCIES, (address[]))
+        });
         return suites;
     }
 }
