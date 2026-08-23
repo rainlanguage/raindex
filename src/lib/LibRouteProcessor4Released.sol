@@ -14,6 +14,14 @@ import {
     DEPENDENCIES as RouteProcessor4_0_1_14_DEPENDENCIES
 } from "../generated/0_1_14/RouteProcessor4.sol";
 
+import {
+    DEPLOYED_ADDRESS as RouteProcessor4_0_1_15_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as RouteProcessor4_0_1_15_BYTECODE_HASH,
+    CREATION_CODE as RouteProcessor4_0_1_15_CREATION_CODE,
+    RUNTIME_CODE as RouteProcessor4_0_1_15_RUNTIME_CODE,
+    DEPENDENCIES as RouteProcessor4_0_1_15_DEPENDENCIES
+} from "../generated/0_1_15/RouteProcessor4.sol";
+
 /// @title LibRouteProcessor4Released
 /// @notice Every frozen release of `RouteProcessor4`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -34,7 +42,7 @@ library LibRouteProcessor4Released {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](1);
+        DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
             suite: "route-processor@0_1_14",
             creationCode: RouteProcessor4_0_1_14_CREATION_CODE,
@@ -43,6 +51,15 @@ library LibRouteProcessor4Released {
             storedRuntimeCode: RouteProcessor4_0_1_14_RUNTIME_CODE,
             artifactPath: "RouteProcessor4",
             dependencies: abi.decode(RouteProcessor4_0_1_14_DEPENDENCIES, (address[]))
+        });
+        suites[1] = DeploySuite({
+            suite: "route-processor@0_1_15",
+            creationCode: RouteProcessor4_0_1_15_CREATION_CODE,
+            storedDeployedAddress: RouteProcessor4_0_1_15_DEPLOYED_ADDRESS,
+            storedBytecodeHash: RouteProcessor4_0_1_15_BYTECODE_HASH,
+            storedRuntimeCode: RouteProcessor4_0_1_15_RUNTIME_CODE,
+            artifactPath: "RouteProcessor4",
+            dependencies: abi.decode(RouteProcessor4_0_1_15_DEPENDENCIES, (address[]))
         });
         return suites;
     }

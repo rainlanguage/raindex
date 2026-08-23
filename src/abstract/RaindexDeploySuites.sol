@@ -13,7 +13,7 @@ import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
 import {LibDecimalFloatDeploy} from "rain-math-float-0.1.1/src/lib/deploy/LibDecimalFloatDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {LibMetaBoardDeploy} from "rain-metadata-0.1.0/src/lib/deploy/LibMetaBoardDeploy.sol";
+import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.1/src/lib/LibMetaBoardDeploy.sol";
 import {
     CREATION_CODE as RAINDEX_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as RAINDEX_RUNTIME_CODE_CANDIDATE
@@ -76,7 +76,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         address[] memory deps = new address[](3);
         deps[0] = LibDecimalFloatDeploy.ZOLTU_DEPLOYED_LOG_TABLES_ADDRESS;
         deps[1] = address(LibTOFUTokenDecimals.TOFU_DECIMALS_DEPLOYMENT);
-        deps[2] = LibMetaBoardDeploy.METABOARD_DEPLOYED_ADDRESS;
+        deps[2] = LibMetaBoardDeploy.META_BOARD_DEPLOYED_ADDRESS;
         return deps;
     }
 
