@@ -38,7 +38,7 @@ address + codehash. Do the whole cascade without asking:
    ALL changed artifacts or `copy-artifacts` drifts red.
 2. Deploy each changed suite:
    `gh workflow run manual-sol-artifacts.yaml --ref <branch> -f suite=<x>`. One
-   dispatch deploys all five chains. **Never run two deploys concurrently** —
+   dispatch deploys all seven chains. **Never run two deploys concurrently** —
    they share one deployer EOA and race the nonce, leaving a partial deploy;
    serialize dispatches. A `completed/failure` run still deployed if the log has
    `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` — only etherscan `--verify` failed

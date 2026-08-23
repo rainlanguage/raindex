@@ -9,8 +9,8 @@ import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 /// @title RaindexV6FreshTest
 /// @notice Same external setup as `RaindexV6ExternalRealTest` but overlays the
 /// FRESHLY COMPILED `RaindexV6` runtime bytecode at the deployed address rather
-/// than the committed `src/generated/RaindexV6.pointers.sol` runtime code that
-/// `LibEtchRaindex` etches. The committed pointers code is frozen at the last
+/// than the committed `src/generated/candidate/RaindexV6.sol` runtime code that
+/// `LibEtchRaindex` etches. The committed candidate code is regenerated at the last
 /// `Build.sol` run, so tests that run against it do not observe edits to
 /// `src/concrete/raindex/RaindexV6.sol`. Overlaying `type(RaindexV6).runtimeCode`
 /// makes the live source the code under test.
