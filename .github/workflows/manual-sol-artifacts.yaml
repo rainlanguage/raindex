@@ -1,4 +1,10 @@
 name: Manual sol artifacts
+# The on-chain deploy, run by hand. Deliberately `workflow_dispatch` only:
+# broadcasting is key custody and real money, and nothing about a merge, a tag
+# or a schedule should be able to trigger it.
+#
+# Order is: dispatch this once per suite, confirm `RaindexDeployChainTest`
+# passes on every supported network, then push the `sol-v*` tag.
 on:
   workflow_dispatch:
     inputs:
@@ -25,6 +31,12 @@ on:
         required: false
         type: string
         default: ''
+      legacy:
+        description: >-
+          Send type-0 (legacy) transactions. Needed for HyperEVM, whose RPC rejects the fee-history ranges EIP-1559 estimation asks for; one dispatch of the default script broadcasts to every supported network including HyperEVM, so this applies to the whole run. Type-0 works everywhere, so it is safe to set for a run that has to reach HyperEVM.
+        required: false
+        type: boolean
+        default: false
 jobs:
   deploy:
     uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
@@ -32,4 +44,5 @@ jobs:
       suite: ${{ inputs.suite }}
       script: ${{ inputs.script }}
       network: ${{ inputs.network }}
+      legacy: ${{ inputs.legacy }}
     secrets: inherit
