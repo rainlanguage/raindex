@@ -37,6 +37,13 @@ on:
         required: false
         type: boolean
         default: false
+
+      verify:
+        description: >-
+          Verify on the block explorer after broadcasting. Turn it off when the verification retry loop would outlast the deploy; `Manual sol verify` repairs verification later without re-broadcasting.
+        required: false
+        type: boolean
+        default: true
 jobs:
   deploy:
     uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
@@ -45,4 +52,5 @@ jobs:
       script: ${{ inputs.script }}
       network: ${{ inputs.network }}
       legacy: ${{ inputs.legacy }}
+      verify: ${{ inputs.verify }}
     secrets: inherit
