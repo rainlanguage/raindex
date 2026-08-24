@@ -14,7 +14,7 @@ import {
     TakeOrdersConfigV5,
     TaskV2,
     Float
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
