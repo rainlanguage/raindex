@@ -221,23 +221,26 @@
     setTimeScale();
   }
 
-  function applyTickMarkFormatter() {
+  function applyTickMarkFormatter(
+    useLocal: boolean = $useLocalTime,
+    delta: number = timeDelta,
+  ) {
     if (!chart) return;
 
     chart.timeScale().applyOptions({
       tickMarkFormatter: (time: number) =>
-        formatChartTimestamp(time, timeDelta, $useLocalTime),
+        formatChartTimestamp(time, delta, useLocal),
     } as DeepPartial<TimeScaleOptions>);
   }
 
-  function setTimeScale() {
+  function setTimeScale(delta: number = timeDelta) {
     if (!chart) return;
 
-    applyTickMarkFormatter();
+    applyTickMarkFormatter($useLocalTime, delta);
 
     if (chartData && chartData.pricePoints.length > 0) {
       const now = Math.floor(Date.now() / 1000) as UTCTimestamp;
-      const from = (now - timeDelta) as UTCTimestamp;
+      const from = (now - delta) as UTCTimestamp;
       chart.timeScale().setVisibleRange({ from, to: now });
     } else {
       chart.timeScale().fitContent();
@@ -259,15 +262,9 @@
   $: if (chart && chartData) updateChartData();
   $: if (chart && $lightweightChartsTheme) setChartOptions();
   // Timezone preference only refreshes labels — do not reset pan/zoom.
-  $: if (chart) {
-    $useLocalTime;
-    applyTickMarkFormatter();
-  }
+  $: if (chart) applyTickMarkFormatter($useLocalTime, timeDelta);
   // Time-range selection still resets the visible window to the selected delta.
-  $: if (chart) {
-    timeDelta;
-    setTimeScale();
-  }
+  $: if (chart) setTimeScale(timeDelta);
 
   onMount(() => {
     if (trades.length > 0 && selectedPair) setupChart();
