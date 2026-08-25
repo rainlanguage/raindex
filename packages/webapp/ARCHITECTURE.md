@@ -77,6 +77,10 @@ nix develop -c npm run dev
     and bulk withdraw.
   - Detail route: `/vaults/[chainId]-[raindex]-[id]` (components handle the
     heavy lifting inside `ui-components`).
+- `/markets`
+  - Public Raindex market page for direct quote-token markets discovered from
+    active Raindex orders. It renders the same SDK snapshot model served by the
+    market-data REST API, including 24-hour statistics and executable depth.
 - `/deploy`
   - Loads a dotrain registry (`?registry=` query param or default
     `REGISTRY_URL`), validates orders, and shows valid/invalid sections.
@@ -130,6 +134,7 @@ Run inside a Nix shell for tool parity (`nix develop -c <cmd>`):
 
 ```bash
 PUBLIC_WALLETCONNECT_PROJECT_ID=<your_walletconnect_project_id>
+PUBLIC_MARKET_DATA_API_URL=https://api.raindex.finance
 ```
 
 - Notes
