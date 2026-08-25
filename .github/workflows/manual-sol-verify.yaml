@@ -19,8 +19,9 @@ name: Manual sol verify
 # cannot: its `artifactPath` is the bare name `RouteProcessor4`, and this repo
 # holds no Solidity source for it — only the pinned
 # `ROUTE_PROCESSOR_4_CREATION_CODE` bytes taken from sushiswap — so `forge
-# build` emits no artifact under that name and there is nothing here to submit.
-# Dispatching it fails on the first explorer rather than verifying anything.
+# build` emits no artifact under that name and `forge verify-contract` has
+# nothing to submit. Recorded here so the next person does not spend a run
+# finding out.
 on:
   workflow_dispatch:
     inputs:
