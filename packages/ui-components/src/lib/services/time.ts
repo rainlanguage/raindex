@@ -17,10 +17,18 @@ export function dateTimestamp(date: Date): number {
   return Math.floor(date.getTime() / 1000);
 }
 
-export function formatTimestampSecondsAsLocal(timestampSeconds: bigint) {
-  return dayjs(timestampSeconds * BigInt("1000"))
-    .utc()
-    .format("L LT");
+/**
+ * Formats a unix-seconds timestamp for display.
+ *
+ * @param timestampSeconds - unix epoch seconds
+ * @param useLocalTime - when true, format in the browser timezone; otherwise UTC
+ */
+export function formatTimestampSecondsAsLocal(
+  timestampSeconds: bigint,
+  useLocalTime = false,
+) {
+  const date = dayjs(timestampSeconds * BigInt("1000"));
+  return (useLocalTime ? date : date.utc()).format("L LT");
 }
 
 export function timestampSecondsToUTCTimestamp(timestampSeconds: bigint) {
@@ -55,9 +63,18 @@ if (import.meta.vitest) {
 
   describe("Date and timestamp utilities", () => {
     describe("formatTimestampSecondsAsLocal", () => {
-      it("converts timestamp to local format", () => {
-        const result = formatTimestampSecondsAsLocal(BigInt("1672531200")); // Jan 1, 2023 12:00 AM
+      it("converts timestamp to UTC format by default", () => {
+        const result = formatTimestampSecondsAsLocal(BigInt("1672531200")); // Jan 1, 2023 12:00 AM UTC
         expect(result).toBe("01/01/2023 12:00 AM");
+      });
+
+      it("converts timestamp to local format when useLocalTime is true", () => {
+        const result = formatTimestampSecondsAsLocal(
+          BigInt("1672531200"),
+          true,
+        );
+        // Local formatting still uses dayjs localized L LT; value depends on TZ.
+        expect(result).toMatch(/\d{2}\/\d{2}\/\d{4} \d{1,2}:\d{2} [AP]M/);
       });
     });
 

@@ -6,6 +6,7 @@
 	import { RaindexOrder, type RaindexCfg, type Address } from '@rainlanguage/raindex';
 	import TanstackAppTable from '../TanstackAppTable.svelte';
 	import { formatTimestampSecondsAsLocal } from '../../services/time';
+	import { useLocalTime } from '../../storesGeneric/useLocalTime';
 	import ListViewRaindexFilters from '../ListViewRaindexFilters.svelte';
 	import Hash, { HashType } from '../Hash.svelte';
 	import VaultCard from '../VaultCard.svelte';
@@ -198,7 +199,7 @@
 					{/if}
 				</div>
 				<span class="text-xs text-gray-500 dark:text-gray-400">
-					Added: {formatTimestampSecondsAsLocal(item.timestampAdded)}
+					Added: {formatTimestampSecondsAsLocal(item.timestampAdded, $useLocalTime)}
 				</span>
 			</div>
 		</TableBodyCell>

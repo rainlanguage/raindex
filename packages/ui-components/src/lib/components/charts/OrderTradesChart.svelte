@@ -20,6 +20,7 @@
     TIME_DELTA_30_DAYS,
     TIME_DELTA_1_YEAR,
   } from "../../services/time";
+  import { useLocalTime } from "../../storesGeneric/useLocalTime";
   import {
     Button,
     ButtonGroup,
@@ -141,7 +142,7 @@
       },
       timeScale: {
         tickMarkFormatter: (time: number) =>
-          formatChartTimestamp(time, timeDelta),
+          formatChartTimestamp(time, timeDelta, $useLocalTime),
       },
     });
 
@@ -225,7 +226,7 @@
 
     chart.timeScale().applyOptions({
       tickMarkFormatter: (time: number) =>
-        formatChartTimestamp(time, timeDelta),
+        formatChartTimestamp(time, timeDelta, $useLocalTime),
     } as DeepPartial<TimeScaleOptions>);
 
     if (chartData && chartData.pricePoints.length > 0) {
@@ -251,6 +252,11 @@
     setupChart();
   $: if (chart && chartData) updateChartData();
   $: if (chart && $lightweightChartsTheme) setChartOptions();
+  $: if (chart) {
+    $useLocalTime;
+    timeDelta;
+    setTimeScale();
+  }
 
   onMount(() => {
     if (trades.length > 0 && selectedPair) setupChart();
