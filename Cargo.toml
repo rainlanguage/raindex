@@ -48,7 +48,7 @@ derive_builder = "0.20.0"
 thirtyfour = "0.31.0"
 test-context = "0.3.0"
 portpicker = "0.1.1"
-rain-erc = "0.1.1"
+rain-erc = "0.1.5"
 rain-math-float = "0.1.7"
 rain-error-decoding = "0.1.2"
 # Direct dep required: the #[wasm_bindgen] macro emits `::wasm_bindgen` paths, and

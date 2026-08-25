@@ -17,9 +17,23 @@ use rain_error_decoding::{AbiDecodedErrorType, ErrorRegistry};
 use raindex_bindings::provider::{mk_read_provider, ReadProvider};
 use raindex_bindings::IRaindexV6::quote2Call;
 use raindex_bindings::Raindex::multicallCall;
+#[cfg(not(target_family = "wasm"))]
+use std::future::Future;
 use url::Url;
 
 const DEFAULT_QUOTE_CHUNK_SIZE: usize = 16;
+#[cfg(not(target_family = "wasm"))]
+pub(crate) const RPC_ATTEMPT_TIMEOUT_MS: u64 = 3_000;
+
+#[cfg(not(target_family = "wasm"))]
+pub(crate) async fn with_rpc_timeout<F>(future: F, timeout_ms: u64) -> Option<F::Output>
+where
+    F: Future,
+{
+    tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), future)
+        .await
+        .ok()
+}
 
 fn normalize_chunk_size(chunk_size: Option<usize>) -> usize {
     chunk_size.unwrap_or(DEFAULT_QUOTE_CHUNK_SIZE).max(1)
@@ -90,7 +104,21 @@ async fn quote_chunk_once(
         .map(|n| BlockId::Number(BlockNumberOrTag::Number(n)))
         .unwrap_or(BlockId::latest());
 
-    match provider.call(tx).block(block).await {
+    #[cfg(not(target_family = "wasm"))]
+    let response = with_rpc_timeout(
+        async { provider.call(tx).block(block).await },
+        RPC_ATTEMPT_TIMEOUT_MS,
+    )
+    .await
+    .ok_or_else(|| {
+        Error::TransportError(format!(
+            "quote request timed out after {RPC_ATTEMPT_TIMEOUT_MS}ms"
+        ))
+    })?;
+    #[cfg(target_family = "wasm")]
+    let response = provider.call(tx).block(block).await;
+
+    match response {
         Ok(bytes) => {
             let decoded = multicallCall::abi_decode_returns(&bytes).map_err(|e| {
                 Error::AlloySolTypesError(alloy::sol_types::Error::Other(
@@ -142,10 +170,8 @@ async fn quote_chunk_once(
                 // it to a single target.
                 Err(Error::ChunkReverted(Box::new(decoded)))
             } else {
-                Err(Error::ChunkReverted(Box::new(
-                    FailedQuote::CorruptReturnData(format!(
-                        "RPC error without revert data: {err_resp}"
-                    )),
+                Err(Error::TransportError(format!(
+                    "RPC error without revert data: {err_resp}"
                 )))
             }
         }
@@ -177,10 +203,29 @@ async fn quote_chunk_with_probe_and_split(
         Err(err) => err,
     };
 
+    // Retrying a transport failure with progressively smaller chunks
+    // multiplies the same unhealthy RPC request and can turn a single rate
+    // limit into a request storm. Return it so the caller can cycle RPCs.
+    if matches!(initial_err, Error::TransportError(_)) {
+        return Err(initial_err);
+    }
+
     if quote_targets.len() <= 1 {
-        // Singleton batch already reverted — attribute the revert to that one
-        // target using the decoded `FailedQuote` payload.
-        return Ok(vec![chunk_err_to_quote_result(&initial_err)]);
+        // A singleton on-chain revert belongs to that target. Decode and
+        // return it without trying another RPC, because the order itself is
+        // invalid. Provider-level response errors can still be specific to an
+        // unhealthy RPC, so let the caller cycle to the next provider.
+        return if matches!(initial_err, Error::ChunkReverted(_)) {
+            Ok(vec![chunk_err_to_quote_result(&initial_err)])
+        } else {
+            Err(initial_err)
+        };
+    }
+
+    // Only an on-chain revert from the Raindex multicall can be attributed by
+    // splitting a multi-target chunk.
+    if !matches!(initial_err, Error::ChunkReverted(_)) {
+        return Err(initial_err);
     }
 
     // Bisect unconditionally. A previous version short-circuited here with a
@@ -206,7 +251,9 @@ async fn quote_chunk_with_probe_and_split(
                 }
             }
             Err(err) => {
-                if chunk.len() == 1 {
+                if !matches!(err, Error::ChunkReverted(_)) {
+                    return Err(err);
+                } else if chunk.len() == 1 {
                     resolved[start] = Some(chunk_err_to_quote_result(&err));
                 } else {
                     let mid = start + (chunk.len() / 2);
@@ -267,15 +314,156 @@ pub async fn batch_quote(
     registry: Option<&dyn ErrorRegistry>,
     chunk_size: Option<usize>,
 ) -> Result<Vec<QuoteResult>, Error> {
-    let rpcs = rpcs
-        .into_iter()
-        .map(|rpc| rpc.parse::<Url>())
-        .collect::<Result<Vec<Url>, _>>()?;
-    let provider = mk_read_provider(&rpcs)?;
     if quote_targets.is_empty() {
         return Ok(vec![]);
     }
+    #[cfg(target_family = "wasm")]
+    {
+        let rpcs = rpcs
+            .into_iter()
+            .map(|rpc| rpc.parse::<Url>())
+            .collect::<Result<Vec<Url>, _>>()?;
+        let provider = mk_read_provider(&rpcs)?;
+        return batch_quote_with_provider(
+            quote_targets,
+            &provider,
+            block_number,
+            counterparty,
+            registry,
+            chunk_size,
+        )
+        .await;
+    }
+    #[cfg(not(target_family = "wasm"))]
+    {
+        let mut transport_failures = Vec::new();
+        let mut providers = Vec::new();
+        for rpc in &rpcs {
+            let url = match rpc.parse::<Url>() {
+                Ok(url) => url,
+                Err(error) => {
+                    transport_failures.push(format!("{rpc}: {error}"));
+                    continue;
+                }
+            };
+            let provider = match mk_read_provider(std::slice::from_ref(&url)) {
+                Ok(provider) => provider,
+                Err(error) => {
+                    transport_failures.push(format!("{rpc}: {error}"));
+                    continue;
+                }
+            };
+            providers.push((url, provider));
+        }
+        if providers.is_empty() {
+            let reason = if rpcs.is_empty() {
+                "no RPC URLs configured".to_string()
+            } else {
+                transport_failures.join("; ")
+            };
+            let message = format!("all quote RPCs failed: {reason}");
+            return Ok((0..quote_targets.len())
+                .map(|_| Err(FailedQuote::CorruptReturnData(message.clone())))
+                .collect());
+        }
+        batch_quote_with_providers(
+            quote_targets,
+            &providers,
+            transport_failures,
+            block_number,
+            counterparty,
+            registry,
+            chunk_size,
+        )
+        .await
+    }
+}
 
+#[cfg(not(target_family = "wasm"))]
+async fn batch_quote_with_providers(
+    quote_targets: &[QuoteTarget],
+    providers: &[(Url, ReadProvider)],
+    provider_setup_failures: Vec<String>,
+    block_number: Option<u64>,
+    counterparty: Address,
+    registry: Option<&dyn ErrorRegistry>,
+    chunk_size: Option<usize>,
+) -> Result<Vec<QuoteResult>, Error> {
+    let chunk_size = normalize_chunk_size(chunk_size);
+    let mut groups: Vec<(Address, Vec<(usize, QuoteTarget)>)> = Vec::new();
+    for (index, target) in quote_targets.iter().enumerate() {
+        if let Some(group) = groups
+            .iter_mut()
+            .find(|(raindex, _)| *raindex == target.raindex)
+        {
+            group.1.push((index, target.clone()));
+        } else {
+            groups.push((target.raindex, vec![(index, target.clone())]));
+        }
+    }
+
+    let group_futures = groups.into_iter().map(|(_, indexed_targets)| {
+        let providers = providers.to_vec();
+        let provider_setup_failures = provider_setup_failures.clone();
+        async move {
+            let mut out = Vec::with_capacity(indexed_targets.len());
+            let (indexes, targets): (Vec<usize>, Vec<QuoteTarget>) =
+                indexed_targets.into_iter().unzip();
+            for chunk_start in (0..targets.len()).step_by(chunk_size) {
+                let chunk_end = (chunk_start + chunk_size).min(targets.len());
+                let chunk = &targets[chunk_start..chunk_end];
+                let mut failures = provider_setup_failures.clone();
+                let mut chunk_results = None;
+                for (rpc, provider) in &providers {
+                    match quote_chunk_with_probe_and_split(
+                        chunk,
+                        provider,
+                        block_number,
+                        counterparty,
+                        registry,
+                    )
+                    .await
+                    {
+                        Ok(results) => {
+                            chunk_results = Some(results);
+                            break;
+                        }
+                        Err(error) => failures.push(format!("{rpc}: {error}")),
+                    }
+                }
+                let chunk_results = chunk_results.unwrap_or_else(|| {
+                    let message = format!("all quote RPCs failed: {}", failures.join("; "));
+                    (0..chunk.len())
+                        .map(|_| Err(FailedQuote::CorruptReturnData(message.clone())))
+                        .collect()
+                });
+                for (offset, result) in chunk_results.into_iter().enumerate() {
+                    out.push((indexes[chunk_start + offset], result));
+                }
+            }
+            Ok::<Vec<(usize, QuoteResult)>, Error>(out)
+        }
+    });
+
+    let mut results: Vec<Option<QuoteResult>> = Vec::with_capacity(quote_targets.len());
+    results.resize_with(quote_targets.len(), || None);
+    for group_result in join_all(group_futures).await {
+        for (index, result) in group_result? {
+            results[index] = Some(result);
+        }
+    }
+    Ok(results.into_iter().map(Option::unwrap).collect())
+}
+
+#[cfg(target_family = "wasm")]
+async fn batch_quote_with_provider(
+    quote_targets: &[QuoteTarget],
+    provider: &ReadProvider,
+    block_number: Option<u64>,
+    counterparty: Address,
+    registry: Option<&dyn ErrorRegistry>,
+    chunk_size: Option<usize>,
+) -> Result<Vec<QuoteResult>, Error> {
     let chunk_size = normalize_chunk_size(chunk_size);
 
     // Group by raindex, preserving the original index of each target so we
@@ -409,6 +597,242 @@ mod tests {
         .await
         .unwrap();
         assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_without_rpcs_returns_explicit_aligned_failures() {
+        let result = batch_quote(
+            &[QuoteTarget::default()],
+            Vec::new(),
+            None,
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(matches!(
+            &result[0],
+            Err(FailedQuote::CorruptReturnData(message))
+                if message.contains("no RPC URLs configured")
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_transport_failure_returns_aligned_failures_without_bisection() {
+        let rpc_server = MockServer::start_async().await;
+        let failure = rpc_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.status(429).body("rate limited");
+        });
+
+        let result = batch_quote(
+            &[QuoteTarget::default(), QuoteTarget::default()],
+            vec![rpc_server.url("/rpc").to_string()],
+            Some(1),
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert!(result.iter().all(|result| matches!(
+            result,
+            Err(FailedQuote::CorruptReturnData(message))
+                if message.contains("all quote RPCs failed")
+        )));
+        failure.assert_hits(1);
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_applies_timeout_per_chunk_request() {
+        let rpc_server = MockServer::start_async().await;
+        let one = Float::parse("1".to_string()).unwrap();
+        let response = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, one)]);
+        let quote = rpc_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.delay(std::time::Duration::from_millis(1_600))
+                .json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": response,
+                }));
+        });
+
+        let results = batch_quote(
+            &[QuoteTarget::default(), QuoteTarget::default()],
+            vec![rpc_server.url("/rpc")],
+            Some(1),
+            Address::ZERO,
+            None,
+            Some(1),
+        )
+        .await
+        .unwrap();
+
+        assert!(results.iter().all(Result::is_ok));
+        quote.assert_hits(2);
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_cycles_to_next_rpc_after_transport_failure() {
+        let failed_server = MockServer::start_async().await;
+        let failure = failed_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.status(429).body("rate limited");
+        });
+        let healthy_server = MockServer::start_async().await;
+        let healthy = healthy_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                    true,
+                    Float::parse("2".into()).unwrap(),
+                    Float::parse("3".into()).unwrap(),
+                )]),
+            }));
+        });
+
+        let result = batch_quote(
+            &[QuoteTarget::default()],
+            vec![failed_server.url("/rpc"), healthy_server.url("/rpc")],
+            Some(1),
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert!(
+            result[0].is_ok(),
+            "unexpected quote result: {:?}",
+            result[0]
+        );
+        failure.assert_hits(1);
+        healthy.assert_hits(1);
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_cycles_to_next_rpc_after_timeout() {
+        let stalled_server = MockServer::start_async().await;
+        let stalled = stalled_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.delay(std::time::Duration::from_millis(
+                RPC_ATTEMPT_TIMEOUT_MS + 200,
+            ))
+            .json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": "0x",
+            }));
+        });
+        let healthy_server = MockServer::start_async().await;
+        let healthy = healthy_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                    true,
+                    Float::parse("2".into()).unwrap(),
+                    Float::parse("3".into()).unwrap(),
+                )]),
+            }));
+        });
+
+        let result = batch_quote(
+            &[QuoteTarget::default()],
+            vec![stalled_server.url("/rpc"), healthy_server.url("/rpc")],
+            Some(1),
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(result[0].is_ok());
+        stalled.assert_hits(1);
+        healthy.assert_hits(1);
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_cycles_to_next_rpc_after_malformed_response() {
+        let malformed_server = MockServer::start_async().await;
+        let malformed = malformed_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": "0x",
+            }));
+        });
+        let healthy_server = MockServer::start_async().await;
+        let healthy = healthy_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                    true,
+                    Float::parse("2".into()).unwrap(),
+                    Float::parse("3".into()).unwrap(),
+                )]),
+            }));
+        });
+
+        let result = batch_quote(
+            &[QuoteTarget::default()],
+            vec![malformed_server.url("/rpc"), healthy_server.url("/rpc")],
+            Some(1),
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(result[0].is_ok());
+        malformed.assert_hits(1);
+        healthy.assert_hits(1);
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_cycles_to_next_rpc_after_malformed_url() {
+        let healthy_server = MockServer::start_async().await;
+        let healthy = healthy_server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                    true,
+                    Float::parse("2".into()).unwrap(),
+                    Float::parse("3".into()).unwrap(),
+                )]),
+            }));
+        });
+
+        let result = batch_quote(
+            &[QuoteTarget::default()],
+            vec!["not a URL".into(), healthy_server.url("/rpc")],
+            Some(1),
+            Address::ZERO,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert!(result[0].is_ok());
+        healthy.assert_hits(1);
     }
 
     #[tokio::test]
@@ -580,9 +1004,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_batch_quote_invalid_rpc_url_errors() {
+    async fn test_batch_quote_invalid_rpc_url_returns_aligned_failure() {
         let quote_targets = vec![QuoteTarget::default()];
-        let err = batch_quote(
+        let result = batch_quote(
             &quote_targets,
             vec!["this should break".to_string()],
             None,
@@ -591,11 +1015,13 @@ mod tests {
             None,
         )
         .await
-        .unwrap_err();
+        .unwrap();
 
+        assert_eq!(result.len(), 1);
         assert!(matches!(
-            err,
-            Error::UrlParseError(url::ParseError::RelativeUrlWithoutBase)
+            &result[0],
+            Err(FailedQuote::CorruptReturnData(message))
+                if message.contains("all quote RPCs failed")
         ));
     }
 
@@ -848,6 +1274,67 @@ mod tests {
         assert!(q1.ratio.eq(four).unwrap());
         assert!(q2.max_output.eq(five).unwrap());
         assert!(q2.ratio.eq(six).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_batch_quote_retries_only_the_failed_chunk_on_the_next_rpc() {
+        let first_rpc = MockServer::start_async().await;
+        let second_rpc = MockServer::start_async().await;
+        let raindex = "0xcccccccccccccccccccccccccccccccccccccccc"
+            .parse::<Address>()
+            .unwrap();
+        let first_index = 0xAAAAu64;
+        let second_index = 0xBBBBu64;
+        let first_needle = format!("{first_index:064x}");
+        let second_needle = format!("{second_index:064x}");
+        let one = Float::parse("1".to_string()).unwrap();
+        let two = Float::parse("2".to_string()).unwrap();
+        let first_return =
+            encode_multicall_return(vec![encode_quote2_return_bytes(true, one, one)]);
+        let second_return =
+            encode_multicall_return(vec![encode_quote2_return_bytes(true, two, two)]);
+
+        let first_success = first_rpc.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(first_needle.clone());
+            then.json_body(json!({"jsonrpc": "2.0", "id": 1, "result": first_return}));
+        });
+        let first_failure = first_rpc.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(second_needle.clone());
+            then.status(429).body("rate limited");
+        });
+        let second_success = second_rpc.mock(|when, then| {
+            when.method(POST)
+                .path("/rpc")
+                .body_contains(second_needle.clone());
+            then.json_body(json!({"jsonrpc": "2.0", "id": 1, "result": second_return}));
+        });
+
+        let results = batch_quote(
+            &[
+                target_with(raindex, first_index),
+                target_with(raindex, second_index),
+            ],
+            vec![
+                first_rpc.url("/rpc").to_string(),
+                second_rpc.url("/rpc").to_string(),
+            ],
+            None,
+            Address::ZERO,
+            None,
+            Some(1),
+        )
+        .await
+        .unwrap();
+
+        assert!(results[0].as_ref().unwrap().ratio.eq(one).unwrap());
+        assert!(results[1].as_ref().unwrap().ratio.eq(two).unwrap());
+        first_success.assert_hits(1);
+        first_failure.assert_hits(1);
+        second_success.assert_hits(1);
     }
 
     // A multicall whose returned `bytes[]` length does not match the number of

@@ -829,9 +829,8 @@ mod tests {
             raindex,
         };
 
-        // A malformed RPC body causes per-target `CorruptReturnData` (surfaced
-        // via the bisection path); the top-level call still returns Ok.
-        let res = quote_target_specifier
+        // A malformed RPC response remains aligned with the requested quote.
+        let result = quote_target_specifier
             .do_quote(
                 server.url("/sg").as_str(),
                 vec![server.url("/bad-rpc").to_string()],
@@ -841,7 +840,11 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(matches!(res, Err(FailedQuote::CorruptReturnData(_))));
+        assert!(matches!(
+            result,
+            Err(FailedQuote::CorruptReturnData(message))
+                if message.contains("all quote RPCs failed")
+        ));
 
         let err = quote_target_specifier
             .do_quote(
@@ -909,12 +912,9 @@ mod tests {
             QuoteSpec::default(),
         ]);
 
-        // A transport-layer RPC failure (no body for /bad-rpc) now surfaces
-        // per-target as `CorruptReturnData` (the OZ multicall path never fails
-        // at the batch level for transport/revert errors — it bubbles them
-        // into per-target results via bisection).
+        // Endpoint failures stay aligned with the quote targets that reached RPC.
         let bad_rpc_url = rpc_server.url("/bad-rpc").to_string();
-        let result = batch_quote_targets_specifiers
+        let results = batch_quote_targets_specifiers
             .do_quote(
                 rpc_server.url("/sg").as_str(),
                 vec![bad_rpc_url.clone()],
@@ -924,10 +924,14 @@ mod tests {
             )
             .await
             .unwrap();
-        assert_eq!(result.len(), 3);
-        for r in &result {
-            assert!(r.is_err(), "expected all targets to fail: {r:?}");
-        }
+        assert_eq!(results.len(), 3);
+        assert!(matches!(
+            &results[0],
+            Err(FailedQuote::CorruptReturnData(message))
+                if message.contains("all quote RPCs failed")
+        ));
+        assert!(matches!(&results[1], Err(FailedQuote::NonExistent)));
+        assert!(matches!(&results[2], Err(FailedQuote::NonExistent)));
 
         let result = batch_quote_targets_specifiers
             .do_quote(
