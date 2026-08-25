@@ -57,4 +57,3 @@ export async function promiseTimeout<T>(
     ) as Promise<T>,
   ]).finally(() => clearTimeout(timeout));
 }
-

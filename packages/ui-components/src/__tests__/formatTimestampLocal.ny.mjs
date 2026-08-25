@@ -18,6 +18,4 @@ function formatTimestampSecondsAsLocal(timestampSeconds, useLocalTime = false) {
   return (useLocalTime ? date : date.utc()).format("L LT");
 }
 
-process.stdout.write(
-  formatTimestampSecondsAsLocal(BigInt("1672531200"), true),
-);
+process.stdout.write(formatTimestampSecondsAsLocal(BigInt("1672531200"), true));
