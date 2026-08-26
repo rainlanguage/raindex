@@ -18,6 +18,7 @@
 	import {
 		ButtonDarkMode,
 		ButtonScrub,
+		ButtonTimeZone,
 		IconTelegram,
 		IconExternalLink,
 		logoDark,
@@ -154,6 +155,7 @@
 			<SidebarGroup border class="flex justify-start gap-2" ulClass="list-none">
 				<ButtonDarkMode {colorTheme} />
 				<ButtonScrub />
+				<ButtonTimeZone />
 			</SidebarGroup>
 			<SidebarGroup border class="min-h-0 flex-1 overflow-hidden" ulClass="list-none h-full">
 				<TransactionList />
