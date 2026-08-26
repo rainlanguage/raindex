@@ -17,16 +17,28 @@ describe("Date and timestamp utilities", () => {
     });
 
     it("converts timestamp to local format when useLocalTime is true", () => {
-      // Spawn a fresh Node process with TZ=America/New_York so local getters
-      // are non-UTC, then assert the exact EST wall time for a known instant.
+      // Spawn a fresh process with TZ=America/New_York so local getters are
+      // non-UTC, and exercise the exported formatter from time.ts.
       const scriptPath = path.join(
         path.dirname(fileURLToPath(import.meta.url)),
-        "formatTimestampLocal.ny.mjs",
+        "formatTimestampLocal.ny.ts",
       );
-      const result = spawnSync(process.execPath, [scriptPath], {
-        encoding: "utf8",
-        env: { ...process.env, TZ: "America/New_York" },
-      });
+      const viteNode = path.resolve(
+        path.dirname(fileURLToPath(import.meta.url)),
+        "../../../../node_modules/.bin/vite-node",
+      );
+      const result = spawnSync(
+        viteNode,
+        ["--config", "vite.config.ts", scriptPath],
+        {
+          encoding: "utf8",
+          cwd: path.resolve(
+            path.dirname(fileURLToPath(import.meta.url)),
+            "../..",
+          ),
+          env: { ...process.env, TZ: "America/New_York" },
+        },
+      );
       expect(result.status, result.stderr).toBe(0);
       expect(result.stdout.trim()).toBe("12/31/2022 7:00 PM");
     });
