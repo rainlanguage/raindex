@@ -4,3 +4,49 @@ jobs:
   subgraph-test:
     uses: rainlanguage/rainix/.github/workflows/rainix-subgraph-test.yaml@main
     secrets: inherit
+  # `crates/subgraph/schema/raindex.graphql` is the graph-node API schema that
+  # `cynic_codegen` in `crates/subgraph/build.rs` registers as truth for the
+  # generated client, and nothing in this repo produces it. It cannot be
+  # regenerated offline the way `copy-artifacts` regenerates the ABIs, because
+  # deriving it means running graph-node's own schema derivation — so
+  # graph-node runs, here, against a throwaway store and an anvil chain.
+  schema-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          gc-max-store-size-linux: 1G
+      # anvil is the only thing this job wants out of a solidity shell: the
+      # ABIs the manifest names are committed under subgraph/abis, so unlike
+      # rainlanguage/rain.metadata#298 there is no soldeer install and no
+      # forge build here.
+      - name: Start anvil
+        run: |
+          nix develop .#sol-shell -c anvil --host 0.0.0.0 --chain-id 11155111 > anvil.log 2>&1 &
+          nix develop .#sol-shell -c bash -c 'for _ in $(seq 60); do cast block-number --rpc-url http://127.0.0.1:8545 && exit 0; sleep 1; done; exit 1'
+      - name: Start graph-node
+        run: |
+          docker compose -f subgraph/docker-compose.graph-node.yml up -d --wait
+          for _ in $(seq 60); do
+            curl -s -o /dev/null http://localhost:8020/ && exit 0
+            sleep 2
+          done
+          exit 1
+      - name: Deploy the subgraph and diff the committed API schema
+        run: nix develop .#subgraph-shell -c bash subgraph/check-api-schema.sh
+      - name: Upload the API schema graph-node derived
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raindex-api-schema
+          path: raindex.graphql.generated
+          if-no-files-found: warn
+      - name: anvil log
+        if: failure()
+        run: cat anvil.log
+      - name: graph-node logs
+        if: failure()
+        run: docker compose -f subgraph/docker-compose.graph-node.yml logs
+      - name: The subgraph source carries no build residue
+        run: git diff --exit-code -- subgraph/

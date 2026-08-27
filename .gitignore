@@ -28,3 +28,6 @@ dependencies/
 
 # Local pre-commit hook config
 .pre-commit-config.yaml
+
+# The API schema the schema-snapshot job introspects out of graph-node
+raindex.graphql.generated
