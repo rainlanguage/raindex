@@ -21,7 +21,7 @@ type AddOrder implements Event {
   raindex: Raindex!
 
   """The msg.sender of this add order call"""
-  sender: Bytes!
+  sender: String!
   transaction: Transaction!
 }
 
