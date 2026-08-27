@@ -12,9 +12,9 @@ pre-authorized; don't stop to ask about address/codehash churn.
 - Run `gh` via `nix shell nixpkgs#gh --command gh` (not on global PATH).
 - Required checks (`main` ruleset): `test`, `subgraph-test`, `test-js-bindings`,
   `wasm-artifacts`, `wasm-browser-test`, `wasm-test`. `rainix-sol / *`,
-  `git-clean`, `Deploy-Preview-Push` and the ~30-min vercel preview do NOT
-  gate a merge. Still understand every red before merging; never `--admin` over
-  an unexplained failure.
+  `git-clean`, `Deploy-Preview-Push` and the ~30-min vercel preview do NOT gate
+  a merge. Still understand every red before merging; never `--admin` over an
+  unexplained failure.
 - A merge-gate hook requires a
   `Reviewed <9-char-head-sha>: <substantive
   review>` PR comment bound to the
