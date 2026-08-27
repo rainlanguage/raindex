@@ -12,7 +12,7 @@ pre-authorized; don't stop to ask about address/codehash churn.
 - Run `gh` via `nix shell nixpkgs#gh --command gh` (not on global PATH).
 - Required checks (`main` ruleset): `test`, `subgraph-test`, `test-js-bindings`,
   `wasm-artifacts`, `wasm-browser-test`, `wasm-test`. `rainix-sol / *`,
-  `copy-artifacts`, `Deploy-Preview-Push` and the ~30-min vercel preview do NOT
+  `git-clean`, `Deploy-Preview-Push` and the ~30-min vercel preview do NOT
   gate a merge. Still understand every red before merging; never `--admin` over
   an unexplained failure.
 - A merge-gate hook requires a
@@ -35,7 +35,7 @@ address + codehash. Do the whole cascade without asking:
 
 1. Regenerate artifacts — run the `rainix-copy-artifacts` step sequence (see
    that workflow) in `nix develop github:rainlanguage/rainix#sol-shell`. Stage
-   ALL changed artifacts or `copy-artifacts` drifts red.
+   ALL changed artifacts or `git-clean` drifts red.
 2. Deploy each changed suite:
    `gh workflow run manual-sol-artifacts.yaml --ref <branch> -f suite=<x>`. One
    dispatch deploys all seven chains. **Never run two deploys concurrently** —

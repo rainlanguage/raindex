@@ -1,7 +1,7 @@
-name: copy-artifacts
+name: Git is clean
 on: [push]
 jobs:
-  copy-artifacts:
+  git-clean:
     # Build from committed sources and assert the committed meta/pointer
     # artifacts are still current. The meta hook is `script/build-meta.sh`;
     # pointers + abis use the upstream Build.sol convention.
