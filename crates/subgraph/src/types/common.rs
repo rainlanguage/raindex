@@ -511,6 +511,9 @@ pub struct SgClearBounty {
 #[derive(cynic::QueryFragment, Debug, Clone, Serialize, Tsify)]
 #[cynic(graphql_type = "TradeEvent")]
 pub struct SgTradeEvent {
+    pub id: SgBytes,
+    #[serde(rename = "__typename")]
+    pub __typename: String,
     pub transaction: SgTransaction,
     pub sender: SgBytes,
 }

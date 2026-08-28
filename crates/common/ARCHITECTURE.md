@@ -38,7 +38,11 @@ require its `COMMIT_SHA` env var.
   prepare batch withdraw calldata; expose WASM‑friendly structs. The `local_db/`
   subtree is split into `state.rs` (runtime state, query routing via
   `LocalDbState`/`QuerySource`/`SyncReadiness`) and `status.rs` (UI
-  status‑reporting types).
+  status‑reporting types). The `markets/` subtree discovers direct quote-token
+  pairs from active indexed orders and assembles normalized order books, trades,
+  and rolling statistics without application-specific token semantics. Registry
+  token data identifies each network's quote token and enriches indexed
+  metadata; it does not decide which base tokens are listed.
 - `dotrain_order` — Parse and validate a DOTRAIN config; compose
   scenarios/deployments to Rainlang; fetch authoring metadata and pragma words;
   merge additional settings.

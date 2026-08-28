@@ -62,6 +62,7 @@ use wasm_bindgen_utils::{prelude::*, wasm_export};
 
 pub mod add_orders;
 pub mod local_db;
+pub mod markets;
 pub mod order_quotes;
 pub mod orders;
 pub mod orders_list;

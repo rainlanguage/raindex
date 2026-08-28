@@ -398,6 +398,8 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         id: "0x07db8b3f3e7498f9d4d0e40b98f57c020d3d277516e86023a8200a20464d4895",
         timestamp: "1632000000",
         tradeEvent: {
+          id: BYTES32_ZERO,
+          __typename: "TakeOrder",
           sender: "0x0000000000000000000000000000000000000000",
           transaction: {
             id: BYTES32_ZERO,
@@ -476,6 +478,8 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         id: "0x07db8b3f3e7498f9d4d0e40b98f57c020d3d277516e86023a8200a20464d4894",
         timestamp: "1632000000",
         tradeEvent: {
+          id: BYTES32_ZERO,
+          __typename: "TakeOrder",
           sender: "0x0000000000000000000000000000000000000000",
           transaction: {
             id: BYTES32_ZERO,
@@ -564,6 +568,8 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         owner: "0x0000000000000000000000000000000000000000",
       },
       tradeEvent: {
+        id: BYTES32_0123,
+        __typename: "TakeOrder",
         sender: "0x0000000000000000000000000000000000000000",
         transaction: {
           id: BYTES32_0123,

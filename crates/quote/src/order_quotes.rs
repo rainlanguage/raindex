@@ -1,5 +1,7 @@
 #[cfg(test)]
 use crate::injector::NoopInjector;
+#[cfg(not(target_family = "wasm"))]
+use crate::rpc::{with_rpc_timeout, RPC_ATTEMPT_TIMEOUT_MS};
 use crate::{
     error::Error,
     injector::SignedContextInjector,
@@ -75,6 +77,21 @@ struct QuotedPairMetadata {
     pair: Pair,
 }
 
+fn pair_is_selected(
+    selected_pairs: Option<&[Vec<Pair>]>,
+    order_index: usize,
+    input_index: u32,
+    output_index: u32,
+) -> bool {
+    selected_pairs
+        .and_then(|pairs| pairs.get(order_index))
+        .is_none_or(|pairs| {
+            pairs
+                .iter()
+                .any(|pair| pair.input_index == input_index && pair.output_index == output_index)
+        })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(target_family = "wasm", derive(Tsify))]
 #[serde(rename_all = "camelCase")]
@@ -128,6 +145,55 @@ pub async fn get_order_quotes(
     counterparty: Address,
     injector: &dyn SignedContextInjector,
 ) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
+    get_order_quotes_inner(
+        orders,
+        None,
+        block_number,
+        rpcs,
+        chunk_size,
+        counterparty,
+        injector,
+    )
+    .await
+}
+
+/// Quote only the requested IO pairs for each order.
+pub async fn get_order_quotes_for_pairs(
+    orders: Vec<SgOrder>,
+    selected_pairs: &[Vec<Pair>],
+    block_number: Option<u64>,
+    rpcs: Vec<String>,
+    chunk_size: Option<usize>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
+) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
+    if selected_pairs.len() != orders.len() {
+        return Err(Error::PairSelectionLengthMismatch {
+            expected: orders.len(),
+            actual: selected_pairs.len(),
+        });
+    }
+    get_order_quotes_inner(
+        orders,
+        Some(selected_pairs),
+        block_number,
+        rpcs,
+        chunk_size,
+        counterparty,
+        injector,
+    )
+    .await
+}
+
+async fn get_order_quotes_inner(
+    orders: Vec<SgOrder>,
+    selected_pairs: Option<&[Vec<Pair>]>,
+    block_number: Option<u64>,
+    rpcs: Vec<String>,
+    chunk_size: Option<usize>,
+    counterparty: Address,
+    injector: &dyn SignedContextInjector,
+) -> Result<Vec<BatchOrderQuotesResponse>, Error> {
     let started_at = QuoteTiming::now();
     info!(
         order_count = orders.len(),
@@ -142,16 +208,23 @@ pub async fn get_order_quotes(
     let req_block_number = match block_number {
         Some(block) => block,
         None => {
-            let urls = rpcs
-                .iter()
-                .map(|rpc| rpc.parse())
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(Error::UrlParseError)?;
-            let provider = mk_read_provider(&urls).map_err(Error::ReadProviderError)?;
-            provider
-                .get_block_number()
-                .await
-                .map_err(|e| Error::TransportError(e.to_string()))?
+            #[cfg(target_family = "wasm")]
+            {
+                let urls = rpcs
+                    .iter()
+                    .map(|rpc| rpc.parse())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::UrlParseError)?;
+                let provider = mk_read_provider(&urls).map_err(Error::ReadProviderError)?;
+                provider
+                    .get_block_number()
+                    .await
+                    .map_err(|error| Error::TransportError(error.to_string()))?
+            }
+            #[cfg(not(target_family = "wasm"))]
+            {
+                resolve_latest_block_number(&rpcs).await?
+            }
         }
     };
     info!(
@@ -172,7 +245,7 @@ pub async fn get_order_quotes(
     let mut skipped_self_trade_pair_count = 0usize;
 
     let target_build_started_at = QuoteTiming::now();
-    for order in &orders {
+    for (order_index, order) in orders.iter().enumerate() {
         let order_struct: OrderV4 = order.clone().try_into()?;
         let raindex = Address::from_str(&order.raindex.id.0)?;
         let oracle_url = crate::oracle::extract_oracle_url(order);
@@ -181,6 +254,14 @@ pub async fn get_order_quotes(
             for (output_index, output) in order_struct.validOutputs.iter().enumerate() {
                 if input.token == output.token {
                     skipped_self_trade_pair_count += 1;
+                    continue;
+                }
+                if !pair_is_selected(
+                    selected_pairs,
+                    order_index,
+                    input_index as u32,
+                    output_index as u32,
+                ) {
                     continue;
                 }
 
@@ -514,9 +595,101 @@ pub async fn get_order_quotes(
     Ok(responses)
 }
 
+#[cfg(not(target_family = "wasm"))]
+async fn resolve_latest_block_number(rpcs: &[String]) -> Result<u64, Error> {
+    let mut failures = Vec::new();
+    for rpc in rpcs {
+        let url = match rpc.parse() {
+            Ok(url) => url,
+            Err(error) => {
+                failures.push(format!("{rpc}: {error}"));
+                continue;
+            }
+        };
+        let provider = match mk_read_provider(&[url]) {
+            Ok(provider) => provider,
+            Err(error) => {
+                failures.push(format!("{rpc}: {error}"));
+                continue;
+            }
+        };
+        match with_rpc_timeout(provider.get_block_number(), RPC_ATTEMPT_TIMEOUT_MS).await {
+            Some(Ok(value)) => return Ok(value),
+            Some(Err(error)) => failures.push(format!("{rpc}: {error}")),
+            None => failures.push(format!("{rpc}: timed out after {RPC_ATTEMPT_TIMEOUT_MS}ms")),
+        }
+    }
+    Err(Error::TransportError(format!(
+        "all quote RPC block reads failed: {}",
+        failures.join("; ")
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pair_selection_is_scoped_by_order_and_io_indices() {
+        let selections = vec![
+            vec![Pair {
+                pair_name: String::new(),
+                input_index: 1,
+                output_index: 2,
+            }],
+            Vec::new(),
+        ];
+
+        assert!(pair_is_selected(Some(&selections), 0, 1, 2));
+        assert!(!pair_is_selected(Some(&selections), 0, 0, 2));
+        assert!(!pair_is_selected(Some(&selections), 1, 1, 2));
+        assert!(pair_is_selected(None, 1, 1, 2));
+    }
+
+    #[tokio::test]
+    async fn pair_selection_must_align_with_orders() {
+        let error = get_order_quotes_for_pairs(
+            Vec::new(),
+            &[Vec::new()],
+            None,
+            Vec::new(),
+            None,
+            Address::ZERO,
+            &NoopInjector,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::PairSelectionLengthMismatch {
+                expected: 0,
+                actual: 1
+            }
+        ));
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn latest_block_read_cycles_after_malformed_rpc_url() {
+        let server = MockServer::start_async().await;
+        let block = server.mock(|when, then| {
+            when.method(POST).path("/rpc");
+            then.json_body(json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": "0x2a",
+            }));
+        });
+
+        let result = resolve_latest_block_number(&["not a URL".into(), server.url("/rpc")])
+            .await
+            .unwrap();
+
+        assert_eq!(result, 42);
+        block.assert_hits(1);
+    }
+
     #[cfg(not(target_family = "wasm"))]
     use alloy::primitives::{address, Bytes};
     use alloy::{
@@ -525,6 +698,8 @@ mod tests {
         providers::Provider,
         sol_types::{SolCall, SolValue},
     };
+    #[cfg(not(target_family = "wasm"))]
+    use httpmock::{Method::POST, MockServer};
     use rain_math_float::Float;
     #[cfg(not(target_family = "wasm"))]
     use rain_metadata::types::raindex_signed_context_oracle::RaindexSignedContextOracleV1;
@@ -1212,6 +1387,10 @@ amount price: 2 3;
         .await
         .unwrap_err();
 
-        assert!(matches!(err, Error::UrlParseError(_)));
+        assert!(matches!(
+            err,
+            Error::TransportError(message)
+                if message.contains("all quote RPC block reads failed")
+        ));
     }
 }

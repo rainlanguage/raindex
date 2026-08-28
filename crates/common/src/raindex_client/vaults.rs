@@ -471,6 +471,24 @@ pub struct RaindexVaultToken {
     decimals: u8,
 }
 
+impl RaindexVaultToken {
+    pub(crate) fn raw_address(&self) -> Address {
+        self.address
+    }
+
+    pub(crate) fn raw_name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub(crate) fn raw_symbol(&self) -> Option<&str> {
+        self.symbol.as_deref()
+    }
+
+    pub(crate) fn raw_decimals(&self) -> u8 {
+        self.decimals
+    }
+}
+
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]
 impl RaindexVaultToken {
@@ -917,6 +935,17 @@ pub struct RaindexVaultBalanceChange {
     timestamp: U256,
     transaction: RaindexTransaction,
     raindex: Address,
+}
+
+#[cfg(not(target_family = "wasm"))]
+impl RaindexVaultBalanceChange {
+    pub(crate) fn raw_token_address(&self) -> Address {
+        self.token.raw_address()
+    }
+
+    pub(crate) fn raw_amount(&self) -> Float {
+        self.amount
+    }
 }
 #[cfg(target_family = "wasm")]
 #[wasm_bindgen]

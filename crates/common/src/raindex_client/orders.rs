@@ -462,11 +462,29 @@ impl RaindexOrder {
     }
 }
 impl RaindexOrder {
+    pub(crate) fn input_vaults(&self) -> &[RaindexVault] {
+        &self.inputs
+    }
+
     /// The order's output vaults, in the same order as the subgraph returned
     /// them. Unlike [`Self::outputs_list`] this is not filtered by vault type,
     /// so vaults that act as both input and output are still included.
     pub(crate) fn output_vaults(&self) -> &[RaindexVault] {
         &self.outputs
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub(crate) fn raw_order_bytes(&self) -> &Bytes {
+        &self.order_bytes
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    pub(crate) fn raw_order_hash(&self) -> B256 {
+        self.order_hash
+    }
+
+    pub(crate) fn raw_raindex(&self) -> Address {
+        self.raindex
     }
 }
 #[cfg(not(target_family = "wasm"))]
@@ -3563,6 +3581,8 @@ mod tests {
                 "id": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
                 "timestamp": "1632000000",
                 "tradeEvent": {
+                    "id": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    "__typename": "TakeOrder",
                     "sender": "0x0000000000000000000000000000000000000000",
                     "transaction": {
                         "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
