@@ -94,7 +94,7 @@
 		}
 	};
 
-	$: if (open && order) {
+	$: if (open && order && $signerAddress) {
 		loadQuotes();
 		startRefreshInterval();
 	} else {
@@ -271,7 +271,13 @@
 			sell and set your maximum acceptable price.
 		</p>
 
-		{#if isLoadingQuotes}
+		{#if !$signerAddress}
+			<p>Connect your wallet to continue.</p>
+			<div class="flex justify-end gap-2 pt-2">
+				<Button color="alternative" on:click={handleClose}>Cancel</Button>
+				<WalletConnect {appKitModal} {connected} />
+			</div>
+		{:else if isLoadingQuotes}
 			<div class="flex items-center justify-center py-8">
 				<Spinner size="8" />
 				<span class="ml-2">Loading quotes...</span>
@@ -475,18 +481,14 @@
 
 				<div class="flex justify-end gap-2 pt-2">
 					<Button color="alternative" on:click={handleClose}>Cancel</Button>
-					{#if $signerAddress}
-						<Button
-							color="blue"
-							disabled={!canSubmit}
-							on:click={handleSubmit}
-							data-testid="submit-button"
-						>
-							Take Order
-						</Button>
-					{:else}
-						<WalletConnect {appKitModal} {connected} />
-					{/if}
+					<Button
+						color="blue"
+						disabled={!canSubmit}
+						on:click={handleSubmit}
+						data-testid="submit-button"
+					>
+						Take Order
+					</Button>
 				</div>
 			</div>
 		{/if}

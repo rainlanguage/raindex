@@ -21,6 +21,15 @@ vi.mock('../lib/stores/wagmi', () => ({
 	signerAddress: mockSignerAddressStore
 }));
 
+vi.mock('@rainlanguage/ui-components', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@rainlanguage/ui-components')>();
+	const MockComponent = (await import('../lib/__mocks__/MockComponent.svelte')).default;
+	return {
+		...actual,
+		WalletConnect: MockComponent
+	};
+});
+
 const MOCK_RAINDEX_ADDRESS = '0x1234567890123456789012345678901234567890';
 const MOCK_SIGNER_ADDRESS = '0x9876543210987654321098765432109876543210';
 
@@ -392,14 +401,42 @@ describe('TakeOrderModal', () => {
 		await fireEvent.click(cancelButton);
 	});
 
-	it('shows WalletConnect when not connected', async () => {
+	it('prompts to connect and does not fetch quotes when the wallet is disconnected', async () => {
 		mockSignerAddressStore.mockSetSubscribeValue('');
 
 		render(TakeOrderModal, defaultProps);
 
 		await waitFor(() => {
-			expect(screen.queryByTestId('submit-button')).not.toBeInTheDocument();
+			expect(screen.getByText('Connect your wallet to continue.')).toBeInTheDocument();
 		});
+		expect(screen.getByTestId('mock-component')).toBeInTheDocument();
+		expect(screen.queryByTestId('submit-button')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('direction-buy')).not.toBeInTheDocument();
+		expect(screen.queryByText('Loading quotes...')).not.toBeInTheDocument();
+		expect(mockOrder.getQuotes).not.toHaveBeenCalled();
+	});
+
+	it('fetches quotes and shows the take form after the wallet connects', async () => {
+		mockSignerAddressStore.mockSetSubscribeValue('');
+		vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+			value: mockQuotes as never,
+			error: undefined
+		});
+
+		render(TakeOrderModal, defaultProps);
+
+		await waitFor(() => {
+			expect(screen.getByText('Connect your wallet to continue.')).toBeInTheDocument();
+		});
+		expect(mockOrder.getQuotes).not.toHaveBeenCalled();
+
+		mockSignerAddressStore.mockSetSubscribeValue(MOCK_SIGNER_ADDRESS);
+
+		await waitFor(() => {
+			expect(screen.getByTestId('submit-button')).toBeInTheDocument();
+		});
+		expect(screen.queryByText('Connect your wallet to continue.')).not.toBeInTheDocument();
+		expect(mockOrder.getQuotes).toHaveBeenCalled();
 	});
 
 	it('shows submit button disabled initially', async () => {
