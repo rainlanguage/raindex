@@ -10,6 +10,10 @@
 	import { onDestroy } from 'svelte';
 	import { appKitModal, connected, signerAddress } from '$lib/stores/wagmi';
 	import { takeOrderMaxAmount } from '$lib/services/takeOrderMaxAmount';
+	import {
+		TAKE_ORDER_PRICE_CAP_BUFFER_LABEL,
+		formatBufferedPriceCap
+	} from '$lib/services/takeOrderPriceCap';
 	import { fade } from 'svelte/transition';
 	import {
 		Float,
@@ -36,6 +40,7 @@
 	let direction: Direction = 'buy';
 	let exact: boolean = false;
 	let priceCap: string = '';
+	let priceCapFromCurrentQuote = false;
 	let errorMessage = '';
 	let isLoadingQuotes = false;
 	let isFetchingQuotes = false;
@@ -120,6 +125,7 @@
 		direction = 'buy';
 		exact = false;
 		priceCap = '';
+		priceCapFromCurrentQuote = false;
 		errorMessage = '';
 		estimateResult = null;
 		selectedPairIndex = 0;
@@ -244,6 +250,18 @@
 	}
 
 	$: priceCapDecimalsError = validateAmount(priceCap).errorMessage;
+
+	function fillBufferedCurrentPrice() {
+		if (!ratio) return;
+		const formatted = formatBufferedPriceCap(ratio);
+		if (!formatted) return;
+		priceCap = formatted;
+		priceCapFromCurrentQuote = true;
+	}
+
+	function handlePriceCapInput() {
+		priceCapFromCurrentQuote = false;
+	}
 
 	$: effectivePriceCap = (() => {
 		if (priceCap && priceCap.trim() !== '') {
@@ -455,14 +473,37 @@
 							- {inputSymbol} per {outputSymbol}
 						</span>
 					</Label>
-					<input
-						id="price-cap"
-						type="text"
-						class="block w-full rounded-lg border-gray-300 bg-gray-50 p-2.5 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-500 dark:bg-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:border-primary-500 dark:focus:ring-primary-500"
-						placeholder={`Enter max price in ${inputSymbol} per ${outputSymbol}`}
-						bind:value={priceCap}
-						data-testid="price-cap-input"
-					/>
+					<div class="relative">
+						<input
+							id="price-cap"
+							type="text"
+							class="block w-full rounded-lg border-gray-300 bg-gray-50 p-2.5 pr-32 text-sm text-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:border-gray-500 dark:bg-gray-600 dark:text-white dark:placeholder-gray-400 dark:focus:border-primary-500 dark:focus:ring-primary-500"
+							placeholder={`Enter max price in ${inputSymbol} per ${outputSymbol}`}
+							bind:value={priceCap}
+							on:input={handlePriceCapInput}
+							data-testid="price-cap-input"
+						/>
+						{#if ratio}
+							<div class="absolute right-2 top-0 flex h-10 items-center">
+								<Button
+									color="blue"
+									class="px-2 py-1"
+									size="xs"
+									pill
+									on:click={fillBufferedCurrentPrice}
+									data-testid="price-cap-current-button"
+								>
+									CURRENT +{TAKE_ORDER_PRICE_CAP_BUFFER_LABEL}
+								</Button>
+							</div>
+						{/if}
+					</div>
+					{#if priceCapFromCurrentQuote}
+						<p class="mt-1 text-xs text-gray-500 dark:text-gray-400" data-testid="price-cap-buffer-hint">
+							Includes a {TAKE_ORDER_PRICE_CAP_BUFFER_LABEL} buffer above the current quote so the next
+							block can still fill.
+						</p>
+					{/if}
 					{#if priceCapDecimalsError}
 						<p class="mt-1 text-sm text-red-500" data-testid="price-cap-error">
 							{priceCapDecimalsError}

@@ -920,4 +920,140 @@ describe('TakeOrderModal', () => {
 			expect(amountInput.value).toBe('10');
 		});
 	});
+
+	describe('max price current-quote shortcut', () => {
+		const priceQuotes = [
+			{
+				pair: {
+					pairName: 'USDC/ETH',
+					inputIndex: 0,
+					outputIndex: 0
+				},
+				blockNumber: 12345678,
+				success: true,
+				data: {
+					maxOutput: floatToHex(Float.parse('100').value as Float),
+					maxInput: floatToHex(Float.parse('50').value as Float),
+					ratio: floatToHex(Float.parse('100').value as Float),
+					inverseRatio: floatToHex(Float.parse('0.01').value as Float),
+					formattedMaxOutput: '100',
+					formattedMaxInput: '50',
+					formattedRatio: '100',
+					formattedInverseRatio: '0.01'
+				}
+			}
+		];
+
+		it('fills Max Price with the current quote plus a 0.5% buffer', async () => {
+			vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+				value: priceQuotes as never,
+				error: undefined
+			});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('price-cap-current-button')).toBeInTheDocument();
+			});
+			expect(screen.getByTestId('price-cap-current-button')).toHaveTextContent('CURRENT +0.5%');
+
+			await fireEvent.click(screen.getByTestId('price-cap-current-button'));
+
+			const priceCapInput = screen.getByTestId('price-cap-input') as HTMLInputElement;
+			expect(priceCapInput.value).toBe('100.5');
+			expect(screen.getByTestId('price-cap-buffer-hint')).toHaveTextContent(
+				'Includes a 0.5% buffer above the current quote so the next block can still fill.'
+			);
+		});
+
+		it('does not reject CURRENT +0.5% when the buffered quote has more than 67 decimals', async () => {
+			const highPrecisionQuotes = [
+				{
+					...priceQuotes[0],
+					data: {
+						...priceQuotes[0].data,
+						ratio: floatToHex(
+							Float.parse('0.011068446678066134741211935').value as Float
+						),
+						formattedRatio: '0.011068446678066134741211935'
+					}
+				}
+			];
+			vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+				value: highPrecisionQuotes as never,
+				error: undefined
+			});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('price-cap-current-button')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByTestId('price-cap-current-button'));
+
+			const priceCapInput = screen.getByTestId('price-cap-input') as HTMLInputElement;
+			expect(priceCapInput.value).not.toBe('');
+			expect(screen.queryByTestId('price-cap-error')).not.toBeInTheDocument();
+		});
+
+		it('keeps the filled cap when the quote refreshes to a new price', async () => {
+			const laterQuotes = [
+				{
+					...priceQuotes[0],
+					data: {
+						...priceQuotes[0].data,
+						ratio: floatToHex(Float.parse('200').value as Float),
+						formattedRatio: '200'
+					}
+				}
+			];
+
+			vi.mocked(mockOrder.getQuotes)
+				.mockResolvedValueOnce({
+					value: priceQuotes as never,
+					error: undefined
+				})
+				.mockResolvedValueOnce({
+					value: laterQuotes as never,
+					error: undefined
+				});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('price-cap-current-button')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByTestId('price-cap-current-button'));
+
+			const priceCapInput = screen.getByTestId('price-cap-input') as HTMLInputElement;
+			expect(priceCapInput.value).toBe('100.5');
+
+			await fireEvent.click(screen.getByTestId('refresh-button'));
+
+			await waitFor(() => {
+				expect(screen.getByTestId('current-price')).toHaveTextContent('200');
+			});
+			expect(priceCapInput.value).toBe('100.5');
+		});
+
+		it('hides the buffer hint when the user edits Max Price', async () => {
+			vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+				value: priceQuotes as never,
+				error: undefined
+			});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('price-cap-current-button')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByTestId('price-cap-current-button'));
+			expect(screen.getByTestId('price-cap-buffer-hint')).toBeInTheDocument();
+
+			const priceCapInput = screen.getByTestId('price-cap-input');
+			await fireEvent.input(priceCapInput, { target: { value: '101' } });
+
+			expect(screen.queryByTestId('price-cap-buffer-hint')).not.toBeInTheDocument();
+		});
+	});
 });
