@@ -2318,6 +2318,35 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       assert.equal(res.balance.toFixedDecimal(18).value, BigInt(1000));
       assert.equal(res.formattedBalance, "1e-15");
     });
+
+    it("should fetch an arbitrary account balance from a raindex vault instance", async () => {
+      await mockServer
+        .forPost("/sg1")
+        .once()
+        .thenReply(200, JSON.stringify({ data: { vault: vault1 } }));
+      await mockServer.forPost("/rpc1").thenReply(
+        200,
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result:
+            "0x00000000000000000000000000000000000000000000000000000000000003e8",
+        }),
+      );
+
+      const raindexClient = extractWasmEncodedData(
+        await RaindexClient.new([YAML]),
+      );
+      const vault = extractWasmEncodedData(
+        await raindexClient.getVault(1, CHAIN_ID_1_RAINDEX_ADDRESS, "0x0123"),
+      );
+
+      const res = extractWasmEncodedData(
+        await vault.getAccountBalance("0x9876543210987654321098765432109876543210"),
+      );
+      assert.equal(res.balance.toFixedDecimal(18).value, BigInt(1000));
+      assert.equal(res.formattedBalance, "1e-15");
+    });
   });
 
   describe("Transactions", () => {

@@ -56,11 +56,16 @@ describe('TakeOrderModal', () => {
 		}
 	];
 
+	const mockGetAccountBalance = vi.fn();
+
 	const mockOrder = {
 		id: '0xorderid',
 		orderHash: '0xorderhash',
 		chainId: 1,
 		raindex: MOCK_RAINDEX_ADDRESS,
+		inputsList: {
+			items: [{ getAccountBalance: mockGetAccountBalance }]
+		},
 		getQuotes: vi.fn().mockResolvedValue({
 			value: mockQuotes,
 			error: undefined
@@ -79,6 +84,13 @@ describe('TakeOrderModal', () => {
 		vi.clearAllMocks();
 		mockOnSubmit.mockClear();
 		mockSignerAddressStore.mockSetSubscribeValue(MOCK_SIGNER_ADDRESS);
+		mockGetAccountBalance.mockResolvedValue({
+			value: {
+				balance: Float.parse('1000').value as Float,
+				formattedBalance: '1000'
+			},
+			error: undefined
+		});
 	});
 
 	it('renders take order modal correctly', async () => {
@@ -828,6 +840,84 @@ describe('TakeOrderModal', () => {
 				expect(screen.getByTestId('max-output')).toBeInTheDocument();
 				expect(screen.getByTestId('max-output')).toHaveTextContent('100');
 			});
+		});
+	});
+
+	describe('MAX amount', () => {
+		const maxQuotes = [
+			{
+				pair: {
+					pairName: 'USDC/ETH',
+					inputIndex: 0,
+					outputIndex: 0
+				},
+				blockNumber: 12345678,
+				success: true,
+				data: {
+					maxOutput: floatToHex(Float.parse('100').value as Float),
+					maxInput: floatToHex(Float.parse('50').value as Float),
+					ratio: floatToHex(Float.parse('0.5').value as Float),
+					inverseRatio: floatToHex(Float.parse('2').value as Float),
+					formattedMaxOutput: '100',
+					formattedMaxInput: '50',
+					formattedRatio: '0.5',
+					formattedInverseRatio: '2'
+				}
+			}
+		];
+
+		it('fills buy MAX with walletInput / ratio when that is below quote maxOutput', async () => {
+			mockGetAccountBalance.mockResolvedValue({
+				value: {
+					balance: Float.parse('10').value as Float,
+					formattedBalance: '10'
+				},
+				error: undefined
+			});
+			vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+				value: maxQuotes as never,
+				error: undefined
+			});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByText('MAX')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByText('MAX'));
+
+			const amountInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+			expect(amountInput.value).toBe('20');
+			expect(mockGetAccountBalance).toHaveBeenCalledWith(MOCK_SIGNER_ADDRESS);
+		});
+
+		it('fills sell MAX with the wallet input-token balance when it is below quote maxInput', async () => {
+			mockGetAccountBalance.mockResolvedValue({
+				value: {
+					balance: Float.parse('10').value as Float,
+					formattedBalance: '10'
+				},
+				error: undefined
+			});
+			vi.mocked(mockOrder.getQuotes).mockResolvedValue({
+				value: maxQuotes as never,
+				error: undefined
+			});
+
+			render(TakeOrderModal, defaultProps);
+
+			await waitFor(() => {
+				expect(screen.getByTestId('direction-sell')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByTestId('direction-sell'));
+
+			await waitFor(() => {
+				expect(screen.getByText('MAX')).toBeInTheDocument();
+			});
+			await fireEvent.click(screen.getByText('MAX'));
+
+			const amountInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+			expect(amountInput.value).toBe('10');
 		});
 	});
 });

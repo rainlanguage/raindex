@@ -793,14 +793,38 @@ impl RaindexVault {
         preserve_js_class
     )]
     pub async fn get_owner_balance_wasm_binding(&self) -> Result<AccountBalance, RaindexError> {
-        let balance = self.get_owner_balance(self.owner).await?;
-        let decimals = self.token.decimals;
-        let float_balance = Float::from_fixed_decimal(balance, decimals)?;
-        let account_balance = AccountBalance {
-            balance: float_balance,
-            formatted_balance: float_balance.format()?,
-        };
-        Ok(account_balance)
+        self.account_balance(self.owner).await
+    }
+
+    /// Fetches the ERC20 balance of `account` for this vault's token.
+    ///
+    /// Same as [`RaindexVault::get_owner_balance_wasm_binding`], but for an
+    /// arbitrary address rather than the vault owner. Used by takers to cap a
+    /// take-order MAX against their own wallet balance.
+    ///
+    /// ## Examples
+    ///
+    /// ```javascript
+    /// const result = await vault.getAccountBalance(takerAddress);
+    /// if (result.error) {
+    ///   console.error("Error fetching balance:", result.error.readableMsg);
+    ///   return;
+    /// }
+    /// const accountBalance = result.value;
+    /// console.log("Raw balance:", accountBalance.balance);
+    /// console.log("Formatted balance:", accountBalance.formattedBalance);
+    /// ```
+    #[wasm_export(
+        js_name = "getAccountBalance",
+        return_description = "Account balance in both raw and human-readable format",
+        unchecked_return_type = "AccountBalance",
+        preserve_js_class
+    )]
+    pub async fn get_account_balance_wasm_binding(
+        &self,
+        #[wasm_export(param_description = "Account address to check balance for")] account: String,
+    ) -> Result<AccountBalance, RaindexError> {
+        self.account_balance(Address::from_str(&account)?).await
     }
 }
 impl RaindexVault {
@@ -808,6 +832,16 @@ impl RaindexVault {
         let rpcs = self.raindex_client.get_rpc_urls_for_chain(self.chain_id)?;
         let erc20 = ERC20::new(rpcs, self.token.address);
         Ok(erc20.get_account_balance(owner).await?)
+    }
+
+    async fn account_balance(&self, account: Address) -> Result<AccountBalance, RaindexError> {
+        let balance = self.get_owner_balance(account).await?;
+        let decimals = self.token.decimals;
+        let float_balance = Float::from_fixed_decimal(balance, decimals)?;
+        Ok(AccountBalance {
+            balance: float_balance,
+            formatted_balance: float_balance.format()?,
+        })
     }
 
     /// Builds the withdraw calldata for `amount`.

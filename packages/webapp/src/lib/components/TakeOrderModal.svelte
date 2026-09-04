@@ -9,6 +9,7 @@
 	} from '@rainlanguage/ui-components';
 	import { onDestroy } from 'svelte';
 	import { appKitModal, connected, signerAddress } from '$lib/stores/wagmi';
+	import { takeOrderMaxAmount } from '$lib/services/takeOrderMaxAmount';
 	import { fade } from 'svelte/transition';
 	import {
 		Float,
@@ -127,6 +128,7 @@
 	$: selectedQuote = quotes[selectedPairIndex];
 	$: maxOutputHex = selectedQuote?.data?.maxOutput as unknown as Hex | undefined;
 	$: maxInputHex = selectedQuote?.data?.maxInput as unknown as Hex | undefined;
+	$: ratioHex = selectedQuote?.data?.ratio as unknown as Hex | undefined;
 	$: maxOutput = (() => {
 		if (!maxOutputHex) return undefined;
 		const parsed = Float.fromHex(maxOutputHex);
@@ -137,13 +139,63 @@
 		const parsed = Float.fromHex(maxInputHex);
 		return parsed.error ? undefined : (parsed.value as Float);
 	})();
+	$: ratio = (() => {
+		if (!ratioHex) return undefined;
+		const parsed = Float.fromHex(ratioHex);
+		return parsed.error ? undefined : (parsed.value as Float);
+	})();
 	$: formattedRatio = selectedQuote?.data?.formattedRatio ?? '-';
 	$: formattedMaxOutput = selectedQuote?.data?.formattedMaxOutput ?? '-';
 	$: formattedMaxInput = selectedQuote?.data?.formattedMaxInput ?? '-';
 	$: outputSymbol = selectedQuote?.pair?.pairName?.split('/')[1] ?? 'tokens';
 	$: inputSymbol = selectedQuote?.pair?.pairName?.split('/')[0] ?? 'tokens';
 
-	$: maxAmount = direction === 'buy' ? maxOutput : maxInput;
+	type VaultAccountBalance = {
+		getAccountBalance: (account: string) => Promise<{
+			value?: { balance: Float; formattedBalance: string };
+			error?: { readableMsg: string };
+		}>;
+	};
+
+	let walletInputBalance: Float | undefined = undefined;
+	let isLoadingWalletBalance = false;
+	let walletBalanceRequestId = 0;
+
+	async function loadWalletInputBalance(account: string, inputIndex: number) {
+		const requestId = ++walletBalanceRequestId;
+		isLoadingWalletBalance = true;
+		walletInputBalance = undefined;
+		try {
+			const vaults = (order.inputsList?.items ?? []) as VaultAccountBalance[];
+			const vault = vaults[inputIndex];
+			if (!vault?.getAccountBalance) return;
+			const result = await vault.getAccountBalance(account);
+			if (requestId !== walletBalanceRequestId) return;
+			if (result.error || !result.value) return;
+			walletInputBalance = result.value.balance;
+		} finally {
+			if (requestId === walletBalanceRequestId) {
+				isLoadingWalletBalance = false;
+			}
+		}
+	}
+
+	$: if (open && $signerAddress && selectedQuote) {
+		loadWalletInputBalance($signerAddress, selectedQuote.pair.inputIndex);
+	}
+
+	$: maxAmount = (() => {
+		const quoteCap = direction === 'buy' ? maxOutput : maxInput;
+		if (!quoteCap || isLoadingWalletBalance) return undefined;
+		if (!walletInputBalance || !maxOutput || !maxInput || !ratio) return quoteCap;
+		return takeOrderMaxAmount({
+			direction,
+			maxOutput,
+			maxInput,
+			ratio,
+			walletInputBalance
+		});
+	})();
 	$: formattedMaxAmount = direction === 'buy' ? formattedMaxOutput : formattedMaxInput;
 	$: amountSymbol = direction === 'buy' ? outputSymbol : inputSymbol;
 
