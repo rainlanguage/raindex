@@ -217,6 +217,29 @@ contract RaindexV7St0xNavForkTest is Test {
         (Float totalIn, Float totalOut) = IRaindexV6(RAINDEX).takeOrders4(_takeConfig(order, signedContext));
         assertFalse(totalIn.isZero(), "fill still executes after NAV step");
         assertFalse(totalOut.isZero(), "fill still executes after NAV step");
+
+        // The fill must SETTLE at the re-priced ratio, not merely not-revert.
+        // `takeOrders4` reports amounts from the taker's perspective:
+        // `totalIn` (= totalTakerInput) is the SELL order's OUTPUT (wt shares
+        // sent to the taker) and `totalOut` (= totalTakerOutput) is its INPUT
+        // (USDC taken from the taker). The Raindex order ratio is input/output,
+        // so the effective settlement ratio is totalOut / totalIn.
+        //
+        // Rounding on a fill always favours the order, never the taker, so the
+        // settled ratio is bounded BELOW by the derived io and can exceed it by
+        // at most one unit-in-the-last-place of the discretised amounts. A take
+        // settled at the STALE pre-step ratio (~100 vs ~8058) would be ~80x
+        // off, far outside that band — this is what the assertion rejects.
+        Float settlementRatio = totalOut.div(totalIn);
+        _logFloat("post-step settlement ratio", settlementRatio);
+        assertTrue(settlementRatio.gte(expectedAfter), "settlement ratio must not undercut the re-priced io");
+        // Upper bound: within 0.01% of the derived io (rounding is far tighter
+        // than this at these amounts; a stale ratio is ~8000% away).
+        Float tolerance = expectedAfter.mul(LibDecimalFloat.packLossless(1, -4));
+        assertTrue(
+            settlementRatio.lte(expectedAfter.add(tolerance)),
+            "settlement ratio must track the re-priced io, not a stale one"
+        );
     }
 
     // ------------------------- helpers -------------------------
