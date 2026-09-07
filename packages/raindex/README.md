@@ -85,7 +85,7 @@ networks:
     currency: ETH
 
 metaboards:
-  base: https://api.goldsky.com/api/public/project_clv14x04y9kzi01saerx7bxpg/subgraphs/metadata-base/2025-07-06-594f/gn
+  base: https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71/subgraphs/metadata-base/prod/gn
 
 subgraphs:
   base: https://example.com/subgraph
