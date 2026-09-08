@@ -12,13 +12,17 @@ import {
     OrderConfigV4,
     TaskV2,
     IRaindexV6
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
-import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.8/src/interface/IParserV2.sol";
+import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
+import {
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS,
+    TEST_EXPRESSION_DEPLOYER_ADDRESS
+} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {
@@ -40,7 +44,7 @@ library LibTestTakeOrder {
         address outputToken,
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
-        IParserV2 parser = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
         IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         bytes memory bytecode = parser.parse2(expression);
@@ -49,11 +53,8 @@ library LibTestTakeOrder {
         IOV2[] memory outputs = new IOV2[](1);
         outputs[0] = IOV2(outputToken, outputVaultId);
 
-        EvaluableV4 memory evaluable = EvaluableV4(
-            IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-            IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-            bytecode
-        );
+        EvaluableV4 memory evaluable =
+            EvaluableV4(IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), bytecode);
         OrderConfigV4 memory orderConfig = OrderConfigV4(evaluable, inputs, outputs, bytes32(0), bytes32(0), "");
 
         vm.prank(owner);

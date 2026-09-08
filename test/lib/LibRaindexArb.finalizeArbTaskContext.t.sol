@@ -3,11 +3,16 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
-import {EvaluableV4, SignedContextV1, TaskV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
+import {EvaluableV4, SignedContextV1, TaskV2} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.8/src/interface/IParserV2.sol";
+import {
+    LibTestInterpreterDeploy,
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS,
+    TEST_EXPRESSION_DEPLOYER_ADDRESS
+} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskContextTest
@@ -16,9 +21,9 @@ import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 /// context<1 2>=gas balance. Column 0 is the calling context added by LibContext.
 contract LibRaindexArbFinalizeArbTaskContextTest is Test {
     function testFinalizeArbTaskContextValues() external {
-        LibInterpreterDeploy.etchRainlang(vm);
+        LibTestInterpreterDeploy.etchTestRainlang(vm);
 
-        IParserV2 parser = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
 
         // Task expression: ensure context values match expected Floats.
         // 20e18 input profit with 18 decimals → Float(20).
@@ -36,9 +41,7 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
 
         TaskV2 memory task = TaskV2({
             evaluable: EvaluableV4(
-                IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-                IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-                taskBytecode
+                IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), taskBytecode
             ),
             signedContext: new SignedContextV1[](0)
         });
@@ -60,9 +63,9 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
     /// column would survive it. Here input profit is zero while output profit is
     /// 20 and gas is 1 ether, pinning all three columns at distinct values.
     function testFinalizeArbContextNonZeroOutputAndGas() external {
-        LibInterpreterDeploy.etchRainlang(vm);
+        LibTestInterpreterDeploy.etchTestRainlang(vm);
 
-        IParserV2 parser = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
 
         // 0 input profit → Float(0); 20e18 output profit (18 dp) → Float(20);
         // 1 ether gas swept (packed at -18) → Float(1).
@@ -78,9 +81,7 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
 
         TaskV2 memory task = TaskV2({
             evaluable: EvaluableV4(
-                IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-                IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-                taskBytecode
+                IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), taskBytecode
             ),
             signedContext: new SignedContextV1[](0)
         });

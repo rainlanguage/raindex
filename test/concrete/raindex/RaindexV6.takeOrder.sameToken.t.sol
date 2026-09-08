@@ -11,7 +11,7 @@ import {
     TakeOrderConfigV4,
     SignedContextV1,
     TakeOrdersConfigV5
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
 
