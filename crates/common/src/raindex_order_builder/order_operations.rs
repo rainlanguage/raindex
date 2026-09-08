@@ -127,14 +127,17 @@ impl RaindexOrderBuilder {
         })
     }
 
+    /// Maps each deposit's token address to its amount and decimals. Decimals
+    /// travel with the map so downstream consumers reuse the token info this
+    /// resolution already produced instead of issuing their own decimals RPC.
     async fn get_deposits_as_map(
         &self,
-    ) -> Result<HashMap<Address, Float>, RaindexOrderBuilderError> {
-        let mut map: HashMap<Address, Float> = HashMap::new();
+    ) -> Result<HashMap<Address, (Float, u8)>, RaindexOrderBuilderError> {
+        let mut map: HashMap<Address, (Float, u8)> = HashMap::new();
         for d in self.get_deposits()? {
             let token_info = self.get_token_info(d.token.clone()).await?;
             let amount = Float::parse(d.amount)?;
-            map.insert(token_info.address, amount);
+            map.insert(token_info.address, (amount, token_info.decimals));
         }
         Ok(map)
     }
@@ -153,7 +156,7 @@ impl RaindexOrderBuilder {
             .enumerate()
             .filter_map(|(index, output)| {
                 output.token.as_ref().and_then(|token| {
-                    deposits_map.get(&token.address).map(|amount| {
+                    deposits_map.get(&token.address).map(|(amount, _)| {
                         Ok(VaultAndDeposit {
                             order_io: output.clone(),
                             deposit_amount: *amount,
@@ -238,16 +241,10 @@ impl RaindexOrderBuilder {
 
         let mut calldatas = Vec::new();
 
-        for (token_address, deposit_amount) in &deposits_map {
+        // Decimals arrive with the deposits map (resolved by get_token_info),
+        // so the only round-trip per token here is the allowance read.
+        for (token_address, (deposit_amount, decimals)) in &deposits_map {
             let tx_args = self.get_transaction_args()?;
-            let rpcs = tx_args
-                .rpcs
-                .iter()
-                .map(|rpc| Url::parse(rpc))
-                .collect::<Result<Vec<_>, _>>()?;
-
-            let erc20 = ERC20::new(rpcs, *token_address);
-            let decimals = erc20.decimals().await?;
 
             // An allowance read needs only the token, owner and raindex spender -
             // no deposit context.
@@ -258,12 +255,12 @@ impl RaindexOrderBuilder {
                 tx_args.raindex_address,
             )
             .await?;
-            let allowance_float = Float::from_fixed_decimal(allowance, decimals)?;
+            let allowance_float = Float::from_fixed_decimal(allowance, *decimals)?;
 
             if !allowance_float.eq(*deposit_amount)? {
                 let calldata = approveCall {
                     spender: tx_args.raindex_address,
-                    amount: deposit_amount.to_fixed_decimal(decimals)?,
+                    amount: deposit_amount.to_fixed_decimal(*decimals)?,
                 }
                 .abi_encode();
 
@@ -868,6 +865,72 @@ mod tests {
             RaindexOrderBuilder::new_with_deployment(yaml, None, "some-deployment".to_string())
                 .await
                 .unwrap()
+        }
+
+        // Approval calldata generation reuses the decimals that already travel
+        // with the deposits map (resolved once per token by get_token_info from
+        // the yaml record), so the only RPC per token is the allowance read.
+        // The decimals mock answers 18 - the wrong value vs the yaml's 6 - so
+        // any decimals() round-trip corrupts the amount assertions below on top
+        // of its hit count.
+        #[tokio::test]
+        async fn test_generate_approval_calldatas_reuses_deposit_token_decimals() {
+            let server = MockServer::start_async().await;
+            let yaml = get_yaml().replace("http://localhost:8085/rpc-url", &server.url("/rpc"));
+
+            let decimals_mock = server.mock(|when, then| {
+                when.method(POST).path("/rpc").body_contains("313ce567");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x0000000000000000000000000000000000000000000000000000000000000012",
+                }));
+            });
+            let allowance_mock = server.mock(|when, then| {
+                when.method(POST).path("/rpc").body_contains("dd62ed3e");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                }));
+            });
+
+            let mut builder =
+                RaindexOrderBuilder::new_with_deployment(yaml, None, "some-deployment".to_string())
+                    .await
+                    .unwrap();
+            builder
+                .set_deposit("token1".to_string(), "5".to_string())
+                .await
+                .unwrap();
+
+            let result = builder
+                .generate_approval_calldatas(
+                    "0x0000000000000000000000000000000000000005".to_string(),
+                )
+                .await
+                .unwrap();
+
+            let calldatas = match result {
+                ApprovalCalldataResult::Calldatas(calldatas) => calldatas,
+                ApprovalCalldataResult::NoDeposits => panic!("expected calldatas"),
+            };
+            assert_eq!(calldatas.len(), 1);
+            assert_eq!(
+                calldatas[0].token,
+                Address::from_str("0xc2132d05d31c914a87c6611c10748aeb04b58e8f").unwrap()
+            );
+
+            let decoded = approveCall::abi_decode(&calldatas[0].calldata).unwrap();
+            // 5 tokens at token1's yaml-recorded 6 decimals.
+            assert_eq!(decoded.amount, U256::from(5_000_000u64));
+            assert_eq!(
+                decoded.spender,
+                Address::from_str("0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6").unwrap()
+            );
+
+            assert_eq!(allowance_mock.hits(), 1);
+            assert_eq!(decimals_mock.hits(), 0);
         }
 
         #[tokio::test]
