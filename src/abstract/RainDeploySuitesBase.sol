@@ -12,4 +12,4 @@ import {
     DeployCandidate,
     DeploySuite,
     RainDeploySuitesBase
-} from "rain-deploy-0.1.7/src/abstract/RainDeploySuitesBase.sol";
+} from "rain-deploy-0.1.8/src/abstract/RainDeploySuitesBase.sol";
