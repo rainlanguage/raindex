@@ -105,6 +105,8 @@ base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 ethereum = "${ETHEREUM_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
 hyperevm = "${HYPEREVM_RPC_URL}"
+robinhood = "${ROBINHOOD_RPC_URL}"
+bsc = "${BSC_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 
 [etherscan]
@@ -114,4 +116,11 @@ base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
 ethereum = { key = "${CI_DEPLOY_ETHEREUM_ETHERSCAN_API_KEY}", chain = 1 }
 flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
 hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
+# Robinhood Chain (4663) is not indexed by Etherscan V2. Its Blockscout speaks
+# the Etherscan API, so the entry points there (the key is ignored). That
+# explorer has rejected non-browser clients, so if `--verify` fails there,
+# verify afterwards through Sourcify: `forge verify-contract --verifier
+# sourcify --chain 4663 ...`.
+robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
+bsc = { key = "${CI_DEPLOY_BSC_ETHERSCAN_API_KEY}", chain = 56 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }
