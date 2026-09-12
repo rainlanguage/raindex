@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {StackItem} from "src/concrete/raindex/RaindexV6.sol";
-import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {EvalV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 
 /// A constructable interpreter mock that returns [ratio, max] for the calculate

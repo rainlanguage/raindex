@@ -7,8 +7,8 @@ import {
     BaseRainlangSubParser,
     OperandV2,
     IParserToolingV1
-} from "rainlang-0.2.1/src/abstract/BaseRainlangSubParser.sol";
-import {LibConvert} from "rain-lib-typecast-0.1.0/src/LibConvert.sol";
+} from "rainlang-0.2.4/src/abstract/BaseRainlangSubParser.sol";
+import {LibConvert} from "rain-lib-typecast-0.1.4/src/LibConvert.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
 
 import {

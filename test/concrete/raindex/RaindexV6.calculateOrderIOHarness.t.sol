@@ -20,7 +20,7 @@ import {
     CONTEXT_VAULT_IO_BALANCE_BEFORE,
     CONTEXT_VAULT_IO_BALANCE_DIFF
 } from "src/lib/LibRaindex.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {
     IRaindexV6,
     OrderV4,
@@ -35,7 +35,7 @@ import {IInterpreterV4, EvalV4, StackItem} from "rainlang-interface-0.2.8/src/in
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.7/src/lib/LibRainDeploy.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";

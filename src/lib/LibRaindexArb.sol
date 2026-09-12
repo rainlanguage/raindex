@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {LibRaindex} from "./LibRaindex.sol";
 import {Address} from "@openzeppelin-contracts-5.6.1/utils/Address.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// @title LibRaindexArb
 library LibRaindexArb {

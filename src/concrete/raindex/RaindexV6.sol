@@ -11,7 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensio
 
 import {LibContext} from "rainlang-interface-0.2.8/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rainlang-interface-0.2.8/src/lib/bytecode/LibBytecode.sol";
-import {LibInterpreterStateDataContract} from "rainlang-0.2.1/src/lib/state/LibInterpreterStateDataContract.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.2.4/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,
@@ -26,7 +26,7 @@ import {LibNamespace} from "rainlang-interface-0.2.8/src/lib/ns/LibNamespace.sol
 import {LibMeta} from "rain-metadata-0.1.7/src/lib/LibMeta.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.7/src/interface/unstable/IMetaV1_2.sol";
 import {LibRaindex} from "../../lib/LibRaindex.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {LibTOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
 
@@ -64,7 +64,7 @@ import {RaindexV6FlashLender} from "../../abstract/RaindexV6FlashLender.sol";
 import {LibBytes32Array} from "rain-solmem-0.1.28/src/lib/LibBytes32Array.sol";
 import {LibBytes32Matrix} from "rain-solmem-0.1.28/src/lib/LibBytes32Matrix.sol";
 
-import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
+import {LibFormatDecimalFloat} from "rain-math-float-0.2.1/src/lib/format/LibFormatDecimalFloat.sol";
 
 /// This will exist in a future version of Open Zeppelin if their main branch is
 /// to be believed.

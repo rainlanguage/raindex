@@ -16,11 +16,11 @@ import {
     SignedContextV1
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RouteProcessorRaindexV6ArbOrderTakerSenderTest is RouteProcessorRaindexV6ArbOrderTakerTest {
     /// forge-config: default.fuzz.runs = 100

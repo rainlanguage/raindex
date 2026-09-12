@@ -6,7 +6,7 @@ import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {MinimumIO} from "../../../src/concrete/raindex/RaindexV6.sol";
 
 /// When the total taker IO is less than the configured minimumIO,

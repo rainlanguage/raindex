@@ -11,7 +11,7 @@ import {
     IRaindexV6
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// `takeOrders4` guards a zero maximum IO before dereferencing any order IO
 /// index, so a zero max with an out-of-range index reverts with the explicit

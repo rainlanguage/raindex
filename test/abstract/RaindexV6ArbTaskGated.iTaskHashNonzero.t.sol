@@ -11,7 +11,7 @@ import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInter
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 /// When constructed with non-empty bytecode the task hash MUST be the
 /// keccak256 of the abi-encoded task.

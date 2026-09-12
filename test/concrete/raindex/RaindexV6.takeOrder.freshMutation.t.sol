@@ -15,7 +15,7 @@ import {
     IRaindexV6
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {MinimumIO, TokenMismatch} from "../../../src/concrete/raindex/RaindexV6.sol";
 import {RecordingTaker} from "test/util/concrete/RecordingTaker.sol";

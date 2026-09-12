@@ -16,8 +16,8 @@ import {
     IInterpreterStoreV3,
     TaskV2
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.7/src/lib/LibRainDeploy.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";

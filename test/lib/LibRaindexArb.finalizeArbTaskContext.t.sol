@@ -12,7 +12,7 @@ import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
     TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskContextTest

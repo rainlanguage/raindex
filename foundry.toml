@@ -59,18 +59,6 @@ fs_permissions = [
 remappings = [
   # Custom remap so @openzeppelin packages' own internal imports resolve.
   "@openzeppelin/contracts/=dependencies/@openzeppelin-contracts-5.6.1/",
-  # `rainlang` 0.2.1's `BaseRainlangSubParser` imports `IDescribedByMetaV1`
-  # under the `rain-metadata-0.1.0/` prefix while `rain-metadata-deploy` 0.1.1
-  # spells `rain-metadata-0.1.7/`. Soldeer installs ONE version per package
-  # name, so no pin set satisfies both; the interface file is byte-identical in
-  # 0.1.0 and 0.1.7, so the older prefix is aliased onto the installed one
-  # rather than installing a second copy — two copies would be two distinct
-  # `IDescribedByMetaV1` types and the subparser would not satisfy this repo's
-  # own interface checks.
-  #
-  # This lives here rather than in `remappings.txt` because `forge soldeer
-  # install` owns that file and regenerates it from the installed set.
-  "rain-metadata-0.1.0/=dependencies/rain-metadata-0.1.7/",
 ]
 
 [dependencies]
@@ -78,7 +66,7 @@ forge-std = "1.16.2"
 "@openzeppelin-contracts" = "5.6.1"
 # rainlanguage/rain.interpreter was renamed to rainlanguage/rainlang;
 # its Soldeer registry name follows.
-rainlang = "0.2.1"
+rainlang = "0.2.4"
 # rainlanguage/rain.interpreter.interface was renamed to
 # rainlanguage/rainlang.interface; its Soldeer registry name moved from
 # `rain-interpreter-interface` (0.1.x) to `rainlang-interface` (0.2.x).
@@ -93,10 +81,11 @@ rain-metadata-deploy = "0.1.1"
 rain-intorastring = "0.1.0"
 rain-sol-codegen = "0.1.36"
 rain-solmem = "0.1.28"
-rain-math-float = "0.1.1"
+rain-math-float = "0.2.1"
+rain-math-float-deploy = "0.1.2"
 rain-tofu-erc20-decimals = "0.1.1"
 rain-deploy = "0.1.8"
-rain-lib-typecast = "0.1.0"
+rain-lib-typecast = "0.1.4"
 rain-lib-hash = "0.1.0"
 rain-math-binary = "0.1.4"
 rain-string = "0.2.0"

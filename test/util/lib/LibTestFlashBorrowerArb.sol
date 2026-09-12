@@ -15,13 +15,13 @@ import {
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.7/src/lib/LibRainDeploy.sol";
+import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";

@@ -12,7 +12,7 @@ import {
     SignedContextV1,
     TaskV2
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
-import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 
 /// @title RaindexV6QuoteSameTokenTest

@@ -15,11 +15,11 @@ import {
     TaskV2,
     SignedContextV1
 } from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.1/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RaindexV6ArbOrderTakerNoOrdersTest is GenericPoolRaindexV6ArbOrderTakerTest {
     /// arb5 MUST revert with NoOrders when given an empty orders array.

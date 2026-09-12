@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {TakeOrdersConfigV5, IRaindexV6} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.5/src/interface/IRaindexV6OrderTaker.sol";
-import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// Records whether `onTakeOrders2` was invoked, so a test can assert the
 /// callback fires only when at least one order was actually taken.

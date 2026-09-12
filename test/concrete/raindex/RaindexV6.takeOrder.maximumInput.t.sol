@@ -17,8 +17,8 @@ import {
 import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
+import {LibFormatDecimalFloat} from "rain-math-float-0.2.1/src/lib/format/LibFormatDecimalFloat.sol";
 
 contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
