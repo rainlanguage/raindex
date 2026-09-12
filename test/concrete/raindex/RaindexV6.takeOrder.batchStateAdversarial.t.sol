@@ -12,8 +12,8 @@ import {
     TakeOrdersConfigV5,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderBatchStateAdversarialTest
 /// @notice Audit Protofire H01 (#2617): adversarial coverage of the per-owner

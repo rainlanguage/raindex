@@ -16,14 +16,17 @@ import {
     SignedContextV1,
     TaskV2,
     Float
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
+import {
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
@@ -65,9 +68,7 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
         OrderV4 memory order = OrderV4({
             owner: address(0x1234),
             evaluable: EvaluableV4(
-                IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-                IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-                hex""
+                IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), hex""
             ),
             validInputs: validInputs,
             validOutputs: validOutputs,
@@ -91,9 +92,7 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
             }),
             TaskV2({
                 evaluable: EvaluableV4(
-                    IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-                    IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-                    hex""
+                    IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), hex""
                 ),
                 signedContext: new SignedContextV1[](0)
             })

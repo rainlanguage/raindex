@@ -4,12 +4,12 @@ pragma solidity ^0.8.19;
 
 import {META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.7/src/lib/LibMeta.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, IOV2} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {IInterpreterV4, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {EvaluableV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
+import {OrderConfigV4, OrderV4, IOV2} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IInterpreterV4, SourceIndexV2} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {EvaluableV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterCallerV4.sol";
 import {HANDLE_IO_ENTRYPOINT} from "../../../src/concrete/raindex/RaindexV6.sol";
-import {LibBytecode} from "rain-interpreter-interface-0.1.0/src/lib/bytecode/LibBytecode.sol";
+import {LibBytecode} from "rainlang-interface-0.2.8/src/lib/bytecode/LibBytecode.sol";
 
 library LibTestAddOrder {
     /// Serialized parser (parse2) output for "_ _:1e18 1e18;:;": the

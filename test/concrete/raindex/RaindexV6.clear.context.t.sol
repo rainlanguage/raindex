@@ -12,12 +12,12 @@ import {
     SignedContextV1,
     IOV2,
     EvaluableV4
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 
 import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
 
 struct ClearContextVaultIds {

@@ -17,9 +17,9 @@ import {
     SignedContextV1,
     TaskV2,
     IInterpreterV4
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// @dev Discriminates that `arb4` passes the INPUT token's OWN decimals and the
 /// OUTPUT token's OWN decimals to `finalizeArb` in the correct positions. The

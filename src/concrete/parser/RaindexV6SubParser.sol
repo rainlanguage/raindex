@@ -7,9 +7,9 @@ import {
     BaseRainlangSubParser,
     OperandV2,
     IParserToolingV1
-} from "rainlang-0.1.5/src/abstract/BaseRainlangSubParser.sol";
-import {LibConvert} from "rain-lib-typecast-0.1.0/src/LibConvert.sol";
-import {LibUint256Matrix} from "rain-solmem-0.1.3/src/lib/LibUint256Matrix.sol";
+} from "rainlang-0.2.4/src/abstract/BaseRainlangSubParser.sol";
+import {LibConvert} from "rain-lib-typecast-0.1.4/src/LibConvert.sol";
+import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
 
 import {
     LibRaindexSubParser,
@@ -35,7 +35,7 @@ import {
     CONTEXT_BASE_ROW_SENDER,
     CONTEXT_BASE_ROW_CALLING_CONTRACT,
     CONTEXT_BASE_ROWS
-} from "rain-interpreter-interface-0.1.0/src/lib/caller/LibContext.sol";
+} from "rainlang-interface-0.2.8/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
@@ -69,7 +69,7 @@ import {
     OPERAND_HANDLER_FUNCTION_POINTERS as SUB_PARSER_OPERAND_HANDLERS
 } from "../../generated/RaindexV6SubParserPointers.sol";
 import {IDescribedByMetaV1} from "rain-metadata-0.1.7/src/interface/IDescribedByMetaV1.sol";
-import {ISubParserToolingV1} from "rain-sol-codegen-0.1.0/src/interface/ISubParserToolingV1.sol";
+import {ISubParserToolingV1} from "rain-sol-codegen-0.1.36/src/interface/ISubParserToolingV1.sol";
 
 /// @title RaindexV6SubParser
 /// @notice Sub-parser that provides raindex-specific context words (sender,

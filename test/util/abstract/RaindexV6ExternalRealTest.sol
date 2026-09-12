@@ -5,22 +5,28 @@ pragma solidity =0.8.25;
 import {Test, Vm, console2} from "forge-std-1.16.2/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rain-interpreter-interface-0.1.0/src/interface/IParserV2.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.8/src/interface/IParserV2.sol";
 import {
     IRaindexV6,
     IInterpreterV4,
     TaskV2,
     EvaluableV4,
     SignedContextV1
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {
+    LibTestInterpreterDeploy,
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS,
+    TEST_EXPRESSION_DEPLOYER_ADDRESS,
+    TEST_PARSER_ADDRESS
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
 
@@ -37,12 +43,12 @@ abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
 
-        LibInterpreterDeploy.etchRainlang(vm);
+        LibTestInterpreterDeploy.etchTestRainlang(vm);
         LibEtchRaindex.etchRaindex(vm);
 
-        iInterpreter = IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS);
-        iStore = IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS);
-        iParserV2 = IParserV2(LibInterpreterDeploy.EXPRESSION_DEPLOYER_DEPLOYED_ADDRESS);
+        iInterpreter = IInterpreterV4(TEST_INTERPRETER_ADDRESS);
+        iStore = IInterpreterStoreV3(TEST_STORE_ADDRESS);
+        iParserV2 = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
 
         iRaindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
@@ -62,7 +68,7 @@ abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
         vm.assume(account != address(iInterpreter));
         vm.assume(account != address(iStore));
         vm.assume(account != address(iParserV2));
-        vm.assume(account != LibInterpreterDeploy.PARSER_DEPLOYED_ADDRESS);
+        vm.assume(account != TEST_PARSER_ADDRESS);
 
         vm.assume(account != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
         vm.assume(account != address(iToken0));

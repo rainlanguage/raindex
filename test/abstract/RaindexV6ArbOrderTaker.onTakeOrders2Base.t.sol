@@ -6,8 +6,8 @@ import {Test} from "forge-std-1.16.2/src/Test.sol";
 
 import {ChildRaindexV6ArbOrderTaker} from "test/util/concrete/ChildRaindexV6ArbOrderTaker.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
-import {Float} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
+import {Float} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 

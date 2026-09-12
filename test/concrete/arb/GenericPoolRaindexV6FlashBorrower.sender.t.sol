@@ -14,9 +14,12 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibInterpreterDeploy} from "rainlang-0.1.5/src/lib/deploy/LibInterpreterDeploy.sol";
+} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
+import {
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS
+} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract GenericPoolRaindexV6FlashBorrowerTest is ArbTest {
     function buildArb() internal override returns (address payable) {
@@ -47,9 +50,7 @@ contract GenericPoolRaindexV6FlashBorrowerTest is ArbTest {
                 abi.encode(iRefundoor, iRefundoor, ""),
                 TaskV2({
                 evaluable: EvaluableV4(
-                    IInterpreterV4(LibInterpreterDeploy.INTERPRETER_DEPLOYED_ADDRESS),
-                    IInterpreterStoreV3(LibInterpreterDeploy.STORE_DEPLOYED_ADDRESS),
-                    ""
+                    IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), ""
                 ),
                 signedContext: new SignedContextV1[](0)
             })

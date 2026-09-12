@@ -11,7 +11,7 @@ import {GenericPoolRaindexV6FlashBorrower} from "../concrete/arb/GenericPoolRain
 import {ROUTE_PROCESSOR_4_CREATION_CODE} from "../lib/deploy/LibRouteProcessor4CreationCode.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
-import {LibDecimalFloatDeploy} from "rain-math-float-0.1.1/src/lib/deploy/LibDecimalFloatDeploy.sol";
+import {LibDecimalFloatDeploy} from "rain-math-float-deploy-0.1.2/src/lib/deploy/LibDecimalFloatDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
 import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.1/src/lib/LibMetaBoardDeploy.sol";
 import {

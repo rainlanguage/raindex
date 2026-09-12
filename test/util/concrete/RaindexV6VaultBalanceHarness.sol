@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
-import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// @dev Exposes RaindexV6's internal vault-balance / token helpers for testing.
 contract RaindexV6VaultBalanceHarness is RaindexV6 {
