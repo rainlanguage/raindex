@@ -160,6 +160,9 @@ pub enum LocalDbError {
     #[error("Database schema version mismatch: expected {expected}, found {found}")]
     SchemaVersionMismatch { expected: u32, found: u32 },
 
+    #[error("Preinstalled database snapshot is invalid: {reason}")]
+    InvalidPreinstalledSnapshot { reason: String },
+
     #[error("Invalid bootstrap implementation")]
     InvalidBootstrapImplementation,
 
@@ -307,6 +310,9 @@ impl LocalDbError {
                 "Database schema version mismatch: expected {}, found {}",
                 expected, found
             ),
+            LocalDbError::InvalidPreinstalledSnapshot { reason } => {
+                format!("Preinstalled database snapshot is invalid: {reason}")
+            }
             LocalDbError::InvalidBootstrapImplementation => {
                 "This bootstrap implementation is invalid.".to_string()
             }

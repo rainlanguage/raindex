@@ -1,7 +1,7 @@
 use super::super::config::NetworkRunnerConfig;
 use super::super::environment::default_environment;
 use super::super::leadership::DefaultLeadership;
-use super::super::ClientRunner;
+use super::super::{ClientRunner, LocalDbProvisioning};
 use crate::local_db::pipeline::adapters::bootstrap::BootstrapPipeline;
 use crate::local_db::pipeline::adapters::{
     apply::DefaultApplyPipeline, events::DefaultEventsPipeline, tokens::DefaultTokensPipeline,
@@ -81,6 +81,21 @@ pub struct SchedulerHandle {
     networks: Vec<NetworkCfg>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SchedulerBootstrap {
+    Managed { schema_initialized: bool },
+    PreinstalledSnapshot,
+}
+
+impl SchedulerBootstrap {
+    fn provisioning(self) -> LocalDbProvisioning {
+        match self {
+            Self::Managed { .. } => LocalDbProvisioning::Managed,
+            Self::PreinstalledSnapshot => LocalDbProvisioning::PreinstalledSnapshot,
+        }
+    }
+}
+
 impl SchedulerHandle {
     pub fn stop(&self) {
         self.stop_flag.set(true);
@@ -101,7 +116,7 @@ pub(crate) fn start(
     status_callback: Option<Function>,
     sync_readiness: SyncReadiness,
     status_store: LocalDbSyncStatusStore,
-    schema_initialized: bool,
+    scheduler_bootstrap: SchedulerBootstrap,
 ) -> Result<SchedulerHandle, LocalDbError> {
     let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
     for raindex_cfg in settings.raindexes.values() {
@@ -136,7 +151,12 @@ pub(crate) fn start(
         set_status_callback(callback.clone());
         emit_initial_sync_statuses(&settings_clone, &status_store, callback.as_deref());
 
-        if !schema_initialized {
+        if matches!(
+            scheduler_bootstrap,
+            SchedulerBootstrap::Managed {
+                schema_initialized: false
+            }
+        ) {
             if let Err(err) = bootstrap
                 .runner_run(&db_clone, Some(DB_SCHEMA_VERSION))
                 .await
@@ -170,7 +190,7 @@ pub(crate) fn start(
             let environment = default_environment(status_store.clone());
 
             let runner = match ClientRunner::from_config(config.clone(), environment, leadership) {
-                Ok(r) => r,
+                Ok(r) => r.with_provisioning(scheduler_bootstrap.provisioning()),
                 Err(err) => {
                     emit_network_status(
                         &status_store,
@@ -879,7 +899,9 @@ mod wasm_tests {
             None,
             SyncReadiness::new(),
             LocalDbSyncStatusStore::new(),
-            false,
+            SchedulerBootstrap::Managed {
+                schema_initialized: false,
+            },
         )
         .expect("should start with valid yaml");
 
