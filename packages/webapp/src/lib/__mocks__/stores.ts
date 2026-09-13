@@ -8,7 +8,12 @@ export const initialPageState = {
 		dotrain: 'some dotrain content',
 		deployment: { key: 'deploy-key' },
 		orderDetail: {},
-		errorMessage: ''
+		errorMessage: '',
+		snapshotPocEnabled: false,
+		registryUrl: '',
+		registry: null,
+		localDb: null,
+		raindexClient: null
 	},
 	url: new URL('http://localhost:3000/deploy'),
 	params: {},
@@ -24,6 +29,7 @@ const mockPageWritable = writable<typeof initialPageState>(initialPageState);
 const mockSignerAddressWritable = writable<string>('');
 const mockChainIdWritable = writable<number>(0);
 const mockConnectedWritable = writable<boolean>(false);
+const mockValidChainIdsWritable = writable<number[]>([]);
 const mockWagmiConfigWritable = writable<Config>(mockWeb3Config);
 const mockAppKitModalWritable = writable<AppKit | null>(null);
 
@@ -43,6 +49,12 @@ export const mockConnectedStore = {
 	subscribe: mockConnectedWritable.subscribe,
 	set: mockConnectedWritable.set,
 	mockSetSubscribeValue: (value: boolean): void => mockConnectedWritable.set(value)
+};
+
+export const mockValidChainIdsStore = {
+	subscribe: mockValidChainIdsWritable.subscribe,
+	set: mockValidChainIdsWritable.set,
+	reset: (): void => mockValidChainIdsWritable.set([])
 };
 
 export const mockWagmiConfigStore = {

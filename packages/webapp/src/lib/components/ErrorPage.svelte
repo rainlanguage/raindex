@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+
+	export let errorMessage: string | undefined = undefined;
+	$: displayedError = errorMessage ?? $page.data?.errorMessage;
 </script>
 
 <div
@@ -18,10 +21,10 @@
 		>.
 	</p>
 
-	{#if $page.data?.errorMessage}
+	{#if displayedError}
 		<div class="error-details rounded border border-red-400 bg-red-100 p-4 text-left text-red-700">
 			<h2 class="font-semibold">Error Details:</h2>
-			<pre class="whitespace-pre-wrap break-words">{$page.data.errorMessage}</pre>
+			<pre class="whitespace-pre-wrap break-words">{displayedError}</pre>
 		</div>
 	{/if}
 
