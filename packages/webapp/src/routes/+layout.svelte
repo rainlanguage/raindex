@@ -23,10 +23,27 @@
 	import { initWallet } from '$lib/services/handleWalletInitialization';
 	import { REGISTRY_URL } from '$lib/constants';
 	import { onMount } from 'svelte';
-	import type { RaindexClient } from '@rainlanguage/raindex';
+	import type { DotrainRegistry, RaindexClient } from '@rainlanguage/raindex';
 	import { seedLocalDbSyncSnapshot } from '$lib/stores/localDbStatus';
+	import LocalDbSyncGate from '$lib/components/LocalDbSyncGate.svelte';
+	import {
+		initializeSnapshotPoc,
+		type SnapshotBootstrap,
+		type SnapshotPocRuntime
+	} from '$lib/services/snapshotPoc';
 
-	const { errorMessage, localDb, raindexClient, registry } = $page.data;
+	const pageData = $page.data;
+	let errorMessage = pageData.errorMessage;
+	let localDb = pageData.localDb;
+	let raindexClient = pageData.raindexClient;
+	let registry = pageData.registry as DotrainRegistry | null;
+	let snapshotBootstrap: SnapshotBootstrap | undefined;
+	// POC mode is selected by a direct page load and remains fixed for this
+	// document. The universal load keeps it enabled across client navigation.
+	const snapshotPocEnabled = pageData.snapshotPocEnabled && $page.url.pathname !== '/';
+	let snapshotBootstrapPending = snapshotPocEnabled && !errorMessage;
+	let snapshotBootstrapPhase = 'Preparing local database';
+	let snapshotBootstrapElapsed = 0;
 	const registryManager = new RegistryManager(REGISTRY_URL);
 
 	const queryClient = new QueryClient({
@@ -39,10 +56,7 @@
 
 	let walletInitError: string | null = null;
 
-	onMount(() => {
-		if (!browser || !raindexClient || !registry) return;
-		const client = raindexClient as RaindexClient;
-
+	const initializeClientState = (client: RaindexClient) => {
 		const uniqueChainIds = client.getUniqueChainIds();
 		if (!uniqueChainIds.error) {
 			validChainIds.set(uniqueChainIds.value);
@@ -58,6 +72,63 @@
 			.catch(() => {
 				// The live status callback will continue to update the sidebar and data gate.
 			});
+	};
+
+	const freeSnapshotRuntime = (runtime: SnapshotPocRuntime) => {
+		runtime.raindexClient.free();
+		runtime.localDb.free();
+		runtime.registry.free();
+	};
+
+	onMount(() => {
+		if (!browser) return;
+
+		if (snapshotPocEnabled) {
+			let disposed = false;
+			let ownedRuntime: SnapshotPocRuntime | undefined;
+			const startedAt = performance.now();
+			const elapsedTimer = window.setInterval(() => {
+				snapshotBootstrapElapsed = (performance.now() - startedAt) / 1000;
+			}, 100);
+
+			initializeSnapshotPoc(pageData.registryUrl, (phase) => {
+				if (!disposed) snapshotBootstrapPhase = phase;
+			})
+				.then((runtime) => {
+					if (disposed) {
+						freeSnapshotRuntime(runtime);
+						return;
+					}
+					ownedRuntime = runtime;
+					registry = runtime.registry;
+					localDb = runtime.localDb;
+					raindexClient = runtime.raindexClient;
+					snapshotBootstrap = runtime.snapshotBootstrap;
+					snapshotBootstrapPending = false;
+					initializeClientState(runtime.raindexClient);
+				})
+				.catch((error: unknown) => {
+					if (disposed) return;
+					const message = (error as Error).message;
+					errorMessage = 'Error initializing local database: ' + message;
+					snapshotBootstrap = {
+						status: 'failed',
+						elapsedMs: performance.now() - startedAt,
+						message
+					};
+					snapshotBootstrapPending = false;
+				})
+				.finally(() => window.clearInterval(elapsedTimer));
+
+			return () => {
+				disposed = true;
+				window.clearInterval(elapsedTimer);
+				if (ownedRuntime) freeSnapshotRuntime(ownedRuntime);
+			};
+		}
+
+		if (!registry) return;
+		if (raindexClient) initializeClientState(raindexClient as RaindexClient);
 	});
 
 	$: if (browser && window.navigator) {
@@ -66,6 +137,28 @@
 		});
 	}
 </script>
+
+{#if snapshotBootstrap && snapshotBootstrap.status !== 'failed'}
+	<div
+		data-testid="snapshot-poc-result"
+		role="status"
+		aria-live="polite"
+		class="fixed right-4 top-4 z-[110] max-w-md rounded-lg bg-emerald-700 px-5 py-3 text-sm text-white shadow-lg"
+	>
+		<div class="font-semibold">SQLite snapshot POC: {snapshotBootstrap.status}</div>
+		<div>
+			{#if snapshotBootstrap.status === 'installed'}
+				{(snapshotBootstrap.bytesWritten / 1_000_000).toFixed(1)} MB installed from Cloudflare R2 in
+				{(snapshotBootstrap.elapsedMs / 1000).toFixed(1)}s; database ready in
+				{(snapshotBootstrap.readyElapsedMs / 1000).toFixed(1)}s
+			{:else}
+				Existing {(snapshotBootstrap.bytesWritten / 1_000_000).toFixed(1)} MB local snapshot opened in
+				{snapshotBootstrap.elapsedMs.toFixed(0)}ms; database ready in
+				{snapshotBootstrap.readyElapsedMs.toFixed(0)}ms
+			{/if}
+		</div>
+	</div>
+{/if}
 
 {#if walletInitError}
 	<div
@@ -82,19 +175,38 @@
 				<LoadingWrapper>
 					{#if $page.url.pathname === '/'}
 						<Homepage {colorTheme} />
+					{:else if snapshotBootstrapPending}
+						<div
+							data-testid="snapshot-poc-loading-shell"
+							class="flex h-screen w-full justify-start overflow-hidden bg-white dark:bg-gray-900 dark:text-gray-400"
+						>
+							<Sidebar {colorTheme} page={$page} localDbStatusOverride="syncing" />
+							<p class="sr-only" role="status" aria-live="polite">
+								{snapshotBootstrapPhase}
+							</p>
+							<main class="mx-auto h-screen w-full grow overflow-auto px-4 pt-14 lg:ml-64 lg:p-8">
+								<LocalDbSyncGate
+									syncingOverride={`${snapshotBootstrapPhase} (${snapshotBootstrapElapsed.toFixed(1)}s)`}
+								/>
+							</main>
+						</div>
 					{:else if errorMessage}
-						<ErrorPage />
+						<ErrorPage {errorMessage} />
 					{:else}
 						<DotrainRegistryProvider {registry} error={errorMessage} manager={registryManager}>
 							<LocalDbProvider {localDb}>
 								<RaindexClientProvider {raindexClient}>
 									<div
 										data-testid="layout-container"
-										class="flex min-h-screen w-full justify-start bg-white dark:bg-gray-900 dark:text-gray-400"
+										class={snapshotPocEnabled
+											? 'flex h-screen w-full justify-start overflow-hidden bg-white dark:bg-gray-900 dark:text-gray-400'
+											: 'flex min-h-screen w-full justify-start bg-white dark:bg-gray-900 dark:text-gray-400'}
 									>
 										<Sidebar {colorTheme} page={$page} />
 										<main
-											class="mx-auto h-full w-full grow overflow-x-auto px-4 pt-14 lg:ml-64 lg:p-8"
+											class={snapshotPocEnabled
+												? 'mx-auto h-screen w-full grow overflow-auto px-4 pt-14 lg:ml-64 lg:p-8'
+												: 'mx-auto h-full w-full grow overflow-x-auto px-4 pt-14 lg:ml-64 lg:p-8'}
 										>
 											<slot />
 										</main>

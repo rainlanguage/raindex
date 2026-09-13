@@ -28,11 +28,13 @@
 		TransactionList,
 		LocalDbStatusCard
 	} from '@rainlanguage/ui-components';
+	import type { LocalDbStatus } from '@rainlanguage/raindex';
 	import { onMount } from 'svelte';
 	import { connected, appKitModal } from '$lib/stores/wagmi';
 	import { networkStatuses, raindexStatuses } from '$lib/stores/localDbStatus';
 	export let colorTheme;
 	export let page;
+	export let localDbStatusOverride: LocalDbStatus | undefined = undefined;
 
 	let sideBarHidden: boolean = false;
 	let breakPoint: number = 1024;
@@ -125,7 +127,11 @@
 				<WalletConnect {appKitModal} {connected} classes="w-full" />
 			</SidebarGroup>
 			<SidebarGroup border ulClass="list-none">
-				<LocalDbStatusCard networkStatuses={$networkStatuses} raindexStatuses={$raindexStatuses} />
+				<LocalDbStatusCard
+					networkStatuses={$networkStatuses}
+					raindexStatuses={$raindexStatuses}
+					statusOverride={localDbStatusOverride}
+				/>
 			</SidebarGroup>
 			<SidebarGroup border ulClass="list-none">
 				<SidebarItem
