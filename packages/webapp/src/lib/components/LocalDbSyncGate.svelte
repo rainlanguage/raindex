@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { localDbSyncGate } from '$lib/stores/localDbStatus';
+
+	export let syncingOverride: string | undefined = undefined;
 </script>
 
-{#if $localDbSyncGate.status === 'syncing'}
+{#if syncingOverride || $localDbSyncGate.status === 'syncing'}
 	<div
 		data-testid="local-db-syncing-notice"
 		class="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border border-sky-200 bg-sky-50 px-6 py-8 text-center shadow-sm dark:border-sky-900/70 dark:bg-sky-950/30"
@@ -18,9 +20,9 @@
 			We are preparing the local database. Orders and vaults will appear once the initial
 			sync finishes.
 		</p>
-		{#if $localDbSyncGate.phaseMessage}
+		{#if syncingOverride || ($localDbSyncGate.status === 'syncing' && $localDbSyncGate.phaseMessage)}
 			<p class="mt-4 text-sm font-medium text-sky-700 dark:text-sky-300">
-				{$localDbSyncGate.phaseMessage}
+				{syncingOverride ?? ($localDbSyncGate.status === 'syncing' ? $localDbSyncGate.phaseMessage : '')}
 			</p>
 		{/if}
 	</div>

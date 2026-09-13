@@ -29,6 +29,18 @@ describe("LocalDbStatusCard", () => {
     expect(screen.getByTestId("local-db-status")).toBeInTheDocument();
   });
 
+  it("renders a non-interactive status override", async () => {
+    render(LocalDbStatusCard, { props: { statusOverride: "syncing" } });
+
+    expect(screen.getByText("Syncing")).toBeInTheDocument();
+    const headerButton = screen.getByTestId("local-db-status-header");
+    expect(headerButton).toBeDisabled();
+    await fireEvent.click(headerButton);
+    expect(
+      screen.queryByTestId("local-db-status-modal"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows syncing status when a network is syncing and none are failing", () => {
     const networkStatuses = new Map<number, NetworkSyncStatus>([
       [1, { chainId: 1, status: "active", schedulerState: "leader" }],

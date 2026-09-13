@@ -8,7 +8,12 @@ export const initialPageState = {
 		dotrain: 'some dotrain content',
 		deployment: { key: 'deploy-key' },
 		orderDetail: {},
-		errorMessage: ''
+		errorMessage: '',
+		snapshotPocEnabled: false,
+		registryUrl: '',
+		registry: null,
+		localDb: null,
+		raindexClient: null
 	},
 	url: new URL('http://localhost:3000/deploy'),
 	params: {},
