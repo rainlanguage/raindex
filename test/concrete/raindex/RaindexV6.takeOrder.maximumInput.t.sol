@@ -13,7 +13,7 @@ import {
     OrderConfigV4,
     TaskV2,
     IRaindexV6
-} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 

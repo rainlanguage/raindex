@@ -13,7 +13,7 @@ import {
     TaskV2,
     EvaluableV4,
     SignedContextV1
-} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
@@ -25,7 +25,7 @@ import {
     TEST_STORE_ADDRESS,
     TEST_EXPRESSION_DEPLOYER_ADDRESS,
     TEST_PARSER_ADDRESS
-} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.5/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.8/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";

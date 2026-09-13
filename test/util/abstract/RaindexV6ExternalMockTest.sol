@@ -11,7 +11,7 @@ import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
-import {IRaindexV6, OrderConfigV4, OrderV4, TaskV2} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {IRaindexV6, OrderConfigV4, OrderV4, TaskV2} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";

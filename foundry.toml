@@ -66,14 +66,14 @@ forge-std = "1.16.2"
 "@openzeppelin-contracts" = "5.6.1"
 # rainlanguage/rain.interpreter was renamed to rainlanguage/rainlang;
 # its Soldeer registry name follows.
-rainlang = "0.2.4"
+rainlang = "0.2.5"
 # rainlanguage/rain.interpreter.interface was renamed to
 # rainlanguage/rainlang.interface; its Soldeer registry name moved from
 # `rain-interpreter-interface` (0.1.x) to `rainlang-interface` (0.2.x).
 rainlang-interface = "0.2.8"
 # rainlanguage/rain.raindex.interface was renamed to
 # rainlanguage/raindex.interface; Soldeer registry name follows.
-raindex-interface = "0.1.5"
+raindex-interface = "0.1.6"
 rain-metadata = "0.1.7"
 # The MetaBoard split out of `rain.metadata` into its own deploy repo. The
 # deploy pin lives there now; `rain-metadata` keeps the interfaces and libs.

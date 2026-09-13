@@ -17,7 +17,7 @@ import {
     SignedContextV1,
     TaskV2,
     IInterpreterV4
-} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 

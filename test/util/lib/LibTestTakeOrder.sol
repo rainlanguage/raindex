@@ -12,7 +12,7 @@ import {
     OrderConfigV4,
     TaskV2,
     IRaindexV6
-} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
 import {IParserV2} from "rainlang-interface-0.2.8/src/interface/IParserV2.sol";
@@ -22,7 +22,7 @@ import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
     TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.5/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {

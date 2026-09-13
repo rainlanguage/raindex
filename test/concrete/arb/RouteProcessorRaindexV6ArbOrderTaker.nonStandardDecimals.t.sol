@@ -16,7 +16,7 @@ import {
     SignedContextV1,
     TaskV2,
     Float
-} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
@@ -26,7 +26,7 @@ import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.4/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.5/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";

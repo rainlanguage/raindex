@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibRaindexArb} from "src/lib/LibRaindexArb.sol";
-import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.5/src/interface/IRaindexV6.sol";
+import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
 
