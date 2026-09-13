@@ -17,17 +17,7 @@ import {
 } from "raindex-interface-0.1.3/src/interface/IRaindexV6.sol";
 import {LibOrder} from "../../../../src/lib/LibOrder.sol";
 import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-
-/// @dev EIP-1271 always-valid signer bytecode target. Etched over the real
-/// oracle signer so tests can mutate unsigned frames and still clear
-/// `LibContext` auth, then hit the rainlang `ensure` messages.
-contract AlwaysValid1271 {
-    bytes4 internal constant MAGIC = 0x1626ba7e;
-
-    function isValidSignature(bytes32, bytes calldata) external pure returns (bytes4) {
-        return MAGIC;
-    }
-}
+import {AlwaysValid1271} from "./AlwaysValid1271.sol";
 
 /// @title RaindexV7St0xFixedSpreadFork
 /// @notice Shared Base/Robinhood fork harness for live st0x-fixed-spread-v7
