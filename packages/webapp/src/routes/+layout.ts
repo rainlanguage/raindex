@@ -12,10 +12,22 @@ export interface LayoutData {
 	raindexClient: RaindexClient | null;
 	registry: DotrainRegistry | null;
 	localDb: SQLiteWasmDatabase | null;
+	snapshotPocEnabled: boolean;
+	registryUrl: string;
 }
+
+// The root layout remains mounted across client-side navigation. Once this
+// document opts into the POC, keep every universal load on the same bootstrap
+// path so navigation cannot create an unowned managed database beside it. A
+// full page load without the flag starts a fresh, normal production session.
+let snapshotPocSessionEnabled = false;
 
 export const load: LayoutLoad<LayoutData> = async ({ url }) => {
 	let errorMessage: string | undefined;
+	if (url.pathname !== '/' && url.searchParams.get('snapshot-poc') === '1') {
+		snapshotPocSessionEnabled = true;
+	}
+	const snapshotPocEnabled = snapshotPocSessionEnabled;
 
 	const registryParam = url.searchParams.get('registry');
 	let registryUrl = REGISTRY_URL;
@@ -37,6 +49,30 @@ export const load: LayoutLoad<LayoutData> = async ({ url }) => {
 				registryUrl = REGISTRY_URL;
 			}
 		}
+	}
+
+	const stores: AppStoresInterface = {
+		selectedChainIds: writable<number[]>([]),
+		showInactiveOrders: writable<boolean>(false),
+		// @ts-expect-error initially the value is empty
+		orderHash: writable<Hex>(''),
+		hideZeroBalanceVaults: writable<boolean>(false),
+		hideInactiveOrdersVaults: writable<boolean>(false),
+		activeTokens: writable<Address[]>([]),
+		activeRaindexAddresses: writable<Address[]>([]),
+		// @ts-expect-error initially the value is empty
+		ownerFilter: writable<Address>('')
+	};
+
+	if (snapshotPocEnabled) {
+		return {
+			stores,
+			registry: null,
+			localDb: null,
+			raindexClient: null,
+			snapshotPocEnabled,
+			registryUrl
+		};
 	}
 
 	let registry: DotrainRegistry | null = null;
@@ -95,25 +131,18 @@ export const load: LayoutLoad<LayoutData> = async ({ url }) => {
 			stores: null,
 			registry,
 			localDb,
+			snapshotPocEnabled,
+			registryUrl,
 			raindexClient: null
 		};
 	}
 
 	return {
-		stores: {
-			selectedChainIds: writable<number[]>([]),
-			showInactiveOrders: writable<boolean>(false),
-			// @ts-expect-error initially the value is empty
-			orderHash: writable<Hex>(''),
-			hideZeroBalanceVaults: writable<boolean>(false),
-			hideInactiveOrdersVaults: writable<boolean>(false),
-			activeTokens: writable<Address[]>([]),
-			activeRaindexAddresses: writable<Address[]>([]),
-			// @ts-expect-error initially the value is empty
-			ownerFilter: writable<Address>('')
-		},
+		stores,
 		registry,
 		localDb,
+		snapshotPocEnabled,
+		registryUrl,
 		raindexClient
 	};
 };
@@ -150,6 +179,7 @@ if (import.meta.vitest) {
 	describe('Layout load function', () => {
 		beforeEach(() => {
 			vi.clearAllMocks();
+			snapshotPocSessionEnabled = false;
 			// @ts-expect-error mock storage
 			global.localStorage = {
 				data: {} as Record<string, string>,
@@ -165,15 +195,21 @@ if (import.meta.vitest) {
 			};
 			mockInit.mockResolvedValue(undefined);
 			mockLocalDbNew.mockReturnValue({
-				value: { db: true, query: vi.fn(), wipeAndRecreate: vi.fn(), transaction: vi.fn() }
+				value: {
+					db: true,
+					query: vi.fn(),
+					wipeAndRecreate: vi.fn(),
+					transaction: vi.fn()
+				}
 			});
 		});
 
 		it('should return errorMessage if registry fails to load', async () => {
 			mockRegistryNew.mockRejectedValueOnce(new Error('Network error'));
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const result = await load({ url: new URL('http://localhost:3000') } as any);
+			const result = await load({
+				url: new URL('http://localhost:3000')
+			} as Parameters<typeof load>[0]);
 
 			expect(result).toHaveProperty('stores', null);
 			expect(result.errorMessage).toContain('Failed to load registry');
@@ -188,8 +224,9 @@ if (import.meta.vitest) {
 				value: mockRegistry
 			});
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const result = await load({ url: new URL('http://localhost:3000') } as any);
+			const result = await load({
+				url: new URL('http://localhost:3000')
+			} as Parameters<typeof load>[0]);
 
 			expect(result).toHaveProperty('stores', null);
 			expect(result.errorMessage).toContain('Malformed settings');
@@ -204,11 +241,45 @@ if (import.meta.vitest) {
 				error: { readableMsg: 'Database init failed' }
 			});
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const result = await load({ url: new URL('http://localhost:3000') } as any);
+			const result = await load({
+				url: new URL('http://localhost:3000')
+			} as Parameters<typeof load>[0]);
 
 			expect(result).toHaveProperty('stores', null);
 			expect(result.errorMessage).toContain('Error initializing local database');
+		});
+
+		it('renders the snapshot POC before starting database bootstrap', async () => {
+			const result = await load({
+				url: new URL(
+					'http://localhost:3000/orders?snapshot-poc=1&registry=https://registry.example'
+				)
+			} as Parameters<typeof load>[0]);
+
+			expect(result.snapshotPocEnabled).toBe(true);
+			expect(result.registry).toBeNull();
+			expect(result.registryUrl).toBe('https://registry.example');
+			expect(result.localDb).toBeNull();
+			expect(result.raindexClient).toBeNull();
+			expect(mockRegistryNew).not.toHaveBeenCalled();
+			expect(mockInit).not.toHaveBeenCalled();
+		});
+
+		it('keeps snapshot mode across client-side navigation without the query flag', async () => {
+			await load({
+				url: new URL('http://localhost:3000/orders?snapshot-poc=1')
+			} as Parameters<typeof load>[0]);
+
+			const result = await load({
+				url: new URL('http://localhost:3000/vaults')
+			} as Parameters<typeof load>[0]);
+
+			expect(result.snapshotPocEnabled).toBe(true);
+			expect(result.registry).toBeNull();
+			expect(result.localDb).toBeNull();
+			expect(result.raindexClient).toBeNull();
+			expect(mockRegistryNew).not.toHaveBeenCalled();
+			expect(mockInit).not.toHaveBeenCalled();
 		});
 
 		it('should initialize when registry and RaindexClient succeed', async () => {
@@ -219,13 +290,19 @@ if (import.meta.vitest) {
 			mockRegistryNew.mockResolvedValueOnce({
 				value: mockRegistry
 			});
-			const localDb = { db: true, query: vi.fn(), wipeAndRecreate: vi.fn(), transaction: vi.fn() };
+			const localDb = {
+				db: true,
+				query: vi.fn(),
+				wipeAndRecreate: vi.fn(),
+				transaction: vi.fn()
+			};
 			mockLocalDbNew.mockReturnValue({
 				value: localDb
 			});
 
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const result = await load({ url: new URL('http://localhost:3000') } as any);
+			const result = await load({
+				url: new URL('http://localhost:3000')
+			} as Parameters<typeof load>[0]);
 
 			expect(result.errorMessage).toBeUndefined();
 			expect(result.stores).not.toBeNull();

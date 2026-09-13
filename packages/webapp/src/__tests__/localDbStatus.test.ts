@@ -9,9 +9,11 @@ import {
 	updateStatus,
 	aggregateStatus,
 	localDbSyncGate,
+	markLocalDbInitialSyncComplete,
 	resetLocalDbStatus,
 	seedLocalDbSyncSnapshot
 } from '../lib/stores/localDbStatus';
+import type { LocalDbSyncGateState } from '../lib/stores/localDbStatus';
 
 describe('localDbStatus store', () => {
 	beforeEach(() => {
@@ -567,6 +569,43 @@ describe('localDbStatus store', () => {
 			expect(get(localDbSyncGate)).toEqual({ status: 'idle' });
 		});
 
+		it('is ready after explicit initial completion without status callbacks', () => {
+			markLocalDbInitialSyncComplete();
+
+			expect(get(networkStatuses).size).toBe(0);
+			expect(get(raindexStatuses).size).toBe(0);
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('resets an actively subscribed ready gate to idle', () => {
+			const states: LocalDbSyncGateState[] = [];
+			const unsubscribe = localDbSyncGate.subscribe((state) => states.push(state));
+
+			updateNetworkStatus({
+				chainId: 137,
+				status: 'active',
+				schedulerState: 'leader'
+			});
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'active',
+				schedulerState: 'leader'
+			});
+			expect(states.at(-1)).toEqual({ status: 'ready' });
+
+			const resetStateStart = states.length;
+			resetLocalDbStatus();
+
+			expect(get(networkStatuses).size).toBe(0);
+			expect(get(raindexStatuses).size).toBe(0);
+			expect(states.slice(resetStateStart).every((state) => state.status === 'idle')).toBe(true);
+			expect(states.at(-1)).toEqual({ status: 'idle' });
+			unsubscribe();
+		});
+
 		it('does not block data views for non-destructive initial sync phases', () => {
 			updateNetworkStatus({
 				chainId: 137,
@@ -584,6 +623,45 @@ describe('localDbStatus store', () => {
 			});
 
 			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('keeps an existing usable database visible while bootstrap catches up', () => {
+			markLocalDbInitialSyncComplete();
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			expect(get(localDbSyncGate)).toEqual({ status: 'ready' });
+		});
+
+		it('notifies an existing subscriber when a validated snapshot becomes ready', () => {
+			const states: LocalDbSyncGateState[] = [];
+			const unsubscribe = localDbSyncGate.subscribe((state) => states.push(state));
+
+			updateRaindexStatus({
+				raindexId: {
+					chainId: 137,
+					raindexAddress: '0x1234567890123456789012345678901234567890'
+				},
+				status: 'syncing',
+				schedulerState: 'leader',
+				phaseMessage: 'Running bootstrap'
+			});
+			expect(states.at(-1)).toEqual({
+				status: 'syncing',
+				phaseMessage: 'Running bootstrap'
+			});
+
+			markLocalDbInitialSyncComplete();
+
+			expect(states.at(-1)).toEqual({ status: 'ready' });
+			unsubscribe();
 		});
 
 		it('blocks data views while the initial dump is downloading', () => {
