@@ -19,6 +19,8 @@ export type LocalDbSyncGateState =
 let initialSyncComplete = false;
 let blockingInitialSyncStarted = false;
 let lastBlockingPhaseMessage: string | undefined;
+let resetting = false;
+const syncGateRevision = writable(0);
 
 const BLOCKING_SYNC_PHASE_MESSAGES = new Set(['Downloading initial dump', 'Running bootstrap']);
 
@@ -69,11 +71,21 @@ export function seedLocalDbSyncSnapshot(snapshot: LocalDbSyncSnapshot) {
 }
 
 export function resetLocalDbStatus() {
+	resetting = true;
+	networkStatuses.set(new Map());
+	raindexStatuses.set(new Map());
 	initialSyncComplete = false;
 	blockingInitialSyncStarted = false;
 	lastBlockingPhaseMessage = undefined;
-	networkStatuses.set(new Map());
-	raindexStatuses.set(new Map());
+	resetting = false;
+	syncGateRevision.update((revision) => revision + 1);
+}
+
+export function markLocalDbInitialSyncComplete() {
+	initialSyncComplete = true;
+	blockingInitialSyncStarted = false;
+	lastBlockingPhaseMessage = undefined;
+	syncGateRevision.update((revision) => revision + 1);
 }
 
 export const aggregateStatus = derived(
@@ -88,9 +100,17 @@ export const aggregateStatus = derived(
 export const localDbStatus = aggregateStatus;
 
 export const localDbSyncGate = derived(
-	[networkStatuses, raindexStatuses],
+	[networkStatuses, raindexStatuses, syncGateRevision],
 	([$networkMap, $raindexMap]): LocalDbSyncGateState => {
+		if (resetting) {
+			return { status: 'idle' };
+		}
+
 		const statuses = [...Array.from($networkMap.values()), ...Array.from($raindexMap.values())];
+
+		if (initialSyncComplete) {
+			return { status: 'ready' };
+		}
 
 		if (statuses.length === 0) {
 			return { status: 'idle' };
@@ -101,10 +121,6 @@ export const localDbSyncGate = derived(
 			initialSyncComplete = true;
 			blockingInitialSyncStarted = false;
 			lastBlockingPhaseMessage = undefined;
-			return { status: 'ready' };
-		}
-
-		if (initialSyncComplete) {
 			return { status: 'ready' };
 		}
 
