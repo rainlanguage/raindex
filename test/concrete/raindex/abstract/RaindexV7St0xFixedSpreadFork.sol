@@ -76,9 +76,13 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
 
     function _usdcDecimals() internal pure virtual returns (uint8);
 
+    /// Pinned tip for deterministic CI. Do not use provider head here —
+    /// keep any latest-state canary in a separate suite.
+    function _forkBlockNumber() internal pure virtual returns (uint256);
+
     function setUp() public {
         string memory rpc = vm.envOr(_rpcEnvKey(), _rpcFallback());
-        vm.createSelectFork(rpc);
+        vm.createSelectFork(rpc, _forkBlockNumber());
         vm.warp(ORACLE_PUBLISH_TIME);
 
         // Real signer may carry EIP-7702 code; replace with always-valid 1271.
