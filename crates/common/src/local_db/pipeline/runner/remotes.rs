@@ -63,8 +63,9 @@ pub fn lookup_manifest_entry(
     manifest_map: &ManifestMap,
     target: &RunnerTarget,
 ) -> Option<ManifestRaindex> {
+    let manifest_url = target.manifest_url.as_ref()?;
     manifest_map
-        .get(&target.manifest_url)
+        .get(manifest_url)
         .and_then(|manifest| {
             manifest.find(
                 target.inputs.raindex_id.chain_id,
@@ -218,7 +219,10 @@ raindexes:
             )]),
         };
 
-        let map = HashMap::from([(target.manifest_url.clone(), manifest)]);
+        let map = HashMap::from([(
+            target.manifest_url.clone().expect("managed target remote"),
+            manifest,
+        )]);
         (target, map)
     }
 
@@ -472,7 +476,11 @@ networks: {{}}
     #[test]
     fn lookup_manifest_entry_chain_id_mismatch() {
         let (target, mut manifest_map) = sample_runner_target();
-        if let Some(manifest) = manifest_map.get_mut(&target.manifest_url) {
+        if let Some(manifest) = target
+            .manifest_url
+            .as_ref()
+            .and_then(|url| manifest_map.get_mut(url))
+        {
             if let Some(network) = manifest.networks.get_mut("network-a") {
                 network.chain_id = target.inputs.raindex_id.chain_id + 1;
             }

@@ -104,7 +104,7 @@ mod tests {
         RunnerTarget {
             raindex_key: "test-raindex".to_string(),
             network_key: "test-network".to_string(),
-            manifest_url: Url::parse("https://manifests.example/client.yaml").unwrap(),
+            manifest_url: Some(Url::parse("https://manifests.example/client.yaml").unwrap()),
             inputs: SyncInputs {
                 raindex_id: RaindexIdentifier {
                     chain_id: 1,
