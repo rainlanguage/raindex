@@ -5,8 +5,9 @@ pragma solidity =0.8.25;
 import {RaindexV7St0xFixedSpreadFork} from "./abstract/RaindexV7St0xFixedSpreadFork.sol";
 
 /// @title RaindexV7St0xFixedSpreadRobinhoodForkTest
-/// @notice Robinhood Chain fork coverage for the live SPYM sell order of
-/// st0x-fixed-spread-v7.
+/// @notice Robinhood Chain fork coverage for the live SPYM **sell** order of
+/// st0x-fixed-spread-v7. Buy coverage lives in
+/// `RaindexV7.st0xFixedSpread.robinhood.buy.fork.t.sol`.
 ///
 /// Run:
 /// `ROBINHOOD_MAINNET_RPC_URL=<rpc> forge test --match-contract RaindexV7St0xFixedSpreadRobinhoodForkTest -vvv`

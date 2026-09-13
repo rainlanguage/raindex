@@ -31,10 +31,12 @@ contract AlwaysValid1271 {
 
 /// @title RaindexV7St0xFixedSpreadFork
 /// @notice Shared Base/Robinhood fork harness for live st0x-fixed-spread-v7
-/// SPYM sell orders. Approach A: keep live `ORDER_BYTES`, etch the real
-/// oracle signer to EIP-1271 always-valid, build/mutate 10-slot v7 frames.
+/// SPYM sell and buy orders. Approach A: keep live `ORDER_BYTES`, etch the
+/// real oracle signer to EIP-1271 always-valid, build/mutate 10-slot v7 frames.
 ///
-/// Happy path: quote+take derives `underlying * convertToAssets(1 share)`.
+/// Happy path: quote+take derives
+/// `underlying * convertToAssets(1 share)` (sell) or
+/// `underlying * convertToShares(1 asset)` (buy; oracle underlying is inverted).
 /// NAV step between quote and take re-prices (does not revert).
 /// Guard matrix: one `expectRevert` per rainlang `ensure` string.
 abstract contract RaindexV7St0xFixedSpreadFork is Test {
@@ -54,6 +56,8 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
     bytes32 internal constant SESSION_CLOSED = bytes32(uint256(0x636c6f736564e6)); // "closed"
 
     uint256 internal constant DEPOSIT_SHARES = 1e15;
+    /// Enough USDC for buy-order output deposits (6-decimal raw).
+    uint256 internal constant DEPOSIT_USDC = 1_000_000e6;
     uint256 internal constant ONE = 1e18;
 
     // -------- chain-specific fixtures (implemented by concrete forks) --------
@@ -80,6 +84,11 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
     /// keep any latest-state canary in a separate suite.
     function _forkBlockNumber() internal pure virtual returns (uint256);
 
+    /// `true` for buy-share orders (vault is input, USDC is output).
+    function _isBuy() internal pure virtual returns (bool) {
+        return false;
+    }
+
     function setUp() public {
         string memory rpc = vm.envOr(_rpcEnvKey(), _rpcFallback());
         vm.createSelectFork(rpc, _forkBlockNumber());
@@ -92,46 +101,55 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
 
     // ------------------------------ happy path ------------------------------
 
-    function testQuoteAndTakeDerivesFromLiveConvertToAssets() external {
+    function testQuoteAndTakeDerivesFromLiveConvert() external {
         OrderV4 memory order = _order();
         SignedContextV1[] memory signedContext = _signedContext(_underlyingPrice());
 
-        _depositOutputShares(order, DEPOSIT_SHARES);
+        _depositOrderOutput(order);
 
         (bool success,, Float ioRatio) = _quote(order, signedContext);
         assertTrue(success, "quote should succeed");
 
-        Float expected = _underlyingPrice().mul(_erc4626ConvertToAssetsFloat(_wtVault(), ONE));
+        Float expected = _expectedIoRatio();
         _logFloat("expected io", expected);
         _logFloat("actual   io", ioRatio);
-        assertTrue(ioRatio.eq(expected), "io-ratio must equal underlying * convertToAssets(1 share)");
+        assertTrue(ioRatio.eq(expected), "io-ratio must equal underlying * live vault convert");
 
-        _fundUsdcAndApprove(1_000_000 * (10 ** uint256(_usdcDecimals())));
+        _fundTakerAndApprove();
         (Float totalIn, Float totalOut) = IRaindexV6(_raindex()).takeOrders4(_takeConfig(order, signedContext));
-        assertFalse(totalIn.isZero(), "taker should receive shares");
-        assertFalse(totalOut.isZero(), "taker should pay USDC");
+        if (_isBuy()) {
+            assertFalse(totalIn.isZero(), "taker should receive USDC");
+            assertFalse(totalOut.isZero(), "taker should pay shares");
+        } else {
+            assertFalse(totalIn.isZero(), "taker should receive shares");
+            assertFalse(totalOut.isZero(), "taker should pay USDC");
+        }
     }
 
     function testTakeStillSucceedsWhenNavStepsAfterQuote() external {
         OrderV4 memory order = _order();
         SignedContextV1[] memory signedContext = _signedContext(_underlyingPrice());
 
-        _depositOutputShares(order, DEPOSIT_SHARES);
+        _depositOrderOutput(order);
         (bool success,,) = _quote(order, signedContext);
         assertTrue(success, "quote should succeed before NAV step");
 
-        uint256 navBefore = IERC4626(_wtVault()).convertToAssets(ONE);
+        uint256 navBefore = _isBuy()
+            ? IERC4626(_wtVault()).convertToShares(ONE)
+            : IERC4626(_wtVault()).convertToAssets(ONE);
         _donateUnderlyingToVault();
-        uint256 navAfter = IERC4626(_wtVault()).convertToAssets(ONE);
-        assertTrue(navAfter != navBefore, "donate must change convertToAssets(1e18)");
+        uint256 navAfter = _isBuy()
+            ? IERC4626(_wtVault()).convertToShares(ONE)
+            : IERC4626(_wtVault()).convertToAssets(ONE);
+        assertTrue(navAfter != navBefore, "donate must change live vault convert(1e18)");
         console2.log("navBefore", navBefore);
         console2.log("navAfter", navAfter);
 
         (, Float ioRatioAfter) = _requoteRatio(order, signedContext);
-        Float expectedAfter = _underlyingPrice().mul(_erc4626ConvertToAssetsFloat(_wtVault(), ONE));
+        Float expectedAfter = _expectedIoRatio();
         assertTrue(ioRatioAfter.eq(expectedAfter), "post-step io must track live NAV");
 
-        _fundUsdcAndApprove(1_000_000 * (10 ** uint256(_usdcDecimals())));
+        _fundTakerAndApprove();
         (Float totalIn, Float totalOut) = IRaindexV6(_raindex()).takeOrders4(_takeConfig(order, signedContext));
         assertFalse(totalIn.isZero(), "fill still executes after NAV step");
         assertFalse(totalOut.isZero(), "fill still executes after NAV step");
@@ -244,8 +262,20 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
 
     // ------------------------------ helpers ------------------------------
 
+    /// Sell: quote-per-underlying (100). Buy: oracle signs the inverse
+    /// orientation (0.01); both multiply by the matching vault convert.
     function _underlyingPrice() internal pure returns (Float) {
+        if (_isBuy()) {
+            return LibDecimalFloat.packLossless(1, -2);
+        }
         return LibDecimalFloat.packLossless(100, 0);
+    }
+
+    function _expectedIoRatio() internal view returns (Float) {
+        Float convert = _isBuy()
+            ? _erc4626ConvertToSharesFloat(_wtVault(), ONE)
+            : _erc4626ConvertToAssetsFloat(_wtVault(), ONE);
+        return _underlyingPrice().mul(convert);
     }
 
     function _order() internal pure returns (OrderV4 memory order) {
@@ -254,6 +284,7 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
     }
 
     /// 10-slot v7 frame. Signature is ignored under etched EIP-1271.
+    /// Slots 6/7 follow the order IO: sell is USDC→vault, buy is vault→USDC.
     function _signedContext(Float underlyingPrice) internal pure returns (SignedContextV1[] memory signedContext) {
         bytes32[] memory context = new bytes32[](10);
         context[0] = bytes32(uint256(7));
@@ -262,8 +293,13 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         context[3] = SESSION_RTH;
         context[4] = bytes32(SESSION_START);
         context[5] = bytes32(SESSION_END);
-        context[6] = bytes32(uint256(uint160(_usdc())));
-        context[7] = bytes32(uint256(uint160(_wtVault())));
+        if (_isBuy()) {
+            context[6] = bytes32(uint256(uint160(_wtVault())));
+            context[7] = bytes32(uint256(uint160(_usdc())));
+        } else {
+            context[6] = bytes32(uint256(uint160(_usdc())));
+            context[7] = bytes32(uint256(uint160(_wtVault())));
+        }
         context[8] = bytes32(FRAME_EXPIRY);
         context[9] = bytes32(_expectedChainId());
 
@@ -293,14 +329,18 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
     function _expectEnsureRevert(OrderV4 memory order, SignedContextV1[] memory signedContext, bytes memory message)
         internal
     {
-        _depositOutputShares(order, DEPOSIT_SHARES);
-        _fundUsdcAndApprove(1_000_000 * (10 ** uint256(_usdcDecimals())));
+        _depositOrderOutput(order);
+        _fundTakerAndApprove();
         vm.expectRevert(message);
         IRaindexV6(_raindex()).takeOrders4(_takeConfig(order, signedContext));
     }
 
     function _erc4626ConvertToAssetsFloat(address vault, uint256 shares) internal view returns (Float) {
         return LibDecimalFloat.fromFixedDecimalLosslessPacked(IERC4626(vault).convertToAssets(shares), 18);
+    }
+
+    function _erc4626ConvertToSharesFloat(address vault, uint256 assets) internal view returns (Float) {
+        return LibDecimalFloat.fromFixedDecimalLosslessPacked(IERC4626(vault).convertToShares(assets), 18);
     }
 
     function _logFloat(string memory label, Float f) internal pure {
@@ -325,6 +365,14 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         });
     }
 
+    function _depositOrderOutput(OrderV4 memory order) internal {
+        if (_isBuy()) {
+            _depositOutputUsdc(order, DEPOSIT_USDC);
+        } else {
+            _depositOutputShares(order, DEPOSIT_SHARES);
+        }
+    }
+
     function _depositOutputShares(OrderV4 memory order, uint256 shareAmount) internal {
         address owner = order.owner;
         address vault = _wtVault();
@@ -335,6 +383,29 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         IRaindexV6(_raindex())
             .deposit4(vault, vaultId, LibDecimalFloat.fromFixedDecimalLosslessPacked(shareAmount, 18), new TaskV2[](0));
         vm.stopPrank();
+    }
+
+    function _depositOutputUsdc(OrderV4 memory order, uint256 usdcAmount) internal {
+        address owner = order.owner;
+        address usdc = _usdc();
+        bytes32 vaultId = order.validOutputs[0].vaultId;
+        deal(usdc, owner, usdcAmount);
+        vm.startPrank(owner);
+        IERC20(usdc).approve(_raindex(), usdcAmount);
+        IRaindexV6(_raindex()).deposit4(
+            usdc, vaultId, LibDecimalFloat.fromFixedDecimalLosslessPacked(usdcAmount, _usdcDecimals()), new TaskV2[](0)
+        );
+        vm.stopPrank();
+    }
+
+    function _fundTakerAndApprove() internal {
+        if (_isBuy()) {
+            // Taker pays vault shares (order input) and receives USDC.
+            deal(_wtVault(), address(this), DEPOSIT_SHARES);
+            IERC20(_wtVault()).approve(_raindex(), type(uint256).max);
+        } else {
+            _fundUsdcAndApprove(1_000_000 * (10 ** uint256(_usdcDecimals())));
+        }
     }
 
     function _fundUsdcAndApprove(uint256 amount) internal {

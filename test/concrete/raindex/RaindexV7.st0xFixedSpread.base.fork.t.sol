@@ -5,8 +5,9 @@ pragma solidity =0.8.25;
 import {RaindexV7St0xFixedSpreadFork} from "./abstract/RaindexV7St0xFixedSpreadFork.sol";
 
 /// @title RaindexV7St0xFixedSpreadBaseForkTest
-/// @notice Base fork coverage for the live SPYM sell order of
-/// st0x-fixed-spread-v7.
+/// @notice Base fork coverage for the live SPYM **sell** order of
+/// st0x-fixed-spread-v7. Buy coverage lives in
+/// `RaindexV7.st0xFixedSpread.base.buy.fork.t.sol`.
 ///
 /// Run:
 /// `BASE_MAINNET_RPC_URL=<rpc> forge test --match-contract RaindexV7St0xFixedSpreadBaseForkTest -vvv`
