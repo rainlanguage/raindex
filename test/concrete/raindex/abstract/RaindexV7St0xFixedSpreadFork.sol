@@ -136,8 +136,7 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         assertTrue(settlementRatio.gte(expectedAfter), "settlement must not undercut re-priced io");
         Float tolerance = expectedAfter.mul(LibDecimalFloat.packLossless(1, -4));
         assertTrue(
-            settlementRatio.lte(expectedAfter.add(tolerance)),
-            "settlement must track re-priced io, not a stale ratio"
+            settlementRatio.lte(expectedAfter.add(tolerance)), "settlement must track re-priced io, not a stale ratio"
         );
     }
 
@@ -273,9 +272,8 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         view
         returns (bool success, Float maxOutput, Float ioRatio)
     {
-        return IRaindexV6(_raindex()).quote2(
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: signedContext})
-        );
+        return IRaindexV6(_raindex())
+            .quote2(QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: signedContext}));
     }
 
     function _requoteRatio(OrderV4 memory order, SignedContextV1[] memory signedContext)
@@ -330,9 +328,8 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         deal(vault, owner, shareAmount);
         vm.startPrank(owner);
         IERC20(vault).approve(_raindex(), shareAmount);
-        IRaindexV6(_raindex()).deposit4(
-            vault, vaultId, LibDecimalFloat.fromFixedDecimalLosslessPacked(shareAmount, 18), new TaskV2[](0)
-        );
+        IRaindexV6(_raindex())
+            .deposit4(vault, vaultId, LibDecimalFloat.fromFixedDecimalLosslessPacked(shareAmount, 18), new TaskV2[](0));
         vm.stopPrank();
     }
 
