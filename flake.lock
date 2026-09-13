@@ -791,11 +791,11 @@
         "rainix": "rainix"
       },
       "locked": {
-        "lastModified": 1780132487,
-        "narHash": "sha256-hA/nbXGJTq96r25DupipA/qfBV6xEuEPFDjIEwHir/o=",
+        "lastModified": 1780414163,
+        "narHash": "sha256-b2INClNtYE2lupIGVFP2M3UEXMrk0GZk1rA6sZqMlrI=",
         "owner": "rainlanguage",
         "repo": "rain.cli",
-        "rev": "207d8f6b5be688ba91980e0d3bc36691a31e7982",
+        "rev": "24814702413a577987850634f55fde1f7788777c",
         "type": "github"
       },
       "original": {
@@ -814,11 +814,11 @@
         "solc": "solc"
       },
       "locked": {
-        "lastModified": 1780117808,
-        "narHash": "sha256-/4VDWb2VbD1ztmg8yJDnNklcP6YPMOXaNnVzWHczj4g=",
+        "lastModified": 1780287289,
+        "narHash": "sha256-eZ74zj6VwotSmT1kXImwA2yX0el0pZthcgNjg7j/AyQ=",
         "owner": "rainlanguage",
         "repo": "rainix",
-        "rev": "ae2b77d271cb0a99f60249ce91bb495bb948192b",
+        "rev": "f22d4dcaca61717e33eac65e7b09b9a82f604c1f",
         "type": "github"
       },
       "original": {

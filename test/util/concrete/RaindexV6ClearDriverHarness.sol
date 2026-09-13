@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
-import {Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 
 /// @dev RaindexV6 subclass that exposes order-liveness and vault seeding so a
 /// full `clear3` can be driven against fresh-compiled source bytecode.
