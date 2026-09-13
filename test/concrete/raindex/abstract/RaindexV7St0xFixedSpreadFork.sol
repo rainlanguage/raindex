@@ -80,8 +80,9 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
 
     function _usdcDecimals() internal pure virtual returns (uint8);
 
-    /// Pinned tip for deterministic CI. Do not use provider head here —
-    /// keep any latest-state canary in a separate suite.
+    /// Pinned tip for deterministic CI when the RPC is archive-capable.
+    /// Return `0` to fork at provider head (required when CI only has a
+    /// non-archive endpoint, e.g. public Robinhood).
     function _forkBlockNumber() internal pure virtual returns (uint256);
 
     /// `true` for buy-share orders (vault is input, USDC is output).
@@ -91,7 +92,12 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
 
     function setUp() public {
         string memory rpc = vm.envOr(_rpcEnvKey(), _rpcFallback());
-        vm.createSelectFork(rpc, _forkBlockNumber());
+        uint256 forkBlock = _forkBlockNumber();
+        if (forkBlock == 0) {
+            vm.createSelectFork(rpc);
+        } else {
+            vm.createSelectFork(rpc, forkBlock);
+        }
         vm.warp(ORACLE_PUBLISH_TIME);
 
         // Real signer may carry EIP-7702 code; replace with always-valid 1271.
@@ -134,13 +140,11 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         (bool success,,) = _quote(order, signedContext);
         assertTrue(success, "quote should succeed before NAV step");
 
-        uint256 navBefore = _isBuy()
-            ? IERC4626(_wtVault()).convertToShares(ONE)
-            : IERC4626(_wtVault()).convertToAssets(ONE);
+        uint256 navBefore =
+            _isBuy() ? IERC4626(_wtVault()).convertToShares(ONE) : IERC4626(_wtVault()).convertToAssets(ONE);
         _donateUnderlyingToVault();
-        uint256 navAfter = _isBuy()
-            ? IERC4626(_wtVault()).convertToShares(ONE)
-            : IERC4626(_wtVault()).convertToAssets(ONE);
+        uint256 navAfter =
+            _isBuy() ? IERC4626(_wtVault()).convertToShares(ONE) : IERC4626(_wtVault()).convertToAssets(ONE);
         assertTrue(navAfter != navBefore, "donate must change live vault convert(1e18)");
         console2.log("navBefore", navBefore);
         console2.log("navAfter", navAfter);
@@ -272,9 +276,8 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
     }
 
     function _expectedIoRatio() internal view returns (Float) {
-        Float convert = _isBuy()
-            ? _erc4626ConvertToSharesFloat(_wtVault(), ONE)
-            : _erc4626ConvertToAssetsFloat(_wtVault(), ONE);
+        Float convert =
+            _isBuy() ? _erc4626ConvertToSharesFloat(_wtVault(), ONE) : _erc4626ConvertToAssetsFloat(_wtVault(), ONE);
         return _underlyingPrice().mul(convert);
     }
 
@@ -392,9 +395,13 @@ abstract contract RaindexV7St0xFixedSpreadFork is Test {
         deal(usdc, owner, usdcAmount);
         vm.startPrank(owner);
         IERC20(usdc).approve(_raindex(), usdcAmount);
-        IRaindexV6(_raindex()).deposit4(
-            usdc, vaultId, LibDecimalFloat.fromFixedDecimalLosslessPacked(usdcAmount, _usdcDecimals()), new TaskV2[](0)
-        );
+        IRaindexV6(_raindex())
+            .deposit4(
+                usdc,
+                vaultId,
+                LibDecimalFloat.fromFixedDecimalLosslessPacked(usdcAmount, _usdcDecimals()),
+                new TaskV2[](0)
+            );
         vm.stopPrank();
     }
 
