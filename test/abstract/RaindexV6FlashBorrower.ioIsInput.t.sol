@@ -15,12 +15,12 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
 import {LibDecimalFloat} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.5/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.6/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RaindexV6FlashBorrowerIOIsInputTest is ArbTest {
     function buildArb() internal override returns (address payable) {
