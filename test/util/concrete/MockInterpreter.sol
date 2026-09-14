@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {StackItem} from "src/concrete/raindex/RaindexV6.sol";
-import {EvalV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
+import {EvalV4} from "rainlang-interface-0.2.9/src/interface/IInterpreterV4.sol";
 
 contract MockInterpreter {
     StackItem[] internal sStack;

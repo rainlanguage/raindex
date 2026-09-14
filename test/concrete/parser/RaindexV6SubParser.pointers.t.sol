@@ -14,7 +14,7 @@ import {
     SUB_PARSER_OPERAND_HANDLERS,
     RaindexV6SubParser
 } from "../../../src/concrete/parser/RaindexV6SubParser.sol";
-import {LibGenParseMeta} from "rainlang-interface-0.2.8/src/lib/codegen/LibGenParseMeta.sol";
+import {LibGenParseMeta} from "rainlang-interface-0.2.9/src/lib/codegen/LibGenParseMeta.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
 

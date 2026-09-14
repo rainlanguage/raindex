@@ -11,7 +11,7 @@ import {
     IOV2,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
 import {Float} from "rain-math-float-0.2.1/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 

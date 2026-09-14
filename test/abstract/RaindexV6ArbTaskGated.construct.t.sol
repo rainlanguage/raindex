@@ -5,13 +5,13 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {ChildRaindexV6ArbTaskGated} from "test/util/concrete/ChildRaindexV6ArbTaskGated.sol";
 import {RaindexV6ArbConfig, RaindexV6ArbCommon} from "../../src/abstract/RaindexV6ArbCommon.sol";
-import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.8/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.8/src/interface/IInterpreterStoreV3.sol";
+import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.9/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.9/src/interface/IInterpreterStoreV3.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.5/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.6/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 /// Construction MUST emit the Construct event with the sender and config.
 contract RaindexV6ArbTaskGatedConstructTest is Test {

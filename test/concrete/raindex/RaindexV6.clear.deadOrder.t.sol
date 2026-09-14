@@ -7,8 +7,8 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.6/src/interface/IRaindexV6.sol";
-import {SignedContextV1} from "rainlang-interface-0.2.8/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
+import {SignedContextV1} from "rainlang-interface-0.2.9/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 
 /// @title RaindexV6ClearDeadOrderTest
 /// If either order passed to `clear3` is dead (never added, or removed) the
