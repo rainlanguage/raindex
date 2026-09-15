@@ -26,6 +26,15 @@ pub fn fetch_target_watermark_stmt(raindex_id: &RaindexIdentifier) -> SqlStateme
     )
 }
 
+/// Fetches every target watermark in one database call so browser bootstrap
+/// does not add a WASM boundary crossing for each configured contract.
+pub fn fetch_all_target_watermarks_stmt() -> SqlStatement {
+    SqlStatement::new(
+        "SELECT chain_id, raindex_address, last_block, last_hash, updated_at \
+         FROM target_watermarks;",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,5 +81,13 @@ mod tests {
         assert!(s.starts_with("0x"));
         assert_eq!(s.len(), 42); // 0x + 40 hex chars
         assert_eq!(s, "0xabababababababababababababababababababab");
+    }
+
+    #[test]
+    fn fetch_all_stmt_is_unfiltered_and_param_free() {
+        let stmt = fetch_all_target_watermarks_stmt();
+        assert!(stmt.sql().contains("FROM target_watermarks"));
+        assert!(!stmt.sql().contains("WHERE"));
+        assert!(stmt.params().is_empty());
     }
 }

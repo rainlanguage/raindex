@@ -1,7 +1,7 @@
 #[cfg(target_family = "wasm")]
 use crate::local_db::{
     pipeline::adapters::bootstrap::BootstrapPipeline,
-    query::fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
+    query::fetch_target_watermark::{fetch_all_target_watermarks_stmt, TargetWatermarkRow},
 };
 use crate::local_db::{
     query::{
@@ -9,6 +9,10 @@ use crate::local_db::{
         LocalDbQueryError, LocalDbQueryExecutor,
     },
     LocalDbError,
+};
+#[cfg(target_family = "wasm")]
+use crate::raindex_client::local_db::pipeline::runner::{
+    scheduler::SchedulerBootstrap, LocalDbProvisioning,
 };
 use crate::raindex_client::local_db::{
     LocalDb, LocalDbSyncSnapshot, LocalDbSyncStatusStore, SyncReadiness,
@@ -42,7 +46,7 @@ use raindex_subgraph_client::{
 };
 use serde::{Deserialize, Serialize};
 #[cfg(target_family = "wasm")]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 #[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 #[cfg(target_family = "wasm")]
@@ -134,6 +138,15 @@ impl RaindexClient {
     ///   localDb,
     ///   statusCallback: updateStatus,
     /// });
+    ///
+    /// // With a complete authenticated snapshot installed by the caller.
+    /// // Raindex validates its schema and configured target watermarks, then
+    /// // starts incremental sync without fetching manifests or seed dumps.
+    /// const result = await RaindexClient.new([yamlConfig], undefined, {
+    ///   localDb,
+    ///   localDbProvisioning: 'preinstalled-snapshot',
+    ///   statusCallback: updateStatus,
+    /// });
     /// ```
     #[wasm_export(
         js_name = "new",
@@ -151,7 +164,7 @@ impl RaindexClient {
         validate: Option<bool>,
         #[wasm_export(
             js_name = "options",
-            param_description = "Optional setup object with localDb and statusCallback"
+            param_description = "Optional setup object with localDb, statusCallback, and localDbProvisioning"
         )]
         options: Option<JsValue>,
     ) -> Result<RaindexClient, RaindexError> {
@@ -193,8 +206,14 @@ impl RaindexClient {
         };
 
         if let (Some(db), Some(settings)) = (local_db.as_ref(), settings.as_ref()) {
-            initialize_local_db_readiness(db, settings, &sync_readiness, &sync_status_store)
-                .await?;
+            initialize_local_db_readiness(
+                db,
+                settings,
+                &sync_readiness,
+                &sync_status_store,
+                options.local_db_provisioning,
+            )
+            .await?;
         }
 
         let scheduler = if has_syncs {
@@ -207,7 +226,14 @@ impl RaindexClient {
                 options.status_callback,
                 sync_readiness.clone(),
                 sync_status_store.clone(),
-                true,
+                match options.local_db_provisioning {
+                    LocalDbProvisioning::Managed => SchedulerBootstrap::Managed {
+                        schema_initialized: true,
+                    },
+                    LocalDbProvisioning::PreinstalledSnapshot => {
+                        SchedulerBootstrap::PreinstalledSnapshot
+                    }
+                },
             )?;
             Rc::new(RefCell::new(Some(handle)))
         } else {
@@ -234,6 +260,7 @@ impl RaindexClient {
 pub struct LocalDbClientOptions {
     pub local_db: Option<JsValue>,
     pub status_callback: Option<js_sys::Function>,
+    local_db_provisioning: LocalDbProvisioning,
 }
 
 #[cfg(target_family = "wasm")]
@@ -245,10 +272,24 @@ impl LocalDbClientOptions {
 
         let local_db = optional_field(&options, "localDb")?;
         let status_callback = optional_function_field(&options, "statusCallback")?;
+        let local_db_provisioning = match optional_string_field(&options, "localDbProvisioning")?
+            .as_deref()
+        {
+            None | Some("managed") => LocalDbProvisioning::Managed,
+            Some("preinstalled-snapshot") => LocalDbProvisioning::PreinstalledSnapshot,
+            Some(value) => {
+                return Err(RaindexError::LocalDbQueryError(
+                    LocalDbQueryError::database(format!(
+                        "options.localDbProvisioning must be 'managed' or 'preinstalled-snapshot', found '{value}'"
+                    )),
+                ));
+            }
+        };
 
         Ok(Self {
             local_db,
             status_callback,
+            local_db_provisioning,
         })
     }
 }
@@ -273,6 +314,19 @@ fn optional_function_field(
             value.dyn_into::<js_sys::Function>().map_err(|_| {
                 RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
                     "options.{name} must be a function"
+                )))
+            })
+        })
+        .transpose()
+}
+
+#[cfg(target_family = "wasm")]
+fn optional_string_field(options: &JsValue, name: &str) -> Result<Option<String>, RaindexError> {
+    optional_field(options, name)?
+        .map(|value| {
+            value.as_string().ok_or_else(|| {
+                RaindexError::LocalDbQueryError(LocalDbQueryError::database(format!(
+                    "options.{name} must be a string"
                 )))
             })
         })
@@ -616,22 +670,56 @@ impl From<serde_wasm_bindgen::Error> for RaindexError {
 }
 
 #[cfg(target_family = "wasm")]
+fn ensure_preinstalled_snapshot_covers_targets(
+    configured_raindexes: &[crate::local_db::RaindexIdentifier],
+    watermarked_raindexes: &HashSet<crate::local_db::RaindexIdentifier>,
+) -> Result<(), LocalDbError> {
+    if let Some(missing) = configured_raindexes
+        .iter()
+        .find(|raindex_id| !watermarked_raindexes.contains(*raindex_id))
+    {
+        return Err(LocalDbError::InvalidPreinstalledSnapshot {
+            reason: format!(
+                "missing target watermark for chain {} raindex {}",
+                missing.chain_id, missing.raindex_address
+            ),
+        });
+    }
+    Ok(())
+}
+
+#[cfg(target_family = "wasm")]
 async fn initialize_local_db_readiness(
     db: &LocalDb,
     settings: &crate::local_db::pipeline::runner::utils::ParsedRunnerSettings,
     sync_readiness: &SyncReadiness,
     sync_status_store: &LocalDbSyncStatusStore,
+    provisioning: LocalDbProvisioning,
 ) -> Result<(), RaindexError> {
-    crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter::new()
-        .runner_run(
-            db,
-            Some(raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION),
-        )
-        .await?;
+    let bootstrap =
+        crate::raindex_client::local_db::pipeline::bootstrap::ClientBootstrapAdapter::new();
+    match provisioning {
+        LocalDbProvisioning::Managed => {
+            bootstrap
+                .runner_run(
+                    db,
+                    Some(raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION),
+                )
+                .await?;
+        }
+        LocalDbProvisioning::PreinstalledSnapshot => {
+            bootstrap
+                .validate_preinstalled(
+                    db,
+                    Some(raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION),
+                )
+                .await?;
+        }
+    }
 
     sync_status_store.seed(settings);
 
-    let mut chain_raindexes = settings
+    let chain_raindexes = settings
         .raindexes
         .values()
         .filter(|raindex| settings.syncs.contains_key(&raindex.network.key))
@@ -649,21 +737,29 @@ async fn initialize_local_db_readiness(
             },
         );
 
-    for (chain_id, raindex_ids) in chain_raindexes.drain() {
-        let mut chain_ready = true;
+    let configured_raindexes = chain_raindexes
+        .values()
+        .flatten()
+        .cloned()
+        .collect::<Vec<_>>();
+    let watermarks: Vec<TargetWatermarkRow> =
+        db.query_json(&fetch_all_target_watermarks_stmt()).await?;
+    let watermarked_raindexes = watermarks
+        .into_iter()
+        .map(|watermark| {
+            crate::local_db::RaindexIdentifier::new(watermark.chain_id, watermark.raindex_address)
+        })
+        .collect::<HashSet<_>>();
 
-        for raindex_id in raindex_ids {
-            let rows: Vec<TargetWatermarkRow> = db
-                .query_json(&fetch_target_watermark_stmt(&raindex_id))
-                .await?;
+    if provisioning == LocalDbProvisioning::PreinstalledSnapshot {
+        ensure_preinstalled_snapshot_covers_targets(&configured_raindexes, &watermarked_raindexes)?;
+    }
 
-            if rows.is_empty() {
-                chain_ready = false;
-                break;
-            }
-        }
-
-        if chain_ready {
+    for (chain_id, raindex_ids) in chain_raindexes {
+        if raindex_ids
+            .iter()
+            .all(|raindex_id| watermarked_raindexes.contains(raindex_id))
+        {
             sync_readiness.mark_ready(chain_id);
             sync_status_store.record_chain_ready(chain_id);
         }
@@ -1494,6 +1590,53 @@ raindexes:
             .unwrap();
 
             assert!(client.local_db_state.local_db().is_some());
+        }
+
+        #[wasm_bindgen_test]
+        fn test_local_db_preinstalled_snapshot_option() {
+            let options = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &options,
+                &JsValue::from_str("localDbProvisioning"),
+                &JsValue::from_str("preinstalled-snapshot"),
+            )
+            .unwrap();
+
+            let parsed = LocalDbClientOptions::parse(Some(options.into())).unwrap();
+            assert_eq!(
+                parsed.local_db_provisioning,
+                LocalDbProvisioning::PreinstalledSnapshot
+            );
+        }
+
+        #[wasm_bindgen_test]
+        fn test_local_db_preinstalled_snapshot_option_rejects_unknown_value() {
+            let options = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &options,
+                &JsValue::from_str("localDbProvisioning"),
+                &JsValue::from_str("skip-everything"),
+            )
+            .unwrap();
+
+            let Err(error) = LocalDbClientOptions::parse(Some(options.into())) else {
+                panic!("unknown provisioning mode must be rejected");
+            };
+            assert!(error.to_string().contains("localDbProvisioning"));
+        }
+
+        #[wasm_bindgen_test]
+        fn test_preinstalled_snapshot_requires_every_configured_watermark() {
+            let covered = crate::local_db::RaindexIdentifier::new(1, Address::repeat_byte(0x11));
+            let missing = crate::local_db::RaindexIdentifier::new(137, Address::repeat_byte(0x22));
+            let configured = vec![covered.clone(), missing.clone()];
+            let watermarked = HashSet::from([covered]);
+
+            let error =
+                ensure_preinstalled_snapshot_covers_targets(&configured, &watermarked).unwrap_err();
+            assert!(error
+                .to_string()
+                .contains(&missing.raindex_address.to_string()));
         }
 
         #[wasm_bindgen_test]

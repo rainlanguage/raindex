@@ -39,6 +39,14 @@ use futures::future::join_all;
 use leadership::{DefaultLeadership, Leadership, LeadershipGuard};
 use raindex_app_settings::remote::manifest::ManifestMap;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum LocalDbProvisioning {
+    #[default]
+    Managed,
+    #[cfg_attr(not(any(test, target_family = "wasm")), allow(dead_code))]
+    PreinstalledSnapshot,
+}
+
 pub struct ClientRunner<B, W, E, T, A, S, L> {
     network_key: Option<String>,
     chain_id: Option<u32>,
@@ -47,6 +55,7 @@ pub struct ClientRunner<B, W, E, T, A, S, L> {
     manifest_map: ManifestMap,
     manifests_loaded: bool,
     has_provisioned_dumps: bool,
+    provisioning: LocalDbProvisioning,
     environment: RunnerEnvironment<B, W, E, T, A, S>,
     leadership: L,
     leadership_guard: Option<LeadershipGuard>,
@@ -78,6 +87,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            provisioning: LocalDbProvisioning::Managed,
             environment,
             leadership,
             leadership_guard: None,
@@ -99,6 +109,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            provisioning: LocalDbProvisioning::Managed,
             environment,
             leadership,
             leadership_guard: None,
@@ -120,8 +131,15 @@ where
             .collect()
     }
 
+    #[cfg_attr(not(any(test, target_family = "wasm")), allow(dead_code))]
+    pub(crate) fn with_provisioning(mut self, provisioning: LocalDbProvisioning) -> Self {
+        self.provisioning = provisioning;
+        self
+    }
+
     pub fn needs_initial_provisioning(&self) -> bool {
-        !self.manifests_loaded || !self.has_provisioned_dumps
+        self.provisioning == LocalDbProvisioning::Managed
+            && (!self.manifests_loaded || !self.has_provisioned_dumps)
     }
 
     pub async fn run<DB>(&mut self, db: &DB) -> Result<RunOutcome, LocalDbError>
@@ -147,7 +165,7 @@ where
             }
         }
 
-        if !self.manifests_loaded {
+        if self.provisioning == LocalDbProvisioning::Managed && !self.manifests_loaded {
             on_phase(SyncPhase::FetchingSyncManifest);
             self.manifest_map = match self
                 .environment
@@ -185,7 +203,7 @@ where
         }
 
         let mut targets = self.base_targets.clone();
-        let needs_provisioning = !self.has_provisioned_dumps;
+        let needs_provisioning = self.needs_initial_provisioning();
 
         if needs_provisioning {
             let (provisioned, mut provisioning_failures) =
@@ -1340,6 +1358,27 @@ raindexes:
             .expect("default builder constructs engine");
 
         pipelines.into_engine();
+    }
+
+    #[tokio::test]
+    async fn preinstalled_snapshot_skips_manifest_and_dump_provisioning() {
+        let telemetry = Telemetry::default();
+        let environment =
+            build_environment(ManifestMap::new(), HashMap::new(), 0, 0, telemetry.clone());
+        let settings = single_raindex_settings_yaml();
+        let mut runner =
+            ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+
+        runner = runner.with_provisioning(LocalDbProvisioning::PreinstalledSnapshot);
+        assert!(!runner.needs_initial_provisioning());
+
+        let report = unwrap_report(runner.run(&db).await.expect("run succeeds"));
+        assert_eq!(report.successes.len(), 1);
+        assert_eq!(telemetry.manifest_fetch_count(), 0);
+        assert!(telemetry.dump_requests().is_empty());
+        assert_eq!(telemetry.engine_runs().len(), 1);
     }
 
     #[tokio::test]
