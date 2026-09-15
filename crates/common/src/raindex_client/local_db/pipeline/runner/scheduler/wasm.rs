@@ -7,6 +7,7 @@ use crate::local_db::pipeline::adapters::{
     apply::DefaultApplyPipeline, events::DefaultEventsPipeline, tokens::DefaultTokensPipeline,
     window::DefaultWindowPipeline,
 };
+use crate::local_db::pipeline::runner::utils::configured_sync_networks;
 use crate::local_db::pipeline::runner::utils::ParsedRunnerSettings;
 use crate::local_db::pipeline::runner::RunOutcome;
 use crate::local_db::pipeline::SyncPhase;
@@ -25,7 +26,7 @@ use js_sys::Function;
 use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use raindex_app_settings::network::NetworkCfg;
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
@@ -103,14 +104,7 @@ pub(crate) fn start(
     status_store: LocalDbSyncStatusStore,
     schema_initialized: bool,
 ) -> Result<SchedulerHandle, LocalDbError> {
-    let mut networks_map: HashMap<String, NetworkCfg> = HashMap::new();
-    for raindex_cfg in settings.raindexes.values() {
-        networks_map
-            .entry(raindex_cfg.network.key.clone())
-            .or_insert_with(|| (*raindex_cfg.network).clone());
-    }
-    let mut networks: Vec<NetworkCfg> = networks_map.into_values().collect();
-    networks.sort_by(|a, b| a.key.cmp(&b.key));
+    let networks = configured_sync_networks(&settings);
 
     if networks.is_empty() {
         return Err(LocalDbError::CustomError(
