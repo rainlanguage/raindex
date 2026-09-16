@@ -221,7 +221,7 @@ mod tests {
         };
         let runner_target = RunnerTarget {
             raindex_key: "test".to_string(),
-            manifest_url: "https://example.com/manifest.yaml".parse().unwrap(),
+            manifest_url: Some("https://example.com/manifest.yaml".parse().unwrap()),
             network_key: "anvil".to_string(),
             inputs,
         };

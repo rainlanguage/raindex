@@ -69,7 +69,7 @@ mod tests {
         let fetch = FetchConfig::new(1, 1, 1, 1, 0, 0).expect("fetch config");
         RunnerTarget {
             raindex_key: "test-book".to_string(),
-            manifest_url: Url::parse("https://manifests.example/default.yaml").unwrap(),
+            manifest_url: Some(Url::parse("https://manifests.example/default.yaml").unwrap()),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
                 raindex_id: RaindexIdentifier::new(

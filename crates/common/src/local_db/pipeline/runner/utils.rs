@@ -22,7 +22,9 @@ pub struct ParsedRunnerSettings {
 #[derive(Debug, Clone)]
 pub struct RunnerTarget {
     pub raindex_key: String,
-    pub manifest_url: Url,
+    /// The manifest used by managed provisioning. Preinstalled snapshots do
+    /// not need a remote and therefore leave this unset.
+    pub manifest_url: Option<Url>,
     pub network_key: String,
     pub inputs: SyncInputs,
 }
@@ -80,6 +82,24 @@ pub fn build_runner_targets(
     raindexes: &HashMap<String, RaindexCfg>,
     syncs: &HashMap<String, LocalDbSyncCfg>,
 ) -> Result<Vec<RunnerTarget>, LocalDbError> {
+    build_runner_targets_inner(raindexes, syncs, true)
+}
+
+/// Builds runner targets without requiring dump provisioning configuration.
+/// This is only suitable when the database was installed and validated by the
+/// caller and the runner will perform incremental sync directly.
+pub(crate) fn build_preinstalled_runner_targets(
+    raindexes: &HashMap<String, RaindexCfg>,
+    syncs: &HashMap<String, LocalDbSyncCfg>,
+) -> Result<Vec<RunnerTarget>, LocalDbError> {
+    build_runner_targets_inner(raindexes, syncs, false)
+}
+
+fn build_runner_targets_inner(
+    raindexes: &HashMap<String, RaindexCfg>,
+    syncs: &HashMap<String, LocalDbSyncCfg>,
+    require_remote: bool,
+) -> Result<Vec<RunnerTarget>, LocalDbError> {
     let mut targets = Vec::with_capacity(raindexes.len());
     for (key, raindex) in raindexes {
         let network_key = raindex.network.key.clone();
@@ -104,17 +124,19 @@ pub fn build_runner_targets(
             manifest_end_block: 0,
         };
 
-        let remote =
-            raindex
-                .local_db_remote
-                .as_ref()
-                .ok_or_else(|| LocalDbError::MissingLocalDbRemote {
+        let manifest_url = match (&raindex.local_db_remote, require_remote) {
+            (Some(remote), _) => Some(remote.url.clone()),
+            (None, false) => None,
+            (None, true) => {
+                return Err(LocalDbError::MissingLocalDbRemote {
                     raindex_key: key.clone(),
-                })?;
+                })
+            }
+        };
 
         targets.push(RunnerTarget {
             raindex_key: key.clone(),
-            manifest_url: remote.url.clone(),
+            manifest_url,
             network_key,
             inputs,
         });
@@ -384,7 +406,7 @@ raindexes:
         );
         assert_eq!(
             target_a.manifest_url,
-            Url::parse("https://remotes.example.com/a.yaml").expect("valid manifest url")
+            Some(Url::parse("https://remotes.example.com/a.yaml").expect("valid manifest url"))
         );
     }
 

@@ -39,6 +39,14 @@ use futures::future::join_all;
 use leadership::{DefaultLeadership, Leadership, LeadershipGuard};
 use raindex_app_settings::remote::manifest::ManifestMap;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum LocalDbProvisioning {
+    #[default]
+    Managed,
+    #[cfg_attr(not(any(test, target_family = "wasm")), allow(dead_code))]
+    PreinstalledSnapshot,
+}
+
 pub struct ClientRunner<B, W, E, T, A, S, L> {
     network_key: Option<String>,
     chain_id: Option<u32>,
@@ -47,6 +55,7 @@ pub struct ClientRunner<B, W, E, T, A, S, L> {
     manifest_map: ManifestMap,
     manifests_loaded: bool,
     has_provisioned_dumps: bool,
+    provisioning: LocalDbProvisioning,
     environment: RunnerEnvironment<B, W, E, T, A, S>,
     leadership: L,
     leadership_guard: Option<LeadershipGuard>,
@@ -78,6 +87,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            provisioning: LocalDbProvisioning::Managed,
             environment,
             leadership,
             leadership_guard: None,
@@ -89,7 +99,24 @@ where
         environment: RunnerEnvironment<B, W, E, T, A, S>,
         leadership: L,
     ) -> Result<Self, LocalDbError> {
-        let base_targets = config.build_targets()?;
+        Self::from_config_with_provisioning(
+            config,
+            environment,
+            leadership,
+            LocalDbProvisioning::Managed,
+        )
+    }
+
+    pub(crate) fn from_config_with_provisioning(
+        config: NetworkRunnerConfig,
+        environment: RunnerEnvironment<B, W, E, T, A, S>,
+        leadership: L,
+        provisioning: LocalDbProvisioning,
+    ) -> Result<Self, LocalDbError> {
+        let base_targets = match provisioning {
+            LocalDbProvisioning::Managed => config.build_targets()?,
+            LocalDbProvisioning::PreinstalledSnapshot => config.build_preinstalled_targets()?,
+        };
 
         Ok(Self {
             network_key: Some(config.network_key),
@@ -99,6 +126,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            provisioning,
             environment,
             leadership,
             leadership_guard: None,
@@ -121,7 +149,8 @@ where
     }
 
     pub fn needs_initial_provisioning(&self) -> bool {
-        !self.manifests_loaded || !self.has_provisioned_dumps
+        self.provisioning == LocalDbProvisioning::Managed
+            && (!self.manifests_loaded || !self.has_provisioned_dumps)
     }
 
     pub async fn run<DB>(&mut self, db: &DB) -> Result<RunOutcome, LocalDbError>
@@ -147,7 +176,7 @@ where
             }
         }
 
-        if !self.manifests_loaded {
+        if self.provisioning == LocalDbProvisioning::Managed && !self.manifests_loaded {
             on_phase(SyncPhase::FetchingSyncManifest);
             self.manifest_map = match self
                 .environment
@@ -185,7 +214,7 @@ where
         }
 
         let mut targets = self.base_targets.clone();
-        let needs_provisioning = !self.has_provisioned_dumps;
+        let needs_provisioning = self.needs_initial_provisioning();
 
         if needs_provisioning {
             let (provisioned, mut provisioning_failures) =
@@ -1162,6 +1191,38 @@ raindexes:
         )
     }
 
+    fn remote_free_settings_yaml() -> String {
+        format!(
+            r#"
+version: {version}
+networks:
+  anvil:
+    rpcs:
+      - https://rpc.example/anvil
+    chain-id: 42161
+subgraphs:
+  anvil: https://subgraph.example/anvil
+local-db-sync:
+  anvil:
+    batch-size: 10
+    max-concurrent-batches: 2
+    retry-attempts: 3
+    retry-delay-ms: 100
+    rate-limit-delay-ms: 1
+    finality-depth: 12
+    bootstrap-block-threshold: 10000
+    sync-interval-ms: 5000
+raindexes:
+  raindex-a:
+    address: 0x00000000000000000000000000000000000000a1
+    network: anvil
+    subgraph: anvil
+    deployment-block: 123
+"#,
+            version = SpecVersion::current()
+        )
+    }
+
     fn prepare_db_baseline(db: &RecordingDb) {
         let tables: Vec<TableResponse> = REQUIRED_TABLES
             .iter()
@@ -1340,6 +1401,48 @@ raindexes:
             .expect("default builder constructs engine");
 
         pipelines.into_engine();
+    }
+
+    #[tokio::test]
+    async fn preinstalled_from_config_runs_without_remote_configuration() {
+        let parsed = parse_runner_settings(&remote_free_settings_yaml()).expect("valid settings");
+        let config =
+            NetworkRunnerConfig::from_global_settings(&parsed, "anvil").expect("network config");
+        let telemetry = Telemetry::default();
+        let environment =
+            build_environment(ManifestMap::new(), HashMap::new(), 0, 0, telemetry.clone());
+        let mut runner = ClientRunner::from_config_with_provisioning(
+            config.clone(),
+            environment,
+            AlwaysLeadership,
+            LocalDbProvisioning::PreinstalledSnapshot,
+        )
+        .expect("preinstalled runner does not require a remote");
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+
+        let report = unwrap_report(runner.run(&db).await.expect("run succeeds"));
+        assert_eq!(report.successes.len(), 1);
+        assert_eq!(telemetry.manifest_fetch_count(), 0);
+        assert!(telemetry.dump_requests().is_empty());
+        assert_eq!(telemetry.engine_runs(), vec!["raindex-a"]);
+
+        let managed_environment = build_environment(
+            ManifestMap::new(),
+            HashMap::new(),
+            0,
+            0,
+            Telemetry::default(),
+        );
+        assert!(matches!(
+            ClientRunner::from_config_with_provisioning(
+                config,
+                managed_environment,
+                AlwaysLeadership,
+                LocalDbProvisioning::Managed,
+            ),
+            Err(LocalDbError::MissingLocalDbRemote { .. })
+        ));
     }
 
     #[tokio::test]

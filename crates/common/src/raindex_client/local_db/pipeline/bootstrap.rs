@@ -3,14 +3,14 @@ use crate::local_db::{
     query::{
         create_tables::{required_table_schema, REQUIRED_TABLES},
         create_views::create_views_batch,
-        fetch_table_columns::{fetch_table_columns_stmt, TableColumnResponse},
+        fetch_table_columns::{fetch_table_schema_columns_stmt, TableSchemaColumnResponse},
         fetch_tables::{fetch_tables_stmt, TableResponse},
         fetch_target_watermark::{fetch_target_watermark_stmt, TargetWatermarkRow},
         LocalDbQueryExecutor, SqlStatement, SqlStatementBatch,
     },
     LocalDbError, RaindexIdentifier,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const BOOTSTRAP_CACHE_SIZE_SQL: &str = "PRAGMA cache_size = -25000";
 
@@ -39,6 +39,52 @@ impl ClientBootstrapAdapter {
             .all(|&t| existing.contains(&t.to_ascii_lowercase()))
     }
 
+    async fn missing_required_schema<DB>(
+        &self,
+        db: &DB,
+        existing_tables: &HashSet<String>,
+    ) -> Result<Vec<String>, LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+    {
+        let required_schema = required_table_schema();
+        let missing_tables = required_schema
+            .iter()
+            .filter(|table| !existing_tables.contains(&table.name))
+            .map(|table| table.name.clone())
+            .collect::<Vec<_>>();
+        if !missing_tables.is_empty() {
+            return Ok(missing_tables);
+        }
+
+        let statement = fetch_table_schema_columns_stmt(
+            required_schema.iter().map(|table| table.name.as_str()),
+        );
+        let actual_columns: Vec<TableSchemaColumnResponse> = db.query_json(&statement).await?;
+        let columns_by_table = actual_columns.into_iter().fold(
+            HashMap::<String, HashSet<String>>::new(),
+            |mut columns_by_table, column| {
+                columns_by_table
+                    .entry(column.table_name.to_ascii_lowercase())
+                    .or_default()
+                    .insert(column.name.to_ascii_lowercase());
+                columns_by_table
+            },
+        );
+
+        Ok(required_schema
+            .iter()
+            .flat_map(|table| {
+                table.columns.iter().filter_map(|column| {
+                    let present = columns_by_table
+                        .get(&table.name)
+                        .is_some_and(|columns| columns.contains(column));
+                    (!present).then(|| format!("{}.{}", table.name, column))
+                })
+            })
+            .collect())
+    }
+
     async fn has_required_schema_shape<DB>(
         &self,
         db: &DB,
@@ -47,29 +93,10 @@ impl ClientBootstrapAdapter {
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        for required_table in required_table_schema() {
-            if !existing_tables.contains(&required_table.name) {
-                return Ok(false);
-            }
-
-            let actual_columns: Vec<TableColumnResponse> = db
-                .query_json(&fetch_table_columns_stmt(&required_table.name))
-                .await?;
-            let actual_column_names: HashSet<String> = actual_columns
-                .into_iter()
-                .map(|column| column.name.to_ascii_lowercase())
-                .collect();
-
-            if required_table
-                .columns
-                .iter()
-                .any(|column| !actual_column_names.contains(column))
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
+        Ok(self
+            .missing_required_schema(db, existing_tables)
+            .await?
+            .is_empty())
     }
 
     fn check_threshold(
@@ -114,6 +141,52 @@ impl ClientBootstrapAdapter {
         db.query_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL))
             .await?;
         db.execute_batch(dump_stmt).await?;
+        Ok(())
+    }
+
+    /// Validate a snapshot installed by the caller without scanning or
+    /// mutating the whole database. The snapshot transport is responsible for
+    /// byte-level authentication; this verifies Raindex's schema contract.
+    /// It deliberately performs no writes so target coverage can be validated
+    /// before any replaceable objects are refreshed.
+    pub async fn validate_preinstalled<DB>(
+        &self,
+        db: &DB,
+        db_schema_version: Option<u32>,
+    ) -> Result<(), LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+    {
+        let existing_tables = self.fetch_existing_tables(db).await?;
+        let missing_tables = REQUIRED_TABLES
+            .iter()
+            .filter(|table| !existing_tables.contains(&table.to_ascii_lowercase()))
+            .copied()
+            .collect::<Vec<_>>();
+        if !missing_tables.is_empty() {
+            return Err(LocalDbError::InvalidPreinstalledSnapshot {
+                reason: format!("missing required tables: {}", missing_tables.join(", ")),
+            });
+        }
+
+        self.ensure_schema(db, db_schema_version).await?;
+        let missing_schema = self.missing_required_schema(db, &existing_tables).await?;
+        if !missing_schema.is_empty() {
+            return Err(LocalDbError::InvalidPreinstalledSnapshot {
+                reason: format!("missing required columns: {}", missing_schema.join(", ")),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Refresh replaceable objects after all read-only preinstalled snapshot
+    /// checks, including configured target coverage, have succeeded.
+    pub async fn refresh_preinstalled_views<DB>(&self, db: &DB) -> Result<(), LocalDbError>
+    where
+        DB: LocalDbQueryExecutor + ?Sized,
+    {
+        db.execute_batch(&create_views_batch()).await?;
         Ok(())
     }
 }
@@ -210,7 +283,8 @@ mod tests {
     use crate::local_db::query::fetch_db_metadata::{fetch_db_metadata_stmt, DbMetadataRow};
     use crate::local_db::query::fetch_tables::{fetch_tables_stmt, TableResponse};
     use crate::local_db::query::fetch_target_watermark::{
-        fetch_target_watermark_stmt, TargetWatermarkRow,
+        fetch_configured_target_watermarks_stmt, fetch_target_watermark_stmt,
+        PreinstalledTargetWatermarkRow, TargetWatermarkRow,
     };
     use crate::local_db::query::insert_db_metadata::insert_db_metadata_stmt;
     use crate::local_db::query::FromDbJson;
@@ -220,10 +294,53 @@ mod tests {
     use alloy::primitives::{Address, Bytes};
     use async_trait::async_trait;
     use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
+    use raindex_app_settings::spec_version::SpecVersion;
     use serde_json::json;
     use std::str::FromStr;
 
     const TEST_BLOCK_NUMBER_THRESHOLD: u32 = 10_000;
+
+    fn preinstalled_settings(
+        deployment_block: u64,
+    ) -> crate::local_db::pipeline::runner::utils::ParsedRunnerSettings {
+        crate::local_db::pipeline::runner::utils::parse_runner_settings(&format!(
+            r#"
+version: {}
+networks:
+  test:
+    rpcs:
+      - https://rpc.example/test
+    chain-id: 1
+subgraphs:
+  test: https://subgraph.example/test
+local-db-sync:
+  test:
+    batch-size: 10
+    max-concurrent-batches: 1
+    retry-attempts: 1
+    retry-delay-ms: 1
+    rate-limit-delay-ms: 1
+    finality-depth: 1
+    bootstrap-block-threshold: 100
+    sync-interval-ms: 5000
+raindexes:
+  test:
+    address: 0x1111111111111111111111111111111111111111
+    network: test
+    subgraph: test
+    deployment-block: {deployment_block}
+"#,
+            SpecVersion::current()
+        ))
+        .expect("valid remote-free settings")
+    }
+
+    fn configured_watermarks_stmt() -> SqlStatement {
+        fetch_configured_target_watermarks_stmt(&[RaindexIdentifier::new(
+            1,
+            Address::repeat_byte(0x11),
+        )])
+    }
 
     #[derive(Default)]
     struct MockDb {
@@ -280,26 +397,41 @@ mod tests {
         }
 
         fn with_required_schema_columns(self) -> Self {
-            required_table_schema().into_iter().fold(self, |db, table| {
-                let rows = table
-                    .columns
-                    .iter()
-                    .map(|name| TableColumnResponse { name: name.clone() })
-                    .collect::<Vec<_>>();
-                db.with_json(&fetch_table_columns_stmt(&table.name), json!(rows))
-            })
+            let schema = required_table_schema();
+            let rows = schema
+                .iter()
+                .flat_map(|table| {
+                    table.columns.iter().map(|name| TableSchemaColumnResponse {
+                        table_name: table.name.clone(),
+                        name: name.clone(),
+                    })
+                })
+                .collect::<Vec<_>>();
+            self.with_json(
+                &fetch_table_schema_columns_stmt(schema.iter().map(|table| table.name.as_str())),
+                json!(rows),
+            )
         }
 
         fn with_required_schema_columns_missing(self, table_name: &str, column_name: &str) -> Self {
-            required_table_schema().into_iter().fold(self, |db, table| {
-                let rows = table
-                    .columns
-                    .iter()
-                    .filter(|&name| table.name != table_name || name != column_name)
-                    .map(|name| TableColumnResponse { name: name.clone() })
-                    .collect::<Vec<_>>();
-                db.with_json(&fetch_table_columns_stmt(&table.name), json!(rows))
-            })
+            let schema = required_table_schema();
+            let rows = schema
+                .iter()
+                .flat_map(|table| {
+                    table
+                        .columns
+                        .iter()
+                        .filter(|&name| table.name != table_name || name != column_name)
+                        .map(|name| TableSchemaColumnResponse {
+                            table_name: table.name.clone(),
+                            name: name.clone(),
+                        })
+                })
+                .collect::<Vec<_>>();
+            self.with_json(
+                &fetch_table_schema_columns_stmt(schema.iter().map(|table| table.name.as_str())),
+                json!(rows),
+            )
         }
     }
 
@@ -692,6 +824,283 @@ mod tests {
             expected_views,
             "schema-ok bootstrap should still refresh replaceable views"
         );
+    }
+
+    #[tokio::test]
+    async fn validate_preinstalled_checks_schema_without_full_integrity_scan() {
+        let adapter = ClientBootstrapAdapter::new();
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_views();
+
+        adapter
+            .validate_preinstalled(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap();
+
+        assert!(!db
+            .json_calls()
+            .iter()
+            .any(|sql| sql.to_ascii_lowercase().contains("quick_check")));
+        assert!(db.calls().is_empty(), "validation must be read-only");
+
+        adapter.refresh_preinstalled_views(&db).await.unwrap();
+        assert_eq!(db.calls().len(), create_views_batch().statements().len());
+    }
+
+    #[tokio::test]
+    async fn validate_preinstalled_reports_missing_metadata_as_invalid_snapshot() {
+        let adapter = ClientBootstrapAdapter::new();
+        let db = MockDb::default().with_json(
+            &fetch_tables_stmt(),
+            required_tables_without_db_metadata_json(),
+        );
+
+        let error = adapter
+            .validate_preinstalled(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            LocalDbError::InvalidPreinstalledSnapshot { reason }
+                if reason.contains("db_metadata")
+        ));
+        assert!(!db
+            .json_calls()
+            .contains(&fetch_db_metadata_stmt().sql().to_string()));
+        assert!(
+            db.calls().is_empty(),
+            "validation must not mutate the snapshot"
+        );
+    }
+
+    #[tokio::test]
+    async fn validate_preinstalled_rejects_invalid_schema_without_resetting_it() {
+        let adapter = ClientBootstrapAdapter::new();
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns_missing("target_watermarks", "raindex_address");
+
+        let error = adapter
+            .validate_preinstalled(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            LocalDbError::InvalidPreinstalledSnapshot { reason }
+                if reason.contains("target_watermarks.raindex_address")
+        ));
+        assert!(
+            db.calls().is_empty(),
+            "validation must not mutate the snapshot"
+        );
+    }
+
+    #[tokio::test]
+    async fn rejected_target_coverage_does_not_refresh_views() {
+        let adapter = ClientBootstrapAdapter::new();
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_views();
+
+        adapter
+            .validate_preinstalled(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap();
+
+        let configured = crate::raindex_client::ConfiguredSnapshotTarget {
+            raindex_id: RaindexIdentifier::new(1, Address::repeat_byte(0x11)),
+            deployment_block: 1,
+        };
+        let watermarks = Vec::<PreinstalledTargetWatermarkRow>::new();
+        crate::raindex_client::ensure_preinstalled_snapshot_covers_targets(
+            &[configured],
+            &watermarks,
+        )
+        .unwrap_err();
+
+        assert!(
+            db.calls().is_empty(),
+            "rejected target coverage must not refresh views"
+        );
+    }
+
+    #[tokio::test]
+    async fn production_initialization_rejects_missing_coverage_without_writes_or_readiness() {
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_json(&configured_watermarks_stmt(), json!([]));
+        let readiness = crate::raindex_client::local_db::SyncReadiness::new();
+        let statuses = crate::raindex_client::local_db::LocalDbSyncStatusStore::new();
+
+        crate::raindex_client::initialize_local_db_readiness(
+            &db,
+            &preinstalled_settings(100),
+            &readiness,
+            &statuses,
+            crate::raindex_client::local_db::pipeline::runner::LocalDbProvisioning::PreinstalledSnapshot,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(db.calls().is_empty());
+        assert!(!readiness.is_ready(1));
+    }
+
+    #[tokio::test]
+    async fn production_initialization_rejects_malformed_watermark_without_writes() {
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_json(
+                &configured_watermarks_stmt(),
+                json!([{
+                    "chain_id": 1,
+                    "raindex_address": "0x1111111111111111111111111111111111111111",
+                    "last_block": 100,
+                    "last_hash": null,
+                    "updated_at": 1
+                }]),
+            );
+
+        crate::raindex_client::initialize_local_db_readiness(
+            &db,
+            &preinstalled_settings(100),
+            &crate::raindex_client::local_db::SyncReadiness::new(),
+            &crate::raindex_client::local_db::LocalDbSyncStatusStore::new(),
+            crate::raindex_client::local_db::pipeline::runner::LocalDbProvisioning::PreinstalledSnapshot,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(db.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn production_initialization_rejects_watermark_before_deployment_without_writes() {
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_json(
+                &configured_watermarks_stmt(),
+                json!([PreinstalledTargetWatermarkRow {
+                    chain_id: 1,
+                    raindex_address: "0x1111111111111111111111111111111111111111".to_string(),
+                    last_block: 99,
+                    last_hash: Bytes::from(vec![0; 32]),
+                    updated_at: 1,
+                }]),
+            );
+
+        let error = crate::raindex_client::initialize_local_db_readiness(
+            &db,
+            &preinstalled_settings(100),
+            &crate::raindex_client::local_db::SyncReadiness::new(),
+            &crate::raindex_client::local_db::LocalDbSyncStatusStore::new(),
+            crate::raindex_client::local_db::pipeline::runner::LocalDbProvisioning::PreinstalledSnapshot,
+        )
+        .await
+        .unwrap_err();
+
+        assert!(error.to_string().contains("precedes deployment block"));
+        assert!(db.calls().is_empty());
+    }
+
+    #[tokio::test]
+    async fn production_initialization_ignores_unrelated_malformed_watermark_rows() {
+        let db_row = DbMetadataRow {
+            id: 1,
+            db_schema_version: DB_SCHEMA_VERSION,
+            created_at: None,
+            updated_at: None,
+        };
+        // The mock only registers the configured-target query. This models a
+        // database that also retains unrelated rows (including NULL/malformed
+        // rows): SQLite applies the identity predicate before deserializing the
+        // selected configured row. Regressing to an all-row query fails here.
+        let db = MockDb::default()
+            .with_json(&fetch_tables_stmt(), required_tables_json())
+            .with_json(&fetch_db_metadata_stmt(), json!([db_row]))
+            .with_required_schema_columns()
+            .with_json(
+                &configured_watermarks_stmt(),
+                json!([PreinstalledTargetWatermarkRow {
+                    chain_id: 1,
+                    raindex_address: "0x1111111111111111111111111111111111111111".to_string(),
+                    last_block: 100,
+                    last_hash: Bytes::from(vec![0; 32]),
+                    updated_at: 1,
+                }]),
+            )
+            .with_views();
+        let readiness = crate::raindex_client::local_db::SyncReadiness::new();
+
+        crate::raindex_client::initialize_local_db_readiness(
+            &db,
+            &preinstalled_settings(100),
+            &readiness,
+            &crate::raindex_client::local_db::LocalDbSyncStatusStore::new(),
+            crate::raindex_client::local_db::pipeline::runner::LocalDbProvisioning::PreinstalledSnapshot,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(db.calls().len(), create_views_batch().statements().len());
+        assert!(readiness.is_ready(1));
+        let watermark_queries = db
+            .json_calls()
+            .into_iter()
+            .filter(|sql| sql.contains("FROM target_watermarks"))
+            .collect::<Vec<_>>();
+        assert_eq!(watermark_queries.len(), 1);
+        assert!(watermark_queries[0].contains("lower(raindex_address)"));
     }
 
     #[tokio::test]

@@ -142,7 +142,7 @@ mod tests {
 
         let target = RunnerTarget {
             raindex_key: "test".to_string(),
-            manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),
+            manifest_url: Some(Url::parse("https://example.com/manifest.yaml").unwrap()),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
                 raindex_id: raindex_id.clone(),
@@ -229,7 +229,7 @@ mod tests {
 
         let target = RunnerTarget {
             raindex_key: "empty".to_string(),
-            manifest_url: Url::parse("https://example.com/empty.yaml").unwrap(),
+            manifest_url: Some(Url::parse("https://example.com/empty.yaml").unwrap()),
             network_key: "anvil".to_string(),
             inputs: SyncInputs {
                 raindex_id: raindex_id.clone(),

@@ -1,7 +1,7 @@
 use super::super::config::NetworkRunnerConfig;
 use super::super::environment::default_environment;
 use super::super::leadership::DefaultLeadership;
-use super::super::ClientRunner;
+use super::super::{ClientRunner, LocalDbProvisioning};
 use crate::local_db::pipeline::adapters::bootstrap::BootstrapPipeline;
 use crate::local_db::pipeline::adapters::{
     apply::DefaultApplyPipeline, events::DefaultEventsPipeline, tokens::DefaultTokensPipeline,
@@ -82,6 +82,21 @@ pub struct SchedulerHandle {
     networks: Vec<NetworkCfg>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SchedulerBootstrap {
+    Managed { schema_initialized: bool },
+    PreinstalledSnapshot,
+}
+
+impl SchedulerBootstrap {
+    fn provisioning(self) -> LocalDbProvisioning {
+        match self {
+            Self::Managed { .. } => LocalDbProvisioning::Managed,
+            Self::PreinstalledSnapshot => LocalDbProvisioning::PreinstalledSnapshot,
+        }
+    }
+}
+
 impl SchedulerHandle {
     pub fn stop(&self) {
         self.stop_flag.set(true);
@@ -102,7 +117,7 @@ pub(crate) fn start(
     status_callback: Option<Function>,
     sync_readiness: SyncReadiness,
     status_store: LocalDbSyncStatusStore,
-    schema_initialized: bool,
+    scheduler_bootstrap: SchedulerBootstrap,
 ) -> Result<SchedulerHandle, LocalDbError> {
     let networks = configured_sync_networks(&settings);
 
@@ -130,7 +145,12 @@ pub(crate) fn start(
         set_status_callback(callback.clone());
         emit_initial_sync_statuses(&settings_clone, &status_store, callback.as_deref());
 
-        if !schema_initialized {
+        if matches!(
+            scheduler_bootstrap,
+            SchedulerBootstrap::Managed {
+                schema_initialized: false
+            }
+        ) {
             if let Err(err) = bootstrap
                 .runner_run(&db_clone, Some(DB_SCHEMA_VERSION))
                 .await
@@ -163,7 +183,12 @@ pub(crate) fn start(
             let leadership = DefaultLeadership::with_network_key(network.key.clone());
             let environment = default_environment(status_store.clone());
 
-            let runner = match ClientRunner::from_config(config.clone(), environment, leadership) {
+            let runner = match ClientRunner::from_config_with_provisioning(
+                config.clone(),
+                environment,
+                leadership,
+                scheduler_bootstrap.provisioning(),
+            ) {
                 Ok(r) => r,
                 Err(err) => {
                     emit_network_status(
@@ -456,6 +481,7 @@ mod wasm_tests {
     use crate::raindex_client::local_db::LocalDbStatus;
     use alloy::primitives::Address;
     use gloo_timers::future::TimeoutFuture;
+    use raindex_app_settings::spec_version::SpecVersion;
     use std::cell::{Cell, RefCell};
     use std::collections::VecDeque;
     use std::rc::Rc;
@@ -863,9 +889,47 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn scheduler_handle_networks_returns_correct_network_configs() {
-        use crate::raindex_client::tests::get_local_db_test_yaml;
-
-        let yaml = get_local_db_test_yaml();
+        let yaml = format!(
+            r#"
+version: {}
+networks:
+  synced:
+    rpcs: [https://rpc.example/synced]
+    chain-id: 1
+  unsynced:
+    rpcs: [https://rpc.example/unsynced]
+    chain-id: 2
+subgraphs:
+  synced: https://subgraph.example/synced
+  unsynced: https://subgraph.example/unsynced
+local-db-remotes:
+  remote: https://remote.example/manifest.yaml
+local-db-sync:
+  synced:
+    batch-size: 10
+    max-concurrent-batches: 1
+    retry-attempts: 1
+    retry-delay-ms: 1
+    rate-limit-delay-ms: 1
+    finality-depth: 4
+    bootstrap-block-threshold: 100
+    sync-interval-ms: 5000
+raindexes:
+  synced-raindex:
+    address: 0x0000000000000000000000000000000000000001
+    network: synced
+    subgraph: synced
+    local-db-remote: remote
+    deployment-block: 1
+  unsynced-raindex:
+    address: 0x0000000000000000000000000000000000000002
+    network: unsynced
+    subgraph: unsynced
+    local-db-remote: remote
+    deployment-block: 1
+"#,
+            SpecVersion::current()
+        );
         let settings = parse_runner_settings(&yaml).expect("should parse valid yaml");
         let handle = start(
             settings,
@@ -873,7 +937,9 @@ mod wasm_tests {
             None,
             SyncReadiness::new(),
             LocalDbSyncStatusStore::new(),
-            false,
+            SchedulerBootstrap::Managed {
+                schema_initialized: false,
+            },
         )
         .expect("should start with valid yaml");
 
@@ -881,11 +947,11 @@ mod wasm_tests {
 
         let networks = handle.networks();
         assert_eq!(networks.len(), 1, "expected exactly one network");
-        assert_eq!(networks[0].key, "arbitrum");
-        assert_eq!(networks[0].chain_id, 42161);
+        assert_eq!(networks[0].key, "synced");
+        assert_eq!(networks[0].chain_id, 1);
 
         let network_keys = handle.network_keys();
-        assert_eq!(network_keys, vec!["arbitrum".to_string()]);
+        assert_eq!(network_keys, vec!["synced".to_string()]);
     }
 
     #[wasm_bindgen_test]

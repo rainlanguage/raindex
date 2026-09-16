@@ -1,5 +1,5 @@
 use crate::local_db::pipeline::runner::utils::{
-    build_runner_targets, ParsedRunnerSettings, RunnerTarget,
+    build_preinstalled_runner_targets, build_runner_targets, ParsedRunnerSettings, RunnerTarget,
 };
 use crate::local_db::LocalDbError;
 use raindex_app_settings::local_db_sync::LocalDbSyncCfg;
@@ -62,6 +62,10 @@ impl NetworkRunnerConfig {
 
     pub fn build_targets(&self) -> Result<Vec<RunnerTarget>, LocalDbError> {
         build_runner_targets(&self.settings.raindexes, &self.settings.syncs)
+    }
+
+    pub fn build_preinstalled_targets(&self) -> Result<Vec<RunnerTarget>, LocalDbError> {
+        build_preinstalled_runner_targets(&self.settings.raindexes, &self.settings.syncs)
     }
 }
 
@@ -187,5 +191,29 @@ raindexes:
         let targets = config.build_targets().expect("targets ok");
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].raindex_key, "raindex-b");
+    }
+
+    #[test]
+    fn preinstalled_targets_do_not_require_remote_configuration() {
+        let global = parse_runner_settings(&sample_settings_yaml()).expect("valid yaml");
+        let mut config =
+            NetworkRunnerConfig::from_global_settings(&global, "network-b").expect("config ok");
+        config
+            .settings
+            .raindexes
+            .get_mut("raindex-b")
+            .expect("raindex")
+            .local_db_remote = None;
+
+        let targets = config
+            .build_preinstalled_targets()
+            .expect("preinstalled targets do not fetch manifests");
+        assert_eq!(targets.len(), 1);
+        assert!(targets[0].manifest_url.is_none());
+
+        assert!(matches!(
+            config.build_targets(),
+            Err(LocalDbError::MissingLocalDbRemote { .. })
+        ));
     }
 }

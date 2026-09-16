@@ -76,8 +76,10 @@ pub fn build_manifest(
             continue;
         }
 
-        let previous_entry = previous_manifests
-            .get(&runner_target.manifest_url)
+        let previous_entry = runner_target
+            .manifest_url
+            .as_ref()
+            .and_then(|url| previous_manifests.get(url))
             .and_then(|manifest| manifest.find(raindex_id.chain_id, raindex_id.raindex_address))
             .cloned();
 
@@ -175,7 +177,7 @@ mod tests {
         let fetch = FetchConfig::new(10, 5, 5, 1, 0, 0).unwrap();
         RunnerTarget {
             raindex_key: format!("{}-{}", network_key, address),
-            manifest_url: Url::parse("https://example.com/manifest.yaml").unwrap(),
+            manifest_url: Some(Url::parse("https://example.com/manifest.yaml").unwrap()),
             network_key: network_key.to_string(),
             inputs: SyncInputs {
                 raindex_id: RaindexIdentifier {
