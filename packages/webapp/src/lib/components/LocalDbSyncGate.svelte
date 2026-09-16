@@ -9,6 +9,7 @@
 	import { readable, type Readable } from 'svelte/store';
 
 	export let nonBlocking = false;
+	export let syncingOverride: string | undefined = undefined;
 	export let selectedChainIds: Readable<number[]> = readable([]);
 	export let emptyMessage = 'None found';
 	// Svelte consumes this interface to type slot props.
@@ -18,10 +19,12 @@
 	}
 
 	const dispatch = createEventDispatcher<{ synccomplete: void }>();
-	const raindexClient = useRaindexClient();
+	// The snapshot bootstrap shell is intentionally rendered before the data
+	// providers exist. Its explicit status must therefore be provider-free.
+	const raindexClient = syncingOverride === undefined ? useRaindexClient() : undefined;
 
-	$: networksResult = raindexClient.getAllNetworks();
-	$: configuredNetworks = Array.from(networksResult.value?.values() ?? []);
+	$: networksResult = raindexClient?.getAllNetworks();
+	$: configuredNetworks = Array.from(networksResult?.value?.values() ?? []);
 	$: localDbChainIds = Array.from(
 		new Set([
 			...Array.from($networkStatuses.keys()),
@@ -136,7 +139,7 @@
 		</div>
 	{/if}
 	<slot emptyMessage={resolvedEmptyMessage} />
-{:else if $localDbSyncGate.status === 'syncing'}
+{:else if syncingOverride || $localDbSyncGate.status === 'syncing'}
 	<div
 		data-testid="local-db-syncing-notice"
 		class="mx-auto mt-12 flex max-w-2xl flex-col items-center rounded-lg border border-sky-200 bg-sky-50 px-6 py-8 text-center shadow-sm dark:border-sky-900/70 dark:bg-sky-950/30"
@@ -152,9 +155,9 @@
 			We are preparing the local database. Orders and vaults will appear once the initial
 			sync finishes.
 		</p>
-		{#if $localDbSyncGate.phaseMessage}
+		{#if syncingOverride || ($localDbSyncGate.status === 'syncing' && $localDbSyncGate.phaseMessage)}
 			<p class="mt-4 text-sm font-medium text-sky-700 dark:text-sky-300">
-				{$localDbSyncGate.phaseMessage}
+				{syncingOverride ?? ($localDbSyncGate.status === 'syncing' ? $localDbSyncGate.phaseMessage : '')}
 			</p>
 		{/if}
 	</div>

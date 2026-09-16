@@ -1,5 +1,9 @@
 <script lang="ts">
-	import type { NetworkSyncStatus, RaindexSyncStatus } from '@rainlanguage/raindex';
+	import type {
+		LocalDbStatus,
+		NetworkSyncStatus,
+		RaindexSyncStatus
+	} from '@rainlanguage/raindex';
 	import LocalDbStatusBadge from './LocalDbStatusBadge.svelte';
 	import LocalDbStatusModal from './LocalDbStatusModal.svelte';
 	import { aggregateLocalDbStatus } from '../utils/localDbStatus';
@@ -7,18 +11,18 @@
 
 	export let networkStatuses: Map<number, NetworkSyncStatus> = new Map();
 	export let raindexStatuses: Map<string, RaindexSyncStatus> = new Map();
+	export let statusOverride: LocalDbStatus | undefined = undefined;
 
 	let modalOpen = false;
 
 	$: networkList = Array.from(networkStatuses.values());
-	$: hasNetworks = networkList.length > 0;
-	$: displayStatus = aggregateLocalDbStatus([
-		...networkList,
-		...Array.from(raindexStatuses.values())
-	]).status;
+	$: hasNetworks = statusOverride === undefined && networkList.length > 0;
+	$: displayStatus =
+		statusOverride ??
+		aggregateLocalDbStatus([...networkList, ...Array.from(raindexStatuses.values())]).status;
 
 	function openModal() {
-		modalOpen = true;
+		if (statusOverride === undefined) modalOpen = true;
 	}
 </script>
 
@@ -30,6 +34,7 @@
 		type="button"
 		class="flex w-full items-center justify-between px-3 py-3 text-left transition hover:bg-gray-50 dark:hover:bg-gray-800"
 		on:click={openModal}
+		disabled={statusOverride !== undefined}
 		data-testid="local-db-status-header"
 	>
 		<div class="flex items-center gap-2">
@@ -46,4 +51,6 @@
 	</button>
 </div>
 
-<LocalDbStatusModal bind:open={modalOpen} {networkStatuses} {raindexStatuses} />
+{#if statusOverride === undefined}
+	<LocalDbStatusModal bind:open={modalOpen} {networkStatuses} {raindexStatuses} />
+{/if}
