@@ -5,6 +5,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
 use reqwest::Client;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -89,6 +90,33 @@ pub struct OracleResponse {
     pub context: Vec<FixedBytes<32>>,
     /// The EIP-191 signature over keccak256(abi.encodePacked(context))
     pub signature: Bytes,
+}
+
+/// Error returned for one item in an `allowFailure=true` oracle batch.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("{error}: {detail}")]
+pub struct OracleBatchItemError {
+    /// Stable machine-readable error code supplied by the oracle.
+    pub error: String,
+    /// Human-readable details for this failed item.
+    pub detail: String,
+}
+
+/// Result for one item in an `allowFailure=true` oracle batch.
+pub type OracleBatchItemResult = Result<SignedContextV1, OracleBatchItemError>;
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "status", content = "body", rename_all = "lowercase")]
+enum OracleBatchItemResponse {
+    Ok(OracleResponse),
+    Error(OracleBatchItemError),
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum OracleBatchResponse {
+    Envelope(Vec<OracleBatchItemResponse>),
+    Legacy(Vec<OracleResponse>),
 }
 
 impl From<OracleResponse> for SignedContextV1 {
@@ -182,11 +210,11 @@ impl OracleClient {
         request.await
     }
 
-    async fn fetch_responses(
+    async fn fetch_json<T: DeserializeOwned>(
         &self,
         url: &Url,
         body: Vec<u8>,
-    ) -> Result<Vec<OracleResponse>, OracleError> {
+    ) -> Result<T, OracleError> {
         let endpoint = sanitized_endpoint(url);
         self.with_request_permit(url, async {
             let response = self
@@ -224,7 +252,7 @@ impl OracleClient {
         url: &Url,
         body: Vec<u8>,
     ) -> Result<SignedContextV1, OracleError> {
-        let response = self.fetch_responses(url, body).await?;
+        let response: Vec<OracleResponse> = self.fetch_json(url, body).await?;
 
         let [response]: [OracleResponse; 1] =
             response
@@ -247,12 +275,16 @@ impl OracleClient {
     pub(crate) async fn fetch_signed_context_batches(
         &self,
         requests: Vec<OracleBatchRequest>,
-    ) -> Vec<Result<Vec<SignedContextV1>, OracleError>> {
+    ) -> Vec<Result<Vec<OracleBatchItemResult>, OracleError>> {
         let requests = requests
             .into_iter()
             .map(|request| async move {
-                self.fetch_signed_context_batch(&request.url, request.body, request.expected_count)
-                    .await
+                self.fetch_signed_context_batch_allow_failure(
+                    &request.url,
+                    request.body,
+                    request.expected_count,
+                )
+                .await
             })
             .collect::<Vec<_>>();
 
@@ -268,7 +300,7 @@ impl OracleClient {
         expected_count: usize,
     ) -> Result<Vec<SignedContextV1>, OracleError> {
         let url = validate_oracle_url(url)?;
-        let response = self.fetch_responses(&url, body).await?;
+        let response: Vec<OracleResponse> = self.fetch_json(&url, body).await?;
 
         if response.len() != expected_count {
             return Err(OracleError::InvalidResponse(format!(
@@ -279,6 +311,40 @@ impl OracleClient {
         }
 
         Ok(response.into_iter().map(Into::into).collect())
+    }
+
+    /// Fetch independently fallible signed contexts from a compatible batch
+    /// endpoint while preserving one result slot per request item.
+    pub(crate) async fn fetch_signed_context_batch_allow_failure(
+        &self,
+        url: &str,
+        body: Vec<u8>,
+        expected_count: usize,
+    ) -> Result<Vec<OracleBatchItemResult>, OracleError> {
+        let mut url = validate_oracle_url(url)?;
+        url.query_pairs_mut().append_pair("allowFailure", "true");
+        let response: OracleBatchResponse = self.fetch_json(&url, body).await?;
+        let response: Vec<OracleBatchItemResult> = match response {
+            OracleBatchResponse::Envelope(items) => items
+                .into_iter()
+                .map(|item| match item {
+                    OracleBatchItemResponse::Ok(response) => Ok(response.into()),
+                    OracleBatchItemResponse::Error(error) => Err(error),
+                })
+                .collect(),
+            OracleBatchResponse::Legacy(items) => {
+                items.into_iter().map(|item| Ok(item.into())).collect()
+            }
+        };
+
+        if response.len() != expected_count {
+            return Err(OracleError::InvalidResponse(format!(
+                "Expected {} oracle batch item responses, got {}",
+                expected_count,
+                response.len()
+            )));
+        }
+        Ok(response)
     }
 }
 
@@ -383,6 +449,19 @@ pub async fn fetch_signed_context_batch(
         .await
 }
 
+/// Fetch signed context for a batch using the oracle's per-item failure
+/// envelope. Transport, HTTP, JSON-shape, and result-count failures remain
+/// request-level errors; valid item errors remain aligned with their request.
+pub async fn fetch_signed_context_batch_allow_failure(
+    url: &str,
+    body: Vec<u8>,
+    expected_count: usize,
+) -> Result<Vec<OracleBatchItemResult>, OracleError> {
+    OracleClient::new()?
+        .fetch_signed_context_batch_allow_failure(url, body, expected_count)
+        .await
+}
+
 /// Extract the oracle URL from an SgOrder's meta, if present.
 ///
 /// Parses the meta bytes and looks for a `RaindexSignedContextOracleV1` entry.
@@ -405,6 +484,8 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     use httpmock::{Method::POST, MockServer};
     use raindex_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
+    #[cfg(not(target_family = "wasm"))]
+    use serde_json::json;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -513,17 +594,12 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     #[tokio::test]
-    async fn test_fetch_signed_context_batches_preserves_batch_positions_and_failures() {
+    async fn test_fetch_signed_context_batches_preserves_item_and_request_failures() {
         let server = MockServer::start_async().await;
         let first_response = OracleResponse {
             signer: address!("0x1111111111111111111111111111111111111111"),
             context: vec![FixedBytes::with_last_byte(1)],
             signature: vec![0xaa].into(),
-        };
-        let second_response = OracleResponse {
-            signer: address!("0x2222222222222222222222222222222222222222"),
-            context: vec![FixedBytes::with_last_byte(2)],
-            signature: vec![0xbb].into(),
         };
         let third_response = OracleResponse {
             signer: address!("0x3333333333333333333333333333333333333333"),
@@ -532,9 +608,16 @@ mod tests {
         };
         let first_mock = server
             .mock_async(|when, then| {
-                when.method(POST).path("/first");
-                then.status(200)
-                    .json_body_obj(&vec![first_response.clone(), second_response.clone()]);
+                when.method(POST)
+                    .path("/first")
+                    .query_param("allowFailure", "true");
+                then.status(200).json_body(json!([
+                    {"status": "ok", "body": first_response.clone()},
+                    {
+                        "status": "error",
+                        "body": {"error": "service_unavailable", "detail": "pair unavailable"}
+                    }
+                ]));
             })
             .await;
         let failing_mock = server
@@ -545,15 +628,19 @@ mod tests {
             .await;
         let third_mock = server
             .mock_async(|when, then| {
-                when.method(POST).path("/third");
-                then.status(200)
-                    .json_body_obj(&vec![third_response.clone()]);
+                when.method(POST)
+                    .path("/third")
+                    .query_param("apiKey", "kept")
+                    .query_param("allowFailure", "true");
+                then.status(200).json_body(json!([
+                    {"status": "ok", "body": third_response.clone()}
+                ]));
             })
             .await;
         let requests = vec![
             OracleBatchRequest::new(server.url("/first"), vec![], 2),
             OracleBatchRequest::new(server.url("/failing"), vec![], 1),
-            OracleBatchRequest::new(server.url("/third"), vec![], 1),
+            OracleBatchRequest::new(format!("{}?apiKey=kept", server.url("/third")), vec![], 1),
         ];
 
         let results = OracleClient::new()
@@ -563,21 +650,156 @@ mod tests {
 
         assert_eq!(results.len(), 3);
         assert_eq!(
-            results[0].as_ref().unwrap()[0].signer,
+            results[0].as_ref().unwrap()[0].as_ref().unwrap().signer,
             address!("0x1111111111111111111111111111111111111111")
         );
         assert_eq!(
-            results[0].as_ref().unwrap()[1].signer,
-            address!("0x2222222222222222222222222222222222222222")
+            results[0].as_ref().unwrap()[1].as_ref().unwrap_err(),
+            &OracleBatchItemError {
+                error: "service_unavailable".to_string(),
+                detail: "pair unavailable".to_string(),
+            }
         );
         assert!(results[1].is_err());
         assert_eq!(
-            results[2].as_ref().unwrap()[0].signer,
+            results[2].as_ref().unwrap()[0].as_ref().unwrap().signer,
             address!("0x3333333333333333333333333333333333333333")
         );
         first_mock.assert_async().await;
         failing_mock.assert_async().await;
         third_mock.assert_async().await;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn test_fetch_signed_context_batch_allow_failure_all_success() {
+        let server = MockServer::start_async().await;
+        let first = OracleResponse {
+            signer: address!("0x1111111111111111111111111111111111111111"),
+            context: vec![FixedBytes::with_last_byte(1)],
+            signature: vec![0xaa].into(),
+        };
+        let second = OracleResponse {
+            signer: address!("0x2222222222222222222222222222222222222222"),
+            context: vec![FixedBytes::with_last_byte(2)],
+            signature: vec![0xbb].into(),
+        };
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/oracle")
+                    .query_param("allowFailure", "true");
+                then.status(200).json_body(json!([
+                    {"status": "ok", "body": first},
+                    {"status": "ok", "body": second}
+                ]));
+            })
+            .await;
+
+        let results = fetch_signed_context_batch_allow_failure(&server.url("/oracle"), vec![], 2)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(
+            results[0].as_ref().unwrap().signer,
+            address!("0x1111111111111111111111111111111111111111")
+        );
+        assert_eq!(
+            results[1].as_ref().unwrap().signer,
+            address!("0x2222222222222222222222222222222222222222")
+        );
+        mock.assert_async().await;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn test_fetch_signed_context_batch_allow_failure_accepts_legacy_success_shape() {
+        let server = MockServer::start_async().await;
+        let response = OracleResponse {
+            signer: address!("0x1111111111111111111111111111111111111111"),
+            context: vec![FixedBytes::with_last_byte(1)],
+            signature: vec![0xaa].into(),
+        };
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/oracle")
+                    .query_param("allowFailure", "true");
+                then.status(200).json_body_obj(&vec![response]);
+            })
+            .await;
+
+        let results = fetch_signed_context_batch_allow_failure(&server.url("/oracle"), vec![], 1)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].as_ref().unwrap().signer,
+            address!("0x1111111111111111111111111111111111111111")
+        );
+        mock.assert_async().await;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn test_fetch_signed_context_batch_allow_failure_all_errors() {
+        let server = MockServer::start_async().await;
+        let mock = server
+            .mock_async(|when, then| {
+                when.method(POST)
+                    .path("/oracle")
+                    .query_param("allowFailure", "true");
+                then.status(200).json_body(json!([
+                    {"status": "error", "body": {"error": "bad_request", "detail": "bad pair"}},
+                    {"status": "error", "body": {"error": "internal_error", "detail": "signer failed"}}
+                ]));
+            })
+            .await;
+
+        let results = fetch_signed_context_batch_allow_failure(&server.url("/oracle"), vec![], 2)
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].as_ref().unwrap_err().error, "bad_request");
+        assert_eq!(results[1].as_ref().unwrap_err().error, "internal_error");
+        mock.assert_async().await;
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[tokio::test]
+    async fn test_fetch_signed_context_batch_allow_failure_rejects_malformed_and_count_mismatch() {
+        let server = MockServer::start_async().await;
+        let malformed = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/malformed");
+                then.status(200)
+                    .header("content-type", "application/json")
+                    .body(r#"[{"status":"ok","body":{"unexpected":true}}]"#);
+            })
+            .await;
+        let mismatch = server
+            .mock_async(|when, then| {
+                when.method(POST).path("/mismatch");
+                then.status(200).json_body(json!([]));
+            })
+            .await;
+
+        let malformed_error =
+            fetch_signed_context_batch_allow_failure(&server.url("/malformed"), vec![], 1)
+                .await
+                .unwrap_err();
+        assert!(matches!(malformed_error, OracleError::RequestFailed { .. }));
+
+        let mismatch_error =
+            fetch_signed_context_batch_allow_failure(&server.url("/mismatch"), vec![], 1)
+                .await
+                .unwrap_err();
+        assert!(matches!(mismatch_error, OracleError::InvalidResponse(_)));
+        malformed.assert_async().await;
+        mismatch.assert_async().await;
     }
 
     #[tokio::test]

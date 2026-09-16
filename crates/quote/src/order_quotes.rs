@@ -365,7 +365,7 @@ async fn get_order_quotes_inner(
         oracle_batch_request_count,
         "starting bounded batched quote oracle context fetches"
     );
-    let oracle_batch_results: Vec<Result<Vec<SignedContextV1>, String>> =
+    let oracle_batch_results: Vec<Result<Vec<Result<SignedContextV1, String>>, String>> =
         if oracle_batch_requests.is_empty() {
             vec![]
         } else {
@@ -374,7 +374,16 @@ async fn get_order_quotes_inner(
                     .fetch_signed_context_batches(oracle_batch_requests)
                     .await
                     .into_iter()
-                    .map(|result| result.map_err(|error| error.to_string()))
+                    .map(|result| {
+                        result
+                            .map(|items| {
+                                items
+                                    .into_iter()
+                                    .map(|item| item.map_err(|error| error.to_string()))
+                                    .collect()
+                            })
+                            .map_err(|error| error.to_string())
+                    })
                     .collect(),
                 Err(error) => {
                     let error = error.to_string();
@@ -392,7 +401,7 @@ async fn get_order_quotes_inner(
         match batch_result {
             Ok(contexts) => {
                 for (item, context) in batch.items.iter().zip(contexts) {
-                    oracle_results[item.pair_preparation_index] = Some(Ok(context));
+                    oracle_results[item.pair_preparation_index] = Some(context);
                 }
             }
             Err(error) => {
@@ -781,13 +790,20 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     async fn start_batch_oracle_server(
-        responses: Vec<crate::oracle::OracleResponse>,
+        responses: Vec<Result<crate::oracle::OracleResponse, crate::oracle::OracleBatchItemError>>,
     ) -> (String, tokio::task::JoinHandle<Vec<Vec<u8>>>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/oracle", listener.local_addr().unwrap());
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.unwrap();
             let body = read_http_body(&mut stream).await;
+            let responses = responses
+                .into_iter()
+                .map(|response| match response {
+                    Ok(body) => json!({"status": "ok", "body": body}),
+                    Err(body) => json!({"status": "error", "body": body}),
+                })
+                .collect::<Vec<_>>();
             let payload = serde_json::to_vec(&responses).unwrap();
             let headers = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1181,10 +1197,20 @@ amount price: 2 3;
         let oracle_responses = oracle_contexts
             .iter()
             .cloned()
-            .map(|context| crate::oracle::OracleResponse {
-                signer: context.signer,
-                context: context.context,
-                signature: context.signature,
+            .enumerate()
+            .map(|(index, context)| {
+                if index == 0 {
+                    Ok(crate::oracle::OracleResponse {
+                        signer: context.signer,
+                        context: context.context,
+                        signature: context.signature,
+                    })
+                } else {
+                    Err(crate::oracle::OracleBatchItemError {
+                        error: "service_unavailable".to_string(),
+                        detail: "pair unavailable".to_string(),
+                    })
+                }
             })
             .collect();
         let base_oracle_order =
@@ -1207,13 +1233,12 @@ amount price: 2 3;
             context: injected_context.clone(),
             call_count: injector_call_count.clone(),
         };
-        let quote_values =
-            [("2", "3"), ("4", "5"), ("6", "7"), ("8", "9")].map(|(output_max, ratio)| {
-                (
-                    Float::parse(output_max.to_string()).unwrap(),
-                    Float::parse(ratio.to_string()).unwrap(),
-                )
-            });
+        let quote_values = [("2", "3"), ("6", "7"), ("8", "9")].map(|(output_max, ratio)| {
+            (
+                Float::parse(output_max.to_string()).unwrap(),
+                Float::parse(ratio.to_string()).unwrap(),
+            )
+        });
         let quote_results = quote_values
             .iter()
             .map(|(output_max, ratio)| {
@@ -1235,17 +1260,6 @@ amount price: 2 3;
                     inputIOIndex: U256::ZERO,
                     outputIOIndex: U256::from(1),
                     signedContext: vec![oracle_contexts[0].clone(), injected_context.clone()],
-                },
-            }
-            .abi_encode(),
-        );
-        let expected_second_oracle_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
-                quoteConfig: QuoteV2 {
-                    order: order_struct.clone(),
-                    inputIOIndex: U256::from(1),
-                    outputIOIndex: U256::ZERO,
-                    signedContext: vec![oracle_contexts[1].clone(), injected_context.clone()],
                 },
             }
             .abi_encode(),
@@ -1274,7 +1288,6 @@ amount price: 2 3;
         );
         let expected_rpc_calls = vec![
             expected_oracle_quote_call,
-            expected_second_oracle_quote_call,
             expected_plain_quote_call,
             expected_second_plain_quote_call,
         ];
@@ -1298,7 +1311,7 @@ amount price: 2 3;
                 .iter()
                 .map(|response| response.success)
                 .collect::<Vec<_>>(),
-            vec![true, true, true, true]
+            vec![true, false, true, true]
         );
         assert_eq!(
             responses
@@ -1308,24 +1321,35 @@ amount price: 2 3;
             vec![(0, 1), (1, 0), (0, 1), (1, 0)]
         );
 
-        for (response_index, quote_value_index) in [(0, 0), (1, 1), (2, 2), (3, 3)] {
+        for (response_index, quote_value_index) in [(0, 0), (2, 1), (3, 2)] {
             let data = responses[response_index].data.as_ref().unwrap();
             let (expected_output_max, expected_ratio) = &quote_values[quote_value_index];
             assert!(data.max_output.eq(*expected_output_max).unwrap());
             assert!(data.ratio.eq(*expected_ratio).unwrap());
         }
 
-        for (response, oracle_context) in responses[..2].iter().zip(&oracle_contexts) {
-            assert_eq!(response.signed_context.len(), 2);
-            assert_eq!(response.signed_context[0].signer, oracle_context.signer);
-            assert_eq!(response.signed_context[1].signer, injected_context.signer);
-        }
+        assert!(responses[1].data.is_none());
+        assert!(responses[1]
+            .error
+            .as_deref()
+            .is_some_and(|error| error.contains("service_unavailable")));
+
+        assert_eq!(responses[0].signed_context.len(), 2);
+        assert_eq!(
+            responses[0].signed_context[0].signer,
+            oracle_contexts[0].signer
+        );
+        assert_eq!(
+            responses[0].signed_context[1].signer,
+            injected_context.signer
+        );
+        assert!(responses[1].signed_context.is_empty());
         for response in &responses[2..] {
             assert_eq!(response.signed_context.len(), 1);
             assert_eq!(response.signed_context[0].signer, injected_context.signer);
         }
 
-        assert_eq!(injector_call_count.load(Ordering::SeqCst), 4);
+        assert_eq!(injector_call_count.load(Ordering::SeqCst), 3);
         let oracle_request_bodies = oracle_server.await.unwrap();
         assert_eq!(oracle_request_bodies, vec![expected_oracle_body]);
         rpc_server.await.unwrap();
