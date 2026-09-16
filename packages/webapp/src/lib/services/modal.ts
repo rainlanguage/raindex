@@ -30,52 +30,64 @@ export type TransactionConfirmationModalResult = {
 };
 
 export const handleTransactionConfirmationModal = (
-	props: TransactionConfirmationProps
+	props: TransactionConfirmationProps,
+	options?: { timeout?: number }
 ): Promise<TransactionConfirmationModalResult> => {
 	return new Promise((resolve) => {
 		const originalOnConfirm = props.args.onConfirm;
 		let modalResolved = false;
+		let checkDismissal: ReturnType<typeof setInterval> | undefined;
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		let modal: InstanceType<typeof TransactionConfirmationModal>;
+
+		const finish = (result: TransactionConfirmationModalResult) => {
+			if (modalResolved) return;
+			modalResolved = true;
+			resolve(result);
+		};
+
+		const cleanup = () => {
+			if (checkDismissal !== undefined) clearInterval(checkDismissal);
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+			if (modal && !modal.$$.destroyed) {
+				modal.$destroy();
+			}
+		};
 
 		// Wrap the onConfirm to resolve our promise
 		props.args.onConfirm = (hash) => {
 			originalOnConfirm(hash);
-			if (!modalResolved) {
-				modalResolved = true;
-				resolve({ success: true, hash });
-			}
+			finish({ success: true, hash });
 		};
 
-		// Create modal with modified props
-		const modal = new TransactionConfirmationModal({
+		// Honor closeOnConfirm from the caller. Take-order and withdraw pass false so
+		// the "Transaction submitted" state is visible; the old override to true hid
+		// confirmation even when the tx succeeded on-chain.
+		modal = new TransactionConfirmationModal({
 			target: document.body,
 			props: {
 				...props,
-				closeOnConfirm: true
+				onClosed: () => {
+					finish({ success: false });
+					cleanup();
+				}
 			}
 		});
 
-		// Check periodically if modal was dismissed
-		const checkDismissal = setInterval(() => {
+		// Check periodically if modal was dismissed without an onClosed callback
+		checkDismissal = setInterval(() => {
 			if (!modal.$$.ctx || modal.$$.destroyed) {
-				if (!modalResolved) {
-					modalResolved = true;
-					resolve({ success: false });
-				}
-				clearInterval(checkDismissal);
+				finish({ success: false });
+				if (checkDismissal !== undefined) clearInterval(checkDismissal);
 			}
 		}, 500);
 
-		// Clean up after 30 seconds maximum
-		setTimeout(() => {
-			if (!modalResolved) {
-				modalResolved = true;
-				resolve({ success: false });
-			}
-			clearInterval(checkDismissal);
-			if (modal && !modal.$$.destroyed) {
-				modal.$destroy();
-			}
-		}, 30000);
+		if (options?.timeout !== undefined) {
+			timeoutId = setTimeout(() => {
+				finish({ success: false });
+				cleanup();
+			}, options.timeout);
+		}
 	});
 };
 
