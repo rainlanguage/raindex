@@ -397,7 +397,19 @@ using-networks-from:
             "decimals": 18
         },
         "infoURL": "http://localhost:8085/info-url",
-        "shortName": "remote-network"
+        "shortName": "remote-network",
+        "explorers": [
+            {
+                "name": "Incompatible Explorer",
+                "url": "https://incompatible.example.com",
+                "standard": "none"
+            },
+            {
+                "name": "Remote Explorer",
+                "url": "https://explorer.example.com",
+                "standard": "EIP3091"
+            }
+        ]
     },
     {
         "name": "Remote2",
@@ -437,6 +449,10 @@ using-networks-from:
             vec![Url::parse("http://localhost:8085/rpc-url").unwrap()]
         );
         assert_eq!(network.chain_id, 123);
+        assert_eq!(
+            network.block_explorer,
+            Some(Url::parse("https://explorer.example.com").unwrap())
+        );
 
         let network = networks.get("remote2-network").unwrap();
         assert_eq!(network.key, "remote2-network");
@@ -445,6 +461,7 @@ using-networks-from:
             vec![Url::parse("http://localhost:8085/rpc-url").unwrap()]
         );
         assert_eq!(network.chain_id, 234);
+        assert_eq!(network.block_explorer, None);
     }
 
     #[test]

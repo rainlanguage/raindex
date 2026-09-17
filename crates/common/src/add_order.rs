@@ -642,6 +642,7 @@ price: 2e18;
             label: None,
             network_id: None,
             currency: None,
+            block_explorer: None,
         };
         let network_arc = Arc::new(network);
         let rainlang = RainlangCfg {
@@ -767,6 +768,7 @@ _ _: 0 0;
             label: None,
             network_id: None,
             currency: None,
+            block_explorer: None,
         };
         let network_arc = Arc::new(network);
         let rainlang = RainlangCfg {
@@ -933,6 +935,7 @@ _ _: 0 0;
             label: None,
             network_id: None,
             currency: None,
+            block_explorer: None,
         };
         let network_arc = Arc::new(network);
         let rainlang = RainlangCfg {
@@ -1279,6 +1282,7 @@ _ _: 16 52;
             label: None,
             network_id: None,
             currency: None,
+            block_explorer: None,
         };
         let network_arc = Arc::new(network);
         let rainlang = RainlangCfg {

@@ -127,10 +127,11 @@ compares logical data only.
 
 ### Networks (`network.rs`)
 
-- `NetworkCfg { key, rpcs: Vec<Url>, chain_id, label?, network_id?, currency? }`
+- `NetworkCfg { key, rpcs: Vec<Url>, chain_id, label?, network_id?, currency?, block_explorer? }`
   - `dummy()` and `Default` for tests.
   - Validators: `validate_rpc(&str) -> Url`, `validate_chain_id(&str) -> u64`,
-    `validate_network_id(&str) -> u32`.
+    `validate_network_id(&str) -> u32`, and
+    `validate_block_explorer(&str) -> Url` (HTTP(S) only).
   - Parse all: looks for `networks` map with entries shaped like:
     ```yaml
     networks:
@@ -140,6 +141,7 @@ compares logical data only.
         label: Ethereum Mainnet
         network-id: 1
         currency: ETH
+        block-explorer: https://etherscan.io
     ```
   - `parse_rpcs(documents, network_key)` reads just the `rpcs` vector for a
     named network.
@@ -380,7 +382,8 @@ merged into the model.
     requests and parses JSON into `ChainId` structures.
   - `ChainId::try_into_network_cfg` converts a chain into a `NetworkCfg` by
     selecting the first acceptable RPC URL (non‑WS and without `API_KEY`
-    placeholders). Key is the chain’s `shortName`.
+    placeholders). Key is the chain’s `shortName`; when available, the first
+    HTTP(S) EIP-3091 explorer URL becomes the network's block explorer.
   - Conflicts in produced network keys across sources yield
     `ConflictingNetworks`.
 

@@ -268,6 +268,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
             (
@@ -280,6 +281,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
         ]);
@@ -432,6 +434,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
             (
@@ -444,6 +447,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
             (
@@ -456,6 +460,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
             (
@@ -468,6 +473,7 @@ using-tokens-from:
                     label: None,
                     network_id: None,
                     currency: None,
+                    block_explorer: None,
                 },
             ),
         ]);
