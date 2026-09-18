@@ -309,7 +309,7 @@ describe("TransactionManager", () => {
       // Receipt already confirmed — timeout means indexing is slow, not that the tx failed.
       expect(mockContext.updateState).toHaveBeenCalledWith({
         status: TransactionStatusMessage.SUCCESS,
-        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+        errorDetails: TransactionStoreErrorMessage.INDEXING_CATCHING_UP,
       });
       expect(mockContext.onSuccess).toHaveBeenCalled();
       expect(mockContext.onError).not.toHaveBeenCalled();
@@ -919,7 +919,7 @@ describe("TransactionManager", () => {
       // Receipt already confirmed — timeout means indexing is slow, not that the tx failed.
       expect(mockContext.updateState).toHaveBeenCalledWith({
         status: TransactionStatusMessage.SUCCESS,
-        errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+        errorDetails: TransactionStoreErrorMessage.INDEXING_CATCHING_UP,
       });
       expect(mockContext.onSuccess).toHaveBeenCalled();
       expect(mockContext.onError).not.toHaveBeenCalled();
@@ -1335,7 +1335,7 @@ describe("createSdkIndexingFn", () => {
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.SUCCESS,
-      errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+      errorDetails: TransactionStoreErrorMessage.INDEXING_CATCHING_UP,
     });
     expect(mockOnSuccess).toHaveBeenCalled();
     expect(mockOnError).not.toHaveBeenCalled();
@@ -1354,7 +1354,7 @@ describe("createSdkIndexingFn", () => {
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.SUCCESS,
-      errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+      errorDetails: TransactionStoreErrorMessage.INDEXING_CATCHING_UP,
     });
     expect(mockOnSuccess).toHaveBeenCalled();
     expect(mockOnError).not.toHaveBeenCalled();
@@ -1376,7 +1376,7 @@ describe("createSdkIndexingFn", () => {
 
     expect(mockUpdateState).toHaveBeenCalledWith({
       status: TransactionStatusMessage.SUCCESS,
-      errorDetails: TransactionStoreErrorMessage.SUBGRAPH_TIMEOUT_ERROR,
+      errorDetails: TransactionStoreErrorMessage.INDEXING_CATCHING_UP,
     });
     expect(mockOnSuccess).toHaveBeenCalled();
     expect(mockOnError).not.toHaveBeenCalled();
