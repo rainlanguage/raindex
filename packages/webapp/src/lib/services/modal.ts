@@ -36,22 +36,11 @@ export const handleTransactionConfirmationModal = (
 	return new Promise((resolve) => {
 		const originalOnConfirm = props.args.onConfirm;
 		let modalResolved = false;
-		let checkDismissal: ReturnType<typeof setInterval> | undefined;
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-		let modal: InstanceType<typeof TransactionConfirmationModal>;
 
 		const finish = (result: TransactionConfirmationModalResult) => {
 			if (modalResolved) return;
 			modalResolved = true;
 			resolve(result);
-		};
-
-		const cleanup = () => {
-			if (checkDismissal !== undefined) clearInterval(checkDismissal);
-			if (timeoutId !== undefined) clearTimeout(timeoutId);
-			if (modal && !modal.$$.destroyed) {
-				modal.$destroy();
-			}
 		};
 
 		// Wrap the onConfirm to resolve our promise
@@ -63,7 +52,7 @@ export const handleTransactionConfirmationModal = (
 		// Honor closeOnConfirm from the caller. Take-order and withdraw pass false so
 		// the "Transaction submitted" state is visible; the old override to true hid
 		// confirmation even when the tx succeeded on-chain.
-		modal = new TransactionConfirmationModal({
+		const modal = new TransactionConfirmationModal({
 			target: document.body,
 			props: {
 				...props,
@@ -74,20 +63,29 @@ export const handleTransactionConfirmationModal = (
 			}
 		});
 
+		const cleanup = () => {
+			clearInterval(checkDismissal);
+			if (timeoutId !== undefined) clearTimeout(timeoutId);
+			if (!modal.$$.destroyed) {
+				modal.$destroy();
+			}
+		};
+
 		// Check periodically if modal was dismissed without an onClosed callback
-		checkDismissal = setInterval(() => {
+		const checkDismissal = setInterval(() => {
 			if (!modal.$$.ctx || modal.$$.destroyed) {
 				finish({ success: false });
-				if (checkDismissal !== undefined) clearInterval(checkDismissal);
+				clearInterval(checkDismissal);
 			}
 		}, 500);
 
-		if (options?.timeout !== undefined) {
-			timeoutId = setTimeout(() => {
-				finish({ success: false });
-				cleanup();
-			}, options.timeout);
-		}
+		const timeoutId =
+			options?.timeout !== undefined
+				? setTimeout(() => {
+						finish({ success: false });
+						cleanup();
+					}, options.timeout)
+				: undefined;
 	});
 };
 
