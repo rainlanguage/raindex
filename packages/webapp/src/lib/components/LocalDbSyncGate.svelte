@@ -32,28 +32,20 @@
 		$selectedChainIds.length === 0
 			? localDbChainIds
 			: localDbChainIds.filter((chainId) => $selectedChainIds.includes(chainId));
-	$: syncingChainIds =
-		$localDbSyncGate.status === 'syncing'
-			? relevantChainIds.filter(
-					(chainId) =>
-						$networkStatuses.get(chainId)?.status === 'syncing' ||
-						Array.from($raindexStatuses.values()).some(
-							(status) =>
-								status.raindexId.chainId === chainId && status.status === 'syncing'
-						)
-				)
-			: [];
-	$: failedChainIds =
-		$localDbSyncGate.status === 'failure'
-			? relevantChainIds.filter(
-					(chainId) =>
-						$networkStatuses.get(chainId)?.status === 'failure' ||
-						Array.from($raindexStatuses.values()).some(
-							(status) =>
-								status.raindexId.chainId === chainId && status.status === 'failure'
-						)
-				)
-			: [];
+	$: syncingChainIds = relevantChainIds.filter(
+		(chainId) =>
+			$networkStatuses.get(chainId)?.status === 'syncing' ||
+			Array.from($raindexStatuses.values()).some(
+				(status) => status.raindexId.chainId === chainId && status.status === 'syncing'
+			)
+	);
+	$: failedChainIds = relevantChainIds.filter(
+		(chainId) =>
+			$networkStatuses.get(chainId)?.status === 'failure' ||
+			Array.from($raindexStatuses.values()).some(
+				(status) => status.raindexId.chainId === chainId && status.status === 'failure'
+			)
+	);
 	$: syncingNetworkNames = syncingChainIds.map(
 		(chainId) => getConfiguredNetworkName(chainId)
 	);
