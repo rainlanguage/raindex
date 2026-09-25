@@ -28,6 +28,7 @@ ARB_RPC="${ARBITRUM_RPC_URL:-https://arbitrum.drpc.org}"
 BASE_RPC="${BASE_RPC_URL:-https://mainnet.base.org}"
 FLARE_RPC="${FLARE_RPC_URL:-https://flare-api.flare.network/ext/C/rpc}"
 POLY_RPC="${POLYGON_RPC_URL:-https://polygon.drpc.org}"
+ROBINHOOD_RPC="${ROBINHOOD_RPC_URL:-https://rpc.mainnet.chain.robinhood.com}"
 
 ADDR=$(grep -aoE 'DEPLOYED_ADDRESS = address\(0x[0-9a-fA-F]{40}' "$PTR" | grep -aoE '0x[0-9a-fA-F]{40}')
 [ -n "$ADDR" ] || { echo "could not read RAINDEX_DEPLOYED_ADDRESS from $PTR" >&2; exit 1; }
@@ -103,12 +104,13 @@ else
     OUT="STARTBLOCK arbitrum $(find_deploy_block "$ARB_RPC" "$ADDR")
 STARTBLOCK base $(find_deploy_block "$BASE_RPC" "$ADDR")
 STARTBLOCK flare $(find_deploy_block "$FLARE_RPC" "$ADDR")
-STARTBLOCK polygon $(find_deploy_block "$POLY_RPC" "$ADDR")"
+STARTBLOCK polygon $(find_deploy_block "$POLY_RPC" "$ADDR")
+STARTBLOCK robinhood $(find_deploy_block "$ROBINHOOD_RPC" "$ADDR")"
 fi
 
 get() { printf '%s\n' "$OUT" | grep -aoE "STARTBLOCK $1 [0-9]+" | grep -aoE '[0-9]+$' | head -1; }
-ARB=$(get arbitrum); BASE=$(get base); FLARE=$(get flare); POLY=$(get polygon)
-for pair in "arbitrum:$ARB" "base:$BASE" "flare:$FLARE" "polygon:$POLY"; do
+ARB=$(get arbitrum); BASE=$(get base); FLARE=$(get flare); POLY=$(get polygon); ROBINHOOD=$(get robinhood)
+for pair in "arbitrum:$ARB" "base:$BASE" "flare:$FLARE" "polygon:$POLY" "robinhood:$ROBINHOOD"; do
     [ -n "${pair#*:}" ] || { echo "missing start block for ${pair%%:*}; finder output:" >&2; printf '%s\n' "$OUT" >&2; exit 1; }
 done
 
@@ -116,14 +118,16 @@ sed -i -E "s/(RAINDEX_START_BLOCK_ARBITRUM = )[0-9]+/\1${ARB}/" "$LIB"
 sed -i -E "s/(RAINDEX_START_BLOCK_BASE = )[0-9]+/\1${BASE}/" "$LIB"
 sed -i -E "s/(RAINDEX_START_BLOCK_FLARE = )[0-9]+/\1${FLARE}/" "$LIB"
 sed -i -E "s/(RAINDEX_START_BLOCK_POLYGON = )[0-9]+/\1${POLY}/" "$LIB"
+sed -i -E "s/(RAINDEX_START_BLOCK_ROBINHOOD = )[0-9]+/\1${ROBINHOOD}/" "$LIB"
 
 sed -i -E "s/(address: \")0x[0-9a-fA-F]+(\")/\1${ADDR}\2/" "$YAML"
 
-jq --arg addr "$ADDR" --argjson arb "$ARB" --argjson base "$BASE" --argjson flare "$FLARE" --argjson poly "$POLY" '
+jq --arg addr "$ADDR" --argjson arb "$ARB" --argjson base "$BASE" --argjson flare "$FLARE" --argjson poly "$POLY" --argjson robinhood "$ROBINHOOD" '
     ."arbitrum-one".Raindex = {address: $addr, startBlock: $arb}
     | .matic.Raindex = {address: $addr, startBlock: $poly}
     | .base.Raindex = {address: $addr, startBlock: $base}
     | .flare.Raindex = {address: $addr, startBlock: $flare}
+    | .robinhood.Raindex = {address: $addr, startBlock: $robinhood}
 ' "$NET" >"${NET}.tmp" && mv "${NET}.tmp" "$NET"
 
-echo "start blocks: arbitrum=${ARB} base=${BASE} flare=${FLARE} polygon=${POLY}  address=${ADDR}"
+echo "start blocks: arbitrum=${ARB} base=${BASE} flare=${FLARE} polygon=${POLY} robinhood=${ROBINHOOD}  address=${ADDR}"
