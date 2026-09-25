@@ -83,4 +83,5 @@ library LibRaindexDeploy {
     uint256 constant RAINDEX_START_BLOCK_BASE = 47387582;
     uint256 constant RAINDEX_START_BLOCK_FLARE = 63011168;
     uint256 constant RAINDEX_START_BLOCK_POLYGON = 88573024;
+    uint256 constant RAINDEX_START_BLOCK_ROBINHOOD = 59557818;
 }
