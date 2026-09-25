@@ -10,7 +10,13 @@ use thiserror::Error;
 
 use super::RaindexIdentifier;
 
-const SKIPPED_TABLES: &[&str] = &["db_metadata", "sync_status"];
+const SKIPPED_TABLES: &[&str] = &[
+    "db_metadata",
+    "sync_status",
+    "raw_events",
+    "take_order_contexts",
+    "context_values",
+];
 
 #[derive(Debug, Deserialize)]
 struct TableInfoRow {
@@ -1261,20 +1267,6 @@ mod tests {
         ));
 
         out.push_str(&format!(
-            "INSERT INTO \"raw_events\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"address\", \"topics\", \"data\", \"raw_json\") VALUES ({}, '{}', 'raw_tx_{}', {}, {}, {}, 'address_{}', '[\"topic_{}\"]', 'data_{}', '{{\"event\":\"raw_{}\"}}');\n",
-            chain_id,
-            raindex,
-            label,
-            base,
-            block(base),
-            ts(base),
-            label,
-            label,
-            label,
-            label
-        ));
-
-        out.push_str(&format!(
             "INSERT INTO \"deposits\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"block_number\", \"block_timestamp\", \"sender\", \"token\", \"vault_id\", \"deposit_amount\", \"deposit_amount_uint256\") VALUES ({}, '{}', 'dep_tx_{}', {}, {}, {}, 'sender_{}', 'token_{}', 'vault_{}', 'amount_{}', 'uint_{}');\n",
             chain_id,
             raindex,
@@ -1346,24 +1338,6 @@ mod tests {
             label,
             label,
             label,
-            label
-        ));
-
-        out.push_str(&format!(
-            "INSERT INTO \"take_order_contexts\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"context_value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 'context_entry_{}');\n",
-            chain_id,
-            raindex,
-            label,
-            take_idx,
-            label
-        ));
-
-        out.push_str(&format!(
-            "INSERT INTO \"context_values\" (\"chain_id\", \"raindex_address\", \"transaction_hash\", \"log_index\", \"context_index\", \"value_index\", \"value\") VALUES ({}, '{}', 'take_tx_{}', {}, 0, 0, 'context_value_{}');\n",
-            chain_id,
-            raindex,
-            label,
-            take_idx,
             label
         ));
 
