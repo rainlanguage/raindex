@@ -195,8 +195,8 @@ mod tests {
         decoder.read_to_string(&mut sql).expect("decode gzip");
 
         assert!(
-            sql.contains("INSERT INTO \"raw_events\""),
-            "export should include raw_events data"
+            !sql.contains("INSERT INTO \"raw_events\""),
+            "export should omit raw_events data"
         );
         assert!(sql.starts_with("BEGIN;"));
         assert!(sql.ends_with("COMMIT;\n"));

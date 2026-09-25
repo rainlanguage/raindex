@@ -441,17 +441,18 @@ mod tests {
                 );",
             ));
             batch.add(SqlStatement::new(
-                "CREATE TABLE IF NOT EXISTS raw_events (
+                "CREATE TABLE IF NOT EXISTS deposits (
                     chain_id INTEGER NOT NULL,
                     raindex_address TEXT NOT NULL,
                     transaction_hash TEXT NOT NULL,
                     log_index INTEGER NOT NULL,
                     block_number INTEGER NOT NULL,
-                    block_timestamp INTEGER,
-                    address TEXT NOT NULL,
-                    topics TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    raw_json TEXT NOT NULL,
+                    block_timestamp INTEGER NOT NULL,
+                    sender TEXT NOT NULL,
+                    token TEXT NOT NULL,
+                    vault_id TEXT NOT NULL,
+                    deposit_amount TEXT NOT NULL,
+                    deposit_amount_uint256 TEXT NOT NULL,
                     PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
                 );",
             ));
@@ -535,15 +536,15 @@ mod tests {
         {
             self.ensure_tables(db).await?;
 
-            // Seed a raw event to force export_data_only to return Some, but skip watermark to trigger export failure.
+            // Seed an exported row but skip the watermark to trigger export failure.
             let raindex_id = &config.raindex_id;
             let raindex_address = encode_prefixed(raindex_id.raindex_address);
             let mut batch = SqlStatementBatch::new();
             batch.add(SqlStatement::new(format!(
-                "INSERT INTO raw_events (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
-                 VALUES ({}, '{}', '0xseedtx', 0, {}, 1_700_000_000, '{}', '[]', '0x00', '{{}}') \
+                "INSERT INTO deposits (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, sender, token, vault_id, deposit_amount, deposit_amount_uint256) \
+                 VALUES ({}, '{}', '0xseedtx', 0, {}, 1700000000, '{}', '{}', '1', '1', '1') \
                  ON CONFLICT(chain_id, raindex_address, transaction_hash, log_index) DO NOTHING;",
-                raindex_id.chain_id, raindex_address, config.latest_block, raindex_address
+                raindex_id.chain_id, raindex_address, config.latest_block, raindex_address, raindex_address
             )));
             db.execute_batch(&batch.ensure_transaction()).await?;
 
@@ -596,17 +597,18 @@ mod tests {
                 );",
             ));
             batch.add(SqlStatement::new(
-                "CREATE TABLE IF NOT EXISTS raw_events (
+                "CREATE TABLE IF NOT EXISTS deposits (
                     chain_id INTEGER NOT NULL,
                     raindex_address TEXT NOT NULL,
                     transaction_hash TEXT NOT NULL,
                     log_index INTEGER NOT NULL,
                     block_number INTEGER NOT NULL,
-                    block_timestamp INTEGER,
-                    address TEXT NOT NULL,
-                    topics TEXT NOT NULL,
-                    data TEXT NOT NULL,
-                    raw_json TEXT NOT NULL,
+                    block_timestamp INTEGER NOT NULL,
+                    sender TEXT NOT NULL,
+                    token TEXT NOT NULL,
+                    vault_id TEXT NOT NULL,
+                    deposit_amount TEXT NOT NULL,
+                    deposit_amount_uint256 TEXT NOT NULL,
                     PRIMARY KEY (chain_id, raindex_address, transaction_hash, log_index)
                 );",
             ));
@@ -702,14 +704,14 @@ mod tests {
 
                 let mut batch = SqlStatementBatch::new();
                 batch.add(SqlStatement::new(format!(
-                    "INSERT INTO raw_events (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, address, topics, data, raw_json) \
-                     VALUES ({}, '{}', '0xseedtx', 0, {}, 1_700_000_000, '{}', '[]', '0x00', '{{}}') \
+                    "INSERT INTO deposits (chain_id, raindex_address, transaction_hash, log_index, block_number, block_timestamp, sender, token, vault_id, deposit_amount, deposit_amount_uint256) \
+                     VALUES ({}, '{}', '0xseedtx', 0, {}, 1700000000, '{}', '{}', '1', '1', '1') \
                      ON CONFLICT(chain_id, raindex_address, transaction_hash, log_index) DO NOTHING;",
-                    raindex_id.chain_id, raindex_address, config.latest_block, raindex_address
+                    raindex_id.chain_id, raindex_address, config.latest_block, raindex_address, raindex_address
                 )));
                 batch.add(SqlStatement::new(format!(
                     "INSERT INTO target_watermarks (chain_id, raindex_address, last_block, last_hash, updated_at) \
-                     VALUES ({}, '{}', {}, '0xfeedface', 1_700_000_000_000) \
+                     VALUES ({}, '{}', {}, '0xfeedface', 1700000000000) \
                      ON CONFLICT(chain_id, raindex_address) DO UPDATE \
                      SET last_block = excluded.last_block, \
                          last_hash = excluded.last_hash, \
