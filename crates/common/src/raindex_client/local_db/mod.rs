@@ -9,7 +9,6 @@ use executor::JsCallbackExecutor;
 use serde_json::Value;
 #[cfg(target_family = "wasm")]
 use std::rc::Rc;
-#[cfg(not(target_family = "wasm"))]
 use std::sync::Arc;
 use std::{fmt, future::Future, pin::Pin};
 use wasm_bindgen_utils::prelude::*;
@@ -43,6 +42,10 @@ type ExecuteBatchFn = dyn Fn(
     ) -> Pin<Box<dyn Future<Output = Result<(), LocalDbQueryError>> + Send + 'static>>
     + Send
     + Sync;
+
+#[cfg(target_family = "wasm")]
+type ExecuteDumpFn =
+    dyn Fn(Arc<String>) -> Pin<Box<dyn Future<Output = Result<(), LocalDbQueryError>> + 'static>>;
 
 #[cfg(target_family = "wasm")]
 type QueryTextFn =
@@ -84,6 +87,8 @@ type FnPtr<T> = Arc<T>;
 #[derive(Clone)]
 pub struct LocalDb {
     execute_batch_fn: FnPtr<ExecuteBatchFn>,
+    #[cfg(target_family = "wasm")]
+    execute_dump_fn: FnPtr<ExecuteDumpFn>,
     query_text_fn: FnPtr<QueryTextFn>,
     query_json_fn: FnPtr<QueryJsonFn>,
     wipe_and_recreate_fn: FnPtr<WipeAndRecreateFn>,
@@ -103,6 +108,14 @@ impl LocalDb {
                 let exec = Rc::clone(&exec);
                 let batch = batch.clone();
                 Box::pin(async move { exec.execute_batch(&batch).await })
+            })
+        };
+
+        let execute_dump_fn: FnPtr<ExecuteDumpFn> = {
+            let exec = Rc::clone(&exec);
+            Rc::new(move |dump: Arc<String>| {
+                let exec = Rc::clone(&exec);
+                Box::pin(async move { exec.execute_sql_dump(dump).await })
             })
         };
 
@@ -134,6 +147,7 @@ impl LocalDb {
 
         Self {
             execute_batch_fn,
+            execute_dump_fn,
             query_text_fn,
             query_json_fn,
             wipe_and_recreate_fn,
@@ -208,6 +222,11 @@ impl fmt::Debug for LocalDb {
 impl LocalDbQueryExecutor for LocalDb {
     async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
         (self.execute_batch_fn)(batch).await
+    }
+
+    #[cfg(target_family = "wasm")]
+    async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
+        (self.execute_dump_fn)(dump).await
     }
 
     async fn query_json<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
@@ -424,23 +443,7 @@ raindexes:
     }
 
     fn test_local_db(query: js_sys::Function) -> JsValue {
-        let local_db = js_sys::Object::new();
-        js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &query).unwrap();
-        js_sys::Reflect::set(
-            &local_db,
-            &JsValue::from_str("wipeAndRecreate"),
-            &js_sys::Function::new_no_args(
-                "return Promise.resolve({ value: undefined, error: null });",
-            ),
-        )
-        .unwrap();
-        js_sys::Reflect::set(
-            &local_db,
-            &JsValue::from_str("transaction"),
-            &js_sys::Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
-        )
-        .unwrap();
-        local_db.into()
+        crate::raindex_client::tests::local_db_object_from_query_callback(query)
     }
 
     fn recording_status_callback(

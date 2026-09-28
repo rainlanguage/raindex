@@ -11,6 +11,7 @@ use crate::local_db::{
     LocalDbError, RaindexIdentifier,
 };
 use std::collections::HashSet;
+use std::sync::Arc;
 
 const BOOTSTRAP_CACHE_SIZE_SQL: &str = "PRAGMA cache_size = -25000";
 
@@ -106,14 +107,28 @@ impl ClientBootstrapAdapter {
     async fn apply_dump<DB>(
         &self,
         db: &DB,
-        dump_stmt: &SqlStatementBatch,
+        dump_sql: Option<&Arc<String>>,
+        dump_stmt: Option<&SqlStatementBatch>,
     ) -> Result<(), LocalDbError>
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
         db.query_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL))
             .await?;
-        db.execute_batch(dump_stmt).await?;
+        #[cfg(not(target_family = "wasm"))]
+        let _ = dump_sql;
+        #[cfg(target_family = "wasm")]
+        if let Some(dump_sql) = dump_sql {
+            db.execute_sql_dump(Arc::clone(dump_sql))
+                .await
+                .map_err(LocalDbError::DumpImportFailed)?;
+        } else if let Some(dump_stmt) = dump_stmt {
+            db.execute_batch(dump_stmt).await?;
+        }
+        #[cfg(not(target_family = "wasm"))]
+        if let Some(dump_stmt) = dump_stmt {
+            db.execute_batch(dump_stmt).await?;
+        }
         Ok(())
     }
 }
@@ -128,9 +143,10 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
             last_synced_block, ..
         } = self.inspect_state(db, &config.raindex_id).await?;
 
-        if let Some(dump_stmt) = config.dump_stmt.as_ref() {
+        if config.dump_sql.is_some() || config.dump_stmt.is_some() {
             if self.is_fresh_db(db, &config.raindex_id).await? {
-                self.apply_dump(db, dump_stmt).await?;
+                self.apply_dump(db, config.dump_sql.as_ref(), config.dump_stmt.as_ref())
+                    .await?;
                 return Ok(());
             }
 
@@ -142,7 +158,8 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
                 Ok(_) => {}
                 Err(_) => {
                     self.clear_raindex_data(db, &config.raindex_id).await?;
-                    self.apply_dump(db, dump_stmt).await?;
+                    self.apply_dump(db, config.dump_sql.as_ref(), config.dump_stmt.as_ref())
+                        .await?;
                 }
             }
         }
@@ -354,6 +371,7 @@ mod tests {
     fn cfg_with_dump(latest_block: u64) -> BootstrapConfig {
         BootstrapConfig {
             raindex_id: sample_ob_id(),
+            dump_sql: None,
             dump_stmt: Some(SqlStatementBatch::from(vec![SqlStatement::new(
                 "--dump-sql",
             )])),
@@ -764,6 +782,7 @@ mod tests {
         let dump_stmt = SqlStatement::new("--dump-sql");
         let cfg = BootstrapConfig {
             raindex_id: sample_ob_id(),
+            dump_sql: None,
             dump_stmt: Some(SqlStatementBatch::from(vec![dump_stmt.clone()])),
             latest_block: 100,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -796,6 +815,7 @@ mod tests {
         let dump_stmt = SqlStatement::new("--dump-sql");
         let cfg = BootstrapConfig {
             raindex_id: sample_ob_id(),
+            dump_sql: None,
             dump_stmt: Some(SqlStatementBatch::from(vec![dump_stmt.clone()])),
             latest_block: latest,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -877,6 +897,7 @@ mod tests {
         let latest = last_synced + u64::from(TEST_BLOCK_NUMBER_THRESHOLD) + 5;
         let cfg = BootstrapConfig {
             raindex_id: sample_ob_id(),
+            dump_sql: None,
             dump_stmt: None,
             latest_block: latest,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,
@@ -904,6 +925,7 @@ mod tests {
         let dump_stmt = SqlStatement::new("--dump-sql");
         let cfg = BootstrapConfig {
             raindex_id: sample_ob_id(),
+            dump_sql: None,
             dump_stmt: Some(SqlStatementBatch::from(vec![dump_stmt.clone()])),
             latest_block: latest,
             block_number_threshold: TEST_BLOCK_NUMBER_THRESHOLD,

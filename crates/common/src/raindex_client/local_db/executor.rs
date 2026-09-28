@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use js_sys::{Array, BigInt, Object, Reflect};
 use std::rc::Rc;
+use std::sync::Arc;
 use wasm_bindgen_utils::prelude::wasm_bindgen_futures::JsFuture;
 use wasm_bindgen_utils::prelude::JsCast;
 use wasm_bindgen_utils::result::WasmEncodedResult;
@@ -16,6 +17,10 @@ pub struct JsCallbackExecutor {
     query_callback: js_sys::Function,
     wipe_callback: js_sys::Function,
     transaction_callback: js_sys::Function,
+    begin_import_callback: js_sys::Function,
+    append_import_callback: js_sys::Function,
+    finish_import_callback: js_sys::Function,
+    cancel_import_callback: js_sys::Function,
     serialize: Rc<Mutex<()>>,
 }
 
@@ -24,12 +29,20 @@ impl JsCallbackExecutor {
         let query_callback = method(&local_db, "query")?;
         let wipe_callback = method(&local_db, "wipeAndRecreate")?;
         let transaction_callback = method(&local_db, "transaction")?;
+        let begin_import_callback = method(&local_db, "beginSqlDumpImport")?;
+        let append_import_callback = method(&local_db, "appendSqlDumpChunk")?;
+        let finish_import_callback = method(&local_db, "finishSqlDumpImport")?;
+        let cancel_import_callback = method(&local_db, "cancelSqlDumpImport")?;
 
         Ok(Self {
             local_db,
             query_callback,
             wipe_callback,
             transaction_callback,
+            begin_import_callback,
+            append_import_callback,
+            finish_import_callback,
+            cancel_import_callback,
             serialize: Rc::new(Mutex::new(())),
         })
     }
@@ -42,6 +55,10 @@ impl JsCallbackExecutor {
             query_callback: query_callback.clone(),
             wipe_callback: js_sys::Function::new_no_args("return undefined"),
             transaction_callback: js_sys::Function::new_no_args("return undefined"),
+            begin_import_callback: js_sys::Function::new_no_args("return undefined"),
+            append_import_callback: js_sys::Function::new_no_args("return undefined"),
+            finish_import_callback: js_sys::Function::new_no_args("return undefined"),
+            cancel_import_callback: js_sys::Function::new_no_args("return undefined"),
             serialize: Rc::new(Mutex::new(())),
         }
     }
@@ -82,15 +99,7 @@ impl JsCallbackExecutor {
             LocalDbQueryError::database(format!("Promise resolution failed: {:?}", e))
         })?;
 
-        let wasm_result: WasmEncodedResult<String> = serde_wasm_bindgen::from_value(js_result)
-            .map_err(|_| LocalDbQueryError::invalid_response())?;
-
-        match wasm_result {
-            WasmEncodedResult::Success { value, .. } => Ok(value),
-            WasmEncodedResult::Err { error, .. } => {
-                Err(LocalDbQueryError::database(error.readable_msg))
-            }
-        }
+        decode_string_result(js_result)
     }
 
     async fn invoke_statement(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
@@ -124,16 +133,72 @@ impl JsCallbackExecutor {
             LocalDbQueryError::database(format!("Transaction promise resolution failed: {:?}", e))
         })?;
 
-        let wasm_result: WasmEncodedResult<String> = serde_wasm_bindgen::from_value(js_result)
-            .map_err(|_| LocalDbQueryError::invalid_response())?;
+        decode_string_result(js_result).map(|_| ())
+    }
 
-        match wasm_result {
-            WasmEncodedResult::Success { .. } => Ok(()),
-            WasmEncodedResult::Err { error, .. } => {
-                Err(LocalDbQueryError::database(error.readable_msg))
+    async fn invoke_import_unlocked(
+        &self,
+        callback: &js_sys::Function,
+        args: ImportArgs<'_>,
+    ) -> Result<String, LocalDbQueryError> {
+        let result = match args {
+            ImportArgs::Begin => callback.call0(&self.local_db),
+            ImportArgs::Session(id) => callback.call1(&self.local_db, &JsValue::from_str(id)),
+            ImportArgs::Chunk(id, sql) => callback.call2(
+                &self.local_db,
+                &JsValue::from_str(id),
+                &JsValue::from_str(sql),
+            ),
+        }
+        .map_err(|e| {
+            LocalDbQueryError::database(format!("JavaScript import callback failed: {e:?}"))
+        })?;
+        let js_result = JsFuture::from(js_sys::Promise::resolve(&result))
+            .await
+            .map_err(|e| LocalDbQueryError::database(format!("Import promise failed: {e:?}")))?;
+        decode_string_result(js_result)
+    }
+
+    async fn append_import_sql(&self, id: &str, sql: &str) -> Result<(), LocalDbQueryError> {
+        const CHUNK_BYTES: usize = 256 * 1024;
+        let mut start = 0;
+        while start < sql.len() {
+            let mut end = (start + CHUNK_BYTES).min(sql.len());
+            while !sql.is_char_boundary(end) {
+                end -= 1;
             }
+            self.invoke_import_unlocked(
+                &self.append_import_callback,
+                ImportArgs::Chunk(id, &sql[start..end]),
+            )
+            .await?;
+            start = end;
+        }
+        Ok(())
+    }
+}
+
+enum ImportArgs<'a> {
+    Begin,
+    Session(&'a str),
+    Chunk(&'a str, &'a str),
+}
+
+fn decode_string_result(value: JsValue) -> Result<String, LocalDbQueryError> {
+    let result: WasmEncodedResult<String> =
+        serde_wasm_bindgen::from_value(value).map_err(|_| LocalDbQueryError::invalid_response())?;
+    match result {
+        WasmEncodedResult::Success { value, .. } => Ok(value),
+        WasmEncodedResult::Err { error, .. } => {
+            Err(LocalDbQueryError::database(error.readable_msg))
         }
     }
+}
+
+#[derive(serde::Deserialize)]
+struct IndexDefinition {
+    name: String,
+    sql: String,
 }
 
 fn transaction_statement(sql: &str, params: &[SqlValue]) -> Result<Object, LocalDbQueryError> {
@@ -188,6 +253,68 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         }
 
         self.invoke_transaction_unlocked(batch).await
+    }
+
+    async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
+        let _guard = self.serialize.lock().await;
+        // The producer wraps its data-only dump in BEGIN/COMMIT. Keep index
+        // changes inside that same worker-owned import transaction.
+        let data_sql = dump
+            .trim()
+            .strip_prefix("BEGIN;")
+            .and_then(|sql| sql.strip_suffix("COMMIT;"))
+            .ok_or_else(|| {
+                LocalDbQueryError::database("Unsupported SQL dump transaction markers")
+            })?;
+        // All targets share this executor lock. Defer index construction for the
+        // first dump in a fresh database; rebuilding global indexes for every
+        // additional target would repeat the most expensive part of bootstrap.
+        let watermarks = self
+            .invoke_statement_unlocked(&SqlStatement::new(
+                "SELECT 1 AS present FROM target_watermarks LIMIT 1",
+            ))
+            .await?;
+        let has_watermarks: Vec<serde_json::Value> =
+            serde_json::from_str(&watermarks).map_err(|_| LocalDbQueryError::invalid_response())?;
+        let mut prefix = String::from("BEGIN;\n");
+        let mut suffix = String::new();
+        if has_watermarks.is_empty() {
+            let index_rows = self
+                .invoke_statement_unlocked(&SqlStatement::new(
+                    "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
+                ))
+                .await?;
+            let index_rows: Vec<IndexDefinition> = serde_json::from_str(&index_rows)
+                .map_err(|_| LocalDbQueryError::invalid_response())?;
+            for row in &index_rows {
+                prefix.push_str(&format!(
+                    "DROP INDEX \"{}\";\n",
+                    row.name.replace('"', "\"\"")
+                ));
+                suffix.push_str(&row.sql);
+                suffix.push_str(";\n");
+            }
+        }
+        suffix.push_str("COMMIT;\n");
+
+        let id = self
+            .invoke_import_unlocked(&self.begin_import_callback, ImportArgs::Begin)
+            .await?;
+        let import_result = async {
+            self.append_import_sql(&id, &prefix).await?;
+            self.append_import_sql(&id, data_sql).await?;
+            self.append_import_sql(&id, &suffix).await?;
+            self.invoke_import_unlocked(&self.finish_import_callback, ImportArgs::Session(&id))
+                .await?;
+            Ok(())
+        }
+        .await;
+        if import_result.is_err() {
+            let _ = self
+                .invoke_import_unlocked(&self.cancel_import_callback, ImportArgs::Session(&id))
+                .await;
+        }
+        import_result
     }
 
     async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
@@ -309,6 +436,19 @@ pub mod tests {
             }
             if let Some(transaction) = transaction {
                 Reflect::set(&local_db, &JsValue::from_str("transaction"), &transaction).unwrap();
+            }
+            for name in [
+                "beginSqlDumpImport",
+                "appendSqlDumpChunk",
+                "finishSqlDumpImport",
+                "cancelSqlDumpImport",
+            ] {
+                Reflect::set(
+                    &local_db,
+                    &JsValue::from_str(name),
+                    &Function::new_no_args("return { value: '', error: null };"),
+                )
+                .unwrap();
             }
             local_db.into()
         }
@@ -707,6 +847,151 @@ pub mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("wipe failed readable"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn sql_dump_import_keeps_indexes_and_data_in_one_bounded_session() {
+            use std::cell::RefCell;
+            use wasm_bindgen::prelude::Closure;
+
+            let chunks = Rc::new(RefCell::new(Vec::<String>::new()));
+            let captured = Rc::clone(&chunks);
+            let append = Closure::wrap(Box::new(move |id: String, sql: String| -> JsValue {
+                assert_eq!(id, "session");
+                assert!(sql.len() <= 256 * 1024);
+                captured.borrow_mut().push(sql);
+                serde_wasm_bindgen::to_value(&WasmEncodedResult::success(String::new())).unwrap()
+            }) as Box<dyn FnMut(String, String) -> JsValue>);
+            let local_db = create_local_db(
+                Some(Function::new_with_args(
+                    "sql",
+                    "return sql.includes('target_watermarks') ? { value: '[]', error: null } : { value: '[{\"name\":\"idx_t_value\",\"sql\":\"CREATE INDEX idx_t_value ON t(value)\"}]', error: null };",
+                )),
+                Some(success_wipe_callback()),
+                Some(success_transaction_callback()),
+            );
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("beginSqlDumpImport"),
+                &Function::new_no_args("return { value: 'session', error: null };"),
+            )
+            .unwrap();
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("appendSqlDumpChunk"),
+                append.as_ref(),
+            )
+            .unwrap();
+            append.forget();
+            let exec = JsCallbackExecutor::new(local_db).unwrap();
+            let inserts = "INSERT INTO t VALUES ('😀');\n".repeat(30_000);
+            let dump = Arc::new(format!("BEGIN;\n{inserts}COMMIT;\n"));
+            exec.execute_sql_dump(dump).await.unwrap();
+
+            let chunks = chunks.borrow();
+            assert!(chunks.len() > 3);
+            let sql = chunks.concat();
+            assert!(sql.starts_with("BEGIN;\nDROP INDEX \"idx_t_value\";"));
+            assert!(sql.contains(&inserts));
+            assert!(sql.ends_with("CREATE INDEX idx_t_value ON t(value);\nCOMMIT;\n"));
+            assert_eq!(sql.matches("BEGIN;").count(), 1);
+            assert_eq!(sql.matches("COMMIT;").count(), 1);
+        }
+
+        #[wasm_bindgen_test]
+        async fn later_dump_keeps_existing_indexes() {
+            use std::cell::RefCell;
+            use wasm_bindgen::prelude::Closure;
+
+            let chunks = Rc::new(RefCell::new(Vec::<String>::new()));
+            let captured = Rc::clone(&chunks);
+            let append = Closure::wrap(Box::new(move |_id: String, sql: String| -> JsValue {
+                captured.borrow_mut().push(sql);
+                serde_wasm_bindgen::to_value(&WasmEncodedResult::success(String::new())).unwrap()
+            }) as Box<dyn FnMut(String, String) -> JsValue>);
+            let local_db = create_local_db(
+                Some(Function::new_with_args(
+                    "sql",
+                    "if (!sql.includes('target_watermarks')) throw new Error('unexpected index query'); return { value: '[{\"present\":1}]', error: null };",
+                )),
+                Some(success_wipe_callback()),
+                Some(success_transaction_callback()),
+            );
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("beginSqlDumpImport"),
+                &Function::new_no_args("return { value: 'session', error: null };"),
+            )
+            .unwrap();
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("appendSqlDumpChunk"),
+                append.as_ref(),
+            )
+            .unwrap();
+            append.forget();
+
+            let exec = JsCallbackExecutor::new(local_db).unwrap();
+            exec.execute_sql_dump(Arc::new(
+                "BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string(),
+            ))
+            .await
+            .unwrap();
+
+            let sql = chunks.borrow().concat();
+            assert_eq!(sql.matches("BEGIN;").count(), 1);
+            assert_eq!(sql.matches("COMMIT;").count(), 1);
+            assert!(!sql.contains("DROP INDEX"));
+            assert!(!sql.contains("CREATE INDEX"));
+            assert!(sql.contains("INSERT INTO t VALUES (1);"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn sql_dump_import_cancels_after_chunk_error() {
+            use std::cell::Cell;
+            use wasm_bindgen::prelude::Closure;
+
+            let cancelled = Rc::new(Cell::new(false));
+            let cancelled_flag = Rc::clone(&cancelled);
+            let cancel = Closure::wrap(Box::new(move |_id: String| -> JsValue {
+                cancelled_flag.set(true);
+                serde_wasm_bindgen::to_value(&WasmEncodedResult::success(String::new())).unwrap()
+            }) as Box<dyn FnMut(String) -> JsValue>);
+            let local_db = create_local_db(
+                Some(create_success_callback("[]")),
+                Some(success_wipe_callback()),
+                Some(success_transaction_callback()),
+            );
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("beginSqlDumpImport"),
+                &Function::new_no_args("return { value: 'session', error: null };"),
+            )
+            .unwrap();
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("appendSqlDumpChunk"),
+                &Function::new_no_args(
+                    "return { value: null, error: { msg: 'bad SQL', readableMsg: 'bad SQL' } };",
+                ),
+            )
+            .unwrap();
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("cancelSqlDumpImport"),
+                cancel.as_ref(),
+            )
+            .unwrap();
+            cancel.forget();
+
+            let exec = JsCallbackExecutor::new(local_db).unwrap();
+            let result = exec
+                .execute_sql_dump(Arc::new(
+                    "BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string(),
+                ))
+                .await;
+            assert!(result.is_err());
+            assert!(cancelled.get());
         }
     }
 }

@@ -985,6 +985,21 @@ accounts:
             &js_sys::Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
         )
         .unwrap();
+        for name in [
+            "beginSqlDumpImport",
+            "appendSqlDumpChunk",
+            "finishSqlDumpImport",
+            "cancelSqlDumpImport",
+        ] {
+            js_sys::Reflect::set(
+                &local_db,
+                &JsValue::from_str(name),
+                &js_sys::Function::new_no_args(
+                    "return Promise.resolve({ value: '', error: null });",
+                ),
+            )
+            .unwrap();
+        }
         local_db.into()
     }
 
@@ -1432,6 +1447,21 @@ raindexes:
                 js_sys::Reflect::set(
                     &local_db,
                     &JsValue::from_str("transaction"),
+                    &js_sys::Function::new_no_args(
+                        "return Promise.resolve({ value: '', error: null });",
+                    ),
+                )
+                .unwrap();
+            }
+            for name in [
+                "beginSqlDumpImport",
+                "appendSqlDumpChunk",
+                "finishSqlDumpImport",
+                "cancelSqlDumpImport",
+            ] {
+                js_sys::Reflect::set(
+                    &local_db,
+                    &JsValue::from_str(name),
                     &js_sys::Function::new_no_args(
                         "return Promise.resolve({ value: '', error: null });",
                     ),

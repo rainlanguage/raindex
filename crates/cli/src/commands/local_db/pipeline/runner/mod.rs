@@ -293,7 +293,7 @@ where
                 .await
                 .map_err(|error| mk_failure(TargetStage::DumpDownload, error))?;
             SyncInputs {
-                dump_str: Some(dump_sql),
+                dump_str: Some(std::sync::Arc::new(dump_sql)),
                 ..inputs
             }
         }
@@ -548,8 +548,13 @@ mod tests {
             )));
             db.execute_batch(&batch.ensure_transaction()).await?;
 
-            self.telemetry
-                .record_bootstrap_dump(config.dump_stmt.as_ref().map(dump_sql));
+            self.telemetry.record_bootstrap_dump(
+                config
+                    .dump_sql
+                    .as_ref()
+                    .map(|sql| sql.as_str().to_owned())
+                    .or_else(|| config.dump_stmt.as_ref().map(dump_sql)),
+            );
             Ok(())
         }
 
@@ -694,7 +699,11 @@ mod tests {
                 panic!("stub bootstrap panic");
             }
 
-            let dump_stmt = config.dump_stmt.as_ref().map(dump_sql);
+            let dump_stmt = config
+                .dump_sql
+                .as_ref()
+                .map(|sql| sql.as_str().to_owned())
+                .or_else(|| config.dump_stmt.as_ref().map(dump_sql));
             self.telemetry.record_bootstrap_dump(dump_stmt);
             self.ensure_tables(db).await?;
 

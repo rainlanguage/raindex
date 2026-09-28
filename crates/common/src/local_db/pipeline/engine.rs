@@ -10,11 +10,14 @@ use crate::local_db::decode::{
 };
 use crate::local_db::query::fetch_erc20_tokens_by_addresses::Erc20TokenRow;
 use crate::local_db::query::fetch_store_addresses::{fetch_store_addresses_stmt, StoreAddressRow};
-use crate::local_db::query::{LocalDbQueryExecutor, SqlStatement, SqlStatementBatch};
+use crate::local_db::query::LocalDbQueryExecutor;
+#[cfg(not(target_family = "wasm"))]
+use crate::local_db::query::{SqlStatement, SqlStatementBatch};
 use crate::local_db::{LocalDbError, RaindexIdentifier};
 use crate::rpc_client::LogEntryResponse;
 use alloy::primitives::Address;
 use std::collections::{BTreeSet, HashSet};
+use std::sync::Arc;
 use url::Url;
 
 /// Generic engine that orchestrates a full sync cycle by delegating
@@ -34,7 +37,9 @@ pub struct SyncInputs {
     pub raindex_id: RaindexIdentifier,
     pub metadata_rpcs: Vec<Url>,
     pub cfg: SyncConfig,
-    pub dump_str: Option<String>,
+    pub dump_str: Option<Arc<String>>,
+    /// The browser runner will analyze once after all dump targets finish.
+    pub defer_analyze: bool,
     pub block_number_threshold: u32,
     pub manifest_end_block: u64,
 }
@@ -112,6 +117,7 @@ where
                     raindex_id: input.raindex_id.clone(),
                     start_block,
                     target_block,
+                    defer_analyze: input.defer_analyze,
                     hash: target_hash,
                 },
                 raw_logs: &all_raw_logs,
@@ -154,11 +160,14 @@ where
                 db,
                 &BootstrapConfig {
                     raindex_id: input.raindex_id.clone(),
+                    dump_sql: input.dump_str.clone(),
+                    #[cfg(target_family = "wasm")]
+                    dump_stmt: None,
+                    #[cfg(not(target_family = "wasm"))]
                     dump_stmt: input.dump_str.as_ref().map(|value| {
                         let mut batch_stmt = SqlStatementBatch::new();
                         for line in value.lines() {
-                            let stmt = SqlStatement::new(line);
-                            batch_stmt.add(stmt);
+                            batch_stmt.add(SqlStatement::new(line));
                         }
                         batch_stmt
                     }),
@@ -508,6 +517,7 @@ mod tests {
                 window_overrides: WindowOverrides::default(),
             },
             dump_str: None,
+            defer_analyze: false,
             block_number_threshold: 10_000,
             manifest_end_block: 1,
         }
@@ -1598,7 +1608,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn run_passes_dump_statement_to_bootstrap() {
+    async fn run_passes_dump_sql_to_bootstrap() {
         let harness = EngineHarness::new();
         harness.events.set_latest_blocks(vec![Ok(30)]);
         harness.window.set_results(vec![Ok((3, 3))]);
@@ -1618,17 +1628,21 @@ mod tests {
             .tokens
             .set_fetch_missing_results(vec![Ok(Vec::new())]);
         let mut inputs = base_inputs();
-        inputs.dump_str = Some("SELECT 1".into());
+        inputs.dump_str = Some(Arc::new("SELECT 1".into()));
 
         harness.run(&inputs).await.expect("run succeeds");
 
         let configs = harness.bootstrap.configs();
         assert_eq!(configs.len(), 1);
         let config = &configs[0];
-        let dump_stmt = config.dump_stmt.as_ref().expect("dump statement present");
-        let statements = dump_stmt.statements();
-        assert_eq!(statements.len(), 1);
-        assert_eq!(statements[0].sql(), "SELECT 1");
+        assert_eq!(
+            config.dump_sql.as_ref().map(|s| s.as_str()),
+            Some("SELECT 1")
+        );
+        assert_eq!(
+            config.dump_stmt.as_ref().map(SqlStatementBatch::len),
+            Some(1)
+        );
         assert_eq!(config.deployment_block, inputs.cfg.deployment_block);
         assert_eq!(config.block_number_threshold, inputs.block_number_threshold);
         assert_eq!(config.latest_block, inputs.manifest_end_block);

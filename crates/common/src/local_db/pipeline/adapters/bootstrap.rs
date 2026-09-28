@@ -15,10 +15,12 @@ use crate::local_db::RaindexIdentifier;
 use async_trait::async_trait;
 use raindex_app_settings::local_db_manifest::DB_SCHEMA_VERSION;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct BootstrapConfig {
     pub raindex_id: RaindexIdentifier,
+    pub dump_sql: Option<Arc<String>>,
     pub dump_stmt: Option<SqlStatementBatch>,
     pub latest_block: u64,
     pub block_number_threshold: u32,
@@ -748,6 +750,7 @@ mod tests {
         let db = MockDb::default();
         let cfg = BootstrapConfig {
             raindex_id: RaindexIdentifier::new(1, Address::ZERO),
+            dump_sql: None,
             dump_stmt: None,
             latest_block: 0,
             block_number_threshold: 10_000,

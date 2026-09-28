@@ -3,6 +3,8 @@ pub mod environment;
 pub mod leadership;
 pub mod scheduler;
 
+#[cfg(target_family = "wasm")]
+use crate::local_db::query::SqlStatement;
 use crate::local_db::{
     pipeline::runner::TargetStage,
     pipeline::{
@@ -191,6 +193,18 @@ where
             let (provisioned, mut provisioning_failures) =
                 self.provision_dumps(db, targets, &on_phase).await;
             let had_provisioning_failures = !provisioning_failures.is_empty();
+            #[cfg(target_family = "wasm")]
+            let mut provisioned = provisioned;
+            #[cfg(target_family = "wasm")]
+            let had_downloaded_dump = provisioned
+                .iter()
+                .any(|target| target.inputs.dump_str.is_some());
+            #[cfg(target_family = "wasm")]
+            if had_downloaded_dump {
+                for target in &mut provisioned {
+                    target.inputs.defer_analyze = true;
+                }
+            }
             targets = provisioned;
 
             let RunReport {
@@ -198,9 +212,20 @@ where
                 failures: mut run_failures,
             } = self.execute_targets(db, targets).await?;
 
+            let had_import_failure = run_failures
+                .iter()
+                .any(|failure| matches!(failure.error, LocalDbError::DumpImportFailed(_)));
+
             provisioning_failures.append(&mut run_failures);
 
-            if !had_provisioning_failures {
+            // Imports already rebuilt indexes atomically. Analyze the final
+            // combined database once, after all targets have finished.
+            #[cfg(target_family = "wasm")]
+            if had_downloaded_dump {
+                db.query_text(&SqlStatement::new("ANALYZE")).await?;
+            }
+
+            if !had_provisioning_failures && !had_import_failure {
                 self.has_provisioned_dumps = true;
             }
 
@@ -252,7 +277,7 @@ where
                     let dump_sql = environment.download_dump(&entry.dump_url).await;
                     return match dump_sql {
                         Ok(sql) => {
-                            target.inputs.dump_str = Some(sql);
+                            target.inputs.dump_str = Some(std::sync::Arc::new(sql));
                             Ok(target)
                         }
                         Err(error) => Err(TargetFailure {
@@ -619,6 +644,7 @@ mod tests {
     enum EngineBehavior {
         Success,
         ApplyFail,
+        ImportFailOnce,
     }
 
     #[derive(Clone, Default)]
@@ -723,6 +749,7 @@ mod tests {
     struct StubBootstrap {
         telemetry: Telemetry,
         raindex_key: String,
+        fail_import_once: bool,
     }
 
     impl StubBootstrap {
@@ -730,6 +757,7 @@ mod tests {
             Self {
                 telemetry,
                 raindex_key,
+                fail_import_once: false,
             }
         }
     }
@@ -791,12 +819,29 @@ mod tests {
         where
             DB: LocalDbQueryExecutor + ?Sized,
         {
-            let dump_sql = config.dump_stmt.as_ref().map(dump_sql);
+            let dump_sql = config
+                .dump_sql
+                .as_ref()
+                .map(|sql| sql.as_str().to_owned())
+                .or_else(|| config.dump_stmt.as_ref().map(dump_sql));
             self.telemetry.record_bootstrap(
                 self.raindex_key.clone(),
                 dump_sql,
                 config.latest_block,
             );
+            if self.fail_import_once
+                && self
+                    .telemetry
+                    .bootstrap_records()
+                    .iter()
+                    .filter(|record| record.raindex_key == self.raindex_key)
+                    .count()
+                    == 1
+            {
+                return Err(LocalDbError::DumpImportFailed(LocalDbQueryError::database(
+                    "test import failure",
+                )));
+            }
             Ok(())
         }
 
@@ -1221,7 +1266,8 @@ raindexes:
             let telemetry = telemetry.clone();
             telemetry.record_builder_init();
             let fail_apply = behavior == EngineBehavior::ApplyFail;
-            let bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
+            let mut bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
+            bootstrap.fail_import_once = behavior == EngineBehavior::ImportFailOnce;
             let window = StubWindow::new(0, target.inputs.cfg.deployment_block);
             let events = StubEvents::new(target.inputs.cfg.deployment_block);
             let apply = StubApply::new(telemetry.clone(), target.raindex_key.clone(), fail_apply);
@@ -1940,6 +1986,37 @@ raindexes:
     }
 
     #[tokio::test]
+    async fn failed_dump_import_is_retried_on_next_run() {
+        let telemetry = Telemetry::default();
+        let behaviors =
+            HashMap::from([(RAINDEX_KEY_A.to_string(), EngineBehavior::ImportFailOnce)]);
+        let environment = build_environment(manifest_for_a(), behaviors, 1, 2, telemetry.clone());
+        let mut runner = ClientRunner::with_environment(
+            single_raindex_settings_yaml(),
+            environment,
+            AlwaysLeadership,
+        )
+        .unwrap();
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+
+        let first = unwrap_report(runner.run(&db).await.unwrap());
+        assert_eq!(first.failures.len(), 1);
+        assert!(matches!(
+            first.failures[0].error,
+            LocalDbError::DumpImportFailed(_)
+        ));
+        assert!(!runner.has_provisioned_dumps);
+
+        let second = unwrap_report(runner.run(&db).await.unwrap());
+        assert_eq!(second.successes.len(), 1);
+        assert!(second.failures.is_empty());
+        assert!(runner.has_provisioned_dumps);
+        assert_eq!(telemetry.dump_requests().len(), 2);
+        assert_eq!(telemetry.manifest_fetch_count(), 1);
+    }
+
+    #[tokio::test]
     async fn engine_build_and_run_failures_are_both_reported() {
         let telemetry = Telemetry::default();
         let manifest = manifest_for_both();
@@ -2009,7 +2086,8 @@ raindexes:
             ClientRunner::with_environment(settings, environment, AlwaysLeadership).unwrap();
 
         assert_eq!(runner.base_targets.len(), 1);
-        runner.base_targets[0].inputs.dump_str = Some("-- preloaded dump".to_string());
+        runner.base_targets[0].inputs.dump_str =
+            Some(std::sync::Arc::new("-- preloaded dump".to_string()));
 
         let db = RecordingDb::default();
         prepare_db_for_targets(&db, &runner.base_targets);

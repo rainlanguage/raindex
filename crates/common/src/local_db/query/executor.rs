@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+#[cfg(target_family = "wasm")]
+use std::sync::Arc;
 
 use super::{FromDbJson, LocalDbQueryError, SqlStatement, SqlStatementBatch};
 
@@ -11,6 +13,15 @@ use super::{FromDbJson, LocalDbQueryError, SqlStatement, SqlStatementBatch};
 #[cfg_attr(not(target_family = "wasm"), async_trait)]
 pub trait LocalDbQueryExecutor {
     async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError>;
+
+    /// Execute a data-only dump. Backends can override this to avoid building
+    /// one owned statement for every line of the dump.
+    #[cfg(target_family = "wasm")]
+    async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
+        let statements: Vec<_> = dump.lines().map(SqlStatement::new).collect();
+        self.execute_batch(&SqlStatementBatch::from(statements))
+            .await
+    }
 
     async fn query_json<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
     where
