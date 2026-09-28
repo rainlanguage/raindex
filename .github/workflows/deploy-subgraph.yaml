@@ -8,8 +8,11 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     env:
-      GOLDSKY_TOKEN: ${{ secrets.CI_GOLDSKY_TOKEN }}
-      GOLDSKY_SUBGRAPH_NAME: raindex
+      # GitHub secret ORMI_DEPLOY_KEY, from Vault secret/infra/rain/ormi (deploy_key).
+      ORMI_DEPLOY_KEY: ${{ secrets.ORMI_DEPLOY_KEY }}
+      SUBGRAPH_NAME: raindex
+      # Public query base for this Ormi account. subgraph-deploy skips a version that already answers here.
+      ORMI_QUERY_BASE: https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71
     steps:
       - uses: actions/checkout@v4
       - name: Free disk space
