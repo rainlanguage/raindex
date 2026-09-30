@@ -27,7 +27,7 @@ export function getDecimalFloatAddress(): Address {
     return Address.fromString("0x83e4c7732e715b5E7310796A4A2a21d89f3FB59A");
   } else if (network == "mainnet") {
     return Address.fromString("0x83e4c7732e715b5E7310796A4A2a21d89f3FB59A");
-  } else if (network == "robinhood-mainnet") {
+  } else if (network == "robinhood") {
     return Address.fromString("0x799632d282178e770C7465cad54aDA1021A913D6");
   }
 

@@ -14,7 +14,7 @@ const NETWORK_ADDRESSES: string[][] = [
   ["matic", "0xb92ad1a33930ab64e0a7dc1acd9eddf9d4f8bc91"],
   ["linea", "0x83e4c7732e715b5e7310796a4a2a21d89f3fb59a"],
   ["mainnet", "0x83e4c7732e715b5e7310796a4a2a21d89f3fb59a"],
-  ["robinhood-mainnet", "0x799632d282178e770c7465cad54ada1021a913d6"],
+  ["robinhood", "0x799632d282178e770c7465cad54ada1021a913d6"],
 ];
 
 describe("getDecimalFloatAddress", () => {
