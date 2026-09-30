@@ -4,12 +4,13 @@
 	import VaultBalanceChart from '../charts/VaultBalanceChart.svelte';
 	import TanstackPageContentDetail from './TanstackPageContentDetail.svelte';
 	import CardProperty from '../CardProperty.svelte';
-	import { QKEY_VAULT } from '../../queries/keys';
+	import { QKEY_VAULT, QKEY_VAULT_CHANGES } from '../../queries/keys';
 	import {
 		RaindexClient,
 		type Address,
 		type Hex,
-		type RaindexVault
+		type RaindexVault,
+		type RaindexVaultBalanceChange
 	} from '@rainlanguage/orderbook';
 	import type { ChartTheme } from '../../utils/lightweightChartsThemes';
 	import { toHex } from 'viem';
@@ -56,6 +57,43 @@
 			return result.value;
 		}
 	});
+
+	$: balanceChangesQuery = createQuery<RaindexVaultBalanceChange[]>({
+		queryKey: [
+			$vaultDetailQuery.data?.id ?? '',
+			QKEY_VAULT_CHANGES + ($vaultDetailQuery.data?.id ?? ''),
+			QKEY_VAULT_CHANGES
+		],
+		enabled: !!$vaultDetailQuery.data,
+		queryFn: async () => {
+			// eslint-disable-next-line no-console
+			console.log('[VaultDetail] fetching balance changes, vault:', $vaultDetailQuery.data?.id);
+			const result = await $vaultDetailQuery.data!.getBalanceChanges(1);
+			// eslint-disable-next-line no-console
+			console.log(
+				'[VaultDetail] result:',
+				result,
+				'value length:',
+				result.value?.length,
+				'error:',
+				result.error
+			);
+			if (result.error) throw new Error(result.error.msg);
+			return result.value;
+		}
+	});
+
+	// eslint-disable-next-line no-console
+	$: console.log(
+		'[VaultDetail] vaultData:',
+		!!$vaultDetailQuery.data,
+		'bcData:',
+		$balanceChangesQuery?.data?.length,
+		'bcLoading:',
+		$balanceChangesQuery?.isLoading,
+		'bcError:',
+		$balanceChangesQuery?.error
+	);
 
 	const interval = setInterval(async () => {
 		invalidateTanstackQueries(queryClient, [id, QKEY_VAULT + id]);
@@ -177,8 +215,10 @@
 	</svelte:fragment>
 
 	<svelte:fragment slot="chart" let:data>
-		<VaultBalanceChart vault={data} {lightweightChartsTheme} />
+		<VaultBalanceChart vault={data} query={balanceChangesQuery} {lightweightChartsTheme} />
 	</svelte:fragment>
 
-	<svelte:fragment slot="below" let:data><VaultBalanceChangesTable vault={data} /></svelte:fragment>
+	<svelte:fragment slot="below">
+		<VaultBalanceChangesTable data={$balanceChangesQuery.data} />
+	</svelte:fragment>
 </TanstackPageContentDetail>

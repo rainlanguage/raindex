@@ -1,14 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
-import { test, vi } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
+import { test } from 'vitest';
 import { expect } from '../lib/test/matchers';
-import { QueryClient } from '@tanstack/svelte-query';
 import VaultBalanceChangesTable from '../lib/components/tables/VaultBalanceChangesTable.svelte';
-import type { RaindexVault, RaindexVaultBalanceChange } from '@rainlanguage/orderbook';
+import type { RaindexVaultBalanceChange } from '@rainlanguage/orderbook';
 import { formatTimestampSecondsAsLocal } from '../lib/services/time';
 
 test('renders the vault list table with correct data', async () => {
-	const queryClient = new QueryClient();
-
 	const mockVaultBalanceChanges: RaindexVaultBalanceChange[] = [
 		{
 			__typename: 'Withdrawal',
@@ -32,29 +29,19 @@ test('renders the vault list table with correct data', async () => {
 			},
 			orderbook: '0x00'
 		}
-		// ... other mock data
 	] as unknown as RaindexVaultBalanceChange[];
-	const mockVault: RaindexVault = {
-		id: 'vault1',
-		getBalanceChanges: vi.fn().mockResolvedValue({ value: mockVaultBalanceChanges })
-	} as unknown as RaindexVault;
 
 	render(VaultBalanceChangesTable, {
 		props: {
-			vault: mockVault
-		},
-		context: new Map([['$$_queryClient', queryClient]])
+			data: mockVaultBalanceChanges
+		}
 	});
 
-	await waitFor(() => {
-		const rows = screen.getAllByTestId('bodyRow');
-		expect(rows).toHaveLength(1);
-	});
+	const rows = screen.getAllByTestId('bodyRow');
+	expect(rows).toHaveLength(1);
 });
 
 test('it shows the correct data in the table', async () => {
-	const queryClient = new QueryClient();
-
 	const mockVaultBalanceChanges: RaindexVaultBalanceChange[] = [
 		{
 			type: 'withdrawal',
@@ -82,28 +69,19 @@ test('it shows the correct data in the table', async () => {
 			orderbook: '0x00'
 		}
 	] as unknown as RaindexVaultBalanceChange[];
-	const mockVault: RaindexVault = {
-		id: 'vault1',
-		getBalanceChanges: vi.fn().mockResolvedValue({ value: mockVaultBalanceChanges })
-	} as unknown as RaindexVault;
 
 	render(VaultBalanceChangesTable, {
 		props: {
-			vault: mockVault
-		},
-		context: new Map([['$$_queryClient', queryClient]])
+			data: mockVaultBalanceChanges
+		}
 	});
 
-	await waitFor(() => {
-		expect(screen.getByTestId('vaultBalanceChangesTableDate')).toHaveTextContent(
-			formatTimestampSecondsAsLocal(BigInt('1625247600'))
-		);
-		expect(screen.getByTestId('vaultBalanceChangesTableFrom')).toHaveTextContent('0xUse...User1');
-		expect(screen.getByTestId('vaultBalanceChangesTableTx')).toHaveTextContent('tx1');
-		expect(screen.getByTestId('vaultBalanceChangesTableBalanceChange')).toHaveTextContent(
-			'0.1 TKN1'
-		);
-		expect(screen.getByTestId('vaultBalanceChangesTableBalance')).toHaveTextContent('0.4 TKN1');
-		expect(screen.getByTestId('vaultBalanceChangesTableType')).toHaveTextContent('withdrawal');
-	});
+	expect(screen.getByTestId('vaultBalanceChangesTableDate')).toHaveTextContent(
+		formatTimestampSecondsAsLocal(BigInt('1625247600'))
+	);
+	expect(screen.getByTestId('vaultBalanceChangesTableFrom')).toHaveTextContent('0xUse...User1');
+	expect(screen.getByTestId('vaultBalanceChangesTableTx')).toHaveTextContent('tx1');
+	expect(screen.getByTestId('vaultBalanceChangesTableBalanceChange')).toHaveTextContent('0.1 TKN1');
+	expect(screen.getByTestId('vaultBalanceChangesTableBalance')).toHaveTextContent('0.4 TKN1');
+	expect(screen.getByTestId('vaultBalanceChangesTableType')).toHaveTextContent('withdrawal');
 });
