@@ -3,8 +3,9 @@ use crate::local_db::query::{
     FromDbJson, LocalDbQueryError, LocalDbQueryExecutor, SqlStatement, SqlStatementBatch, SqlValue,
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::lock::{Mutex, OwnedMutexGuard};
 use js_sys::{Array, BigInt, Object, Reflect};
+#[cfg(test)]
 use std::rc::Rc;
 use std::sync::Arc;
 use wasm_bindgen_utils::prelude::wasm_bindgen_futures::JsFuture;
@@ -21,7 +22,7 @@ pub struct JsCallbackExecutor {
     append_import_callback: js_sys::Function,
     finish_import_callback: js_sys::Function,
     cancel_import_callback: js_sys::Function,
-    serialize: Rc<Mutex<()>>,
+    serialize: Arc<Mutex<()>>,
 }
 
 impl JsCallbackExecutor {
@@ -43,7 +44,7 @@ impl JsCallbackExecutor {
             append_import_callback,
             finish_import_callback,
             cancel_import_callback,
-            serialize: Rc::new(Mutex::new(())),
+            serialize: Arc::new(Mutex::new(())),
         })
     }
 
@@ -59,7 +60,7 @@ impl JsCallbackExecutor {
             append_import_callback: js_sys::Function::new_no_args("return undefined"),
             finish_import_callback: js_sys::Function::new_no_args("return undefined"),
             cancel_import_callback: js_sys::Function::new_no_args("return undefined"),
-            serialize: Rc::new(Mutex::new(())),
+            serialize: Arc::new(Mutex::new(())),
         }
     }
 
@@ -136,11 +137,11 @@ impl JsCallbackExecutor {
         decode_string_result(js_result).map(|_| ())
     }
 
-    async fn invoke_import_unlocked(
+    fn import_promise(
         &self,
         callback: &js_sys::Function,
         args: ImportArgs<'_>,
-    ) -> Result<String, LocalDbQueryError> {
+    ) -> Result<js_sys::Promise, LocalDbQueryError> {
         let result = match args {
             ImportArgs::Begin => callback.call0(&self.local_db),
             ImportArgs::Session(id) => callback.call1(&self.local_db, &JsValue::from_str(id)),
@@ -153,13 +154,26 @@ impl JsCallbackExecutor {
         .map_err(|e| {
             LocalDbQueryError::database(format!("JavaScript import callback failed: {e:?}"))
         })?;
-        let js_result = JsFuture::from(js_sys::Promise::resolve(&result))
+        Ok(js_sys::Promise::resolve(&result))
+    }
+
+    async fn invoke_import_unlocked(
+        &self,
+        callback: &js_sys::Function,
+        args: ImportArgs<'_>,
+    ) -> Result<String, LocalDbQueryError> {
+        let js_result = JsFuture::from(self.import_promise(callback, args)?)
             .await
             .map_err(|e| LocalDbQueryError::database(format!("Import promise failed: {e:?}")))?;
         decode_string_result(js_result)
     }
 
-    async fn append_import_sql(&self, id: &str, sql: &str) -> Result<(), LocalDbQueryError> {
+    async fn append_import_sql(
+        &self,
+        guard: &mut ImportSessionGuard,
+        id: &str,
+        sql: &str,
+    ) -> Result<(), LocalDbQueryError> {
         const CHUNK_BYTES: usize = 256 * 1024;
         let mut start = 0;
         while start < sql.len() {
@@ -167,14 +181,91 @@ impl JsCallbackExecutor {
             while !sql.is_char_boundary(end) {
                 end -= 1;
             }
-            self.invoke_import_unlocked(
-                &self.append_import_callback,
-                ImportArgs::Chunk(id, &sql[start..end]),
-            )
-            .await?;
+            guard
+                .invoke(
+                    &self.append_import_callback,
+                    ImportArgs::Chunk(id, &sql[start..end]),
+                )
+                .await?;
             start = end;
         }
         Ok(())
+    }
+}
+
+struct ImportSessionGuard {
+    executor: JsCallbackExecutor,
+    pending: Option<PendingImport>,
+    serialize: Option<OwnedMutexGuard<()>>,
+}
+
+enum PendingImport {
+    Beginning(js_sys::Promise),
+    Active {
+        id: String,
+        in_flight: Option<js_sys::Promise>,
+    },
+}
+
+impl ImportSessionGuard {
+    async fn invoke(
+        &mut self,
+        callback: &js_sys::Function,
+        args: ImportArgs<'_>,
+    ) -> Result<String, LocalDbQueryError> {
+        let promise = self.executor.import_promise(callback, args)?;
+        if let Some(PendingImport::Active { in_flight, .. }) = &mut self.pending {
+            *in_flight = Some(promise.clone());
+        }
+        let outcome = JsFuture::from(promise).await;
+        if let Some(PendingImport::Active { in_flight, .. }) = &mut self.pending {
+            *in_flight = None;
+        }
+        decode_string_result(
+            outcome.map_err(|e| {
+                LocalDbQueryError::database(format!("Import promise failed: {e:?}"))
+            })?,
+        )
+    }
+
+    fn disarm(&mut self) {
+        self.pending = None;
+    }
+}
+
+impl Drop for ImportSessionGuard {
+    fn drop(&mut self) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let executor = self.executor.clone();
+        let serialize = self.serialize.take();
+        wasm_bindgen_utils::prelude::wasm_bindgen_futures::spawn_local(async move {
+            // Keep later queries/imports serialized until rollback finishes.
+            let _serialize = serialize;
+            let id = match pending {
+                PendingImport::Active { id, in_flight } => {
+                    // The SDK rejects cancellation while an append/finish/cancel
+                    // request is still in flight on this connection.
+                    if let Some(promise) = in_flight {
+                        let _ = JsFuture::from(promise).await;
+                    }
+                    Some(id)
+                }
+                PendingImport::Beginning(promise) => JsFuture::from(promise)
+                    .await
+                    .ok()
+                    .and_then(|value| decode_string_result(value).ok()),
+            };
+            if let Some(id) = id {
+                let _ = executor
+                    .invoke_import_unlocked(
+                        &executor.cancel_import_callback,
+                        ImportArgs::Session(&id),
+                    )
+                    .await;
+            }
+        });
     }
 }
 
@@ -256,7 +347,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
     }
 
     async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
-        let _guard = self.serialize.lock().await;
+        let serialize = Arc::clone(&self.serialize).lock_owned().await;
         // The producer wraps its data-only dump in BEGIN/COMMIT. Keep index
         // changes inside that same worker-owned import transaction.
         let data_sql = dump
@@ -297,22 +388,40 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         }
         suffix.push_str("COMMIT;\n");
 
-        let id = self
-            .invoke_import_unlocked(&self.begin_import_callback, ImportArgs::Begin)
-            .await?;
+        let begin = self.import_promise(&self.begin_import_callback, ImportArgs::Begin)?;
+        let mut guard = ImportSessionGuard {
+            executor: self.clone(),
+            pending: Some(PendingImport::Beginning(begin.clone())),
+            serialize: Some(serialize),
+        };
+        let id =
+            decode_string_result(JsFuture::from(begin).await.map_err(|e| {
+                LocalDbQueryError::database(format!("Import promise failed: {e:?}"))
+            })?)?;
+        guard.pending = Some(PendingImport::Active {
+            id: id.clone(),
+            in_flight: None,
+        });
         let import_result = async {
-            self.append_import_sql(&id, &prefix).await?;
-            self.append_import_sql(&id, data_sql).await?;
-            self.append_import_sql(&id, &suffix).await?;
-            self.invoke_import_unlocked(&self.finish_import_callback, ImportArgs::Session(&id))
+            self.append_import_sql(&mut guard, &id, &prefix).await?;
+            self.append_import_sql(&mut guard, &id, data_sql).await?;
+            self.append_import_sql(&mut guard, &id, &suffix).await?;
+            guard
+                .invoke(&self.finish_import_callback, ImportArgs::Session(&id))
                 .await?;
             Ok(())
         }
         .await;
         if import_result.is_err() {
-            let _ = self
-                .invoke_import_unlocked(&self.cancel_import_callback, ImportArgs::Session(&id))
-                .await;
+            if guard
+                .invoke(&self.cancel_import_callback, ImportArgs::Session(&id))
+                .await
+                .is_ok()
+            {
+                guard.disarm();
+            }
+        } else {
+            guard.disarm();
         }
         import_result
     }
@@ -992,6 +1101,104 @@ pub mod tests {
                 .await;
             assert!(result.is_err());
             assert!(cancelled.get());
+        }
+
+        #[wasm_bindgen_test]
+        async fn dropped_import_cancels_before_releasing_executor_lock() {
+            use gloo_timers::future::TimeoutFuture;
+            use std::task::Poll;
+
+            for stage in ["begin", "append", "finish"] {
+                let local_db = create_local_db(
+                    Some(create_success_callback("[]")),
+                    Some(success_wipe_callback()),
+                    Some(success_transaction_callback()),
+                );
+                for (method, current, value) in [
+                    ("beginSqlDumpImport", "begin", "session"),
+                    ("appendSqlDumpChunk", "append", ""),
+                    ("finishSqlDumpImport", "finish", ""),
+                ] {
+                    let body = if current == stage {
+                        "this.reached = true; this.inFlight = true; return new Promise(resolve => this.pendingResolve = resolve).then(value => { this.inFlight = false; return value; });".to_string()
+                    } else {
+                        format!("return {{ value: '{value}', error: null }};")
+                    };
+                    Reflect::set(
+                        &local_db,
+                        &JsValue::from_str(method),
+                        &Function::new_no_args(&body),
+                    )
+                    .unwrap();
+                }
+                Reflect::set(
+                    &local_db,
+                    &JsValue::from_str("cancelSqlDumpImport"),
+                    &Function::new_no_args(
+                        "if (this.inFlight) throw new Error('Wait for the previous SQL dump import request to finish'); this.cancelled = true; return new Promise(resolve => this.cancelResolve = resolve);",
+                    ),
+                ).unwrap();
+                let exec = JsCallbackExecutor::new(local_db.clone()).unwrap();
+                let mut import = exec.execute_sql_dump(Arc::new(
+                    "BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string(),
+                ));
+                for _ in 0..50 {
+                    assert!(matches!(futures::poll!(import.as_mut()), Poll::Pending));
+                    if Reflect::get(&local_db, &JsValue::from_str("reached"))
+                        .unwrap()
+                        .as_bool()
+                        == Some(true)
+                    {
+                        break;
+                    }
+                    TimeoutFuture::new(0).await;
+                }
+                assert_eq!(
+                    Reflect::get(&local_db, &JsValue::from_str("reached"))
+                        .unwrap()
+                        .as_bool(),
+                    Some(true),
+                    "stage {stage} must be reached"
+                );
+                drop(import);
+                TimeoutFuture::new(0).await;
+                assert_ne!(
+                    Reflect::get(&local_db, &JsValue::from_str("cancelled"))
+                        .unwrap()
+                        .as_bool(),
+                    Some(true)
+                );
+                let stmt = SqlStatement::new("SELECT 1");
+                let mut query = exec.query_text(&stmt);
+                assert!(matches!(futures::poll!(query.as_mut()), Poll::Pending));
+                let resolve = method(&local_db, "pendingResolve").unwrap();
+                resolve
+                    .call1(
+                        &local_db,
+                        &serde_wasm_bindgen::to_value(&WasmEncodedResult::success(
+                            if stage == "begin" { "session" } else { "" }.to_string(),
+                        ))
+                        .unwrap(),
+                    )
+                    .unwrap();
+                TimeoutFuture::new(0).await;
+                assert_eq!(
+                    Reflect::get(&local_db, &JsValue::from_str("cancelled"))
+                        .unwrap()
+                        .as_bool(),
+                    Some(true)
+                );
+                assert!(matches!(futures::poll!(query.as_mut()), Poll::Pending));
+                let resolve = method(&local_db, "cancelResolve").unwrap();
+                resolve
+                    .call1(
+                        &local_db,
+                        &serde_wasm_bindgen::to_value(&WasmEncodedResult::success(String::new()))
+                            .unwrap(),
+                    )
+                    .unwrap();
+                assert_eq!(query.await.unwrap(), "[]");
+            }
         }
     }
 }

@@ -222,7 +222,9 @@ where
             // combined database once, after all targets have finished.
             #[cfg(target_family = "wasm")]
             if had_downloaded_dump {
-                db.query_text(&SqlStatement::new("ANALYZE")).await?;
+                if let Err(error) = db.query_text(&SqlStatement::new("ANALYZE")).await {
+                    tracing::warn!(%error, "Deferred bootstrap ANALYZE failed");
+                }
             }
 
             if !had_provisioning_failures && !had_import_failure {
@@ -1424,6 +1426,45 @@ raindexes:
         assert_eq!(latest_blocks.get(RAINDEX_KEY_A), Some(&111));
         assert_eq!(latest_blocks.get(RAINDEX_KEY_B), Some(&222));
         assert_eq!(db.batch_calls().len(), 2);
+    }
+
+    #[cfg(target_family = "wasm")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    async fn analyze_failure_preserves_import_report_and_skips_redownload() {
+        let telemetry = Telemetry::default();
+        let environment =
+            build_environment(manifest_for_a(), HashMap::new(), 1, 1, telemetry.clone());
+        let mut runner = ClientRunner::with_environment(
+            single_raindex_settings_yaml(),
+            environment,
+            AlwaysLeadership,
+        )
+        .unwrap();
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+        db.inner.text_map.lock().unwrap().insert(
+            "ANALYZE".to_string(),
+            Err(LocalDbQueryError::database("planner stats unavailable")),
+        );
+
+        let report = unwrap_report(runner.run(&db).await.unwrap());
+        assert_eq!(report.successes.len(), 1);
+        assert!(report.failures.is_empty());
+        assert!(runner.has_provisioned_dumps);
+        assert_eq!(
+            db.inner
+                .text_calls
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|sql| sql.as_str() == "ANALYZE")
+                .count(),
+            1
+        );
+
+        let report = unwrap_report(runner.run(&db).await.unwrap());
+        assert_eq!(report.successes.len(), 1);
+        assert_eq!(telemetry.dump_requests().len(), 1);
     }
 
     #[tokio::test]

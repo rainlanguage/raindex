@@ -1639,10 +1639,13 @@ mod tests {
             config.dump_sql.as_ref().map(|s| s.as_str()),
             Some("SELECT 1")
         );
+        #[cfg(not(target_family = "wasm"))]
         assert_eq!(
             config.dump_stmt.as_ref().map(SqlStatementBatch::len),
             Some(1)
         );
+        #[cfg(target_family = "wasm")]
+        assert!(config.dump_stmt.is_none());
         assert_eq!(config.deployment_block, inputs.cfg.deployment_block);
         assert_eq!(config.block_number_threshold, inputs.block_number_threshold);
         assert_eq!(config.latest_block, inputs.manifest_end_block);
