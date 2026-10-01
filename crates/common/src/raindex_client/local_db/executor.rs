@@ -5,6 +5,7 @@ use crate::local_db::query::{
 use async_trait::async_trait;
 use futures::lock::{Mutex, OwnedMutexGuard};
 use js_sys::{Array, BigInt, Object, Reflect};
+use std::future::Future;
 #[cfg(test)]
 use std::rc::Rc;
 use std::sync::Arc;
@@ -72,6 +73,13 @@ impl JsCallbackExecutor {
         &self,
         stmt: &SqlStatement,
     ) -> Result<String, LocalDbQueryError> {
+        wait_while_importing(|| self.call_statement_unlocked(stmt)).await
+    }
+
+    async fn call_statement_unlocked(
+        &self,
+        stmt: &SqlStatement,
+    ) -> Result<String, LocalDbQueryError> {
         // If there are no parameters, pass `undefined` to the JS callback
         // instead of an empty array to match the SDK's expected semantics.
         let js_params_val = if stmt.params().is_empty() {
@@ -109,6 +117,13 @@ impl JsCallbackExecutor {
     }
 
     async fn invoke_transaction_unlocked(
+        &self,
+        batch: &SqlStatementBatch,
+    ) -> Result<(), LocalDbQueryError> {
+        wait_while_importing(|| self.call_transaction_unlocked(batch)).await
+    }
+
+    async fn call_transaction_unlocked(
         &self,
         batch: &SqlStatementBatch,
     ) -> Result<(), LocalDbQueryError> {
@@ -273,6 +288,30 @@ enum ImportArgs<'a> {
     Begin,
     Session(&'a str),
     Chunk(&'a str, &'a str),
+}
+
+/// Another tab's import can hold the shared worker for many seconds. The SDK
+/// expires an abandoned import after two minutes of inactivity.
+const IMPORT_WAIT_POLL_MS: u32 = 250;
+const IMPORT_WAIT_TIMEOUT_MS: f64 = 300_000.0;
+
+async fn wait_while_importing<T, F, Fut>(mut request: F) -> Result<T, LocalDbQueryError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, LocalDbQueryError>>,
+{
+    let started = js_sys::Date::now();
+    loop {
+        match request().await {
+            Err(err)
+                if err.is_import_in_progress()
+                    && js_sys::Date::now() - started < IMPORT_WAIT_TIMEOUT_MS =>
+            {
+                gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
+            }
+            result => return result,
+        }
+    }
 }
 
 fn decode_string_result(value: JsValue) -> Result<String, LocalDbQueryError> {
@@ -784,6 +823,48 @@ pub mod tests {
             assert!(matches!(err, LocalDbQueryError::Database { .. }));
             assert!(err.to_string().contains("boom readable"));
             assert_eq!(*calls.borrow(), 1);
+        }
+
+        #[wasm_bindgen_test]
+        async fn query_waits_for_another_tabs_import() {
+            use std::cell::RefCell;
+            use std::rc::Rc;
+            use wasm_bindgen::prelude::Closure;
+
+            let calls: Rc<RefCell<usize>> = Rc::new(RefCell::new(0));
+            let calls_clone = calls.clone();
+            let closure =
+                Closure::wrap(Box::new(move |_sql: String, _params: JsValue| -> JsValue {
+                    *calls_clone.borrow_mut() += 1;
+                    if *calls_clone.borrow() < 3 {
+                        let busy = "JavaScript error: JsValue(\"SQL dump import is in progress.\")";
+                        let result = WasmEncodedResult::Err::<String> {
+                            value: None,
+                            error: WasmEncodedError {
+                                msg: busy.to_string(),
+                                readable_msg: busy.to_string(),
+                            },
+                        };
+                        return serde_wasm_bindgen::to_value(&result).unwrap();
+                    }
+                    let result = WasmEncodedResult::Success::<String> {
+                        value: "ok".to_string(),
+                        error: None,
+                    };
+                    serde_wasm_bindgen::to_value(&result).unwrap()
+                })
+                    as Box<dyn FnMut(String, JsValue) -> JsValue>);
+            let callback: Function = closure.as_ref().clone().unchecked_into();
+            closure.forget();
+            let exec = JsCallbackExecutor::from_ref(&callback);
+
+            let value = exec
+                .query_text(&SqlStatement::new("PRAGMA quick_check"))
+                .await
+                .unwrap();
+
+            assert_eq!(value, "ok");
+            assert_eq!(*calls.borrow(), 3);
         }
 
         #[wasm_bindgen_test]

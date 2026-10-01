@@ -94,6 +94,12 @@ impl LocalDbQueryError {
             operation: operation.into(),
         }
     }
+
+    /// sqlite-web rejects ordinary requests while any tab holds a bulk SQL
+    /// dump import open on the shared worker. The database is not unhealthy.
+    pub fn is_import_in_progress(&self) -> bool {
+        matches!(self, Self::Database { message } if message.contains("SQL dump import is in progress"))
+    }
 }
 
 impl From<SqlBuildError> for LocalDbQueryError {

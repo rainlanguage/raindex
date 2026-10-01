@@ -41,6 +41,10 @@ use futures::future::join_all;
 use leadership::{DefaultLeadership, Leadership, LeadershipGuard};
 use raindex_app_settings::remote::manifest::ManifestMap;
 
+/// After this many failed dump imports, stop re-downloading the dump and let
+/// the failed targets sync from RPC instead.
+const MAX_DUMP_IMPORT_ATTEMPTS: u32 = 3;
+
 pub struct ClientRunner<B, W, E, T, A, S, L> {
     network_key: Option<String>,
     chain_id: Option<u32>,
@@ -49,6 +53,7 @@ pub struct ClientRunner<B, W, E, T, A, S, L> {
     manifest_map: ManifestMap,
     manifests_loaded: bool,
     has_provisioned_dumps: bool,
+    dump_import_attempts: u32,
     environment: RunnerEnvironment<B, W, E, T, A, S>,
     leadership: L,
     leadership_guard: Option<LeadershipGuard>,
@@ -80,6 +85,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            dump_import_attempts: 0,
             environment,
             leadership,
             leadership_guard: None,
@@ -101,6 +107,7 @@ where
             manifest_map: ManifestMap::new(),
             manifests_loaded: false,
             has_provisioned_dumps: false,
+            dump_import_attempts: 0,
             environment,
             leadership,
             leadership_guard: None,
@@ -227,7 +234,11 @@ where
                 }
             }
 
-            if !had_provisioning_failures && !had_import_failure {
+            if had_import_failure {
+                self.dump_import_attempts += 1;
+            }
+            let import_retries_exhausted = self.dump_import_attempts >= MAX_DUMP_IMPORT_ATTEMPTS;
+            if !had_provisioning_failures && (!had_import_failure || import_retries_exhausted) {
                 self.has_provisioned_dumps = true;
             }
 
@@ -647,6 +658,7 @@ mod tests {
         Success,
         ApplyFail,
         ImportFailOnce,
+        ImportFailAlways,
     }
 
     #[derive(Clone, Default)]
@@ -752,6 +764,7 @@ mod tests {
         telemetry: Telemetry,
         raindex_key: String,
         fail_import_once: bool,
+        fail_import_always: bool,
     }
 
     impl StubBootstrap {
@@ -760,6 +773,7 @@ mod tests {
                 telemetry,
                 raindex_key,
                 fail_import_once: false,
+                fail_import_always: false,
             }
         }
     }
@@ -826,19 +840,21 @@ mod tests {
                 .as_ref()
                 .map(|sql| sql.as_str().to_owned())
                 .or_else(|| config.dump_stmt.as_ref().map(dump_sql));
+            let has_dump = dump_sql.is_some();
             self.telemetry.record_bootstrap(
                 self.raindex_key.clone(),
                 dump_sql,
                 config.latest_block,
             );
-            if self.fail_import_once
-                && self
-                    .telemetry
-                    .bootstrap_records()
-                    .iter()
-                    .filter(|record| record.raindex_key == self.raindex_key)
-                    .count()
-                    == 1
+            if (self.fail_import_always && has_dump)
+                || self.fail_import_once
+                    && self
+                        .telemetry
+                        .bootstrap_records()
+                        .iter()
+                        .filter(|record| record.raindex_key == self.raindex_key)
+                        .count()
+                        == 1
             {
                 return Err(LocalDbError::DumpImportFailed(LocalDbQueryError::database(
                     "test import failure",
@@ -1270,6 +1286,7 @@ raindexes:
             let fail_apply = behavior == EngineBehavior::ApplyFail;
             let mut bootstrap = StubBootstrap::new(telemetry.clone(), target.raindex_key.clone());
             bootstrap.fail_import_once = behavior == EngineBehavior::ImportFailOnce;
+            bootstrap.fail_import_always = behavior == EngineBehavior::ImportFailAlways;
             let window = StubWindow::new(0, target.inputs.cfg.deployment_block);
             let events = StubEvents::new(target.inputs.cfg.deployment_block);
             let apply = StubApply::new(telemetry.clone(), target.raindex_key.clone(), fail_apply);
@@ -2055,6 +2072,48 @@ raindexes:
         assert!(runner.has_provisioned_dumps);
         assert_eq!(telemetry.dump_requests().len(), 2);
         assert_eq!(telemetry.manifest_fetch_count(), 1);
+    }
+
+    #[tokio::test]
+    async fn repeated_dump_import_failures_fall_back_to_rpc_sync() {
+        let telemetry = Telemetry::default();
+        let behaviors =
+            HashMap::from([(RAINDEX_KEY_A.to_string(), EngineBehavior::ImportFailAlways)]);
+        let environment = build_environment(
+            manifest_for_a(),
+            behaviors,
+            1,
+            MAX_DUMP_IMPORT_ATTEMPTS as usize,
+            telemetry.clone(),
+        );
+        let mut runner = ClientRunner::with_environment(
+            single_raindex_settings_yaml(),
+            environment,
+            AlwaysLeadership,
+        )
+        .unwrap();
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+
+        for attempt in 1..=MAX_DUMP_IMPORT_ATTEMPTS {
+            let report = unwrap_report(runner.run(&db).await.unwrap());
+            assert!(matches!(
+                report.failures[0].error,
+                LocalDbError::DumpImportFailed(_)
+            ));
+            assert_eq!(
+                runner.has_provisioned_dumps,
+                attempt == MAX_DUMP_IMPORT_ATTEMPTS
+            );
+        }
+
+        let report = unwrap_report(runner.run(&db).await.unwrap());
+        assert_eq!(report.successes.len(), 1);
+        assert!(report.failures.is_empty());
+        assert_eq!(
+            telemetry.dump_requests().len(),
+            MAX_DUMP_IMPORT_ATTEMPTS as usize
+        );
     }
 
     #[tokio::test]

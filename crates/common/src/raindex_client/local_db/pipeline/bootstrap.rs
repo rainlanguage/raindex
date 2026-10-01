@@ -175,7 +175,13 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        let is_healthy = self.check_integrity(db).await.unwrap_or(false);
+        let is_healthy = match self.check_integrity(db).await {
+            Ok(is_healthy) => is_healthy,
+            Err(LocalDbError::LocalDbQueryError(err)) if err.is_import_in_progress() => {
+                return Err(err.into());
+            }
+            Err(_) => false,
+        };
         if !is_healthy {
             db.wipe_and_recreate().await?;
             self.reset_db(db, db_schema_version).await?;
@@ -1059,6 +1065,7 @@ mod tests {
     }
 
     struct IntegrityCheckFailsDb {
+        query_error: &'static str,
         text_map: HashMap<String, String>,
         calls_text: Mutex<Vec<String>>,
         wipe_called: Mutex<bool>,
@@ -1067,6 +1074,7 @@ mod tests {
     impl IntegrityCheckFailsDb {
         fn new() -> Self {
             let mut db = Self {
+                query_error: "malformed database schema (db_metadata)",
                 text_map: HashMap::new(),
                 calls_text: Mutex::new(Vec::new()),
                 wipe_called: Mutex::new(false),
@@ -1105,9 +1113,7 @@ mod tests {
         where
             T: FromDbJson,
         {
-            Err(LocalDbQueryError::database(
-                "malformed database schema (db_metadata)",
-            ))
+            Err(LocalDbQueryError::database(self.query_error))
         }
 
         async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
@@ -1142,6 +1148,25 @@ mod tests {
 
         let calls = db.calls();
         assert_reset_batches_were_called(&calls);
+    }
+
+    #[tokio::test]
+    async fn runner_run_keeps_database_while_another_import_is_in_progress() {
+        let adapter = ClientBootstrapAdapter::new();
+        let mut db = IntegrityCheckFailsDb::new();
+        db.query_error = "JavaScript error: JsValue(\"SQL dump import is in progress.\")";
+
+        let err = adapter
+            .runner_run(&db, Some(DB_SCHEMA_VERSION))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            LocalDbError::LocalDbQueryError(ref query_err) if query_err.is_import_in_progress()
+        ));
+        assert!(!db.was_wipe_called());
+        assert!(db.calls().is_empty());
     }
 
     struct WipeFailsDb;
