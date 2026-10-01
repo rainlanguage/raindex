@@ -73,7 +73,10 @@ impl JsCallbackExecutor {
         &self,
         stmt: &SqlStatement,
     ) -> Result<String, LocalDbQueryError> {
-        wait_while_importing(|| self.call_statement_unlocked(stmt)).await
+        wait_while_busy(LocalDbQueryError::is_import_in_progress, || {
+            self.call_statement_unlocked(stmt)
+        })
+        .await
     }
 
     async fn call_statement_unlocked(
@@ -116,11 +119,24 @@ impl JsCallbackExecutor {
         self.invoke_statement_unlocked(stmt).await
     }
 
+    /// A follower's read can also time out behind a long import job. Only
+    /// reads retry on that, because a timed-out write may still commit.
+    async fn invoke_read(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
+        let _guard = self.serialize.lock().await;
+        wait_while_busy(LocalDbQueryError::is_worker_unavailable, || {
+            self.call_statement_unlocked(stmt)
+        })
+        .await
+    }
+
     async fn invoke_transaction_unlocked(
         &self,
         batch: &SqlStatementBatch,
     ) -> Result<(), LocalDbQueryError> {
-        wait_while_importing(|| self.call_transaction_unlocked(batch)).await
+        wait_while_busy(LocalDbQueryError::is_import_in_progress, || {
+            self.call_transaction_unlocked(batch)
+        })
+        .await
     }
 
     async fn call_transaction_unlocked(
@@ -295,7 +311,10 @@ enum ImportArgs<'a> {
 const IMPORT_WAIT_POLL_MS: u32 = 250;
 const IMPORT_WAIT_TIMEOUT_MS: f64 = 300_000.0;
 
-async fn wait_while_importing<T, F, Fut>(mut request: F) -> Result<T, LocalDbQueryError>
+async fn wait_while_busy<T, F, Fut>(
+    is_busy: fn(&LocalDbQueryError) -> bool,
+    mut request: F,
+) -> Result<T, LocalDbQueryError>
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, LocalDbQueryError>>,
@@ -303,7 +322,7 @@ where
     let started = js_sys::Date::now();
     loop {
         match request().await {
-            Err(err) if keep_waiting_for_import(&err, started) => {
+            Err(err) if is_busy(&err) && within_import_wait(started) => {
                 gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
             }
             result => return result,
@@ -311,8 +330,8 @@ where
     }
 }
 
-fn keep_waiting_for_import(err: &LocalDbQueryError, started_ms: f64) -> bool {
-    err.is_import_in_progress() && js_sys::Date::now() - started_ms < IMPORT_WAIT_TIMEOUT_MS
+fn within_import_wait(started_ms: f64) -> bool {
+    js_sys::Date::now() - started_ms < IMPORT_WAIT_TIMEOUT_MS
 }
 
 fn decode_string_result(value: JsValue) -> Result<String, LocalDbQueryError> {
@@ -442,7 +461,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
                 .map_err(|e| LocalDbQueryError::database(format!("Import promise failed: {e:?}")))
                 .and_then(decode_string_result);
             match result {
-                Err(err) if keep_waiting_for_import(&err, started) => {
+                Err(err) if err.is_import_in_progress() && within_import_wait(started) => {
                     guard.pending = None;
                     gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
                 }
@@ -485,7 +504,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
     where
         T: FromDbJson,
     {
-        let value = self.query_text(stmt).await?;
+        let value = self.invoke_read(stmt).await?;
         serde_json::from_str(&value)
             .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
     }
@@ -877,6 +896,31 @@ pub mod tests {
 
             assert_eq!(value, "ok");
             assert_eq!(*calls.borrow(), 3);
+        }
+
+        #[wasm_bindgen_test]
+        async fn only_reads_retry_follower_query_timeouts() {
+            let callback = Function::new_with_args(
+                "sql",
+                "this.calls = (this.calls || 0) + 1; return this.calls === 1 ? { value: undefined, error: { msg: 'timeout', readableMsg: 'JavaScript error: JsValue(\"Query timeout\")' } } : { value: '[]', error: null };",
+            );
+            let exec = JsCallbackExecutor::from_ref(&callback);
+            let rows: Vec<serde_json::Value> = exec
+                .query_json(&SqlStatement::new("PRAGMA quick_check"))
+                .await
+                .unwrap();
+            assert!(rows.is_empty());
+
+            let callback = Function::new_with_args(
+                "sql",
+                "return { value: undefined, error: { msg: 'timeout', readableMsg: 'JavaScript error: JsValue(\"Query timeout\")' } };",
+            );
+            let exec = JsCallbackExecutor::from_ref(&callback);
+            let err = exec
+                .query_text(&SqlStatement::new("INSERT INTO t VALUES (1)"))
+                .await
+                .unwrap_err();
+            assert!(err.is_worker_unavailable());
         }
 
         #[wasm_bindgen_test]
