@@ -303,15 +303,16 @@ where
     let started = js_sys::Date::now();
     loop {
         match request().await {
-            Err(err)
-                if err.is_import_in_progress()
-                    && js_sys::Date::now() - started < IMPORT_WAIT_TIMEOUT_MS =>
-            {
+            Err(err) if keep_waiting_for_import(&err, started) => {
                 gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
             }
             result => return result,
         }
     }
+}
+
+fn keep_waiting_for_import(err: &LocalDbQueryError, started_ms: f64) -> bool {
+    err.is_import_in_progress() && js_sys::Date::now() - started_ms < IMPORT_WAIT_TIMEOUT_MS
 }
 
 fn decode_string_result(value: JsValue) -> Result<String, LocalDbQueryError> {
@@ -427,16 +428,27 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         }
         suffix.push_str("COMMIT;\n");
 
-        let begin = self.import_promise(&self.begin_import_callback, ImportArgs::Begin)?;
         let mut guard = ImportSessionGuard {
             executor: self.clone(),
-            pending: Some(PendingImport::Beginning(begin.clone())),
+            pending: None,
             serialize: Some(serialize),
         };
-        let id =
-            decode_string_result(JsFuture::from(begin).await.map_err(|e| {
-                LocalDbQueryError::database(format!("Import promise failed: {e:?}"))
-            })?)?;
+        let started = js_sys::Date::now();
+        let id = loop {
+            let begin = self.import_promise(&self.begin_import_callback, ImportArgs::Begin)?;
+            guard.pending = Some(PendingImport::Beginning(begin.clone()));
+            let result = JsFuture::from(begin)
+                .await
+                .map_err(|e| LocalDbQueryError::database(format!("Import promise failed: {e:?}")))
+                .and_then(decode_string_result);
+            match result {
+                Err(err) if keep_waiting_for_import(&err, started) => {
+                    guard.pending = None;
+                    gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
+                }
+                result => break result?,
+            }
+        };
         guard.pending = Some(PendingImport::Active {
             id: id.clone(),
             in_flight: None,
@@ -1134,6 +1146,36 @@ pub mod tests {
             assert!(!sql.contains("DROP INDEX"));
             assert!(!sql.contains("CREATE INDEX"));
             assert!(sql.contains("INSERT INTO t VALUES (1);"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn sql_dump_import_waits_for_another_tabs_import_to_begin() {
+            let local_db = create_local_db(
+                Some(Function::new_with_args(
+                    "sql",
+                    "return { value: '[{\"present\":1}]', error: null };",
+                )),
+                Some(success_wipe_callback()),
+                Some(success_transaction_callback()),
+            );
+            Reflect::set(
+                &local_db,
+                &JsValue::from_str("beginSqlDumpImport"),
+                &Function::new_no_args(
+                    "this.begins = (this.begins || 0) + 1; return this.begins < 3 ? { value: undefined, error: { msg: 'busy', readableMsg: 'JavaScript error: JsValue(\"SQL dump import is in progress.\")' } } : { value: 'session', error: null };",
+                ),
+            )
+            .unwrap();
+            let exec = JsCallbackExecutor::new(local_db.clone()).unwrap();
+
+            exec.execute_sql_dump(Arc::new(
+                "BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string(),
+            ))
+            .await
+            .unwrap();
+
+            let begins = Reflect::get(&local_db, &JsValue::from_str("begins")).unwrap();
+            assert_eq!(begins.as_f64(), Some(3.0));
         }
 
         #[wasm_bindgen_test]

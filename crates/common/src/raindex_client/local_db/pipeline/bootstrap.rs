@@ -177,7 +177,7 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
     {
         let is_healthy = match self.check_integrity(db).await {
             Ok(is_healthy) => is_healthy,
-            Err(LocalDbError::LocalDbQueryError(err)) if err.is_import_in_progress() => {
+            Err(LocalDbError::LocalDbQueryError(err)) if err.is_worker_unavailable() => {
                 return Err(err.into());
             }
             Err(_) => false,
@@ -1151,22 +1151,29 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runner_run_keeps_database_while_another_import_is_in_progress() {
+    async fn runner_run_keeps_database_when_worker_is_unavailable() {
         let adapter = ClientBootstrapAdapter::new();
-        let mut db = IntegrityCheckFailsDb::new();
-        db.query_error = "JavaScript error: JsValue(\"SQL dump import is in progress.\")";
+        for query_error in [
+            "JavaScript error: JsValue(\"SQL dump import is in progress.\")",
+            "JavaScript error: JsValue(\"Query timeout\")",
+            "Initialization pending",
+        ] {
+            let mut db = IntegrityCheckFailsDb::new();
+            db.query_error = query_error;
 
-        let err = adapter
-            .runner_run(&db, Some(DB_SCHEMA_VERSION))
-            .await
-            .unwrap_err();
+            let err = adapter
+                .runner_run(&db, Some(DB_SCHEMA_VERSION))
+                .await
+                .unwrap_err();
 
-        assert!(matches!(
-            err,
-            LocalDbError::LocalDbQueryError(ref query_err) if query_err.is_import_in_progress()
-        ));
-        assert!(!db.was_wipe_called());
-        assert!(db.calls().is_empty());
+            assert!(matches!(
+                err,
+                LocalDbError::LocalDbQueryError(ref query_err)
+                    if query_err.is_worker_unavailable()
+            ));
+            assert!(!db.was_wipe_called(), "wiped on {query_error}");
+            assert!(db.calls().is_empty());
+        }
     }
 
     struct WipeFailsDb;
