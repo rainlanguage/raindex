@@ -216,6 +216,7 @@ mod tests {
             metadata_rpcs: Vec::new(),
             cfg: sync_config,
             dump_str: None,
+            defer_analyze: false,
             block_number_threshold: 10000,
             manifest_end_block: 1,
         };

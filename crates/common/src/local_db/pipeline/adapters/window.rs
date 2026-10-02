@@ -46,7 +46,7 @@ impl WindowPipeline for DefaultWindowPipeline {
         // 1) Read watermark
         let last_synced_block = {
             let rows: Vec<TargetWatermarkRow> = db
-                .query_json(&fetch_target_watermark_stmt(raindex_id))
+                .query_json_retryable(&fetch_target_watermark_stmt(raindex_id))
                 .await
                 .map_err(LocalDbError::from)?;
             rows.first().map(|r| r.last_block).unwrap_or(0)

@@ -84,6 +84,7 @@ mod tests {
                     window_overrides: WindowOverrides::default(),
                 },
                 dump_str: None,
+                defer_analyze: false,
                 block_number_threshold: 10000,
                 manifest_end_block: 1,
             },

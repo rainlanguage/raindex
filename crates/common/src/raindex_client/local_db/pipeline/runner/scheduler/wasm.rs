@@ -468,21 +468,10 @@ mod wasm_tests {
     }
 
     fn noop_local_db() -> LocalDb {
-        let local_db = js_sys::Object::new();
-        js_sys::Reflect::set(&local_db, &JsValue::from_str("query"), &noop_callback()).unwrap();
-        js_sys::Reflect::set(
-            &local_db,
-            &JsValue::from_str("wipeAndRecreate"),
-            &Function::new_no_args("return Promise.resolve({ value: undefined, error: null });"),
+        LocalDb::from_js_local_db(
+            crate::raindex_client::tests::local_db_object_from_query_callback(noop_callback()),
         )
-        .unwrap();
-        js_sys::Reflect::set(
-            &local_db,
-            &JsValue::from_str("transaction"),
-            &Function::new_no_args("return Promise.resolve({ value: '', error: null });"),
-        )
-        .unwrap();
-        LocalDb::from_js_local_db(local_db.into()).unwrap()
+        .unwrap()
     }
 
     impl SchedulerHandle {
@@ -865,7 +854,23 @@ mod wasm_tests {
     fn scheduler_handle_networks_returns_correct_network_configs() {
         use crate::raindex_client::tests::get_local_db_test_yaml;
 
-        let yaml = get_local_db_test_yaml();
+        let yaml = format!(
+            r#"{}
+local-db-remotes:
+    remote: https://remote.example/manifest
+local-db-sync:
+    arbitrum:
+        batch-size: 10
+        max-concurrent-batches: 2
+        retry-attempts: 1
+        retry-delay-ms: 1
+        rate-limit-delay-ms: 1
+        finality-depth: 12
+        bootstrap-block-threshold: 100
+        sync-interval-ms: 5000
+"#,
+            get_local_db_test_yaml()
+        );
         let settings = parse_runner_settings(&yaml).expect("should parse valid yaml");
         let handle = start(
             settings,
