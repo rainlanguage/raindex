@@ -508,6 +508,15 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
     where
         T: FromDbJson,
     {
+        let value = self.invoke_statement(stmt).await?;
+        serde_json::from_str(&value)
+            .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
+    }
+
+    async fn query_json_retryable<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
+    where
+        T: FromDbJson,
+    {
         let value = self.invoke_read(stmt).await?;
         serde_json::from_str(&value)
             .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
@@ -903,14 +912,15 @@ pub mod tests {
         }
 
         #[wasm_bindgen_test]
-        async fn only_reads_retry_follower_query_timeouts() {
+        async fn explicitly_retryable_queries_retry_follower_timeouts() {
             let callback = Function::new_with_args(
                 "sql",
                 "this.calls = (this.calls || 0) + 1; return this.calls === 1 ? { value: undefined, error: { msg: 'timeout', readableMsg: 'JavaScript error: JsValue(\"Query timeout\")' } } : { value: '[]', error: null };",
             );
-            let exec = JsCallbackExecutor::from_ref(&callback);
+            // Exercise the erased LocalDb wrapper as well as the executor.
+            let exec = LocalDb::new(JsCallbackExecutor::from_ref(&callback));
             let rows: Vec<serde_json::Value> = exec
-                .query_json(&SqlStatement::new("PRAGMA quick_check"))
+                .query_json_retryable(&SqlStatement::new("PRAGMA quick_check"))
                 .await
                 .unwrap();
             assert!(rows.is_empty());
@@ -925,6 +935,37 @@ pub mod tests {
                 .await
                 .unwrap_err();
             assert!(err.is_worker_unavailable());
+        }
+
+        #[wasm_bindgen_test]
+        async fn generic_json_query_never_replays_timed_out_writes() {
+            for sql in [
+                "INSERT INTO t VALUES (1) RETURNING v",
+                "WITH input(v) AS (SELECT 1) INSERT INTO t SELECT v FROM input RETURNING v",
+                "SELECT 1; INSERT INTO t VALUES (1) RETURNING v;",
+            ] {
+                let local_db = create_local_db(
+                    Some(Function::new_with_args(
+                        "sql",
+                        "this.writes = (this.writes || 0) + 1; return { value: undefined, error: { msg: 'timeout', readableMsg: 'Query timeout' } };",
+                    )),
+                    Some(success_wipe_callback()),
+                    Some(success_transaction_callback()),
+                );
+                let exec = LocalDb::new(JsCallbackExecutor::new(local_db.clone()).unwrap());
+
+                let err = exec
+                    .query_json::<Vec<serde_json::Value>>(&SqlStatement::new(sql))
+                    .await
+                    .unwrap_err();
+                assert!(err.is_worker_unavailable());
+                assert_eq!(
+                    Reflect::get(&local_db, &JsValue::from_str("writes"))
+                        .unwrap()
+                        .as_f64(),
+                    Some(1.0)
+                );
+            }
         }
 
         #[wasm_bindgen_test]

@@ -15,7 +15,9 @@ pub async fn fetch_latest_trades_per_token<E: LocalDbQueryExecutor + ?Sized>(
     let base_tokens_count = args.base_tokens.len();
     let raindexes_count = args.raindex_addresses.len();
     let stmt = build_fetch_latest_trades_per_token_stmt(&args)?;
-    let trades = exec.query_json::<Vec<LatestTradeRow>>(&stmt).await?;
+    let trades = exec
+        .query_json_retryable::<Vec<LatestTradeRow>>(&stmt)
+        .await?;
     tracing::info!(
         chain_id = args.chain_id,
         base_tokens_count,

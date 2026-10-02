@@ -357,7 +357,7 @@ async fn load_known_store_addresses<DB>(
 where
     DB: LocalDbQueryExecutor + ?Sized,
 {
-    db.query_json(&fetch_store_addresses_stmt(raindex_id))
+    db.query_json_retryable(&fetch_store_addresses_stmt(raindex_id))
         .await
         .map_err(Into::into)
 }

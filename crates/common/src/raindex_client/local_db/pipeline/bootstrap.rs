@@ -29,7 +29,7 @@ impl ClientBootstrapAdapter {
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        let existing: Vec<TableResponse> = db.query_json(&fetch_tables_stmt()).await?;
+        let existing: Vec<TableResponse> = db.query_json_retryable(&fetch_tables_stmt()).await?;
         Ok(existing
             .into_iter()
             .map(|t| t.name.to_ascii_lowercase())
@@ -56,7 +56,7 @@ impl ClientBootstrapAdapter {
             }
 
             let actual_columns: Vec<TableColumnResponse> = db
-                .query_json(&fetch_table_columns_stmt(&required_table.name))
+                .query_json_retryable(&fetch_table_columns_stmt(&required_table.name))
                 .await?;
             let actual_column_names: HashSet<String> = actual_columns
                 .into_iter()
@@ -101,7 +101,7 @@ impl ClientBootstrapAdapter {
         raindex_id: &RaindexIdentifier,
     ) -> Result<bool, LocalDbError> {
         let rows: Vec<TargetWatermarkRow> = db
-            .query_json(&fetch_target_watermark_stmt(raindex_id))
+            .query_json_retryable(&fetch_target_watermark_stmt(raindex_id))
             .await?;
         Ok(rows.is_empty())
     }
@@ -122,7 +122,7 @@ impl ClientBootstrapAdapter {
             // text response for statements without result columns. The final
             // semicolon selects the SDK's multi-statement execution path.
             let _: Vec<serde_json::Value> = db
-                .query_json(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_QUERY_SQL))
+                .query_json_retryable(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_QUERY_SQL))
                 .await?;
             db.execute_sql_dump(Arc::clone(dump_sql))
                 .await

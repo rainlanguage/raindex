@@ -337,7 +337,7 @@ where
         DB: LocalDbQueryExecutor + ?Sized,
     {
         let rows: Vec<TargetWatermarkRow> = db
-            .query_json(&fetch_target_watermark_stmt(&target.inputs.raindex_id))
+            .query_json_retryable(&fetch_target_watermark_stmt(&target.inputs.raindex_id))
             .await?;
 
         Ok(rows.first().is_none_or(|row| {

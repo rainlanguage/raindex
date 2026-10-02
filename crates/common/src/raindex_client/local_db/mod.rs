@@ -91,6 +91,8 @@ pub struct LocalDb {
     execute_dump_fn: FnPtr<ExecuteDumpFn>,
     query_text_fn: FnPtr<QueryTextFn>,
     query_json_fn: FnPtr<QueryJsonFn>,
+    #[cfg(target_family = "wasm")]
+    query_json_retryable_fn: FnPtr<QueryJsonFn>,
     wipe_and_recreate_fn: FnPtr<WipeAndRecreateFn>,
 }
 
@@ -137,6 +139,15 @@ impl LocalDb {
             })
         };
 
+        let query_json_retryable_fn: FnPtr<QueryJsonFn> = {
+            let exec = Rc::clone(&exec);
+            Rc::new(move |stmt: &SqlStatement| {
+                let exec = Rc::clone(&exec);
+                let stmt = stmt.clone();
+                Box::pin(async move { exec.query_json_retryable::<Value>(&stmt).await })
+            })
+        };
+
         let wipe_and_recreate_fn: FnPtr<WipeAndRecreateFn> = {
             let exec = Rc::clone(&exec);
             Rc::new(move || {
@@ -150,6 +161,7 @@ impl LocalDb {
             execute_dump_fn,
             query_text_fn,
             query_json_fn,
+            query_json_retryable_fn,
             wipe_and_recreate_fn,
         }
     }
@@ -234,6 +246,16 @@ impl LocalDbQueryExecutor for LocalDb {
         T: FromDbJson,
     {
         let value = (self.query_json_fn)(stmt).await?;
+        serde_json::from_value(value)
+            .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
+    }
+
+    #[cfg(target_family = "wasm")]
+    async fn query_json_retryable<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
+    where
+        T: FromDbJson,
+    {
+        let value = (self.query_json_retryable_fn)(stmt).await?;
         serde_json::from_value(value)
             .map_err(|err| LocalDbQueryError::deserialization(err.to_string()))
     }
