@@ -14,6 +14,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 const BOOTSTRAP_CACHE_SIZE_SQL: &str = "PRAGMA cache_size = -25000";
+#[cfg(target_family = "wasm")]
+const BOOTSTRAP_CACHE_SIZE_QUERY_SQL: &str = "PRAGMA cache_size = -25000; SELECT 1 WHERE 0;";
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ClientBootstrapAdapter;
@@ -113,19 +115,24 @@ impl ClientBootstrapAdapter {
     where
         DB: LocalDbQueryExecutor + ?Sized,
     {
-        db.query_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL))
-            .await?;
-        #[cfg(not(target_family = "wasm"))]
-        let _ = dump_sql;
         #[cfg(target_family = "wasm")]
         if let Some(dump_sql) = dump_sql {
+            // The setter is idempotent, so a follower timeout can be retried.
+            // The empty SELECT makes sqlite-web return JSON rather than its
+            // text response for statements without result columns. The final
+            // semicolon selects the SDK's multi-statement execution path.
+            let _: Vec<serde_json::Value> = db
+                .query_json(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_QUERY_SQL))
+                .await?;
             db.execute_sql_dump(Arc::clone(dump_sql))
                 .await
                 .map_err(LocalDbError::DumpImportFailed)?;
-        } else if let Some(dump_stmt) = dump_stmt {
-            db.execute_batch(dump_stmt).await?;
+            return Ok(());
         }
         #[cfg(not(target_family = "wasm"))]
+        let _ = dump_sql;
+        db.query_text(&SqlStatement::new(BOOTSTRAP_CACHE_SIZE_SQL))
+            .await?;
         if let Some(dump_stmt) = dump_stmt {
             db.execute_batch(dump_stmt).await?;
         }
@@ -221,6 +228,67 @@ impl BootstrapPipeline for ClientBootstrapAdapter {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_family = "wasm")]
+    #[wasm_bindgen_test::wasm_bindgen_test]
+    async fn dump_preflight_retries_follower_timeouts() {
+        use crate::raindex_client::local_db::executor::JsCallbackExecutor;
+        use wasm_bindgen::JsValue;
+        use wasm_bindgen_utils::prelude::js_sys::{Function, Object, Reflect};
+
+        let local_db = Function::new_no_args(
+            r#"return {
+                calls: {},
+                query(sql) {
+                    this.calls[sql] = (this.calls[sql] || 0) + 1;
+                    if (this.calls[sql] === 1) {
+                        return {value: undefined, error: {msg: 'timeout', readableMsg: 'Query timeout'}};
+                    }
+                    if (sql.startsWith('PRAGMA cache_size') &&
+                        !(sql.includes('SELECT 1 WHERE 0;') && sql.endsWith(';'))) {
+                        return {value: 'Query executed successfully. Rows affected: 0', error: null};
+                    }
+                    return {value: '[]', error: null};
+                },
+                transaction() { return {value: '', error: null}; },
+                wipeAndRecreate() { throw new Error('must not wipe'); },
+                beginSqlDumpImport() { return {value: 'session', error: null}; },
+                appendSqlDumpChunk() { return {value: '', error: null}; },
+                finishSqlDumpImport() { this.finished = true; return {value: '', error: null}; },
+                cancelSqlDumpImport() { throw new Error('must not cancel'); }
+            };"#,
+        )
+        .call0(&JsValue::UNDEFINED)
+        .unwrap();
+        let db = JsCallbackExecutor::new(local_db.clone()).unwrap();
+        let dump = Arc::new("BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string());
+
+        ClientBootstrapAdapter::new()
+            .apply_dump(&db, Some(&dump), None)
+            .await
+            .unwrap();
+
+        let calls = Reflect::get(&local_db, &JsValue::from_str("calls")).unwrap();
+        assert_eq!(Object::keys(&calls.clone().into()).length(), 3);
+        for sql in [
+            BOOTSTRAP_CACHE_SIZE_QUERY_SQL,
+            "SELECT 1 AS present FROM target_watermarks LIMIT 1",
+            "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
+        ] {
+            assert_eq!(
+                Reflect::get(&calls, &JsValue::from_str(sql))
+                    .unwrap()
+                    .as_f64(),
+                Some(2.0)
+            );
+        }
+        assert_eq!(
+            Reflect::get(&local_db, &JsValue::from_str("finished"))
+                .unwrap()
+                .as_bool(),
+            Some(true)
+        );
+    }
+
     use std::collections::HashMap;
     use std::sync::Mutex;
 

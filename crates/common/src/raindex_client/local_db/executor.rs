@@ -123,6 +123,10 @@ impl JsCallbackExecutor {
     /// reads retry on that, because a timed-out write may still commit.
     async fn invoke_read(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
         let _guard = self.serialize.lock().await;
+        self.invoke_read_unlocked(stmt).await
+    }
+
+    async fn invoke_read_unlocked(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
         wait_while_busy(LocalDbQueryError::is_worker_unavailable, || {
             self.call_statement_unlocked(stmt)
         })
@@ -420,7 +424,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         // first dump in a fresh database; rebuilding global indexes for every
         // additional target would repeat the most expensive part of bootstrap.
         let watermarks = self
-            .invoke_statement_unlocked(&SqlStatement::new(
+            .invoke_read_unlocked(&SqlStatement::new(
                 "SELECT 1 AS present FROM target_watermarks LIMIT 1",
             ))
             .await?;
@@ -430,7 +434,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         let mut suffix = String::new();
         if has_watermarks.is_empty() {
             let index_rows = self
-                .invoke_statement_unlocked(&SqlStatement::new(
+                .invoke_read_unlocked(&SqlStatement::new(
                     "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
                 ))
                 .await?;
