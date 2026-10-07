@@ -23,6 +23,13 @@ pub trait LocalDbQueryExecutor {
             .await
     }
 
+    /// Atomically import a browser bootstrap cohort with a single index rebuild.
+    /// Implementations must not commit individual dumps separately.
+    #[cfg(target_family = "wasm")]
+    async fn execute_sql_dumps(&self, _dumps: Vec<Arc<String>>) -> Result<(), LocalDbQueryError> {
+        Err(LocalDbQueryError::not_implemented("execute_sql_dumps"))
+    }
+
     async fn query_json<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
     where
         T: FromDbJson;

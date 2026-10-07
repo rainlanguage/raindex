@@ -48,6 +48,12 @@ type ExecuteDumpFn =
     dyn Fn(Arc<String>) -> Pin<Box<dyn Future<Output = Result<(), LocalDbQueryError>> + 'static>>;
 
 #[cfg(target_family = "wasm")]
+type ExecuteDumpsFn =
+    dyn Fn(
+        Vec<Arc<String>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), LocalDbQueryError>> + 'static>>;
+
+#[cfg(target_family = "wasm")]
 type QueryTextFn =
     dyn Fn(
         &SqlStatement,
@@ -89,6 +95,8 @@ pub struct LocalDb {
     execute_batch_fn: FnPtr<ExecuteBatchFn>,
     #[cfg(target_family = "wasm")]
     execute_dump_fn: FnPtr<ExecuteDumpFn>,
+    #[cfg(target_family = "wasm")]
+    execute_dumps_fn: FnPtr<ExecuteDumpsFn>,
     query_text_fn: FnPtr<QueryTextFn>,
     query_json_fn: FnPtr<QueryJsonFn>,
     #[cfg(target_family = "wasm")]
@@ -118,6 +126,14 @@ impl LocalDb {
             Rc::new(move |dump: Arc<String>| {
                 let exec = Rc::clone(&exec);
                 Box::pin(async move { exec.execute_sql_dump(dump).await })
+            })
+        };
+
+        let execute_dumps_fn: FnPtr<ExecuteDumpsFn> = {
+            let exec = Rc::clone(&exec);
+            Rc::new(move |dumps: Vec<Arc<String>>| {
+                let exec = Rc::clone(&exec);
+                Box::pin(async move { exec.execute_sql_dumps(dumps).await })
             })
         };
 
@@ -159,6 +175,7 @@ impl LocalDb {
         Self {
             execute_batch_fn,
             execute_dump_fn,
+            execute_dumps_fn,
             query_text_fn,
             query_json_fn,
             query_json_retryable_fn,
@@ -239,6 +256,11 @@ impl LocalDbQueryExecutor for LocalDb {
     #[cfg(target_family = "wasm")]
     async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
         (self.execute_dump_fn)(dump).await
+    }
+
+    #[cfg(target_family = "wasm")]
+    async fn execute_sql_dumps(&self, dumps: Vec<Arc<String>>) -> Result<(), LocalDbQueryError> {
+        (self.execute_dumps_fn)(dumps).await
     }
 
     async fn query_json<T>(&self, stmt: &SqlStatement) -> Result<T, LocalDbQueryError>
@@ -393,6 +415,62 @@ mod wasm_tests {
     };
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn import_preflight_waits_for_cross_tab_ownership() {
+        use super::pipeline::runner::leadership::acquire_import;
+        use js_sys::{Array, Function, Reflect};
+        use std::sync::Arc;
+        let mut holder = None;
+        for _ in 0..100 {
+            holder = acquire_import().await.unwrap();
+            if holder.is_some() {
+                break;
+            }
+            TimeoutFuture::new(5).await;
+        }
+        let holder = holder.expect("previous test must release import ownership");
+        let local_db = Function::new_no_args(r#"return {
+            reads:0, populated:false, chunks:[],
+            query(sql) {
+                this.reads++;
+                if (!sql.includes('target_watermarks')) throw new Error('must retain populated indexes');
+                return {value:this.populated ? '[{"present":1}]' : '[]'};
+            },
+            transaction() {}, wipeAndRecreate() {},
+            beginSqlDumpImport() { return {value:'session'}; },
+            appendSqlDumpChunk(id, sql) { this.chunks.push(sql); return {value:''}; },
+            finishSqlDumpImport() { return {value:''}; }, cancelSqlDumpImport() {}
+        };"#).call0(&JsValue::UNDEFINED).unwrap();
+        let exec = JsCallbackExecutor::new(local_db.clone()).unwrap();
+        let mut import = exec.execute_sql_dumps(vec![Arc::new(
+            "BEGIN; INSERT INTO t VALUES (2); COMMIT;".into(),
+        )]);
+        for _ in 0..10 {
+            assert!(futures::poll!(import.as_mut()).is_pending());
+            gloo_timers::future::TimeoutFuture::new(1).await;
+        }
+        assert_eq!(
+            Reflect::get(&local_db, &"reads".into()).unwrap().as_f64(),
+            Some(0.0)
+        );
+        Reflect::set(&local_db, &"populated".into(), &JsValue::TRUE).unwrap();
+        drop(holder);
+        import.await.unwrap();
+        assert_eq!(
+            Reflect::get(&local_db, &"reads".into()).unwrap().as_f64(),
+            Some(1.0)
+        );
+        let chunks = Reflect::get(&local_db, &"chunks".into())
+            .unwrap()
+            .dyn_into::<Array>()
+            .unwrap();
+        let sql = chunks
+            .iter()
+            .map(|v| v.as_string().unwrap())
+            .collect::<String>();
+        assert!(!sql.contains("DROP INDEX"));
+    }
 
     fn single_raindex_settings_yaml() -> String {
         format!(

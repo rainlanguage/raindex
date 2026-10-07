@@ -1,3 +1,5 @@
+#[cfg(target_family = "wasm")]
+pub(crate) mod bootstrap;
 pub mod config;
 pub mod environment;
 pub mod leadership;
@@ -132,6 +134,13 @@ where
 
     pub fn needs_initial_provisioning(&self) -> bool {
         !self.manifests_loaded || !self.has_provisioned_dumps
+    }
+
+    /// Keep the coordinator's network ownership for the runner's lifetime.
+    #[cfg(any(target_family = "wasm", test))]
+    pub(crate) fn with_initial_leadership(mut self, guard: Option<LeadershipGuard>) -> Self {
+        self.leadership_guard = guard;
+        self
     }
 
     pub async fn run<DB>(&mut self, db: &DB) -> Result<RunOutcome, LocalDbError>
@@ -1516,6 +1525,29 @@ raindexes:
         assert_eq!(telemetry.manifest_fetch_count(), 1);
         assert_eq!(telemetry.dump_requests().len(), 2);
         assert_eq!(telemetry.builder_inits(), 4);
+    }
+
+    #[tokio::test]
+    async fn transferred_leadership_skips_reacquisition() {
+        let telemetry = Telemetry::default();
+        let environment = build_environment(manifest_for_both(), HashMap::new(), 1, 2, telemetry);
+        // No acquire is allowed: the coordinator already owns this network,
+        // even if one of its seed downloads failed and the runner must retry.
+        let leadership = SequenceLeadership::new(Vec::new());
+        let mut runner =
+            ClientRunner::with_environment(two_raindexes_settings_yaml(), environment, leadership)
+                .unwrap()
+                .with_initial_leadership(Some(LeadershipGuard::new_noop()));
+        let db = RecordingDb::default();
+        prepare_db_for_targets(&db, &runner.base_targets);
+        assert!(matches!(
+            runner.run(&db).await.unwrap(),
+            RunOutcome::Report(_)
+        ));
+        assert!(matches!(
+            runner.run(&db).await.unwrap(),
+            RunOutcome::Report(_)
+        ));
     }
 
     #[tokio::test]

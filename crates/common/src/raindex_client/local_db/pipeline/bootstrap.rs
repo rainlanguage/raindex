@@ -15,7 +15,8 @@ use std::sync::Arc;
 
 const BOOTSTRAP_CACHE_SIZE_SQL: &str = "PRAGMA cache_size = -25000";
 #[cfg(target_family = "wasm")]
-const BOOTSTRAP_CACHE_SIZE_QUERY_SQL: &str = "PRAGMA cache_size = -25000; SELECT 1 WHERE 0;";
+pub(super) const BOOTSTRAP_CACHE_SIZE_QUERY_SQL: &str =
+    "PRAGMA cache_size = -25000; SELECT 1 WHERE 0;";
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct ClientBootstrapAdapter;
@@ -272,7 +273,7 @@ mod tests {
         for sql in [
             BOOTSTRAP_CACHE_SIZE_QUERY_SQL,
             "SELECT 1 AS present FROM target_watermarks LIMIT 1",
-            "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
+            "SELECT m.name, m.sql FROM sqlite_master AS m JOIN pragma_index_list(m.tbl_name) AS i ON i.name = m.name WHERE m.type = 'index' AND m.sql IS NOT NULL AND i.\"unique\" = 0 ORDER BY m.name",
         ] {
             assert_eq!(
                 Reflect::get(&calls, &JsValue::from_str(sql))

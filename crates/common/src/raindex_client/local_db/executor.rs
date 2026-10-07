@@ -232,6 +232,7 @@ struct ImportSessionGuard {
     executor: JsCallbackExecutor,
     pending: Option<PendingImport>,
     serialize: Option<OwnedMutexGuard<()>>,
+    ownership: Option<super::pipeline::runner::leadership::LeadershipGuard>,
 }
 
 enum PendingImport {
@@ -275,9 +276,11 @@ impl Drop for ImportSessionGuard {
         };
         let executor = self.executor.clone();
         let serialize = self.serialize.take();
+        let ownership = self.ownership.take();
         wasm_bindgen_utils::prelude::wasm_bindgen_futures::spawn_local(async move {
             // Keep later queries/imports serialized until rollback finishes.
             let _serialize = serialize;
+            let _ownership = ownership;
             let id = match pending {
                 PendingImport::Active { id, in_flight } => {
                     // The SDK rejects cancellation while an append/finish/cancel
@@ -391,38 +394,50 @@ fn sql_params_to_js(params: &[SqlValue]) -> JsValue {
     JsValue::from(array)
 }
 
-// SAFETY: WASM builds run on a single thread; the wrapped JavaScript callback is only invoked on
-// that thread, so sharing the executor across async tasks is safe.
-unsafe impl Sync for JsCallbackExecutor {}
-
-#[cfg(target_family = "wasm")]
-#[async_trait(?Send)]
-impl LocalDbQueryExecutor for JsCallbackExecutor {
-    async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
-        let _guard = self.serialize.lock().await;
-        if !batch.is_transaction() {
-            return Err(LocalDbQueryError::database(
-                "SQL statement batch must be wrapped in a transaction",
-            ));
+impl JsCallbackExecutor {
+    async fn import_dumps(&self, dumps: Vec<Arc<String>>) -> Result<(), LocalDbQueryError> {
+        if dumps.is_empty() {
+            return Ok(());
         }
-
-        self.invoke_transaction_unlocked(batch).await
-    }
-
-    async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
         let serialize = Arc::clone(&self.serialize).lock_owned().await;
         // The producer wraps its data-only dump in BEGIN/COMMIT. Keep index
         // changes inside that same worker-owned import transaction.
-        let data_sql = dump
-            .trim()
-            .strip_prefix("BEGIN;")
-            .and_then(|sql| sql.strip_suffix("COMMIT;"))
-            .ok_or_else(|| {
-                LocalDbQueryError::database("Unsupported SQL dump transaction markers")
-            })?;
-        // All targets share this executor lock. Defer index construction for the
-        // first dump in a fresh database; rebuilding global indexes for every
-        // additional target would repeat the most expensive part of bootstrap.
+        let data_sql = dumps
+            .iter()
+            .map(|dump| {
+                dump.trim()
+                    .strip_prefix("BEGIN;")
+                    .and_then(|sql| sql.strip_suffix("COMMIT;"))
+                    .ok_or_else(|| {
+                        LocalDbQueryError::database("Unsupported SQL dump transaction markers")
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // Both cohort and per-network imports hold the same cross-tab lock
+        // before reading watermarks. A competing import cannot populate the DB
+        // between this preflight and opening our worker session.
+        let started = js_sys::Date::now();
+        let ownership = loop {
+            match super::pipeline::runner::leadership::acquire_import().await {
+                Ok(Some(guard)) => break Some(guard),
+                Ok(None) if within_import_wait(started) => {
+                    gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
+                }
+                Ok(None) => {
+                    return Err(LocalDbQueryError::database(
+                        "Timed out waiting for import ownership",
+                    ));
+                }
+                Err(error) => {
+                    // Import still works through the SDK lease without Web
+                    // Locks, but preflight cannot safely justify index drops.
+                    tracing::warn!(%error, "Import ownership unavailable; retaining indexes");
+                    break None;
+                }
+            }
+        };
+        // Only a globally fresh DB benefits from rebuilding every index. Adding
+        // seeds to a populated DB keeps indexes over its existing history intact.
         let watermarks = self
             .invoke_read_unlocked(&SqlStatement::new(
                 "SELECT 1 AS present FROM target_watermarks LIMIT 1",
@@ -430,12 +445,13 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
             .await?;
         let has_watermarks: Vec<serde_json::Value> =
             serde_json::from_str(&watermarks).map_err(|_| LocalDbQueryError::invalid_response())?;
+        let defer_indexes = ownership.is_some() && has_watermarks.is_empty();
         let mut prefix = String::from("BEGIN;\n");
         let mut suffix = String::new();
-        if has_watermarks.is_empty() {
+        if defer_indexes {
             let index_rows = self
                 .invoke_read_unlocked(&SqlStatement::new(
-                    "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name",
+                    "SELECT m.name, m.sql FROM sqlite_master AS m JOIN pragma_index_list(m.tbl_name) AS i ON i.name = m.name WHERE m.type = 'index' AND m.sql IS NOT NULL AND i.\"unique\" = 0 ORDER BY m.name",
                 ))
                 .await?;
             let index_rows: Vec<IndexDefinition> = serde_json::from_str(&index_rows)
@@ -455,6 +471,7 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
             executor: self.clone(),
             pending: None,
             serialize: Some(serialize),
+            ownership,
         };
         let started = js_sys::Date::now();
         let id = loop {
@@ -467,6 +484,11 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
             match result {
                 Err(err) if err.is_import_in_progress() && within_import_wait(started) => {
                     guard.pending = None;
+                    // An older SDK caller may not participate in our Web Lock.
+                    // Its import invalidates preflight; retain indexes rather
+                    // than rebuild over data committed while we waited.
+                    prefix = String::from("BEGIN;\n");
+                    suffix = String::from("COMMIT;\n");
                     gloo_timers::future::TimeoutFuture::new(IMPORT_WAIT_POLL_MS).await;
                 }
                 result => break result?,
@@ -478,7 +500,12 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
         });
         let import_result = async {
             self.append_import_sql(&mut guard, &id, &prefix).await?;
-            self.append_import_sql(&mut guard, &id, data_sql).await?;
+            for sql in data_sql {
+                self.append_import_sql(&mut guard, &id, sql).await?;
+                // Keep a trailing line comment in one dump from consuming the
+                // first statement or index definitions in the next dump.
+                self.append_import_sql(&mut guard, &id, "\n").await?;
+            }
             self.append_import_sql(&mut guard, &id, &suffix).await?;
             guard
                 .invoke(&self.finish_import_callback, ImportArgs::Session(&id))
@@ -498,6 +525,33 @@ impl LocalDbQueryExecutor for JsCallbackExecutor {
             guard.disarm();
         }
         import_result
+    }
+}
+
+// SAFETY: WASM builds run on a single thread; the wrapped JavaScript callback is only invoked on
+// that thread, so sharing the executor across async tasks is safe.
+unsafe impl Sync for JsCallbackExecutor {}
+
+#[cfg(target_family = "wasm")]
+#[async_trait(?Send)]
+impl LocalDbQueryExecutor for JsCallbackExecutor {
+    async fn execute_batch(&self, batch: &SqlStatementBatch) -> Result<(), LocalDbQueryError> {
+        let _guard = self.serialize.lock().await;
+        if !batch.is_transaction() {
+            return Err(LocalDbQueryError::database(
+                "SQL statement batch must be wrapped in a transaction",
+            ));
+        }
+
+        self.invoke_transaction_unlocked(batch).await
+    }
+
+    async fn execute_sql_dump(&self, dump: Arc<String>) -> Result<(), LocalDbQueryError> {
+        self.import_dumps(vec![dump]).await
+    }
+
+    async fn execute_sql_dumps(&self, dumps: Vec<Arc<String>>) -> Result<(), LocalDbQueryError> {
+        self.import_dumps(dumps).await
     }
 
     async fn query_text(&self, stmt: &SqlStatement) -> Result<String, LocalDbQueryError> {
@@ -1235,6 +1289,160 @@ pub mod tests {
             assert!(!sql.contains("DROP INDEX"));
             assert!(!sql.contains("CREATE INDEX"));
             assert!(sql.contains("INSERT INTO t VALUES (1);"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn cohort_rebuilds_only_on_a_fresh_database() {
+            for populated in [false, true] {
+                let local_db = Function::new_with_args("populated",
+                r#"return {
+                chunks: [], begins: 0, finishes: 0,
+                query(sql) {
+                    return {value: sql.includes('target_watermarks') ? (populated ? '[{"present":1}]' : '[]') :
+                        '[{"name":"idx_t_value","sql":"CREATE INDEX idx_t_value ON t(value)"}]'};
+                },
+                transaction() { throw new Error('not a statement transaction'); },
+                wipeAndRecreate() { throw new Error('must not wipe'); },
+                beginSqlDumpImport() { this.begins++; return {value:'session'}; },
+                appendSqlDumpChunk(id, sql) { this.chunks.push(sql); return {value:''}; },
+                finishSqlDumpImport() { this.finishes++; return {value:''}; },
+                cancelSqlDumpImport() { throw new Error('must not cancel'); }
+            };"#,
+            )
+            .call1(&JsValue::UNDEFINED, &JsValue::from_bool(populated))
+            .unwrap();
+                let db = LocalDb::new(JsCallbackExecutor::new(local_db.clone()).unwrap());
+                db.execute_sql_dumps(vec![
+                    Arc::new(
+                        "BEGIN; INSERT INTO t VALUES (1); -- first network\nCOMMIT;".to_string(),
+                    ),
+                    Arc::new("BEGIN; INSERT INTO t VALUES (2); COMMIT;".to_string()),
+                ])
+                .await
+                .unwrap();
+                let chunks = Reflect::get(&local_db, &JsValue::from_str("chunks"))
+                    .unwrap()
+                    .dyn_into::<Array>()
+                    .unwrap();
+                let sql = chunks
+                    .iter()
+                    .map(|v| v.as_string().unwrap())
+                    .collect::<String>();
+                assert_eq!(sql.matches("BEGIN;").count(), 1);
+                assert_eq!(sql.matches("COMMIT;").count(), 1);
+                assert_eq!(sql.matches("DROP INDEX").count(), usize::from(!populated));
+                assert_eq!(sql.matches("CREATE INDEX").count(), usize::from(!populated));
+                if !populated {
+                    assert!(sql.find("VALUES (2)").unwrap() < sql.find("CREATE INDEX").unwrap());
+                }
+                assert_eq!(
+                    Reflect::get(&local_db, &JsValue::from_str("begins"))
+                        .unwrap()
+                        .as_f64(),
+                    Some(1.0)
+                );
+                assert_eq!(
+                    Reflect::get(&local_db, &JsValue::from_str("finishes"))
+                        .unwrap()
+                        .as_f64(),
+                    Some(1.0)
+                );
+            }
+        }
+
+        #[wasm_bindgen_test]
+        async fn import_lease_contention_retains_preflight_indexes() {
+            let local_db = Function::new_no_args(r#"return {
+                chunks: [], begins: 0,
+                query(sql) { return {value: sql.includes('target_watermarks') ? '[]' :
+                    '[{"name":"idx_t_value","sql":"CREATE INDEX idx_t_value ON t(value)"}]'}; },
+                transaction() {}, wipeAndRecreate() {},
+                beginSqlDumpImport() {
+                    if (++this.begins === 1) return {error:{msg:'busy',readableMsg:'SQL dump import is in progress'}};
+                    return {value:'session'};
+                },
+                appendSqlDumpChunk(id, sql) { this.chunks.push(sql); return {value:''}; },
+                finishSqlDumpImport() { return {value:''}; }, cancelSqlDumpImport() {}
+            };"#).call0(&JsValue::UNDEFINED).unwrap();
+            let exec = JsCallbackExecutor::new(local_db.clone()).unwrap();
+            exec.execute_sql_dump(Arc::new("BEGIN; INSERT INTO t VALUES (1); COMMIT;".into()))
+                .await
+                .unwrap();
+            let chunks = Reflect::get(&local_db, &"chunks".into())
+                .unwrap()
+                .dyn_into::<Array>()
+                .unwrap();
+            let sql = chunks
+                .iter()
+                .map(|v| v.as_string().unwrap())
+                .collect::<String>();
+            assert!(sql.contains("INSERT INTO t VALUES (1)"));
+            assert!(!sql.contains("DROP INDEX"));
+            assert!(!sql.contains("CREATE INDEX"));
+            assert_eq!(
+                Reflect::get(&local_db, &"begins".into()).unwrap().as_f64(),
+                Some(2.0)
+            );
+        }
+
+        #[wasm_bindgen_test]
+        async fn cohort_rejects_bad_envelopes_before_opening_a_session() {
+            let local_db = Function::new_no_args(
+                r#"return {
+                query() { throw new Error('must validate before DB access'); },
+                transaction() {}, wipeAndRecreate() {},
+                beginSqlDumpImport() { throw new Error('must not begin'); },
+                appendSqlDumpChunk() {}, finishSqlDumpImport() {}, cancelSqlDumpImport() {}
+            };"#,
+            )
+            .call0(&JsValue::UNDEFINED)
+            .unwrap();
+            let exec = JsCallbackExecutor::new(local_db).unwrap();
+            let error = exec
+                .execute_sql_dumps(vec![
+                    Arc::new("BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string()),
+                    Arc::new("INSERT INTO t VALUES (2);".to_string()),
+                ])
+                .await
+                .unwrap_err();
+            assert!(error
+                .to_string()
+                .contains("Unsupported SQL dump transaction markers"));
+        }
+
+        #[wasm_bindgen_test]
+        async fn second_dump_failure_cancels_the_entire_cohort() {
+            let local_db = Function::new_no_args(r#"return {
+                cancelled: 0, finished: 0,
+                query(sql) { return {value:'[]'}; }, transaction() {}, wipeAndRecreate() {},
+                beginSqlDumpImport() { return {value:'session'}; },
+                appendSqlDumpChunk(id, sql) {
+                    if(sql.includes('bad_second_dump')) return {error:{msg:'bad SQL',readableMsg:'bad SQL'}};
+                    return {value:''};
+                },
+                finishSqlDumpImport() { this.finished++; return {value:''}; },
+                cancelSqlDumpImport() { this.cancelled++; return {value:''}; }
+            };"#).call0(&JsValue::UNDEFINED).unwrap();
+            let exec = JsCallbackExecutor::new(local_db.clone()).unwrap();
+            assert!(exec
+                .execute_sql_dumps(vec![
+                    Arc::new("BEGIN; INSERT INTO t VALUES (1); COMMIT;".to_string()),
+                    Arc::new("BEGIN; bad_second_dump; COMMIT;".to_string()),
+                ])
+                .await
+                .is_err());
+            assert_eq!(
+                Reflect::get(&local_db, &JsValue::from_str("cancelled"))
+                    .unwrap()
+                    .as_f64(),
+                Some(1.0)
+            );
+            assert_eq!(
+                Reflect::get(&local_db, &JsValue::from_str("finished"))
+                    .unwrap()
+                    .as_f64(),
+                Some(0.0)
+            );
         }
 
         #[wasm_bindgen_test]
