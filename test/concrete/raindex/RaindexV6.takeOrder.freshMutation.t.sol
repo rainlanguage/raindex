@@ -49,6 +49,8 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
             abi.encode(true)
         );
         vm.prank(owner);
+        // amount is a whole-token test quantity, far below int256 max.
+        // forge-lint: disable-next-line(unsafe-typecast)
         iRaindex.deposit4(address(iToken1), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0));
     }
 

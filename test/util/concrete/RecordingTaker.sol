@@ -27,7 +27,11 @@ contract RecordingTaker is IRaindexV6OrderTaker {
     }
 
     function onTakeOrders2(
+        // Records the token it was given, including address(0).
+        // forge-lint: disable-next-line(missing-zero-check)
         address outputToken,
+        // Records the token it was given, including address(0).
+        // forge-lint: disable-next-line(missing-zero-check)
         address inputToken,
         Float takerInput,
         Float takerOutput,

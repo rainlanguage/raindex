@@ -21,6 +21,8 @@ contract RecordingFlashLendingMockRaindex is MockRaindexBase {
     address public lastFlashLoanToken;
     uint256 public lastFlashLoanAmount;
 
+    // Records and transfers whatever token the arb requested, including address(0).
+    // forge-lint: disable-next-line(missing-zero-check)
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
         external
         override

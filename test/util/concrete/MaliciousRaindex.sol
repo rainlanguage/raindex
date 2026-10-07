@@ -15,6 +15,8 @@ contract MaliciousRaindex is MockRaindexBase {
     address public inputToken;
     address public outputToken;
 
+    // Records the pair a test configures, including address(0).
+    // forge-lint: disable-next-line(missing-zero-check)
     function setTokens(address input, address output) external {
         inputToken = input;
         outputToken = output;

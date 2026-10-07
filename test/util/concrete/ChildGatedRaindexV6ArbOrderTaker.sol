@@ -14,7 +14,7 @@ import {TaskV2} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
 contract ChildGatedRaindexV6ArbOrderTaker is RaindexV6ArbOrderTaker, RaindexV6ArbTaskGated {
     constructor(RaindexV6ArbConfig memory config) RaindexV6ArbTaskGated(config) {}
 
-    function _beforeArb(TaskV2 memory task) internal view override {
+    function _beforeArb(TaskV2 memory task) internal pure override {
         _checkTaskHash(task);
     }
 }

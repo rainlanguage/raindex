@@ -10,7 +10,7 @@ import {TaskV2} from "raindex-interface-0.1.7/src/interface/IRaindexV6.sol";
 contract ChildRaindexV6ArbTaskGated is RaindexV6ArbTaskGated {
     constructor(RaindexV6ArbConfig memory config) RaindexV6ArbTaskGated(config) {}
 
-    function checkTaskHash(TaskV2 memory task) external view {
+    function checkTaskHash(TaskV2 memory task) external pure {
         _checkTaskHash(task);
     }
 }

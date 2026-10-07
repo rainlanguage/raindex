@@ -26,7 +26,7 @@ abstract contract RaindexV6ArbTaskGated is RaindexV6ArbCommon {
     /// match the hash of the provided task. Passes through if no task was
     /// configured at construction.
     //slither-disable-next-line dead-code
-    function _checkTaskHash(TaskV2 memory task) internal view {
+    function _checkTaskHash(TaskV2 memory task) internal pure {
         if (iTaskHash != bytes32(0) && iTaskHash != keccak256(abi.encode(task))) {
             revert WrongTask();
         }

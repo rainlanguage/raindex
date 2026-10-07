@@ -420,6 +420,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         bytes32 orderHash = quoteConfig.order.hash();
 
         if (sOrders[orderHash] != ORDER_LIVE) {
+            // false is quote2's "no live order" result, not a constant condition.
+            // forge-lint: disable-next-line(boolean-cst)
             return (false, LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         }
 
@@ -433,6 +435,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             quoteConfig.signedContext,
             new bytes32[](0)
         );
+        // true is quote2's "order is live" result required by IRaindexV6.
+        // forge-lint: disable-next-line(boolean-cst)
         return (true, orderIOCalculation.outputMax, orderIOCalculation.IORatio);
     }
 

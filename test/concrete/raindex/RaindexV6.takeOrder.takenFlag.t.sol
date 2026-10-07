@@ -37,7 +37,12 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
         );
         vm.prank(alice);
         iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0)
+            address(iToken1),
+            bytes32(uint256(0x01)),
+            // amount is a whole-token test quantity, far below int256 max.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            LibDecimalFloat.packLossless(int256(amount), 0),
+            new TaskV2[](0)
         );
     }
 

@@ -15,6 +15,8 @@ contract LibRaindexDeploySubgraphYamlAddressTest is Test {
         inputs[1] = ".dataSources[0].source.address";
         inputs[2] = "subgraph/subgraph.yaml";
         bytes memory result = vm.ffi(inputs);
+        // yq prints the 20-byte address this assertion compares.
+        // forge-lint: disable-next-line(unsafe-typecast)
         address addr = address(bytes20(result));
         assertEq(addr, LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, "subgraph.yaml address mismatch");
     }

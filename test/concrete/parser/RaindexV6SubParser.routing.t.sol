@@ -24,9 +24,9 @@ contract RaindexV6SubParserRoutingTest is Test {
     /// byte 3 = column.
     function checkRoute(
         function(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) parser,
-        uint256 expectedColumn,
-        uint256 expectedRow
-    ) internal {
+        uint8 expectedColumn,
+        uint8 expectedRow
+    ) internal pure {
         (bool success, bytes memory bytecode, bytes32[] memory constants) = parser(0, 0, OperandV2.wrap(0));
         assertTrue(success, "parser must succeed");
         assertEq(bytecode.length, 4, "context bytecode must be 4 bytes");
@@ -34,8 +34,8 @@ contract RaindexV6SubParserRoutingTest is Test {
         assertEq(uint8(bytecode[0]), OPCODE_CONTEXT, "opcode index");
         // 0 inputs, 1 output is encoded as the high nibble of byte 1.
         assertEq(uint8(bytecode[1]), 0x10, "io byte (0 in, 1 out)");
-        assertEq(uint8(bytecode[2]), uint8(expectedRow), "row");
-        assertEq(uint8(bytecode[3]), uint8(expectedColumn), "column");
+        assertEq(uint8(bytecode[2]), expectedRow, "row");
+        assertEq(uint8(bytecode[3]), expectedColumn, "column");
     }
 
     /// @dev Same as `checkRoute` but the parser consumes the operand to select
@@ -43,94 +43,94 @@ contract RaindexV6SubParserRoutingTest is Test {
     function checkRouteOperand(
         function(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) parser,
         OperandV2 operand,
-        uint256 expectedColumn,
-        uint256 expectedRow
-    ) internal {
+        uint8 expectedColumn,
+        uint8 expectedRow
+    ) internal pure {
         (bool success, bytes memory bytecode,) = parser(0, 0, operand);
         assertTrue(success, "parser must succeed");
         assertEq(bytecode.length, 4, "context bytecode must be 4 bytes");
-        assertEq(uint8(bytecode[2]), uint8(expectedRow), "row");
-        assertEq(uint8(bytecode[3]), uint8(expectedColumn), "column");
+        assertEq(uint8(bytecode[2]), expectedRow, "row");
+        assertEq(uint8(bytecode[3]), expectedColumn, "column");
     }
 
     // Base column (column 0).
 
-    function testRouteSender() external {
+    function testRouteSender() external pure {
         // order-clearer -> base column 0, sender row 0.
         checkRoute(LibRaindexSubParser.subParserSender, 0, 0);
     }
 
-    function testRouteCallingContract() external {
+    function testRouteCallingContract() external pure {
         // raindex -> base column 0, calling-contract row 1.
         checkRoute(LibRaindexSubParser.subParserCallingContract, 0, 1);
     }
 
     // Calling context column (column 1).
 
-    function testRouteOrderHash() external {
+    function testRouteOrderHash() external pure {
         checkRoute(LibRaindexSubParser.subParserOrderHash, 1, 0);
     }
 
-    function testRouteOrderOwner() external {
+    function testRouteOrderOwner() external pure {
         checkRoute(LibRaindexSubParser.subParserOrderOwner, 1, 1);
     }
 
-    function testRouteOrderCounterparty() external {
+    function testRouteOrderCounterparty() external pure {
         checkRoute(LibRaindexSubParser.subParserOrderCounterparty, 1, 2);
     }
 
     // Calculations column (column 2).
 
-    function testRouteMaxOutput() external {
+    function testRouteMaxOutput() external pure {
         checkRoute(LibRaindexSubParser.subParserMaxOutput, 2, 0);
     }
 
-    function testRouteIORatio() external {
+    function testRouteIORatio() external pure {
         checkRoute(LibRaindexSubParser.subParserIORatio, 2, 1);
     }
 
     // Vault inputs column (column 3).
 
-    function testRouteInputToken() external {
+    function testRouteInputToken() external pure {
         checkRoute(LibRaindexSubParser.subParserInputToken, 3, 0);
     }
 
-    function testRouteInputTokenDecimals() external {
+    function testRouteInputTokenDecimals() external pure {
         checkRoute(LibRaindexSubParser.subParserInputTokenDecimals, 3, 1);
     }
 
-    function testRouteInputVaultId() external {
+    function testRouteInputVaultId() external pure {
         checkRoute(LibRaindexSubParser.subParserInputVaultId, 3, 2);
     }
 
-    function testRouteInputBalanceBefore() external {
+    function testRouteInputBalanceBefore() external pure {
         checkRoute(LibRaindexSubParser.subParserInputBalanceBefore, 3, 3);
     }
 
-    function testRouteInputBalanceDiff() external {
+    function testRouteInputBalanceDiff() external pure {
         checkRoute(LibRaindexSubParser.subParserInputBalanceDiff, 3, 4);
     }
 
     // Vault outputs column (column 4) — same rows as inputs but different
     // column, so this pins input-vs-output column isolation.
 
-    function testRouteOutputToken() external {
+    function testRouteOutputToken() external pure {
         checkRoute(LibRaindexSubParser.subParserOutputToken, 4, 0);
     }
 
-    function testRouteOutputTokenDecimals() external {
+    function testRouteOutputTokenDecimals() external pure {
         checkRoute(LibRaindexSubParser.subParserOutputTokenDecimals, 4, 1);
     }
 
-    function testRouteOutputVaultId() external {
+    function testRouteOutputVaultId() external pure {
         checkRoute(LibRaindexSubParser.subParserOutputVaultId, 4, 2);
     }
 
-    function testRouteOutputBalanceBefore() external {
+    function testRouteOutputBalanceBefore() external pure {
         checkRoute(LibRaindexSubParser.subParserOutputBalanceBefore, 4, 3);
     }
 
-    function testRouteOutputBalanceDiff() external {
+    function testRouteOutputBalanceDiff() external pure {
         checkRoute(LibRaindexSubParser.subParserOutputBalanceDiff, 4, 4);
     }
 
@@ -138,42 +138,42 @@ contract RaindexV6SubParserRoutingTest is Test {
     // row enum. No fixture context columns exist for these, so this is the
     // only coverage of their routing.
 
-    function testRouteDepositToken() external {
+    function testRouteDepositToken() external pure {
         checkRoute(LibRaindexSubParser.subParserDepositToken, 1, 0);
     }
 
-    function testRouteDepositVaultId() external {
+    function testRouteDepositVaultId() external pure {
         checkRoute(LibRaindexSubParser.subParserDepositVaultId, 1, 1);
     }
 
-    function testRouteDepositVaultBalanceBefore() external {
+    function testRouteDepositVaultBalanceBefore() external pure {
         checkRoute(LibRaindexSubParser.subParserDepositVaultBalanceBefore, 1, 2);
     }
 
-    function testRouteDepositVaultBalanceAfter() external {
+    function testRouteDepositVaultBalanceAfter() external pure {
         checkRoute(LibRaindexSubParser.subParserDepositVaultBalanceAfter, 1, 3);
     }
 
     // Withdraw words route to the calling context column (column 1), withdraw
     // row enum.
 
-    function testRouteWithdrawToken() external {
+    function testRouteWithdrawToken() external pure {
         checkRoute(LibRaindexSubParser.subParserWithdrawToken, 1, 0);
     }
 
-    function testRouteWithdrawVaultId() external {
+    function testRouteWithdrawVaultId() external pure {
         checkRoute(LibRaindexSubParser.subParserWithdrawVaultId, 1, 1);
     }
 
-    function testRouteWithdrawVaultBalanceBefore() external {
+    function testRouteWithdrawVaultBalanceBefore() external pure {
         checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceBefore, 1, 2);
     }
 
-    function testRouteWithdrawVaultBalanceAfter() external {
+    function testRouteWithdrawVaultBalanceAfter() external pure {
         checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceAfter, 1, 3);
     }
 
-    function testRouteWithdrawTargetAmount() external {
+    function testRouteWithdrawTargetAmount() external pure {
         checkRoute(LibRaindexSubParser.subParserWithdrawTargetAmount, 1, 4);
     }
 
@@ -181,7 +181,7 @@ contract RaindexV6SubParserRoutingTest is Test {
 
     /// signers routes to the signers column (column 5) and uses the raw
     /// operand as the row.
-    function testRouteSignersRowFromOperand() external {
+    function testRouteSignersRowFromOperand() external pure {
         checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(0))), 5, 0);
         checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(1))), 5, 1);
         checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(7))), 5, 7);
@@ -189,7 +189,7 @@ contract RaindexV6SubParserRoutingTest is Test {
 
     /// signed-context low operand byte selects a column offset added to the
     /// signed context start column (column 6); the second byte selects the row.
-    function testRouteSignedContextColumnMaskAndRowShift() external {
+    function testRouteSignedContextColumnMaskAndRowShift() external pure {
         // operand 0x0000 -> column 6 + 0, row 0.
         checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0000))), 6, 0);
         // operand 0x0001 -> low byte 1 -> column 6 + 1 = 7, row 0.
