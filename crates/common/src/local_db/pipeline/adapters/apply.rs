@@ -22,6 +22,7 @@ pub struct ApplyPipelineTargetInfo {
     pub raindex_id: RaindexIdentifier,
     pub start_block: u64,
     pub target_block: u64,
+    pub defer_analyze: bool,
     pub hash: B256,
 }
 
@@ -104,7 +105,9 @@ pub trait ApplyPipeline {
 
         // Ensure SQLite planner stats are up to date so reads don't suffer from
         // poor query plans.
-        batch.add(SqlStatement::new("ANALYZE"));
+        if !target_info.defer_analyze {
+            batch.add(SqlStatement::new("ANALYZE"));
+        }
 
         Ok(batch)
     }
@@ -166,6 +169,7 @@ mod tests {
             raindex_id: raindex_id.clone(),
             start_block,
             target_block,
+            defer_analyze: false,
             hash: SAMPLE_HASH_B256,
         }
     }
@@ -928,6 +932,24 @@ mod tests {
             "ANALYZE",
             "ANALYZE should be the last statement in the batch"
         );
+    }
+
+    #[test]
+    fn deferred_analysis_omits_per_target_analyze() {
+        let pipeline = DefaultApplyPipeline::new();
+        let raindex_id = sample_raindex_id();
+        let mut target = build_target_info(&raindex_id, 1, 100);
+        target.defer_analyze = true;
+
+        let batch = pipeline
+            .build_batch(&target, &[], &[], &[], &[])
+            .expect("batch ok");
+
+        assert!(batch.statements().iter().all(|s| s.sql() != "ANALYZE"));
+        assert!(batch
+            .statements()
+            .iter()
+            .any(|s| s.sql().starts_with("INSERT INTO target_watermarks")));
     }
 
     #[test]

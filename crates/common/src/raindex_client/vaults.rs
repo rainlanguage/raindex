@@ -2298,6 +2298,7 @@ mod tests {
         use LocalDbVault;
 
         fn make_local_db_vaults_callback(vaults: Vec<LocalDbVault>) -> js_sys::Function {
+            let vaults_count = vaults.len();
             let json = serde_json::to_string(&vaults).unwrap();
             let result = WasmEncodedResult::Success::<String> {
                 value: json,
@@ -2308,8 +2309,15 @@ mod tests {
                 .as_string()
                 .unwrap();
 
-            let callback = Closure::wrap(Box::new(move |_sql: String| -> JsValue {
-                js_sys::JSON::parse(&payload).unwrap()
+            let callback = Closure::wrap(Box::new(move |sql: String| -> JsValue {
+                if sql.contains("vaults_count") {
+                    serde_wasm_bindgen::to_value(&WasmEncodedResult::success(format!(
+                        "[{{\"vaults_count\":{vaults_count}}}]"
+                    )))
+                    .unwrap()
+                } else {
+                    js_sys::JSON::parse(&payload).unwrap()
+                }
             }) as Box<dyn Fn(String) -> JsValue>);
 
             callback.into_js_value().dyn_into().unwrap()
@@ -2522,7 +2530,7 @@ mod tests {
             );
             assert_eq!(
                 change.transaction().from().to_lowercase(),
-                transaction_sender.to_string()
+                transaction_sender.to_string().to_lowercase()
             );
         }
 
@@ -2542,6 +2550,15 @@ mod tests {
             let captured_sql = Rc::new(RefCell::new((String::new(), JsValue::UNDEFINED)));
             let json = serde_json::to_string(&vec![keep_vault]).unwrap();
             let callback = create_sql_capturing_callback(&json, captured_sql.clone());
+            let callback = js_sys::Function::new_with_args(
+                "callback",
+                "return (sql, params) => sql.includes('vaults_count') \
+                 ? { value: '[{\"vaults_count\":1}]', error: null } \
+                 : callback(sql, params);",
+            )
+            .call1(&JsValue::UNDEFINED, &callback)
+            .unwrap()
+            .unchecked_into();
 
             let client = new_test_client_with_local_db(
                 vec![get_local_db_test_yaml()],

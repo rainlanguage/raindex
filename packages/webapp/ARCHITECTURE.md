@@ -18,7 +18,7 @@ WASM‑backed SDK `@rainlanguage/raindex` to provide a browser UI for:
     providers for state, wallet and transactions.
 - Targets
   - Client‑side SvelteKit app (SSR disabled) built with Vite and Tailwind.
-  - Deployed using the Vercel adapter (Node.js 20 runtime).
+  - Deployed using the Vercel adapter (Node.js 22 runtime).
 - Upstream libraries
   - UI: `@rainlanguage/ui-components`, `flowbite-svelte`,
     `@tanstack/svelte-query`.
@@ -114,7 +114,7 @@ nix develop -c npm run dev
 - `static/` — Static assets.
 - `tailwind.config.ts` — Tailwind setup (includes `ui-components` and Flowbite
   paths).
-- `svelte.config.js` — Vercel adapter (Node.js 20 runtime) and preprocessing.
+- `svelte.config.js` — Vercel adapter (Node.js 22 runtime) and preprocessing.
 - `vite.config.ts` — Build and Vitest configuration (JS DOM, inline deps, env
   passthrough).
 

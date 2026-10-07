@@ -100,6 +100,7 @@ pub fn build_runner_targets(
                 window_overrides: WindowOverrides::default(),
             },
             dump_str: None,
+            defer_analyze: false,
             block_number_threshold: sync_cfg.bootstrap_block_threshold,
             manifest_end_block: 0,
         };
