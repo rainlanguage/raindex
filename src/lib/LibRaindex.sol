@@ -102,9 +102,16 @@ uint256 constant CONTEXT_SIGNED_CONTEXT_START_ROWS = 1;
 uint256 constant CONTEXT_SIGNED_CONTEXT_START_ROW = 0;
 
 library LibRaindex {
-    /// @dev Evaluates each task in `post` against the provided `context`.
-    /// Tasks with empty bytecode are skipped.
+    /// @dev Evaluates each task in `post` against `context` padded with empty
+    /// columns to `CALLING_CONTEXT_COLUMNS`, so the signers and signed context
+    /// columns are at `CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN` and
+    /// `CONTEXT_SIGNED_CONTEXT_START_COLUMN` as in order evaluation. Tasks with
+    /// empty bytecode are skipped.
     function doPost(bytes32[][] memory context, TaskV2[] memory post) internal {
+        bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
+        for (uint256 i = 0; i < context.length; ++i) {
+            callingContext[i] = context[i];
+        }
         StateNamespace namespace = StateNamespace.wrap(uint256(uint160(msg.sender)));
         FullyQualifiedNamespace qualifiedNamespace = LibNamespace.qualifyNamespace(namespace, address(this));
         TaskV2 memory task;
@@ -121,7 +128,7 @@ library LibRaindex {
                             namespace: qualifiedNamespace,
                             bytecode: task.evaluable.bytecode,
                             sourceIndex: SourceIndexV2.wrap(0),
-                            context: LibContext.build(context, task.signedContext),
+                            context: LibContext.build(callingContext, task.signedContext),
                             inputs: emptyStack,
                             stateOverlay: emptyStateOverlay
                         })
