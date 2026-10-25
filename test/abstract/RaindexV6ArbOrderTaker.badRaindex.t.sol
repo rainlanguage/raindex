@@ -8,7 +8,7 @@ import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericP
 import {BadRaindex} from "../../src/abstract/RaindexV6ArbOrderTaker.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
     EvaluableV4,
     TakeOrderConfigV4,
@@ -17,7 +17,7 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -42,7 +42,7 @@ contract RaindexV6ArbOrderTakerBadRaindexTest is GenericPoolRaindexV6ArbOrderTak
         vm.expectRevert(abi.encodeWithSelector(BadRaindex.selector, badRaindex));
         GenericPoolRaindexV6ArbOrderTaker(iArb)
             .arb5(
-                IRaindexV6(badRaindex),
+                IRaindexV7(badRaindex),
                 TakeOrdersConfigV5({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),

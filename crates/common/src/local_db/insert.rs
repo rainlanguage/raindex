@@ -9,7 +9,7 @@ use alloy::{
     primitives::{keccak256, Address, FixedBytes, B256, U256},
 };
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{
+use raindex_bindings::IRaindexV7::{
     AddOrderV3, AfterClearV2, ClearV3, DepositV2, OrderV4, RemoveOrderV3, TakeOrderV3, WithdrawV2,
     IOV2,
 };
@@ -776,7 +776,7 @@ mod tests {
     use alloy::primitives::{b256, Address, Bytes, FixedBytes, B256, U256};
     use itertools::Itertools;
     use raindex_bindings::IInterpreterStoreV3::Set;
-    use raindex_bindings::IRaindexV6::{
+    use raindex_bindings::IRaindexV7::{
         ClearConfigV2, ClearStateChangeV2, EvaluableV4, SignedContextV1, TakeOrderConfigV4,
     };
     use std::collections::HashMap;

@@ -24,7 +24,7 @@ use alloy::serde::WithOtherFields;
 use alloy::sol_types::SolCall;
 use httpmock::MockServer;
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{takeOrders4Call, TakeOrdersConfigV5};
+use raindex_bindings::IRaindexV7::{takeOrders4Call, TakeOrdersConfigV5};
 use serde_json::json;
 use std::ops::{Mul, Sub};
 

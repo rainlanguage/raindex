@@ -23,7 +23,7 @@ import {
 } from "src/lib/LibRaindex.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
     OrderConfigV4,
     QuoteV2,
@@ -31,7 +31,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4, EvalV4, StackItem} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
@@ -464,7 +464,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
             meta: ""
         });
         vm.prank(order.owner);
-        IRaindexV6(address(harness)).addOrder4(config, new TaskV2[](0));
+        IRaindexV7(address(harness)).addOrder4(config, new TaskV2[](0));
     }
 
     /// A LIVE order quotes `(true, vault-capped outputMax, IORatio)`. The output
@@ -479,7 +479,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
         QuoteV2 memory quoteConfig =
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV6(address(harness)).quote2(quoteConfig);
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
 
         assertTrue(exists, "live order exists");
         assertTrue(outputMax.eq(LibDecimalFloat.packLossless(9, 0)), "quote output max vault-capped to 9");
@@ -499,7 +499,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
         QuoteV2 memory quoteConfig =
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV6(address(harness)).quote2(quoteConfig);
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
 
         assertFalse(exists, "dead order does not exist");
         assertTrue(outputMax.isZero(), "dead order output max zero");
@@ -516,11 +516,11 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(50, 0));
         _addOrder(order);
         vm.prank(order.owner);
-        IRaindexV6(address(harness)).removeOrder3(order, new TaskV2[](0));
+        IRaindexV7(address(harness)).removeOrder3(order, new TaskV2[](0));
 
         QuoteV2 memory quoteConfig =
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV6(address(harness)).quote2(quoteConfig);
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
 
         assertFalse(exists, "removed order does not exist");
         assertTrue(outputMax.isZero(), "removed order output max zero");
@@ -554,7 +554,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
         QuoteV2 memory quoteConfig =
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
-        IRaindexV6(address(harness)).quote2(quoteConfig);
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
+        IRaindexV7(address(harness)).quote2(quoteConfig);
     }
 }

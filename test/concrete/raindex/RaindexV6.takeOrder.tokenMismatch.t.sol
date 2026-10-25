@@ -10,7 +10,7 @@ import {
     TakeOrdersConfigV5,
     EvaluableV4,
     SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {TokenMismatch} from "../../../src/error/ErrRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 

@@ -10,8 +10,8 @@ import {
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
@@ -111,7 +111,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         vm.expectCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), 0);
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.TakeOrderV3(bob, config.orders[0], _f(outputMax), LibDecimalFloat.FLOAT_ZERO);
+        emit IRaindexV7.TakeOrderV3(bob, config.orders[0], _f(outputMax), LibDecimalFloat.FLOAT_ZERO);
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
 
         assertTrue(totalTakerInput.eq(_f(outputMax)), "taker input");
@@ -223,7 +223,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
 
         assertTrue(totalTakerInput.isZero(), "taker input");

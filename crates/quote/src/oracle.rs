@@ -2,7 +2,7 @@ use alloy::primitives::{Address, Bytes, FixedBytes, U256};
 use alloy::sol_types::SolValue;
 use futures::{stream::FuturesUnordered, StreamExt};
 use once_cell::sync::{Lazy, OnceCell};
-use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -483,7 +483,7 @@ mod tests {
     use alloy::primitives::{address, FixedBytes};
     #[cfg(not(target_family = "wasm"))]
     use httpmock::{Method::POST, MockServer};
-    use raindex_bindings::IRaindexV6::{EvaluableV4, OrderV4, IOV2};
+    use raindex_bindings::IRaindexV7::{EvaluableV4, OrderV4, IOV2};
     #[cfg(not(target_family = "wasm"))]
     use serde_json::json;
     use std::sync::{

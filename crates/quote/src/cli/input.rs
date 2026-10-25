@@ -5,7 +5,7 @@ use alloy::primitives::{
 };
 use alloy::sol_types::SolType;
 use clap::Args;
-use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2};
+use raindex_bindings::IRaindexV7::{OrderV4, QuoteV2};
 use std::str::FromStr;
 
 /// Group of valid input formats
@@ -202,7 +202,7 @@ mod tests {
     use super::*;
     use alloy::primitives::hex::encode_prefixed;
     use alloy::sol_types::SolValue;
-    use raindex_bindings::IRaindexV6::{EvaluableV4, OrderV4};
+    use raindex_bindings::IRaindexV7::{EvaluableV4, OrderV4};
 
     #[test]
     fn test_parse_input() {

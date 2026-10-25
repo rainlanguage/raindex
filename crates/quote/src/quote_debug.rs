@@ -7,7 +7,7 @@ use rain_interpreter_eval::{
     fork::{Forker, NewForkedEvm},
     trace::{RainEvalResult, RainEvalResultFromRawCallResultError},
 };
-use raindex_bindings::IRaindexV6::quote2Call;
+use raindex_bindings::IRaindexV7::quote2Call;
 use url::Url;
 
 pub struct NewQuoteDebugger {
@@ -89,7 +89,7 @@ mod tests {
     use alloy::sol_types::{SolCall, SolValue};
     use httpmock::MockServer;
     use raindex_app_settings::spec_version::SpecVersion;
-    use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2};
+    use raindex_bindings::IRaindexV7::{OrderV4, QuoteV2};
     use raindex_common::add_order::AddOrderArgs;
     use raindex_common::dotrain_order::DotrainOrder;
     use raindex_test_fixtures::LocalEvm;

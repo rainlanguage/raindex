@@ -189,7 +189,7 @@ fn log_selected_legs(
 
 #[wasm_export]
 impl RaindexClient {
-    /// Generates calldata for `IRaindexV6.takeOrders4` using a mode + price-cap policy.
+    /// Generates calldata for `IRaindexV7.takeOrders4` using a mode + price-cap policy.
     ///
     /// This method includes preflight simulation to validate the transaction will succeed
     /// and automatically removes failing orders from the config.
@@ -608,7 +608,7 @@ mod tests {
         use crate::test_helpers::candidates::make_candidate;
         use alloy::primitives::{Address, Bytes, FixedBytes, U256};
         use rain_math_float::Float;
-        use raindex_bindings::IRaindexV6::SignedContextV1;
+        use raindex_bindings::IRaindexV7::SignedContextV1;
 
         fn float(value: &str) -> Float {
             Float::parse(value.to_string()).unwrap()

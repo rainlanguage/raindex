@@ -5,14 +5,14 @@ pragma solidity =0.8.25;
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderConfigV4,
     OrderV4,
     TakeOrdersConfigV5,
     ClearConfigV2,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.8/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
@@ -53,7 +53,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
             borrower,
-            abi.encodeWithSelector(IRaindexV6.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
+            abi.encodeWithSelector(IRaindexV7.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
             loanAmount
         );
     }
@@ -64,7 +64,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.orderExists.selector, orderHash), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.orderExists.selector, orderHash), loanAmount
         );
     }
 
@@ -86,7 +86,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.deposit4.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
+                IRaindexV7.deposit4.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
             ),
             loanAmount
         );
@@ -110,7 +110,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.withdraw4.selector, address(iToken0), vaultId, withdrawAmount, new TaskV2[](0)
+                IRaindexV7.withdraw4.selector, address(iToken0), vaultId, withdrawAmount, new TaskV2[](0)
             ),
             loanAmount
         );
@@ -125,7 +125,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.addOrder4.selector, config, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.addOrder4.selector, config, new TaskV2[](0)), loanAmount
         );
     }
 
@@ -136,7 +136,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         order.owner = address(borrower);
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.removeOrder3.selector, order, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.removeOrder3.selector, order, new TaskV2[](0)), loanAmount
         );
     }
 
@@ -158,7 +158,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, takeOrdersConfig), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.takeOrders4.selector, takeOrdersConfig), loanAmount
         );
     }
 
@@ -219,7 +219,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.clear3.selector,
+                IRaindexV7.clear4.selector,
                 aliceOrder,
                 bobOrder,
                 clearConfig,

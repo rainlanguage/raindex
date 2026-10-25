@@ -12,8 +12,8 @@ import {
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
@@ -224,7 +224,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderExceedsMaxRatio(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderExceedsMaxRatio(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
         assertTrue(totalTakerInput.isZero(), "input zero");
         assertTrue(totalTakerOutput.isZero(), "output zero");
@@ -265,7 +265,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
         assertTrue(totalTakerInput.isZero(), "input zero");
         assertTrue(totalTakerOutput.isZero(), "output zero");
@@ -310,7 +310,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         config.maximumIO = LibDecimalFloat.packLossless(5, 0);
 
         vm.prank(bob);
-        // selector for TokenSelfTrade() as declared on IRaindexV6.
+        // selector for TokenSelfTrade() as declared on IRaindexV7.
         vm.expectRevert(bytes4(keccak256("TokenSelfTrade()")));
         iRaindex.takeOrders4(config);
     }
@@ -328,7 +328,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
             data: ""
         });
         vm.prank(bob);
-        vm.expectRevert(IRaindexV6.NoOrders.selector);
+        vm.expectRevert(IRaindexV7.NoOrders.selector);
         iRaindex.takeOrders4(config);
     }
 
@@ -345,7 +345,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         config.maximumIO = LibDecimalFloat.packLossless(0, 0);
 
         vm.prank(bob);
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
         iRaindex.takeOrders4(config);
     }
 
@@ -362,7 +362,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         config.maximumIO = LibDecimalFloat.packLossless(-1, 0);
 
         vm.prank(bob);
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
         iRaindex.takeOrders4(config);
     }
 
@@ -533,7 +533,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         TakeOrderConfigV4 memory expectedConfig = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
         vm.prank(bob);
         vm.expectEmit(address(iRaindex));
-        emit IRaindexV6.TakeOrderV3(
+        emit IRaindexV7.TakeOrderV3(
             bob, expectedConfig, LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(6, 0)
         );
         iRaindex.takeOrders4(config);

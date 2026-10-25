@@ -12,7 +12,7 @@ use crate::{
 use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
 use raindex_bindings::provider::mk_read_provider;
-use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
+use raindex_bindings::IRaindexV7::{OrderV4, QuoteV2, SignedContextV1};
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
@@ -1243,8 +1243,8 @@ amount price: 2 3;
             .iter()
             .map(|(output_max, ratio)| {
                 Bytes::from(
-                    raindex_bindings::IRaindexV6::quote2Call::abi_encode_returns(
-                        &raindex_bindings::IRaindexV6::quote2Return {
+                    raindex_bindings::IRaindexV7::quote2Call::abi_encode_returns(
+                        &raindex_bindings::IRaindexV7::quote2Return {
                             exists: true,
                             outputMax: output_max.get_inner(),
                             ioRatio: ratio.get_inner(),
@@ -1254,7 +1254,7 @@ amount price: 2 3;
             })
             .collect::<Vec<_>>();
         let expected_oracle_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
+            raindex_bindings::IRaindexV7::quote2Call {
                 quoteConfig: QuoteV2 {
                     order: order_struct.clone(),
                     inputIOIndex: U256::ZERO,
@@ -1265,7 +1265,7 @@ amount price: 2 3;
             .abi_encode(),
         );
         let expected_plain_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
+            raindex_bindings::IRaindexV7::quote2Call {
                 quoteConfig: QuoteV2 {
                     order: order_struct.clone(),
                     inputIOIndex: U256::ZERO,
@@ -1276,7 +1276,7 @@ amount price: 2 3;
             .abi_encode(),
         );
         let expected_second_plain_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
+            raindex_bindings::IRaindexV7::quote2Call {
                 quoteConfig: QuoteV2 {
                     order: order_struct,
                     inputIOIndex: U256::from(1),

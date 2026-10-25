@@ -7,7 +7,7 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     OrderV4,
@@ -15,7 +15,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -96,7 +96,7 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
         orders[0] = singleIoOrder(address(inputToken), address(outputToken));
         orders[1] = singleIoOrder(address(inputToken), address(decoyToken));
 
-        arb.arb4(IRaindexV6(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
+        arb.arb4(IRaindexV7(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
 
         // The real output token was the one swapped through the exchange.
         assertEq(outputToken.balanceOf(address(exchange)), 100e18, "exchange pulled first order output");
@@ -128,7 +128,7 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
         // inputIOIndex 0, outputIOIndex 1.
         orders[0] = TakeOrderConfigV4(order, 0, 1, new SignedContextV1[](0));
 
-        arb.arb4(IRaindexV6(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
+        arb.arb4(IRaindexV7(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
 
         // validOutputs[1] (the real output) was swapped through the exchange.
         assertEq(outputToken.balanceOf(address(exchange)), 100e18, "exchange pulled outputIOIndex token");

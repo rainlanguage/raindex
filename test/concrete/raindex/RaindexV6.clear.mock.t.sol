@@ -16,7 +16,7 @@ import {
     IInterpreterV4,
     TaskV2,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotOrderOwner, NegativeBounty, ClearZeroAmount} from "../../../src/error/ErrRaindexV6.sol";
 import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
@@ -393,7 +393,7 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
             if (clear.expectedError.length > 0) {
                 vm.expectRevert(clear.expectedError);
             }
-            iRaindex.clear3(aliceOrder, bobOrder, configClear, new SignedContextV1[](0), new SignedContextV1[](0));
+            iRaindex.clear4(aliceOrder, bobOrder, configClear, new SignedContextV1[](0), new SignedContextV1[](0));
         }
 
         if (clear.expectedError.length == 0) {

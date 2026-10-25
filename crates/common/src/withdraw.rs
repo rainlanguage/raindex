@@ -8,7 +8,7 @@ use alloy::sol_types::SolCall;
 use serde::{Deserialize, Serialize};
 
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::withdraw4Call;
+use raindex_bindings::IRaindexV7::withdraw4Call;
 
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct WithdrawArgs {

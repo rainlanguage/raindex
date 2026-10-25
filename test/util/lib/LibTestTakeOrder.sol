@@ -11,8 +11,8 @@ import {
     EvaluableV4,
     OrderConfigV4,
     TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
@@ -45,7 +45,7 @@ library LibTestTakeOrder {
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
         IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
-        IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
+        IRaindexV7 raindex = IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         bytes memory bytecode = parser.parse2(expression);
         IOV2[] memory inputs = new IOV2[](1);

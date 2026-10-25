@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {ChildRaindexV6ArbTaskGated} from "test/util/concrete/ChildRaindexV6ArbTaskGated.sol";
 import {RaindexV6ArbConfig, RaindexV6ArbCommon} from "../../src/abstract/RaindexV6ArbCommon.sol";
-import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {

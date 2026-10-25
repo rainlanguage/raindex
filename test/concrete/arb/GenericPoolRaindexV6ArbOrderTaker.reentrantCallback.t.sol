@@ -18,7 +18,7 @@ import {
     EvaluableV4,
     TaskV2,
     TakeOrdersConfigV5
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {TEST_INTERPRETER_ADDRESS} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";

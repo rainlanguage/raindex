@@ -154,7 +154,7 @@ mod tests {
     use clap::CommandFactory;
     use httpmock::{Method::POST, MockServer};
     use rain_math_float::Float;
-    use raindex_bindings::IRaindexV6::{quote2Call, quote2Return, OrderV4, IOV2};
+    use raindex_bindings::IRaindexV7::{quote2Call, quote2Return, OrderV4, IOV2};
     use serde_json::json;
     use std::{fs::read_to_string, str::FromStr};
     use tempfile::NamedTempFile;

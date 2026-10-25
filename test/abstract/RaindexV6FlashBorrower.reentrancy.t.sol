@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     OrderV4,
@@ -14,7 +14,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -45,7 +45,7 @@ contract RaindexV6FlashBorrowerReentrancyTest is Test {
         GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
 
         // Deploy the reentrant exchange that will call arb4 when invoked.
-        ReentrantExchange exchange = new ReentrantExchange(arb, IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS));
+        ReentrantExchange exchange = new ReentrantExchange(arb, IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS));
 
         IOV2[] memory validInputs = new IOV2[](1);
         validInputs[0] = IOV2(address(inputToken), bytes32(0));
@@ -68,7 +68,7 @@ contract RaindexV6FlashBorrowerReentrancyTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
         arb.arb4(
-            IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS),
+            IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS),
             TakeOrdersConfigV5({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),

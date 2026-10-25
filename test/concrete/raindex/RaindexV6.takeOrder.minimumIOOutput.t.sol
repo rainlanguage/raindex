@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {MinimumIO} from "../../../src/error/ErrRaindexV6.sol";
 

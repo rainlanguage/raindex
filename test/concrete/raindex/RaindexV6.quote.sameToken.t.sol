@@ -4,14 +4,14 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     QuoteV2,
     OrderConfigV4,
     OrderV4,
     IOV2,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 
@@ -42,7 +42,7 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
             }),
             new TaskV2[](0)
         );
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
         (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
         (success, maxOutput, ioRatio);
     }
@@ -88,7 +88,7 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
             QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 1, signedContext: new SignedContextV1[](0)});
 
         // validInputs[0] (tokenA) == validOutputs[1] (tokenA): self-trade.
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.TokenSelfTrade.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
         (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
         (success, maxOutput, ioRatio);
     }

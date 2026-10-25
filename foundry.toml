@@ -81,7 +81,7 @@ rainlang = "0.2.19"
 rainlang-interface = "0.2.13"
 # rainlanguage/rain.raindex.interface was renamed to
 # rainlanguage/raindex.interface; Soldeer registry name follows.
-raindex-interface = "0.1.8"
+raindex-interface = { version = "0.1.10", git = "https://github.com/rainlanguage/raindex.interface.git", rev = "b8b58723c50ab950e18d9126fb608d6f20924602" }
 rain-metadata = "0.1.43"
 # The MetaBoard split out of `rain.metadata` into its own deploy repo. The
 # deploy pin lives there now; `rain-metadata` keeps the interfaces and libs.

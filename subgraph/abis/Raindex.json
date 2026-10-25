@@ -145,7 +145,7 @@
     },
     {
       "type": "function",
-      "name": "clear3",
+      "name": "clear4",
       "inputs": [
         {
           "name": "aliceOrder",

@@ -12,7 +12,7 @@ import {
     SignedContextV1,
     IOV2,
     EvaluableV4
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
@@ -243,7 +243,7 @@ contract RaindexV6ClearOrderContextTest is RaindexV6ExternalRealTest {
             mockVault0Input(address(iToken0), alice, 3e12);
         }
 
-        iRaindex.clear3(
+        iRaindex.clear4(
             orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
         );
     }

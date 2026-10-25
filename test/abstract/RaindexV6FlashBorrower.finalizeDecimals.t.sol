@@ -8,7 +8,7 @@ import {LeftoverFlashLendingMockRaindex} from "test/util/concrete/LeftoverFlashL
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     OrderV4,
@@ -17,7 +17,7 @@ import {
     SignedContextV1,
     TaskV2,
     IInterpreterV4
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -95,7 +95,7 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
         });
 
         arb.arb4(
-            IRaindexV6(address(raindex)),
+            IRaindexV7(address(raindex)),
             TakeOrdersConfigV5({
                 minimumIO: LibDecimalFloat.packLossless(1, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),

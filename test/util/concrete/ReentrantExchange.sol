@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     OrderV4,
@@ -12,7 +12,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -20,9 +20,9 @@ import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.so
 /// @dev Exchange that re-enters arb4 when called during _exchange.
 contract ReentrantExchange {
     GenericPoolRaindexV6FlashBorrower internal immutable iArb;
-    IRaindexV6 internal immutable iRaindex;
+    IRaindexV7 internal immutable iRaindex;
 
-    constructor(GenericPoolRaindexV6FlashBorrower arb, IRaindexV6 raindex) {
+    constructor(GenericPoolRaindexV6FlashBorrower arb, IRaindexV7 raindex) {
         iArb = arb;
         iRaindex = raindex;
     }

@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {TakeOrdersConfigV5, IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IRaindexV6OrderTaker} from "raindex-interface-0.1.8/src/interface/IRaindexV6OrderTaker.sol";
+import {TakeOrdersConfigV5, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IRaindexV7OrderTaker} from "raindex-interface-0.1.10/src/interface/IRaindexV7OrderTaker.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// Records whether `onTakeOrders2` was invoked, so a test can assert the
 /// callback fires only when at least one order was actually taken.
-contract RecordingOrderTaker is IRaindexV6OrderTaker {
+contract RecordingOrderTaker is IRaindexV7OrderTaker {
     bool public called;
-    IRaindexV6 internal immutable iRaindex;
+    IRaindexV7 internal immutable iRaindex;
 
-    constructor(IRaindexV6 raindex) {
+    constructor(IRaindexV7 raindex) {
         iRaindex = raindex;
     }
 

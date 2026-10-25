@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     OrderConfigV4,
     ClearConfigV2,
@@ -14,12 +14,12 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.8/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 
-/// @dev Base for mock raindex contracts that stub all IRaindexV6 functions.
+/// @dev Base for mock raindex contracts that stub all IRaindexV7 functions.
 /// Inheritors override flashLoan and/or takeOrders4 with real token transfers.
-abstract contract MockRaindexBase is IRaindexV6 {
+abstract contract MockRaindexBase is IRaindexV7 {
     using SafeERC20 for IERC20;
 
     function flashLoan(IERC3156FlashBorrower, address, uint256, bytes calldata) external virtual returns (bool) {
@@ -44,7 +44,7 @@ abstract contract MockRaindexBase is IRaindexV6 {
         return false;
     }
 
-    function clear3(
+    function clear4(
         OrderV4 memory,
         OrderV4 memory,
         ClearConfigV2 calldata,

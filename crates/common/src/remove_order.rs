@@ -5,7 +5,7 @@ use crate::transaction::TransactionArgsError;
 use crate::write_tx::{execute_write_tx, WriteTransactionError, WriteTransactionStatus};
 use alloy::primitives::hex::FromHexError;
 use alloy::sol_types::SolCall;
-use raindex_bindings::IRaindexV6::removeOrder3Call;
+use raindex_bindings::IRaindexV7::removeOrder3Call;
 use raindex_subgraph_client::types::{common::SgOrder, order_detail_traits::OrderDetailError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

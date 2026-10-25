@@ -7,7 +7,7 @@ import {IRaindexV6ClearDriverHarness} from "test/util/interface/IRaindexV6ClearD
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @dev RaindexV6 subclass that exposes order-liveness and vault seeding so a
-/// full `clear3` can be driven against fresh-compiled source bytecode.
+/// full `clear4` can be driven against fresh-compiled source bytecode.
 contract RaindexV6ClearDriverHarness is RaindexV6, IRaindexV6ClearDriverHarness {
     function setOrderLive(bytes32 orderHash) external {
         sOrders[orderHash] = 1;

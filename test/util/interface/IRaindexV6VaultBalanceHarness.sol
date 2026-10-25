@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRaindexV6, Float} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {IRaindexV7, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
-interface IRaindexV6VaultBalanceHarness is IRaindexV6 {
+interface IRaindexV6VaultBalanceHarness is IRaindexV7 {
     function exposedIncrease(address owner, address token, bytes32 vaultId, Float amount)
         external
         returns (Float, Float);

@@ -268,7 +268,7 @@ mod tests {
         use crate::raindex_client::{tests::get_test_yaml, RaindexClient};
         use alloy::{primitives::U256, sol_types::SolCall};
         use httpmock::MockServer;
-        use raindex_bindings::IRaindexV6::withdraw4Call;
+        use raindex_bindings::IRaindexV7::withdraw4Call;
         use serde_json::{json, Value};
 
         fn get_vault1_json() -> Value {

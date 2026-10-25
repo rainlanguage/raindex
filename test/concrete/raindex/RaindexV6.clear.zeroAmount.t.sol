@@ -9,7 +9,7 @@ import {
     TaskV2,
     SignedContextV1,
     ClearConfigV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {ClearZeroAmount} from "../../../src/error/ErrRaindexV6.sol";
 
@@ -46,7 +46,7 @@ contract RaindexV6ClearZeroAmountTest is RaindexV6ExternalRealTest {
         iRaindex.addOrder4(configBob, new TaskV2[](0));
 
         vm.expectRevert(ClearZeroAmount.selector);
-        iRaindex.clear3(
+        iRaindex.clear4(
             orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
         );
     }

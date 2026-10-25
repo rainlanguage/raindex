@@ -6,7 +6,7 @@ use alloy::rpc::types::TransactionRequest;
 use alloy::serde::WithOtherFields;
 use alloy::sol_types::SolCall;
 use raindex_bindings::provider::ReadProvider;
-use raindex_bindings::IRaindexV6::{takeOrders4Call, TakeOrdersConfigV5};
+use raindex_bindings::IRaindexV7::{takeOrders4Call, TakeOrdersConfigV5};
 use raindex_bindings::IERC20::approveCall;
 use thiserror::Error;
 use tracing::{debug, info, warn};
@@ -340,7 +340,7 @@ fn single_order_probe_config(config: &TakeOrdersConfigV5, idx: usize) -> TakeOrd
 #[cfg(test)]
 mod tests {
     use super::*;
-    use raindex_bindings::IRaindexV6::TakeOrderConfigV4;
+    use raindex_bindings::IRaindexV7::TakeOrderConfigV4;
 
     #[test]
     fn test_preflight_error_display() {
@@ -432,7 +432,7 @@ mod local_evm_tests {
     use crate::erc20::ERC20;
     use alloy::primitives::B256;
     use raindex_bindings::provider::mk_read_provider;
-    use raindex_bindings::IRaindexV6::TakeOrderConfigV4;
+    use raindex_bindings::IRaindexV7::TakeOrderConfigV4;
     use raindex_test_fixtures::LocalEvm;
     use url::Url;
 
@@ -610,9 +610,9 @@ mod local_evm_tests {
         let provider = mk_read_provider(&[rpc_url]).unwrap();
 
         let fake_order = TakeOrderConfigV4 {
-            order: raindex_bindings::IRaindexV6::OrderV4 {
+            order: raindex_bindings::IRaindexV7::OrderV4 {
                 owner: Address::ZERO,
-                evaluable: raindex_bindings::IRaindexV6::EvaluableV4 {
+                evaluable: raindex_bindings::IRaindexV7::EvaluableV4 {
                     interpreter: Address::ZERO,
                     store: Address::ZERO,
                     bytecode: Bytes::new(),
@@ -667,9 +667,9 @@ mod local_evm_tests {
         let provider = mk_read_provider(&[rpc_url]).unwrap();
 
         let fake_order = TakeOrderConfigV4 {
-            order: raindex_bindings::IRaindexV6::OrderV4 {
+            order: raindex_bindings::IRaindexV7::OrderV4 {
                 owner: Address::ZERO,
-                evaluable: raindex_bindings::IRaindexV6::EvaluableV4 {
+                evaluable: raindex_bindings::IRaindexV7::EvaluableV4 {
                     interpreter: Address::ZERO,
                     store: Address::ZERO,
                     bytecode: Bytes::new(),

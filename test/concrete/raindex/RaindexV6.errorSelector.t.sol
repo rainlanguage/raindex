@@ -4,14 +4,14 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
     IOV2,
     EvaluableV4,
     ClearConfigV2,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 
@@ -19,10 +19,10 @@ import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInte
 /// @notice Signature strings are the oracle for the revert data the deployed
 /// RaindexV6 artifact reverts with.
 contract RaindexV6ErrorSelectorTest is Test {
-    IRaindexV6 internal raindex;
+    IRaindexV7 internal raindex;
 
     function setUp() external {
-        raindex = IRaindexV6(deployCode("RaindexV6.sol:RaindexV6"));
+        raindex = IRaindexV7(deployCode("RaindexV6.sol:RaindexV6"));
     }
 
     function order(address owner, address inputToken, address outputToken) internal pure returns (OrderV4 memory) {
@@ -40,7 +40,7 @@ contract RaindexV6ErrorSelectorTest is Test {
     }
 
     function clear(OrderV4 memory alice, OrderV4 memory bob) internal {
-        raindex.clear3(
+        raindex.clear4(
             alice,
             bob,
             ClearConfigV2(0, 0, 0, 0, bytes32(0), bytes32(0)),

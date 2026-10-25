@@ -6,9 +6,11 @@ import {ERC165, IERC165} from "@openzeppelin-contracts-5.7.0/utils/introspection
 import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin-contracts-5.7.0/utils/ReentrancyGuard.sol";
-import {ON_FLASH_LOAN_CALLBACK_SUCCESS} from "raindex-interface-0.1.8/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IRaindexV6, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.8/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {
+    ON_FLASH_LOAN_CALLBACK_SUCCESS
+} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IRaindexV7, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
@@ -107,7 +109,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         // the flash loan itself will take back what it needs, and we simply
         // keep anything left over according to active balances.
         //slither-disable-next-line unused-return
-        IRaindexV6(msg.sender).takeOrders4(takeOrders);
+        IRaindexV7(msg.sender).takeOrders4(takeOrders);
 
         return ON_FLASH_LOAN_CALLBACK_SUCCESS;
     }
@@ -124,7 +126,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
     ///
     /// @param raindex The `Raindex` contract to take orders from and flash
     /// loan against.
-    /// @param takeOrders As per `IRaindexV6.takeOrders4`.
+    /// @param takeOrders As per `IRaindexV7.takeOrders4`.
     /// @param exchangeData Arbitrary bytes that will be passed to `_exchange`
     /// after the flash loan is taken. The inheriting contract is responsible
     /// for decoding this data and defining how it controls interactions with
@@ -132,7 +134,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
     /// uses this data as a literal encoded external call.
     /// @param task The task to evaluate after the arb completes.
     function arb4(
-        IRaindexV6 raindex,
+        IRaindexV7 raindex,
         TakeOrdersConfigV5 calldata takeOrders,
         bytes calldata exchangeData,
         TaskV2 calldata task
@@ -140,7 +142,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         _beforeArb(task);
         // Mimic what Raindex would do anyway if called with zero orders.
         if (takeOrders.orders.length == 0) {
-            revert IRaindexV6.NoOrders();
+            revert IRaindexV7.NoOrders();
         }
         // The flash-loan amount below reads `minimumIO` as the order output the
         // taker receives, which only matches when `minimumIO` is the taker

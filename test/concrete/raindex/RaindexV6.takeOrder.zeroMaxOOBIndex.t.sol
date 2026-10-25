@@ -8,8 +8,8 @@ import {
     OrderV4,
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -48,7 +48,7 @@ contract RaindexV6TakeOrderZeroMaxOOBIndexTest is RaindexV6ExternalRealTest {
         });
 
         vm.prank(bob);
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
         iRaindex.takeOrders4(config);
     }
 }

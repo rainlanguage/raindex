@@ -8,7 +8,7 @@ import {Math} from "@openzeppelin-contracts-5.7.0/utils/math/Math.sol";
 
 import {RaindexV6ExternalMockTest, REVERTING_MOCK_BYTECODE} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
 import {Reenteroor, IERC20} from "test/util/concrete/Reenteroor.sol";
-import {TaskV2, IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {TaskV2, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -31,7 +31,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
     /// Withdrawing vault ID zero is an error.
     function testWithdrawZeroVaultId(address alice, address token) external {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroVaultId.selector, alice, token));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.ZeroVaultId.selector, alice, token));
         iRaindex.withdraw4(token, bytes32(0), Float.wrap(0), new TaskV2[](0));
     }
 

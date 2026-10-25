@@ -15,7 +15,7 @@ use alloy::{
 use futures::future::join_all;
 use rain_error_decoding::{AbiDecodedErrorType, ErrorRegistry};
 use raindex_bindings::provider::{mk_read_provider, ReadProvider};
-use raindex_bindings::IRaindexV6::quote2Call;
+use raindex_bindings::IRaindexV7::quote2Call;
 use raindex_bindings::Raindex::multicallCall;
 #[cfg(not(target_family = "wasm"))]
 use std::future::Future;
@@ -526,7 +526,7 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::ErrorRegistry;
     use rain_math_float::Float;
-    use raindex_bindings::IRaindexV6::{quote2Call, quote2Return};
+    use raindex_bindings::IRaindexV7::{quote2Call, quote2Return};
     use serde_json::json;
 
     #[test]
@@ -1119,7 +1119,7 @@ mod tests {
     // ---------------------------------------------------------------------
 
     use alloy::primitives::U256;
-    use raindex_bindings::IRaindexV6::QuoteV2;
+    use raindex_bindings::IRaindexV7::QuoteV2;
 
     // Build a `QuoteTarget` with a specific raindex address and a distinctive
     // `inputIOIndex`. The index is ABI-encoded into the inner `quote2` calldata,

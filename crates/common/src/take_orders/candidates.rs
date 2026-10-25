@@ -7,7 +7,7 @@ use crate::utils::timing::Timing;
 use alloy::primitives::{keccak256, Address, B256};
 use alloy::sol_types::SolValue;
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1};
+use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV1};
 use raindex_quote::SignedContextInjector;
 #[cfg(target_family = "wasm")]
 use std::str::FromStr;

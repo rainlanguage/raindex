@@ -4,7 +4,7 @@ This crate provides all functionality to quote Rain Raindex orders from Rust,
 expose the API to WASM/TypeScript, and ship a small CLI for ad‑hoc quoting and
 debugging. It stitches together three external systems:
 
-- On‑chain Raindex V6 contracts (`IRaindexV6`) via JSON‑RPC
+- On‑chain Raindex contracts (`IRaindexV7`) via JSON‑RPC
 - The Raindex subgraph for fetching order details by id
 - Rain error decoding to turn revert data into human readable errors
 
@@ -275,7 +275,7 @@ call, collecting interpreter traces, and decoding any revert reason.
 
 - `alloy` primitives and `sol_types`: ABI encode/decode, EVM types, and contract
   call modeling.
-- `raindex_bindings`: contract bindings (`IRaindexV6`, provider helpers like
+- `raindex_bindings`: contract bindings (`IRaindexV7`, provider helpers like
   `mk_read_provider`, which builds an alloy provider with fallback across
   multiple HTTP RPCs).
 - `raindex_subgraph_client`: GraphQL client and types; provides `order_detail`

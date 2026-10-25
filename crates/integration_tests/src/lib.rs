@@ -231,7 +231,7 @@ amount price: get("amount") 52;
     /// (`token2`) at a fixed `outputMax = 2`, `IORatio = 1`. The output vault is
     /// funded with 10 `dai` so the order is fully takeable when live. The owner
     /// is `from`, which lets us add a second order from a distinct owner for the
-    /// `clear3` two-party path.
+    /// `clear4` two-party path.
     ///
     /// Returns the on-chain `OrderV4` and its hash (the `AddOrderV3` event's
     /// `orderHash`, which is exactly what the contract keys `sOrders` on, hence
@@ -621,7 +621,7 @@ amount price: 2 1;
         );
     }
 
-    /// `clear3` where one side is a dead order is a best-effort no-op: the
+    /// `clear4` where one side is a dead order is a best-effort no-op: the
     /// transaction succeeds, the contract emits `OrderNotFound` for the dead
     /// side and returns early, so neither `ClearV3` nor `AfterClearV2` is
     /// emitted. This mirrors the on-chain early-return that makes bulk clearing
@@ -648,7 +648,7 @@ amount price: 2 1;
 
         // Bob's order is the complementary side: he sells eth (token2) for dai
         // (token1). Built directly so the input/output token pair is the mirror
-        // of Alice's, satisfying clear3's TokenMismatch check.
+        // of Alice's, satisfying clear4's TokenMismatch check.
         let bob_order = OrderV4 {
             owner: bob,
             evaluable: alice_order.evaluable.clone(),
@@ -674,7 +674,7 @@ amount price: 2 1;
                 .call()
                 .await
                 .expect("orderExists call should succeed"),
-            "alice's order must be dead before clear3"
+            "alice's order must be dead before clear4"
         );
 
         let clear_config = ClearConfigV2 {
@@ -689,12 +689,12 @@ amount price: 2 1;
         let receipt = local_evm
             .send_transaction(
                 raindex
-                    .clear3(alice_order, bob_order, clear_config, vec![], vec![])
+                    .clear4(alice_order, bob_order, clear_config, vec![], vec![])
                     .from(bob)
                     .into_transaction_request(),
             )
             .await
-            .expect("clear3 against a dead order must succeed, not revert");
+            .expect("clear4 against a dead order must succeed, not revert");
 
         let (order_not_found, _take_order, clear, after_clear) = count_outcome_events(&receipt);
         assert_eq!(order_not_found, 1, "exactly one OrderNotFound expected");

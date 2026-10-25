@@ -13,7 +13,7 @@ import {
     SignedContextV1,
     TaskV2,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
@@ -114,12 +114,12 @@ contract RaindexV6ClearHandleIORevertTest is RaindexV6ExternalRealTest {
         if (aliceErr.length > 0) {
             vm.expectRevert(aliceErr);
         }
-        iRaindex.clear3(aliceOrder, bobOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        iRaindex.clear4(aliceOrder, bobOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
 
         if (bobErr.length > 0) {
             vm.expectRevert(bobErr);
         }
-        iRaindex.clear3(bobOrder, aliceOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        iRaindex.clear4(bobOrder, aliceOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
     }
 
     function testClearOrderHandleIO0() external {

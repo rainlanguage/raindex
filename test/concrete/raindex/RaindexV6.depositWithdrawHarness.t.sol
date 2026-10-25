@@ -8,8 +8,8 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
-import {TaskV2, IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
+import {TaskV2, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IRaindexV7Stub} from "test/util/abstract/IRaindexV7Stub.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
@@ -22,10 +22,10 @@ import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/interface/I
 /// - deposit crediting exactly the pulled amount,
 /// - the deposit/withdraw event amounts (Float and onchain uint256),
 /// - non-18-decimal token scaling end-to-end.
-contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
+contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV7Stub {
     using LibDecimalFloat for Float;
 
-    IRaindexV6 internal harness;
+    IRaindexV7 internal harness;
     bytes32 internal constant VAULT = bytes32(uint256(1));
 
     function setUp() external {
@@ -33,7 +33,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
 
-        harness = IRaindexV6(payable(address(uint160(uint256(keccak256("deposit.withdraw.harness"))))));
+        harness = IRaindexV7(payable(address(uint160(uint256(keccak256("deposit.withdraw.harness"))))));
         vm.etch(address(harness), vm.getDeployedCode("RaindexV6.sol:RaindexV6"));
     }
 
@@ -139,7 +139,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         sToken = new MockToken("Token", "TKN", 18);
         address alice = makeAddr("alice");
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroDepositAmount.selector, alice, address(sToken), VAULT));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.ZeroDepositAmount.selector, alice, address(sToken), VAULT));
         harness.deposit4(address(sToken), VAULT, Float.wrap(0), new TaskV2[](0));
     }
 
@@ -150,7 +150,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         address alice = makeAddr("alice");
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IRaindexV6.ZeroWithdrawTargetAmount.selector, alice, address(sToken), VAULT)
+            abi.encodeWithSelector(IRaindexV7.ZeroWithdrawTargetAmount.selector, alice, address(sToken), VAULT)
         );
         harness.withdraw4(address(sToken), VAULT, Float.wrap(0), new TaskV2[](0));
     }

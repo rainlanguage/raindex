@@ -7,7 +7,7 @@ import {
     IOV2,
     OrderV4,
     SignedContextV1,
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     OrderConfigV4,
     ClearConfigV2,
@@ -15,10 +15,10 @@ import {
     TaskV2,
     QuoteV2,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.8/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 
-contract FlashLendingMockRaindex is IRaindexV6 {
+contract FlashLendingMockRaindex is IRaindexV7 {
     function flashLoan(IERC3156FlashBorrower receiver, address token, uint256 amount, bytes calldata data)
         external
         returns (bool)
@@ -29,15 +29,15 @@ contract FlashLendingMockRaindex is IRaindexV6 {
 
     function entask2(TaskV2[] calldata) external pure {}
 
-    /// @inheritdoc IRaindexV6
+    /// @inheritdoc IRaindexV7
     function quote2(QuoteV2 calldata) external pure returns (bool, Float, Float) {
         revert("quote");
     }
 
-    /// @inheritdoc IRaindexV6
+    /// @inheritdoc IRaindexV7
     function takeOrders4(TakeOrdersConfigV5 calldata) external pure returns (Float, Float) {}
 
-    /// @inheritdoc IRaindexV6
+    /// @inheritdoc IRaindexV7
     function addOrder4(OrderConfigV4 calldata, TaskV2[] calldata) external pure returns (bool) {
         return false;
     }
@@ -46,8 +46,8 @@ contract FlashLendingMockRaindex is IRaindexV6 {
         return false;
     }
 
-    /// @inheritdoc IRaindexV6
-    function clear3(
+    /// @inheritdoc IRaindexV7
+    function clear4(
         OrderV4 memory,
         OrderV4 memory,
         ClearConfigV2 calldata,

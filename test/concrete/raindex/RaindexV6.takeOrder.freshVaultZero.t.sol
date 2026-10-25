@@ -7,13 +7,13 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderFreshVaultZeroTest
@@ -147,7 +147,7 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
         config.data = hex"01";
 
         // The callback re-enters takeOrders4; the nonReentrant guard reverts it.
-        taker.reenterWith(abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, config));
+        taker.reenterWith(abi.encodeWithSelector(IRaindexV7.takeOrders4.selector, config));
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
         vm.prank(address(taker));

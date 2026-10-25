@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {ChildRaindexV6ArbOrderTaker} from "../util/concrete/ChildRaindexV6ArbOrderTaker.sol";
-import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     TakeOrdersConfigV5,
@@ -12,7 +12,7 @@ import {
     OrderConfigV4,
     OrderV4,
     IInterpreterV4
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";

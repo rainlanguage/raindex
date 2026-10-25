@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {RecordingOrderTaker} from "test/util/concrete/RecordingOrderTaker.sol";
@@ -55,7 +55,7 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
@@ -72,7 +72,7 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
@@ -87,7 +87,7 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");

@@ -8,7 +8,7 @@ use crate::retry::{retry_with_constant_interval, RetryError};
 use crate::utils::timing::Timing;
 use alloy::primitives::{hex::decode, Bytes, B256};
 use alloy::sol_types::{SolCall, SolValue};
-use raindex_bindings::IRaindexV6::{removeOrder3Call, OrderV4};
+use raindex_bindings::IRaindexV7::{removeOrder3Call, OrderV4};
 use raindex_subgraph_client::types::order_detail_traits::OrderDetailError;
 use tracing::{error, info, info_span};
 

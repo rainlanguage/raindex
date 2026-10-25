@@ -6,7 +6,7 @@ import {ArbTest} from "test/util/abstract/ArbTest.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     EvaluableV4,
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
@@ -14,7 +14,7 @@ import {
     IInterpreterStoreV3,
     TaskV2,
     SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -32,7 +32,7 @@ contract RaindexV6FlashBorrowerNoOrdersTest is ArbTest {
     function testArb4NoOrders() external {
         TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](0);
 
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.NoOrders.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.NoOrders.selector));
         GenericPoolRaindexV6FlashBorrower(iArb)
             .arb4(
                 iRaindex,

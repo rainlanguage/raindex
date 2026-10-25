@@ -31,7 +31,7 @@ use rain_metadata::{
 use rain_metadata_bindings::MetaBoard::emitMetaCall;
 use raindex_app_settings::deployment::DeploymentCfg;
 use raindex_bindings::provider::{mk_read_provider, ReadProviderError};
-use raindex_bindings::IRaindexV6::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
+use raindex_bindings::IRaindexV7::{addOrder4Call, EvaluableV4, OrderConfigV4, TaskV2, IOV2};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use std::collections::HashMap;

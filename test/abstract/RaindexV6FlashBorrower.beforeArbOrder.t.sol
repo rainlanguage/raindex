@@ -6,13 +6,13 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {ChildGatedRaindexV6FlashBorrower} from "test/util/concrete/ChildGatedRaindexV6FlashBorrower.sol";
 import {RaindexV6ArbConfig, WrongTask} from "../../src/abstract/RaindexV6ArbCommon.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     TaskV2,
     EvaluableV4,
     SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -62,7 +62,7 @@ contract RaindexV6FlashBorrowerBeforeArbOrderTest is Test {
         TaskV2 memory wrongTask = _gatedTask(hex"02");
 
         vm.expectRevert(abi.encodeWithSelector(WrongTask.selector));
-        arb.arb4(IRaindexV6(address(0xdead)), _emptyOrdersConfig(), "", wrongTask);
+        arb.arb4(IRaindexV7(address(0xdead)), _emptyOrdersConfig(), "", wrongTask);
     }
 
     /// Control: with empty orders and a MATCHING task, the gate passes and the
@@ -73,7 +73,7 @@ contract RaindexV6FlashBorrowerBeforeArbOrderTest is Test {
         TaskV2 memory configuredTask = _gatedTask(hex"01");
         ChildGatedRaindexV6FlashBorrower arb = new ChildGatedRaindexV6FlashBorrower(RaindexV6ArbConfig(configuredTask));
 
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.NoOrders.selector));
-        arb.arb4(IRaindexV6(address(0xdead)), _emptyOrdersConfig(), "", configuredTask);
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.NoOrders.selector));
+        arb.arb4(IRaindexV7(address(0xdead)), _emptyOrdersConfig(), "", configuredTask);
     }
 }

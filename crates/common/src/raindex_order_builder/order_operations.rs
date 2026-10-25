@@ -17,7 +17,7 @@ use raindex_app_settings::{
     order::{OrderIOCfg, VaultType},
     raindex::RaindexCfg,
 };
-use raindex_bindings::{IRaindexV6::deposit4Call, Raindex::multicallCall, IERC20::approveCall};
+use raindex_bindings::{IRaindexV7::deposit4Call, Raindex::multicallCall, IERC20::approveCall};
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use url::Url;
 

@@ -12,8 +12,8 @@ import {
     EvaluableV4,
     OrderConfigV4,
     TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
@@ -43,7 +43,7 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
             orders: orders,
             data: ""
         });
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }

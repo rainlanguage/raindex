@@ -25,7 +25,7 @@ use alloy::{
 };
 use async_trait::async_trait;
 use rain_math_float::Float;
-use raindex_bindings::{IRaindexV6::deposit4Call, IERC20::approveCall};
+use raindex_bindings::{IRaindexV7::deposit4Call, IERC20::approveCall};
 use raindex_subgraph_client::{
     performance::vol::{VaultVolume, VolumeDetails},
     types::{
@@ -2647,7 +2647,7 @@ mod tests {
         use alloy::sol_types::SolCall;
         use httpmock::MockServer;
         use raindex_bindings::{
-            IRaindexV6::{deposit4Call, withdraw4Call},
+            IRaindexV7::{deposit4Call, withdraw4Call},
             IERC20::{allowanceCall, approveCall},
         };
         use raindex_subgraph_client::utils::float::*;

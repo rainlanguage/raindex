@@ -2,7 +2,7 @@ use crate::allowance::read_allowance;
 use crate::transaction::{TransactionArgs, TransactionArgsError, WritableTransactionExecuteError};
 use alloy::primitives::{Address, B256, U256};
 use rain_math_float::{Float, FloatError};
-use raindex_bindings::IRaindexV6::deposit4Call;
+use raindex_bindings::IRaindexV7::deposit4Call;
 #[cfg(not(target_family = "wasm"))]
 use raindex_bindings::IERC20::approveCall;
 use serde::{Deserialize, Serialize};

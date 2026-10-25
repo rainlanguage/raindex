@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {OrderIOCalculationV4} from "src/struct/OrderIOCalculationV4.sol";
-import {ClearStateChangeV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {OrderV4} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {ClearStateChangeV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IRaindexV6ClearStateChangeHarness} from "test/util/interface/IRaindexV6ClearStateChangeHarness.sol";
@@ -17,7 +17,7 @@ import {IRaindexV6ClearStateChangeHarness} from "test/util/interface/IRaindexV6C
 /// each order's OUTPUT is the smaller of its own max output and the
 /// counterparty-derived cap. The difference (output - counterparty input) is the
 /// bounty; a ratio mismatch that makes inputs exceed available outputs reverts
-/// (NegativeBounty) at the clear3 layer.
+/// (NegativeBounty) at the clear4 layer.
 contract RaindexV6ClearStateChangeTest is Test {
     using LibDecimalFloat for Float;
 

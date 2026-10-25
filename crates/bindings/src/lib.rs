@@ -3,7 +3,7 @@ use alloy::sol;
 sol!(
     #![sol(all_derives = true, rpc)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IRaindexV6, "./abis/IRaindexV6.json"
+    IRaindexV7, "./abis/IRaindexV7.json"
 );
 
 sol!(
@@ -57,7 +57,7 @@ pub mod wasm_traits;
 pub mod topics {
     use crate::{
         IInterpreterStoreV3::Set,
-        IRaindexV6::{
+        IRaindexV7::{
             AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
         },
         Raindex::MetaV1_2,

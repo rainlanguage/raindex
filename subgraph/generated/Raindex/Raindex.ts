@@ -1639,73 +1639,73 @@ export class AddOrder4CallPostSignedContextStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3Call extends ethereum.Call {
-  get inputs(): Clear3Call__Inputs {
-    return new Clear3Call__Inputs(this);
+export class Clear4Call extends ethereum.Call {
+  get inputs(): Clear4Call__Inputs {
+    return new Clear4Call__Inputs(this);
   }
 
-  get outputs(): Clear3Call__Outputs {
-    return new Clear3Call__Outputs(this);
+  get outputs(): Clear4Call__Outputs {
+    return new Clear4Call__Outputs(this);
   }
 }
 
-export class Clear3Call__Inputs {
-  _call: Clear3Call;
+export class Clear4Call__Inputs {
+  _call: Clear4Call;
 
-  constructor(call: Clear3Call) {
+  constructor(call: Clear4Call) {
     this._call = call;
   }
 
-  get aliceOrder(): Clear3CallAliceOrderStruct {
-    return changetype<Clear3CallAliceOrderStruct>(
+  get aliceOrder(): Clear4CallAliceOrderStruct {
+    return changetype<Clear4CallAliceOrderStruct>(
       this._call.inputValues[0].value.toTuple(),
     );
   }
 
-  get bobOrder(): Clear3CallBobOrderStruct {
-    return changetype<Clear3CallBobOrderStruct>(
+  get bobOrder(): Clear4CallBobOrderStruct {
+    return changetype<Clear4CallBobOrderStruct>(
       this._call.inputValues[1].value.toTuple(),
     );
   }
 
-  get clearConfig(): Clear3CallClearConfigStruct {
-    return changetype<Clear3CallClearConfigStruct>(
+  get clearConfig(): Clear4CallClearConfigStruct {
+    return changetype<Clear4CallClearConfigStruct>(
       this._call.inputValues[2].value.toTuple(),
     );
   }
 
-  get aliceSignedContext(): Array<Clear3CallAliceSignedContextStruct> {
-    return this._call.inputValues[3].value.toTupleArray<Clear3CallAliceSignedContextStruct>();
+  get aliceSignedContext(): Array<Clear4CallAliceSignedContextStruct> {
+    return this._call.inputValues[3].value.toTupleArray<Clear4CallAliceSignedContextStruct>();
   }
 
-  get bobSignedContext(): Array<Clear3CallBobSignedContextStruct> {
-    return this._call.inputValues[4].value.toTupleArray<Clear3CallBobSignedContextStruct>();
+  get bobSignedContext(): Array<Clear4CallBobSignedContextStruct> {
+    return this._call.inputValues[4].value.toTupleArray<Clear4CallBobSignedContextStruct>();
   }
 }
 
-export class Clear3Call__Outputs {
-  _call: Clear3Call;
+export class Clear4Call__Outputs {
+  _call: Clear4Call;
 
-  constructor(call: Clear3Call) {
+  constructor(call: Clear4Call) {
     this._call = call;
   }
 }
 
-export class Clear3CallAliceOrderStruct extends ethereum.Tuple {
+export class Clear4CallAliceOrderStruct extends ethereum.Tuple {
   get owner(): Address {
     return this[0].toAddress();
   }
 
-  get evaluable(): Clear3CallAliceOrderEvaluableStruct {
-    return changetype<Clear3CallAliceOrderEvaluableStruct>(this[1].toTuple());
+  get evaluable(): Clear4CallAliceOrderEvaluableStruct {
+    return changetype<Clear4CallAliceOrderEvaluableStruct>(this[1].toTuple());
   }
 
-  get validInputs(): Array<Clear3CallAliceOrderValidInputsStruct> {
-    return this[2].toTupleArray<Clear3CallAliceOrderValidInputsStruct>();
+  get validInputs(): Array<Clear4CallAliceOrderValidInputsStruct> {
+    return this[2].toTupleArray<Clear4CallAliceOrderValidInputsStruct>();
   }
 
-  get validOutputs(): Array<Clear3CallAliceOrderValidOutputsStruct> {
-    return this[3].toTupleArray<Clear3CallAliceOrderValidOutputsStruct>();
+  get validOutputs(): Array<Clear4CallAliceOrderValidOutputsStruct> {
+    return this[3].toTupleArray<Clear4CallAliceOrderValidOutputsStruct>();
   }
 
   get nonce(): Bytes {
@@ -1713,7 +1713,7 @@ export class Clear3CallAliceOrderStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallAliceOrderEvaluableStruct extends ethereum.Tuple {
+export class Clear4CallAliceOrderEvaluableStruct extends ethereum.Tuple {
   get interpreter(): Address {
     return this[0].toAddress();
   }
@@ -1727,7 +1727,7 @@ export class Clear3CallAliceOrderEvaluableStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallAliceOrderValidInputsStruct extends ethereum.Tuple {
+export class Clear4CallAliceOrderValidInputsStruct extends ethereum.Tuple {
   get token(): Address {
     return this[0].toAddress();
   }
@@ -1737,7 +1737,7 @@ export class Clear3CallAliceOrderValidInputsStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallAliceOrderValidOutputsStruct extends ethereum.Tuple {
+export class Clear4CallAliceOrderValidOutputsStruct extends ethereum.Tuple {
   get token(): Address {
     return this[0].toAddress();
   }
@@ -1747,21 +1747,21 @@ export class Clear3CallAliceOrderValidOutputsStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallBobOrderStruct extends ethereum.Tuple {
+export class Clear4CallBobOrderStruct extends ethereum.Tuple {
   get owner(): Address {
     return this[0].toAddress();
   }
 
-  get evaluable(): Clear3CallBobOrderEvaluableStruct {
-    return changetype<Clear3CallBobOrderEvaluableStruct>(this[1].toTuple());
+  get evaluable(): Clear4CallBobOrderEvaluableStruct {
+    return changetype<Clear4CallBobOrderEvaluableStruct>(this[1].toTuple());
   }
 
-  get validInputs(): Array<Clear3CallBobOrderValidInputsStruct> {
-    return this[2].toTupleArray<Clear3CallBobOrderValidInputsStruct>();
+  get validInputs(): Array<Clear4CallBobOrderValidInputsStruct> {
+    return this[2].toTupleArray<Clear4CallBobOrderValidInputsStruct>();
   }
 
-  get validOutputs(): Array<Clear3CallBobOrderValidOutputsStruct> {
-    return this[3].toTupleArray<Clear3CallBobOrderValidOutputsStruct>();
+  get validOutputs(): Array<Clear4CallBobOrderValidOutputsStruct> {
+    return this[3].toTupleArray<Clear4CallBobOrderValidOutputsStruct>();
   }
 
   get nonce(): Bytes {
@@ -1769,7 +1769,7 @@ export class Clear3CallBobOrderStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallBobOrderEvaluableStruct extends ethereum.Tuple {
+export class Clear4CallBobOrderEvaluableStruct extends ethereum.Tuple {
   get interpreter(): Address {
     return this[0].toAddress();
   }
@@ -1783,7 +1783,7 @@ export class Clear3CallBobOrderEvaluableStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallBobOrderValidInputsStruct extends ethereum.Tuple {
+export class Clear4CallBobOrderValidInputsStruct extends ethereum.Tuple {
   get token(): Address {
     return this[0].toAddress();
   }
@@ -1793,7 +1793,7 @@ export class Clear3CallBobOrderValidInputsStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallBobOrderValidOutputsStruct extends ethereum.Tuple {
+export class Clear4CallBobOrderValidOutputsStruct extends ethereum.Tuple {
   get token(): Address {
     return this[0].toAddress();
   }
@@ -1803,7 +1803,7 @@ export class Clear3CallBobOrderValidOutputsStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallClearConfigStruct extends ethereum.Tuple {
+export class Clear4CallClearConfigStruct extends ethereum.Tuple {
   get aliceInputIOIndex(): BigInt {
     return this[0].toBigInt();
   }
@@ -1829,7 +1829,7 @@ export class Clear3CallClearConfigStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallAliceSignedContextStruct extends ethereum.Tuple {
+export class Clear4CallAliceSignedContextStruct extends ethereum.Tuple {
   get signer(): Address {
     return this[0].toAddress();
   }
@@ -1843,7 +1843,7 @@ export class Clear3CallAliceSignedContextStruct extends ethereum.Tuple {
   }
 }
 
-export class Clear3CallBobSignedContextStruct extends ethereum.Tuple {
+export class Clear4CallBobSignedContextStruct extends ethereum.Tuple {
   get signer(): Address {
     return this[0].toAddress();
   }

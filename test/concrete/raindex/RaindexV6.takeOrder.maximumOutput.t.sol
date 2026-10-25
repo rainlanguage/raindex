@@ -9,12 +9,12 @@ import {
     TakeOrderConfigV4,
     TakeOrdersConfigV5,
     SignedContextV1,
-    IRaindexV6,
+    IRaindexV7,
     OrderConfigV4,
     IOV2,
     EvaluableV4,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -39,7 +39,7 @@ contract RaindexV6TakeOrderMaximumOutputTest is RaindexV6ExternalRealTest {
             IOIsInput: false,
             data: ""
         });
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
         (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
         (totalTakerInput, totalTakerOutput);
     }

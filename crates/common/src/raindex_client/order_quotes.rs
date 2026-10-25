@@ -5,7 +5,7 @@ use crate::raindex_client::vaults::RaindexVault;
 use crate::utils::timing::Timing;
 use alloy::primitives::{Address, B256};
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1, IOV2};
+use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV1, IOV2};
 use raindex_quote::{
     get_order_quotes, get_order_quotes_for_pairs, BatchOrderQuotesResponse, NoopInjector,
     OrderQuoteValue, Pair, SignedContextInjector,

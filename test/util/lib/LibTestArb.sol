@@ -5,7 +5,7 @@ pragma solidity ^0.8.19;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TakeOrderConfigV4,
     OrderV4,
@@ -13,7 +13,7 @@ import {
     EvaluableV4,
     SignedContextV1,
     TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -43,7 +43,7 @@ struct OrderTakerSetup {
     GenericPoolRaindexV6ArbOrderTaker arb;
     MockToken inputToken;
     MockToken outputToken;
-    IRaindexV6 raindex;
+    IRaindexV7 raindex;
     TakeOrdersConfigV5 takeOrdersConfig;
 }
 
@@ -135,7 +135,7 @@ library LibTestArb {
             });
         }
 
-        arb.arb5{value: ethValue}(IRaindexV6(address(raindex)), takeOrdersConfig, task);
+        arb.arb5{value: ethValue}(IRaindexV7(address(raindex)), takeOrdersConfig, task);
 
         return
             ArbResult({
@@ -205,7 +205,7 @@ library LibTestArb {
             arb: arb,
             inputToken: inputToken,
             outputToken: outputToken,
-            raindex: IRaindexV6(address(raindex)),
+            raindex: IRaindexV7(address(raindex)),
             takeOrdersConfig: takeOrdersConfig
         });
     }

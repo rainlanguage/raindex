@@ -6,13 +6,13 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     TakeOrdersConfigV5,
     TaskV2,
     EvaluableV4,
     SignedContextV1,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
 import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
@@ -35,7 +35,7 @@ contract ReentrantMockRaindex is MockRaindexBase {
             // Re-enter arb5 from the Raindex callback.
             GenericPoolRaindexV6ArbOrderTaker(payable(msg.sender))
                 .arb5(
-                    IRaindexV6(address(this)),
+                    IRaindexV7(address(this)),
                     config,
                     TaskV2({
                     evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),

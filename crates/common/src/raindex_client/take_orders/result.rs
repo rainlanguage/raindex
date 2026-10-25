@@ -3,7 +3,7 @@ use crate::take_orders::{build_approval_calldata, BuiltTakeOrdersConfig, ParsedT
 use alloy::primitives::{Address, Bytes};
 use alloy::sol_types::SolCall;
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::takeOrders4Call;
+use raindex_bindings::IRaindexV7::takeOrders4Call;
 use serde::{Deserialize, Serialize};
 use std::ops::{Div, Mul};
 use wasm_bindgen_utils::prelude::*;
@@ -426,7 +426,7 @@ mod tests {
     use crate::take_orders::build_take_orders_config_from_simulation;
     use crate::test_helpers::candidates::make_candidate;
     use alloy::primitives::U256;
-    use raindex_bindings::IRaindexV6::takeOrders4Call;
+    use raindex_bindings::IRaindexV7::takeOrders4Call;
     use raindex_bindings::IERC20::approveCall;
 
     fn high_price_cap() -> Float {
