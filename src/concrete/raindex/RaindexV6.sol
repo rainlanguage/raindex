@@ -385,6 +385,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             assembly ("memory-safe") {
                 let ptr := mload(0x40)
                 orderIOCalculationsToHandle := ptr
+                mstore(ptr, 0)
                 mstore(0x40, add(ptr, mul(add(length, 1), 0x20)))
             }
         }
