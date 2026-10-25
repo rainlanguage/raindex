@@ -3,17 +3,17 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRaindexProdDeploy} from "src/lib/deploy/LibRaindexProdDeploy.sol";
+import {LibRaindexV6StartBlock} from "src/lib/deploy/LibRaindexV6StartBlock.sol";
 
-/// @title LibRaindexProdDeployNetworksJsonStartBlockPolygonTest
-/// @notice The startBlock for matic in subgraph/networks.json MUST match
-/// the constant in LibRaindexProdDeploy.
-contract LibRaindexProdDeployNetworksJsonStartBlockPolygonTest is Test {
+/// @title NetworksJsonStartBlockPolygonTest
+/// @notice The matic startBlock in subgraph/networks.json is the RaindexV6
+/// start block.
+contract NetworksJsonStartBlockPolygonTest is Test {
     function testNetworksJsonStartBlockPolygon() external view {
         string memory json = vm.readFile("subgraph/networks.json");
         uint256 startBlock = vm.parseJsonUint(json, ".matic.Raindex.startBlock");
         assertEq(
-            startBlock, LibRaindexProdDeploy.RAINDEX_START_BLOCK_POLYGON, "networks.json startBlock mismatch: matic"
+            startBlock, LibRaindexV6StartBlock.RAINDEX_START_BLOCK_POLYGON, "networks.json startBlock mismatch: matic"
         );
     }
 }

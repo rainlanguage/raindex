@@ -4,10 +4,11 @@
 
 # Refresh the RaindexV6 deploy-block bookkeeping after a release.
 #
-# Finds the exact block at which the released RaindexV6 that LibRaindexProdDeploy
-# pins was deployed on each mainnet by binary-searching `eth_getCode` over an
-# archive RPC, then rewrites the new per-chain blocks + that address into:
-#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexProdDeploy.sol
+# Finds the exact block at which the newest released RaindexV6 (the last entry
+# of LibRaindexV6Released) was deployed on each mainnet by binary-searching
+# `eth_getCode` over an archive RPC, then rewrites the new per-chain blocks +
+# that address into:
+#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexV6StartBlock.sol
 #   - subgraph/networks.json (address + startBlock per network)
 #   - subgraph/subgraph.yaml (data source address)
 #
@@ -19,11 +20,14 @@
 # tests.
 set -euo pipefail
 
-LIB="src/lib/deploy/LibRaindexProdDeploy.sol"
+LIB="src/lib/deploy/LibRaindexV6StartBlock.sol"
+RELEASED="src/lib/LibRaindexV6Released.sol"
 NET="subgraph/networks.json"
 YAML="subgraph/subgraph.yaml"
-PTR=src/$(grep -aoE "generated/[0-9]+_[0-9]+_[0-9]+/RaindexV6.sol" "$LIB" | head -1)
-[ -f "$PTR" ] || { echo "could not read the released RaindexV6 snapshot from $LIB" >&2; exit 1; }
+TAG=$(grep -aoE 'storedDeployedAddress: RaindexV6_[A-Za-z0-9_]+_DEPLOYED_ADDRESS' "$RELEASED" | tail -1 \
+    | sed -E 's/.*RaindexV6_(.+)_DEPLOYED_ADDRESS/\1/' || true)
+PTR="src/generated/${TAG}/RaindexV6.sol"
+[ -n "$TAG" ] && [ -f "$PTR" ] || { echo "could not read the newest released RaindexV6 snapshot from $RELEASED" >&2; exit 1; }
 
 ARB_RPC="${ARBITRUM_RPC_URL:-https://arbitrum.drpc.org}"
 BASE_RPC="${BASE_RPC_URL:-https://mainnet.base.org}"
