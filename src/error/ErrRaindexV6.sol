@@ -44,5 +44,6 @@ error NegativePush();
 /// Throws when a negative bounty is calculated.
 error NegativeBounty();
 
-/// Thrown when clear output amounts are both zero.
+/// Thrown when either side of a clear has a non-positive output or a negative
+/// IO ratio.
 error ClearZeroAmount();

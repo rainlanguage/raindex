@@ -8,16 +8,15 @@ import {IERC20, SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils
 import {IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {IRaindexV6ArbOrderTaker, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6ArbOrderTaker.sol";
 import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
+import {RaindexV6ArbCommon, BadRaindex} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.8/src/interface/IRaindexV6OrderTaker.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 
-/// Thrown when `arb5` is called with a `raindex` that is not the trusted
-/// deterministic deployment. `arb5` grants `raindex` an unlimited token approval
-/// and calls it, so an untrusted address could drain the contract's balance.
-error BadRaindex(address badRaindex);
+/// Thrown when `onTakeOrders2` is called during an arb by anything other than
+/// the trusted raindex.
+error UnexpectedOnTakeOrdersCaller(address caller);
 
 /// @title RaindexV6ArbOrderTaker
 /// @notice Arb contract that takes orders directly from a `Raindex` without
@@ -75,19 +74,24 @@ abstract contract RaindexV6ArbOrderTaker is
     }
 
     /// @inheritdoc IRaindexV6OrderTaker
-    /// @dev Empty no-op, and intentionally permissionless: the contract holds no
-    /// value between operations, so there is nothing to protect via `msg.sender`
-    /// validation.
+    /// @dev While `arb5` is in flight only the trusted raindex may call this;
+    /// any other caller reverts with `UnexpectedOnTakeOrdersCaller`. During an
+    /// arb the contract holds the caller's `msg.value` and tokens, and
+    /// `takeOrders4` runs order-owner-chosen code (e.g. the order's store) that
+    /// could otherwise re-enter here and direct that value.
     ///
-    /// The permissionless entry is also the recovery path for value that reaches
-    /// the contract by accident. Unsolicited transfers cannot be prevented: ERC20
-    /// transfers have no recipient hook to revert in, and the arb legitimately
-    /// receives ERC20 and ETH mid-operation. Because anyone may call the
-    /// take-orders entrypoints, a stray balance is swept out by the next call
-    /// rather than stranded; gating this hook to an active orderbook callback
-    /// would instead brick such balances permanently. Concrete implementations
-    /// that move value here (e.g. the generic-pool variant's unlimited
-    /// approve-and-call with whole-ETH-balance forward) are safe only under this
-    /// no-value-between-operations invariant.
-    function onTakeOrders2(address, address, Float, Float, bytes calldata) public virtual override {}
+    /// Outside an arb it is a permissionless no-op: the contract holds no value
+    /// between operations, so there is nothing to protect. The permissionless
+    /// entry is the recovery path for value that reaches the contract by
+    /// accident. Unsolicited transfers cannot be prevented: ERC20 transfers have
+    /// no recipient hook to revert in, and the arb legitimately receives ERC20
+    /// and ETH mid-operation. A stray balance is swept out by the next call
+    /// rather than stranded. Concrete implementations that move value here (e.g.
+    /// the generic-pool variant's unlimited approve-and-call with whole-ETH-
+    /// balance forward) rely on both properties.
+    function onTakeOrders2(address, address, Float, Float, bytes calldata) public virtual override {
+        if (_reentrancyGuardEntered() && msg.sender != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS) {
+            revert UnexpectedOnTakeOrdersCaller(msg.sender);
+        }
+    }
 }
