@@ -52,7 +52,7 @@ changed artifacts or `git-clean` drifts red. Nothing is deployed.
 3. Merge, then push tag `sol-v<version>`. Via rainix `rainix-tag-release.yaml`
    (`package-release.yaml`) it re-runs the fork suite and `release-guard`
    (version == tag, frozen dir byte-identical to `candidate/`, clean tree, no
-   later tag frozen), then publishes `raindex~<version>`.
+   later tag frozen), then publishes `raindex-deploy~<version>`.
 
 `src/generated/<tag>/` snapshots are append-only — the
 `frozen-snapshots-append-only` gate reds any PR that edits or deletes one.
