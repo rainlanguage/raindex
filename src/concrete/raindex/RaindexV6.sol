@@ -52,6 +52,8 @@ import {LibOrder} from "../../lib/LibOrder.sol";
 import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALCULATIONS_COLUMN,
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_VAULT_IO_BALANCE_DIFF,
@@ -62,7 +64,6 @@ import {
 } from "../../lib/LibRaindex.sol";
 import {RaindexV6FlashLender} from "../../abstract/RaindexV6FlashLender.sol";
 import {LibBytes32Array} from "rain-solmem-0.1.28/src/lib/LibBytes32Array.sol";
-import {LibBytes32Matrix} from "rain-solmem-0.1.28/src/lib/LibBytes32Matrix.sol";
 
 import {LibFormatDecimalFloat} from "rain-math-float-0.3.10/src/lib/format/LibFormatDecimalFloat.sol";
 import {
@@ -175,13 +176,15 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         if (post.length != 0) {
             LibRaindex.doPost(
-                LibBytes32Matrix.matrixFrom(
+                LibRaindex.callingContextColumn(
+                    CONTEXT_DEPOSIT_COLUMN,
                     LibBytes32Array.arrayFrom(
                         bytes32(uint256(uint160(token))),
                         bytes32(vaultId),
                         Float.unwrap(beforeBalance),
                         Float.unwrap(afterBalance),
-                        bytes32(uint256(decimals))
+                        bytes32(uint256(decimals)),
+                        bytes32(uint256(uint160(msg.sender)))
                     )
                 ),
                 post
@@ -212,19 +215,22 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             emit WithdrawV2(msg.sender, token, vaultId, targetAmount, withdrawAmount, withdrawAmountUint256);
         }
 
-        bytes32[] memory contextColumn = LibBytes32Array.arrayFrom(
-            bytes32(uint256(uint160(token))),
-            vaultId,
-            Float.unwrap(beforeBalance),
-            Float.unwrap(afterBalance),
-            Float.unwrap(targetAmount),
-            bytes32(uint256(decimals))
-        );
-
-        bytes32[][] memory context = LibBytes32Matrix.matrixFrom(contextColumn);
-
         if (post.length != 0) {
-            LibRaindex.doPost(context, post);
+            LibRaindex.doPost(
+                LibRaindex.callingContextColumn(
+                    CONTEXT_WITHDRAW_COLUMN,
+                    LibBytes32Array.arrayFrom(
+                        bytes32(uint256(uint160(token))),
+                        vaultId,
+                        Float.unwrap(beforeBalance),
+                        Float.unwrap(afterBalance),
+                        Float.unwrap(targetAmount),
+                        bytes32(uint256(decimals)),
+                        bytes32(uint256(uint160(msg.sender)))
+                    )
+                ),
+                post
+            );
         }
     }
 
@@ -307,7 +313,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// with a context of the order hash and the caller.
     function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
         LibRaindex.doPost(
-            LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
+            LibRaindex.callingContextColumn(
+                CONTEXT_CALLING_CONTEXT_COLUMN, LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
+            ),
             post
         );
     }
@@ -709,7 +717,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             {
                 bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
                 callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
-                    order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
+                    order.hash(),
+                    bytes32(uint256(uint160(order.owner))),
+                    bytes32(uint256(uint160(counterparty))),
+                    bytes32(uint256(uint160(msg.sender)))
                 );
 
                 // The calculations column holds the calculated max output and IO

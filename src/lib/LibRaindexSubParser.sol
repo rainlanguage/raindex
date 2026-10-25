@@ -12,6 +12,13 @@ import {
     CONTEXT_BASE_ROWS
 } from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER
+} from "./LibRaindex.sol";
+import {
     CONTEXT_COLUMNS,
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
@@ -86,6 +93,9 @@ bytes constant WORD_WITHDRAW_VAULT_AFTER = "withdraw-vault-after";
 bytes constant WORD_WITHDRAW_TARGET_AMOUNT = "withdraw-target-amount";
 bytes constant WORD_WITHDRAW_TOKEN_DECIMALS = "withdraw-token-decimals";
 
+uint256 constant BASE_WORD_RAINDEX = 0;
+uint256 constant BASE_WORDS_LENGTH = 1;
+
 uint256 constant DEPOSIT_WORD_DEPOSITOR = 0;
 uint256 constant DEPOSIT_WORD_TOKEN = 1;
 uint256 constant DEPOSIT_WORD_VAULT_ID = 2;
@@ -109,10 +119,34 @@ uint256 constant WITHDRAW_WORDS_LENGTH = 7;
 library LibRaindexSubParser {
     using LibUint256Matrix for uint256[][];
 
-    /// @dev Maps the "sender" word to the base context column sender row.
-    function subParserSender(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) {
+    /// @dev Maps the "order-clearer" word to the calling context column.
+    function subParserOrderClearer(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_BASE_COLUMN, CONTEXT_BASE_ROW_SENDER);
+        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER);
+    }
+
+    /// @dev Maps the "depositor" word to the deposit column.
+    function subParserDepositor(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR);
+    }
+
+    /// @dev Maps the "withdrawer" word to the withdraw column.
+    function subParserWithdrawer(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER);
     }
 
     /// @dev Maps the "calling-contract" word to the base context column.

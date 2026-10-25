@@ -15,7 +15,7 @@ library LibRaindexArb {
 
     /// @dev Sweeps the orders' input and output token balances and any native
     /// gas held by this contract to `msg.sender`, then evaluates the post-arb
-    /// task with a context column containing those balances as Floats. Only the
+    /// task with `CONTEXT_ARB_COLUMN` holding those balances as Floats. Only the
     /// two order tokens are swept; any other token left on the arb stays put.
     /// The Float columns are the balances read immediately before each transfer,
     /// so for fee-on-transfer tokens they can exceed the amount actually
@@ -27,7 +27,6 @@ library LibRaindexArb {
         address ordersOutputToken,
         uint8 outputDecimals
     ) internal {
-        bytes32[][] memory context = new bytes32[][](1);
         bytes32[] memory col = new bytes32[](3);
 
         {
@@ -72,10 +71,8 @@ library LibRaindexArb {
             col[2] = Float.unwrap(gasFloat);
         }
 
-        context[0] = col;
-
         TaskV2[] memory post = new TaskV2[](1);
         post[0] = task;
-        LibRaindex.doPost(context, post);
+        LibRaindex.doArbPost(col, post);
     }
 }
