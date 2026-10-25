@@ -143,8 +143,6 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         if (takeOrders.orders.length == 0) {
             revert IRaindexV6.NoOrders();
         }
-        // The arb grants `raindex` an unlimited token approval and calls it, so
-        // it MUST be the trusted deployment rather than a caller-supplied address.
         if (address(raindex) != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS) {
             revert BadRaindex(address(raindex));
         }

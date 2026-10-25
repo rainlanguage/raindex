@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {NegativeBounty, ClearZeroAmount} from "src/error/ErrRaindexV6.sol";
+import {ExponentUnderflow} from "rain-math-float-0.3.10/src/error/ErrDecimalFloat.sol";
 import {
     OrderV4,
     OrderConfigV4,
@@ -23,6 +24,19 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
 import {CalcInterpreter} from "test/util/concrete/CalcInterpreter.sol";
 import {IRaindexV6ClearDriverHarness} from "test/util/interface/IRaindexV6ClearDriverHarness.sol";
+import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
+import {FullyQualifiedNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
+import {
+    LibTestInterpreterDeploy,
+    TEST_INTERPRETER_ADDRESS,
+    TEST_STORE_ADDRESS,
+    TEST_EXPRESSION_DEPLOYER_ADDRESS
+} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+import {
+    CREATION_CODE as DECIMAL_FLOAT_CREATION_CODE
+} from "rain-math-float-deploy-0.1.7/src/generated/0_1_5/DecimalFloat.sol";
 
 /// @title RaindexV6ClearFreshDriverTest
 /// @notice Drives the FULL `clear3` against fresh-compiled RaindexV6 bytecode so
@@ -287,30 +301,128 @@ contract RaindexV6ClearFreshDriverTest is Test {
     // ClearZeroAmount
     // ---------------------------------------------------------------------
 
-    /// Both orders evaluate to a zero max output -> both outputs are zero, so
-    /// clear3 reverts ClearZeroAmount (after handle IO). Pins B12.
-    function testFreshClearZeroAmountReverts() external {
-        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(1, 0), f(0, 0), f(1, 0), f(0, 0), f(10, 0));
+    function expectClearZeroAmount(Float aliceRatio, Float aliceMax, Float bobRatio, Float bobMax) internal {
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) =
+            wireOrders(aliceRatio, aliceMax, bobRatio, bobMax, f(10, 0));
 
         vm.prank(bountyBot);
         vm.expectRevert(ClearZeroAmount.selector);
         raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
     }
 
-    /// Only ONE side zero is NOT a zero clear: alice max 1, bob max 0. bobOutput
-    /// is 0 but aliceOutput is 1, so the AND guard (both zero) does NOT trip and
-    /// the clear succeeds. Pins that ClearZeroAmount requires BOTH outputs zero,
-    /// not either.
-    function testFreshClearOneSideZeroSucceeds() external {
-        // Alice ratio 0 so aliceInput=0 (bobBounty = bobOutput - aliceInput stays
-        // >= 0); bob max 0 so bobOutput=0, bobInput=0.
-        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(0, 0), f(1, 0), f(1, 0), f(0, 0), f(10, 0));
+    function testFreshClearBothZeroOutputReverts() external {
+        expectClearZeroAmount(f(1, 0), f(0, 0), f(1, 0), f(0, 0));
+    }
+
+    function testFreshClearAliceZeroOutputReverts() external {
+        expectClearZeroAmount(f(1, 0), f(0, 0), f(0, 0), f(1, 0));
+    }
+
+    function testFreshClearBobZeroOutputReverts() external {
+        expectClearZeroAmount(f(0, 0), f(1, 0), f(1, 0), f(0, 0));
+    }
+
+    function testFreshClearAliceNegativeOutputReverts() external {
+        expectClearZeroAmount(f(1, 0), f(-1, 0), f(1, 0), f(1, 0));
+    }
+
+    function testFreshClearBobNegativeOutputReverts() external {
+        expectClearZeroAmount(f(1, 0), f(1, 0), f(1, 0), f(-1, 0));
+    }
+
+    function testFreshClearAliceNegativeRatioReverts() external {
+        expectClearZeroAmount(f(-1, 0), f(1, 0), f(1, 0), f(1, 0));
+    }
+
+    function testFreshClearBobNegativeRatioReverts() external {
+        expectClearZeroAmount(f(1, 0), f(1, 0), f(-1, 0), f(1, 0));
+    }
+
+    /// Alice's calculate sets a store key while her output is zero against a
+    /// zero-ratio Bob; the refused clear leaves her store untouched.
+    function testFreshClearAliceZeroOutputLeavesStoreUnchanged() external {
+        LibRainDeploy.deployZoltu(DECIMAL_FLOAT_CREATION_CODE);
+        LibTestInterpreterDeploy.etchTestRainlang(vm);
+        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IInterpreterStoreV3 store = IInterpreterStoreV3(TEST_STORE_ADDRESS);
+
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(1, 0), f(1, 0), f(1, 0), f(1, 0), f(10, 0));
+        aliceOrder.evaluable = EvaluableV4({
+            interpreter: IInterpreterV4(TEST_INTERPRETER_ADDRESS),
+            store: store,
+            bytecode: parser.parse2(":set(1 2),_ _:0 1;:;")
+        });
+        bobOrder.evaluable = EvaluableV4({
+            interpreter: IInterpreterV4(TEST_INTERPRETER_ADDRESS), store: store, bytecode: parser.parse2("_ _:1 0;:;")
+        });
+        raindex.setOrderLive(aliceOrder.hash());
+        raindex.setOrderLive(bobOrder.hash());
+
+        FullyQualifiedNamespace aliceNamespace =
+            LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(alice))), address(raindex));
+
+        vm.prank(bountyBot);
+        vm.expectRevert(ClearZeroAmount.selector);
+        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+
+        assertEq(store.get(aliceNamespace, bytes32(uint256(1))), bytes32(0), "alice store unchanged");
+    }
+
+    /// A zero ratio against a positive counterparty clears: the zero-ratio side
+    /// gives its output for nothing.
+    function testFreshClearAliceZeroRatioClears() external {
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(0, 0), f(1, 0), f(1, 0), f(1, 0), f(10, 0));
 
         doClear(aliceOrder, bobOrder);
 
-        // Alice output moved 1 out; bob output stayed.
         assertTrue(raindex.vaultBalance2(alice, address(token0), ALICE_OUT_VAULT).eq(f(9, 0)), "alice out 9");
-        assertTrue(raindex.vaultBalance2(bob, address(token1), BOB_OUT_VAULT).eq(f(10, 0)), "bob out untouched");
+        assertTrue(raindex.vaultBalance2(bob, address(token1), BOB_OUT_VAULT).eq(f(9, 0)), "bob out 9");
+        assertTrue(raindex.vaultBalance2(alice, address(token1), ALICE_IN_VAULT).isZero(), "alice in 0");
+        assertTrue(raindex.vaultBalance2(bob, address(token0), BOB_IN_VAULT).eq(f(1, 0)), "bob in 1");
+        assertTrue(raindex.vaultBalance2(bountyBot, address(token1), BOB_BOUNTY_VAULT).eq(f(1, 0)), "bob bounty 1");
+    }
+
+    function testFreshClearBobZeroRatioClears() external {
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(1, 0), f(1, 0), f(0, 0), f(1, 0), f(10, 0));
+
+        doClear(aliceOrder, bobOrder);
+
+        assertTrue(raindex.vaultBalance2(alice, address(token0), ALICE_OUT_VAULT).eq(f(9, 0)), "alice out 9");
+        assertTrue(raindex.vaultBalance2(bob, address(token1), BOB_OUT_VAULT).eq(f(9, 0)), "bob out 9");
+        assertTrue(raindex.vaultBalance2(alice, address(token1), ALICE_IN_VAULT).eq(f(1, 0)), "alice in 1");
+        assertTrue(raindex.vaultBalance2(bob, address(token0), BOB_IN_VAULT).isZero(), "bob in 0");
+        assertTrue(raindex.vaultBalance2(bountyBot, address(token0), ALICE_BOUNTY_VAULT).eq(f(1, 0)), "alice bounty 1");
+    }
+
+    /// A zero ratio caps against a negative counterparty max, which would
+    /// divide by that zero ratio if the sides were not refused first.
+    function testFreshClearAliceZeroRatioBobNegativeOutputReverts() external {
+        expectClearZeroAmount(f(0, 0), f(1, 0), f(1, 0), f(-1, 0));
+    }
+
+    function testFreshClearBobZeroRatioAliceNegativeOutputReverts() external {
+        expectClearZeroAmount(f(1, 0), f(-1, 0), f(0, 0), f(1, 0));
+    }
+
+    /// Both sides pass the refusal but the capped output, the smallest max
+    /// over the largest ratio, is below every non-zero Float: the division
+    /// reverts rather than yielding a zero output.
+    function testFreshClearAliceCappedOutputUnderflowReverts() external {
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) =
+            wireOrders(f(1, type(int32).max), f(1, 0), f(1, 0), f(1, type(int32).min), f(10, 0));
+
+        vm.prank(bountyBot);
+        vm.expectPartialRevert(ExponentUnderflow.selector);
+        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+    }
+
+    function testFreshClearBobCappedOutputUnderflowReverts() external {
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) =
+            wireOrders(f(1, 0), f(1, type(int32).min), f(1, type(int32).max), f(1, 0), f(10, 0));
+
+        vm.prank(bountyBot);
+        vm.expectPartialRevert(ExponentUnderflow.selector);
+        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
     }
 
     // ---------------------------------------------------------------------
