@@ -11,7 +11,7 @@
 # `release-guard` checks it against the pushed `sol-v<version>` tag before
 # anything publishes.
 [external.package]
-name = "raindex"
+name = "raindex-deploy"
 version = "0.1.15"
 
 [profile.default]
