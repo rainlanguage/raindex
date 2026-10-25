@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {GenericPoolRaindexV6ArbOrderTakerTest} from "test/util/abstract/GenericPoolRaindexV6ArbOrderTakerTest.sol";
 
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
-import {BadRaindex} from "../../src/abstract/RaindexV6ArbOrderTaker.sol";
+import {BadRaindex} from "../../src/abstract/RaindexV6ArbCommon.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
     IRaindexV6,

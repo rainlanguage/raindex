@@ -14,7 +14,7 @@ import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
 
 contract RouteProcessorRaindexV6ArbOrderTakerOnTakeOrders2DirectTest is Test {
     /// Calling onTakeOrders2 directly from an arbitrary address MUST succeed.
-    /// The function has no access control by design — the contract is stateless
+    /// Outside an arb the function has no access control — the contract is stateless
     /// between operations so there is nothing to exploit.
     function testOnTakeOrders2DirectCallByAttacker() external {
         LibRainDeploy.etchZoltuFactory(vm);
