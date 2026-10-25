@@ -3,12 +3,12 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
+import {LibRaindexProdDeploy} from "src/lib/deploy/LibRaindexProdDeploy.sol";
 
-/// @title LibRaindexDeployNetworksJsonAddressesTest
+/// @title LibRaindexProdDeployNetworksJsonAddressesTest
 /// @notice Every address in subgraph/networks.json MUST match the deterministic
-/// Raindex deploy address from LibRaindexDeploy.
-contract LibRaindexDeployNetworksJsonAddressesTest is Test {
+/// Raindex deploy address from LibRaindexProdDeploy.
+contract LibRaindexProdDeployNetworksJsonAddressesTest is Test {
     function testNetworksJsonAddresses() external view {
         string memory json = vm.readFile("subgraph/networks.json");
         string[] memory networks = vm.parseJsonKeys(json, "$");
@@ -17,7 +17,7 @@ contract LibRaindexDeployNetworksJsonAddressesTest is Test {
             address addr = vm.parseJsonAddress(json, path);
             assertEq(
                 addr,
-                LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS,
+                LibRaindexProdDeploy.RAINDEX_DEPLOYED_ADDRESS,
                 string.concat("networks.json address mismatch: ", networks[i])
             );
         }

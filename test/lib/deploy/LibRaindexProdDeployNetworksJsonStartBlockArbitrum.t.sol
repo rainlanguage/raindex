@@ -3,17 +3,19 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
+import {LibRaindexProdDeploy} from "src/lib/deploy/LibRaindexProdDeploy.sol";
 
-/// @title LibRaindexDeployNetworksJsonStartBlockArbitrumTest
+/// @title LibRaindexProdDeployNetworksJsonStartBlockArbitrumTest
 /// @notice The startBlock for arbitrum-one in subgraph/networks.json MUST match
-/// the constant in LibRaindexDeploy.
-contract LibRaindexDeployNetworksJsonStartBlockArbitrumTest is Test {
+/// the constant in LibRaindexProdDeploy.
+contract LibRaindexProdDeployNetworksJsonStartBlockArbitrumTest is Test {
     function testNetworksJsonStartBlockArbitrum() external view {
         string memory json = vm.readFile("subgraph/networks.json");
         uint256 startBlock = vm.parseJsonUint(json, ".arbitrum-one.Raindex.startBlock");
         assertEq(
-            startBlock, LibRaindexDeploy.RAINDEX_START_BLOCK_ARBITRUM, "networks.json startBlock mismatch: arbitrum-one"
+            startBlock,
+            LibRaindexProdDeploy.RAINDEX_START_BLOCK_ARBITRUM,
+            "networks.json startBlock mismatch: arbitrum-one"
         );
     }
 }

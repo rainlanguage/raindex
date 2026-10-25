@@ -4,50 +4,54 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
-import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
+import {LibRaindexProdDeploy} from "../../../src/lib/deploy/LibRaindexProdDeploy.sol";
 
-/// @title LibRaindexDeployProdTest
+/// @title LibRaindexProdDeployOnChainTest
 /// @notice Forks each supported network and verifies that all raindex
 /// contracts are deployed at the expected addresses with the expected codehash.
-contract LibRaindexDeployProdTest is Test {
+contract LibRaindexProdDeployOnChainTest is Test {
     function _checkAllContracts() internal view {
-        assertTrue(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS.code.length > 0, "RaindexV6 not deployed");
-        assertEq(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS.codehash, LibRaindexDeploy.RAINDEX_DEPLOYED_CODEHASH);
+        assertTrue(LibRaindexProdDeploy.RAINDEX_DEPLOYED_ADDRESS.code.length > 0, "RaindexV6 not deployed");
+        assertEq(LibRaindexProdDeploy.RAINDEX_DEPLOYED_ADDRESS.codehash, LibRaindexProdDeploy.RAINDEX_DEPLOYED_CODEHASH);
 
-        assertTrue(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS.code.length > 0, "SubParser not deployed");
-        assertEq(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS.codehash, LibRaindexDeploy.SUB_PARSER_DEPLOYED_CODEHASH);
-
-        assertTrue(LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS.code.length > 0, "RouteProcessor4 not deployed");
+        assertTrue(LibRaindexProdDeploy.SUB_PARSER_DEPLOYED_ADDRESS.code.length > 0, "SubParser not deployed");
         assertEq(
-            LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS.codehash,
-            LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_CODEHASH
+            LibRaindexProdDeploy.SUB_PARSER_DEPLOYED_ADDRESS.codehash, LibRaindexProdDeploy.SUB_PARSER_DEPLOYED_CODEHASH
         );
 
         assertTrue(
-            LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.code.length > 0,
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS.code.length > 0, "RouteProcessor4 not deployed"
+        );
+        assertEq(
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS.codehash,
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_DEPLOYED_CODEHASH
+        );
+
+        assertTrue(
+            LibRaindexProdDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.code.length > 0,
             "GenericPoolArbOrderTaker not deployed"
         );
         assertEq(
-            LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.codehash,
-            LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH
+            LibRaindexProdDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.codehash,
+            LibRaindexProdDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH
         );
 
         assertTrue(
-            LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.code.length > 0,
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.code.length > 0,
             "RouteProcessorArbOrderTaker not deployed"
         );
         assertEq(
-            LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.codehash,
-            LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS.codehash,
+            LibRaindexProdDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH
         );
 
         assertTrue(
-            LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS.code.length > 0,
+            LibRaindexProdDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS.code.length > 0,
             "GenericPoolFlashBorrower not deployed"
         );
         assertEq(
-            LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS.codehash,
-            LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH
+            LibRaindexProdDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS.codehash,
+            LibRaindexProdDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH
         );
     }
 

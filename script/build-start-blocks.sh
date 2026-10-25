@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-# Refresh the RaindexV6 deploy-block bookkeeping after a redeploy.
+# Refresh the RaindexV6 deploy-block bookkeeping after a release.
 #
-# Finds the exact block at which the currently-pinned RaindexV6 was deployed on
-# each mainnet by binary-searching `eth_getCode` over an archive RPC, then
-# rewrites the new per-chain blocks + the current pinned address into:
-#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexDeploy.sol
+# Finds the exact block at which the released RaindexV6 that LibRaindexProdDeploy
+# pins was deployed on each mainnet by binary-searching `eth_getCode` over an
+# archive RPC, then rewrites the new per-chain blocks + that address into:
+#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexProdDeploy.sol
 #   - subgraph/networks.json (address + startBlock per network)
 #   - subgraph/subgraph.yaml (data source address)
 #
@@ -19,10 +19,11 @@
 # tests.
 set -euo pipefail
 
-LIB="src/lib/deploy/LibRaindexDeploy.sol"
+LIB="src/lib/deploy/LibRaindexProdDeploy.sol"
 NET="subgraph/networks.json"
 YAML="subgraph/subgraph.yaml"
-PTR="src/generated/candidate/RaindexV6.sol"
+PTR=src/$(grep -aoE "generated/[0-9]+_[0-9]+_[0-9]+/RaindexV6.sol" "$LIB" | head -1)
+[ -f "$PTR" ] || { echo "could not read the released RaindexV6 snapshot from $LIB" >&2; exit 1; }
 
 ARB_RPC="${ARBITRUM_RPC_URL:-https://arbitrum.drpc.org}"
 BASE_RPC="${BASE_RPC_URL:-https://mainnet.base.org}"

@@ -3,15 +3,15 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
+import {LibRaindexProdDeploy} from "src/lib/deploy/LibRaindexProdDeploy.sol";
 
-/// @title LibRaindexDeployNetworksJsonStartBlockFlareTest
+/// @title LibRaindexProdDeployNetworksJsonStartBlockFlareTest
 /// @notice The startBlock for flare in subgraph/networks.json MUST match
-/// the constant in LibRaindexDeploy.
-contract LibRaindexDeployNetworksJsonStartBlockFlareTest is Test {
+/// the constant in LibRaindexProdDeploy.
+contract LibRaindexProdDeployNetworksJsonStartBlockFlareTest is Test {
     function testNetworksJsonStartBlockFlare() external view {
         string memory json = vm.readFile("subgraph/networks.json");
         uint256 startBlock = vm.parseJsonUint(json, ".flare.Raindex.startBlock");
-        assertEq(startBlock, LibRaindexDeploy.RAINDEX_START_BLOCK_FLARE, "networks.json startBlock mismatch: flare");
+        assertEq(startBlock, LibRaindexProdDeploy.RAINDEX_START_BLOCK_FLARE, "networks.json startBlock mismatch: flare");
     }
 }

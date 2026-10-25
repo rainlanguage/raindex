@@ -5,20 +5,20 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
 import {LibBlockSearch} from "rain-deploy-0.1.22/src/lib/LibBlockSearch.sol";
-import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
+import {LibRaindexProdDeploy} from "src/lib/deploy/LibRaindexProdDeploy.sol";
 
-/// @title LibRaindexDeployIsStartBlockFlareTest
+/// @title LibRaindexProdDeployIsStartBlockFlareTest
 /// @notice Cheaply validates the known Flare start block constant by checking
 /// that code appears at the block but not the block before.
-contract LibRaindexDeployIsStartBlockFlareTest is Test {
+contract LibRaindexProdDeployIsStartBlockFlareTest is Test {
     function testIsStartBlockFlare() external {
         vm.createSelectFork(LibRainDeploy.FLARE);
         assertTrue(
             LibBlockSearch.isStartBlock(
                 vm,
-                LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS,
-                LibRaindexDeploy.RAINDEX_DEPLOYED_CODEHASH,
-                LibRaindexDeploy.RAINDEX_START_BLOCK_FLARE
+                LibRaindexProdDeploy.RAINDEX_DEPLOYED_ADDRESS,
+                LibRaindexProdDeploy.RAINDEX_DEPLOYED_CODEHASH,
+                LibRaindexProdDeploy.RAINDEX_START_BLOCK_FLARE
             ),
             "not start block: Flare"
         );

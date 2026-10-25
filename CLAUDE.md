@@ -2,10 +2,12 @@ Read and follow @AGENTS.md.
 
 # Merge / Publish / Deploy runbook
 
-Contract change chain: edit source → **deploy** the new bytecode to its new
-CREATE2 address → **merge**. Publishing to soldeer is a separate manual tag
-release (below), never a side effect of merging. All of it is routine and
-pre-authorized; don't stop to ask about address/codehash churn.
+Deploy repo: a source change regenerates `src/generated/candidate/` and merges
+without deploying. Deploying and publishing happen together at a release
+(below). `LibRaindexDeploy` is the candidate; `LibRaindexProdDeploy` pins the
+release `[external.package].version` names, and every on-chain, start-block,
+`networks.json` and `subgraph.yaml` test reads it. Address/codehash churn is
+routine; don't stop to ask about it.
 
 ## Merging a PR
 
@@ -28,41 +30,30 @@ pre-authorized; don't stop to ask about address/codehash churn.
   workflow re-runs and history rewrites are hook-blocked — these are the allowed
   equivalents; don't spell the blocked forms out or you'll trip those hooks.)
 
-## Deploying a contract (the bytecode cascade)
+## Source changes
 
-Any source change to a CREATE2/zoltu-deployed contract moves its on-chain
-address + codehash. Do the whole cascade without asking:
+Regenerate artifacts — run the `rainix-copy-artifacts` step sequence (see that
+workflow) in `nix develop github:rainlanguage/rainix#sol-shell`. Stage ALL
+changed artifacts or `git-clean` drifts red. Nothing is deployed.
 
-1. Regenerate artifacts — run the `rainix-copy-artifacts` step sequence (see
-   that workflow) in `nix develop github:rainlanguage/rainix#sol-shell`. Stage
-   ALL changed artifacts or `git-clean` drifts red.
-2. Deploy each changed suite:
-   `gh workflow run manual-sol-artifacts.yaml --ref <branch> -f suite=<x>`. One
+## Releasing (deploy + publish)
+
+1. Deploy each changed suite:
+   `gh workflow run manual-sol-artifacts.yaml --ref main -f suite=<x>`. One
    dispatch deploys all seven chains. **Never run two deploys concurrently** —
-   they share one deployer EOA and race the nonce, leaving a partial deploy;
-   serialize dispatches. A `completed/failure` run still deployed if the log has
-   `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` — only etherscan `--verify` failed
-   (cosmetic).
-3. If RaindexV6 moved, run `script/build-start-blocks.sh` — rewrites the
-   `RAINDEX_START_BLOCK_*` constants, `subgraph/networks.json` and
-   `subgraph/subgraph.yaml` (else `testIsStartBlock*` / `testNetworksJson*` /
-   `testSubgraphYamlAddress` red). Uses foundry `rpc_endpoints` env vars,
-   falling back to public archive RPCs.
-4. `testProdDeploy*` fork tests stay red until the new addresses have code
-   on-chain; re-trigger PR CI with an empty commit after deploying.
+   they share one deployer EOA and race the nonce; serialize dispatches. A
+   `completed/failure` run still deployed if the log has
+   `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` (only `--verify` failed).
+2. One PR: bump `foundry.toml [external.package].version`, run
+   `forge script ./script/Build.sol --sig 'cutRelease()'` (freezes `candidate/`
+   as `src/generated/<tag>/`), repoint `LibRaindexProdDeploy`'s imports at
+   `<tag>` (`LibRaindexProdDeployTest` reds until it agrees with the version),
+   and if RaindexV6 moved run `script/build-start-blocks.sh` (start blocks,
+   `networks.json`, `subgraph.yaml`).
+3. Merge, then push tag `sol-v<version>`. Via rainix `rainix-tag-release.yaml`
+   (`package-release.yaml`) it re-runs the fork suite and `release-guard`
+   (version == tag, frozen dir byte-identical to `candidate/`, clean tree, no
+   later tag frozen), then publishes `raindex~<version>`.
 
-## Publishing to soldeer (tag release)
-
-- Manual tag release via rainix `rainix-tag-release.yaml@main`
-  (`package-release.yaml`, `sol-v*` tags). Merges to main do NOT publish.
-- To cut a release: deploy changed suites first, then one PR that runs
-  `forge script ./script/Build.sol --sig 'cutRelease()'` — freezing the
-  candidate pins as `src/generated/<tag>/` — and bumps
-  `foundry.toml [external.package].version` to match. Merge, then push tag
-  `sol-v<version>`.
-- The tag re-runs the fork suite and `release-guard` (version == tag, frozen dir
-  present and byte-identical to `candidate/`, clean tree after regeneration, no
-  later tag frozen), then publishes `raindex~<version>` and cuts the GitHub
-  release.
-- `src/generated/<tag>/` snapshots are append-only — the
-  `frozen-snapshots-append-only` gate reds any PR that edits or deletes one.
+`src/generated/<tag>/` snapshots are append-only — the
+`frozen-snapshots-append-only` gate reds any PR that edits or deletes one.
