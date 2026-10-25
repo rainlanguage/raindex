@@ -78,9 +78,4 @@ library LibRaindexDeploy {
     /// The code hash of the `GenericPoolRaindexV6FlashBorrower` contract when
     /// deployed with the rain standard zoltu deployer.
     bytes32 constant GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH = GENERIC_POOL_FB_HASH;
-
-    uint256 constant RAINDEX_START_BLOCK_ARBITRUM = 473899359;
-    uint256 constant RAINDEX_START_BLOCK_BASE = 47387582;
-    uint256 constant RAINDEX_START_BLOCK_FLARE = 63011168;
-    uint256 constant RAINDEX_START_BLOCK_POLYGON = 88573024;
 }

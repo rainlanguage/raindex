@@ -11,8 +11,8 @@ import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTO
 import {MockToken} from "test/util/concrete/MockToken.sol";
 
 contract RaindexV6ArbOrderTakerOnTakeOrders2DirectTest is Test {
-    /// Calling onTakeOrders2 directly MUST succeed (no-op) and not modify
-    /// any state. Anyone can call it — there is no access control by design.
+    /// Calling onTakeOrders2 directly outside an arb MUST succeed (no-op) and not modify
+    /// any state, whoever the caller.
     function testOnTakeOrders2DirectCallSucceeds() external {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);

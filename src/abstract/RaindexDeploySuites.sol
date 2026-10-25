@@ -16,10 +16,6 @@ import {
     RUNTIME_CODE as TOFU_DECIMALS_RUNTIME_CODE
 } from "rain-tofu-erc20-decimals-deploy-0.1.3/src/generated/0_1_0/TOFUTokenDecimals.sol";
 import {
-    DEPLOYED_ADDRESS as META_BOARD_ADDRESS,
-    RUNTIME_CODE as META_BOARD_RUNTIME_CODE
-} from "rain-metadata-deploy-0.1.3/src/generated/0_1_1/MetaBoard.sol";
-import {
     CREATION_CODE as RAINDEX_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as RAINDEX_RUNTIME_CODE_CANDIDATE
 } from "../generated/candidate/RaindexV6.sol";
@@ -73,14 +69,52 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         return candidates;
     }
 
-    /// The code that must already be on a network before `RaindexV6` or
-    /// `RaindexV6SubParser` can be broadcast there: the TOFU decimals reader
-    /// and the metaboard.
+    /// The TOFU decimals reader, which `RaindexV6` and every arb read token
+    /// decimals through.
+    /// @return The dependency.
+    function tofuDecimalsDependency() internal pure returns (DeployDependency memory) {
+        return DeployDependency({deployedAddress: TOFU_DECIMALS_ADDRESS, runtimeCode: TOFU_DECIMALS_RUNTIME_CODE});
+    }
+
+    /// The candidate `RaindexV6`, the only raindex every arb accepts.
+    /// @return The dependency.
+    function raindexDependency() internal pure returns (DeployDependency memory) {
+        return DeployDependency({
+            deployedAddress: LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, runtimeCode: RAINDEX_RUNTIME_CODE_CANDIDATE
+        });
+    }
+
+    /// The code that must already be on a network before an arb can be
+    /// broadcast there: the raindex it takes orders from and the TOFU
+    /// decimals reader.
+    /// @return The dependencies.
+    function arbDependencies() internal pure returns (DeployDependency[] memory) {
+        DeployDependency[] memory deps = new DeployDependency[](2);
+        deps[0] = raindexDependency();
+        deps[1] = tofuDecimalsDependency();
+        return deps;
+    }
+
+    /// `arbDependencies` plus the `RouteProcessor4` candidate the arb swaps
+    /// through.
+    /// @return The dependencies.
+    function routeProcessorArbDependencies() internal pure returns (DeployDependency[] memory) {
+        DeployDependency[] memory deps = new DeployDependency[](3);
+        deps[0] = raindexDependency();
+        deps[1] = tofuDecimalsDependency();
+        deps[2] = DeployDependency({
+            deployedAddress: LibRaindexDeploy.ROUTE_PROCESSOR_DEPLOYED_ADDRESS,
+            runtimeCode: ROUTE_PROCESSOR_RUNTIME_CODE_CANDIDATE
+        });
+        return deps;
+    }
+
+    /// The code that must already be on a network before `RaindexV6` can be
+    /// broadcast there: the TOFU decimals reader.
     /// @return The dependencies.
     function raindexDependencies() internal pure returns (DeployDependency[] memory) {
-        DeployDependency[] memory deps = new DeployDependency[](2);
-        deps[0] = DeployDependency({deployedAddress: TOFU_DECIMALS_ADDRESS, runtimeCode: TOFU_DECIMALS_RUNTIME_CODE});
-        deps[1] = DeployDependency({deployedAddress: META_BOARD_ADDRESS, runtimeCode: META_BOARD_RUNTIME_CODE});
+        DeployDependency[] memory deps = new DeployDependency[](1);
+        deps[0] = tofuDecimalsDependency();
         return deps;
     }
 
@@ -118,7 +152,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibRaindexDeploy.SUB_PARSER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: SUB_PARSER_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
-                dependencies: raindexDependencies(),
+                dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
@@ -159,7 +193,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: GENERIC_POOL_ARB_OT_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
-                dependencies: new DeployDependency[](0),
+                dependencies: arbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
@@ -178,7 +212,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: RP_ARB_OT_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker",
-                dependencies: new DeployDependency[](0),
+                dependencies: routeProcessorArbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
@@ -197,7 +231,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: GENERIC_POOL_FB_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower",
-                dependencies: new DeployDependency[](0),
+                dependencies: arbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),

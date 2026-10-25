@@ -12,6 +12,13 @@ struct RaindexV6ArbConfig {
 /// Thrown when the task does not match the expected hash.
 error WrongTask();
 
+/// Thrown when an arb is called with a `raindex` that is not the trusted
+/// deterministic deployment. The arb grants `raindex` an unlimited token
+/// approval and calls it, so an untrusted address could drain the contract's
+/// balance.
+/// @param badRaindex The untrusted `raindex` passed to the arb.
+error BadRaindex(address badRaindex);
+
 /// @title RaindexV6ArbCommon
 /// @notice Common base for arb contracts that interact with `Raindex`.
 /// Provides a `_beforeArb` hook that is called at the start of every arb
