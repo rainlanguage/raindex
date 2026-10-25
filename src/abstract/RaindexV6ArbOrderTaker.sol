@@ -8,16 +8,11 @@ import {IERC20, SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils
 import {IRaindexV6} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {IRaindexV6ArbOrderTaker, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6ArbOrderTaker.sol";
 import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
+import {RaindexV6ArbCommon, BadRaindex} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {IRaindexV6OrderTaker} from "raindex-interface-0.1.8/src/interface/IRaindexV6OrderTaker.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
-
-/// Thrown when `arb5` is called with a `raindex` that is not the trusted
-/// deterministic deployment. `arb5` grants `raindex` an unlimited token approval
-/// and calls it, so an untrusted address could drain the contract's balance.
-error BadRaindex(address badRaindex);
 
 /// Thrown when `onTakeOrders2` is called during an arb by anything other than
 /// the trusted raindex.
