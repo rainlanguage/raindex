@@ -1595,6 +1595,31 @@
     },
     {
       "type": "event",
+      "name": "OrderCalculateReverted",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "orderHash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "OrderExceedsMaxRatio",
       "inputs": [
         {
