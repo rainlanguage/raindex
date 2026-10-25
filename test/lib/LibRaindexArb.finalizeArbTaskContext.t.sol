@@ -17,8 +17,8 @@ import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskContextTest
 /// @notice Verifies that finalizeArb passes correct Float-encoded context to
-/// the post-arb task: context<1 0>=input balance, context<1 1>=output balance,
-/// context<1 2>=gas balance. Column 0 is the calling context added by LibContext.
+/// the post-arb task: context<7 0>=input balance, context<7 1>=output balance,
+/// context<7 2>=gas balance. Column 0 is the calling context added by LibContext.
 contract LibRaindexArbFinalizeArbTaskContextTest is Test {
     function testFinalizeArbTaskContextValues() external {
         LibTestInterpreterDeploy.etchTestRainlang(vm);
@@ -32,9 +32,9 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
         bytes memory taskBytecode = parser.parse2(
             bytes(
                 string.concat(
-                    ":ensure(equal-to(context<1 0>() 20) \"input\"),",
-                    ":ensure(equal-to(context<1 1>() 0) \"output\"),",
-                    ":ensure(equal-to(context<1 2>() 0) \"gas\");"
+                    ":ensure(equal-to(context<7 0>() 20) \"input\"),",
+                    ":ensure(equal-to(context<7 1>() 0) \"output\"),",
+                    ":ensure(equal-to(context<7 2>() 0) \"gas\");"
                 )
             )
         );
@@ -57,7 +57,7 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
         assertEq(result.outputToken.balanceOf(address(result.arb)), 0, "arb outputToken");
     }
 
-    /// Companion to the above: the output (context<1 1>) and gas (context<1 2>)
+    /// Companion to the above: the output (context<7 1>) and gas (context<7 2>)
     /// columns must carry the correct NON-ZERO Floats, not just zero. The
     /// sibling test only ever sees zero output/gas, so a mutation zeroing either
     /// column would survive it. Here input profit is zero while output profit is
@@ -72,9 +72,9 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
         bytes memory taskBytecode = parser.parse2(
             bytes(
                 string.concat(
-                    ":ensure(equal-to(context<1 0>() 0) \"input\"),",
-                    ":ensure(equal-to(context<1 1>() 20) \"output\"),",
-                    ":ensure(equal-to(context<1 2>() 1) \"gas\");"
+                    ":ensure(equal-to(context<7 0>() 0) \"input\"),",
+                    ":ensure(equal-to(context<7 1>() 20) \"output\"),",
+                    ":ensure(equal-to(context<7 2>() 1) \"gas\");"
                 )
             )
         );

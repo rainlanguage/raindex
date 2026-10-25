@@ -118,11 +118,7 @@ uint256 constant CONTEXT_SIGNED_CONTEXT_START_ROW = 0;
 library LibRaindex {
     /// @dev Builds a calling context with `values` as context column `column`
     /// and every other calling context column empty.
-    function callingContextColumn(uint256 column, bytes32[] memory values)
-        internal
-        pure
-        returns (bytes32[][] memory)
-    {
+    function callingContextColumn(uint256 column, bytes32[] memory values) internal pure returns (bytes32[][] memory) {
         bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
         callingContext[column - 1] = values;
         return callingContext;

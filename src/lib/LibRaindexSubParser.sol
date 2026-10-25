@@ -7,19 +7,14 @@ import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol"
 import {LibSubParse} from "rainlang-0.2.19/src/lib/parse/LibSubParse.sol";
 import {
     CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_ROW_SENDER,
-    CONTEXT_BASE_ROW_CALLING_CONTRACT,
-    CONTEXT_BASE_ROWS
+    CONTEXT_BASE_ROW_CALLING_CONTRACT
 } from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
     CONTEXT_DEPOSIT_COLUMN,
     CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
-    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER
-} from "./LibRaindex.sol";
-import {
-    CONTEXT_COLUMNS,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
     CONTEXT_VAULT_INPUTS_COLUMN,
@@ -328,7 +323,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
     }
 
     /// @dev Maps the "deposit-vault-id" word to the calling context column.
@@ -338,8 +333,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
     }
 
     /// @dev Maps the "deposit-vault-balance-before" word to the calling context column.
@@ -349,10 +343,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE
-            );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE);
     }
 
     /// @dev Maps the "deposit-vault-balance-after" word to the calling context column.
@@ -362,10 +353,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER
-            );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER);
     }
 
     /// @dev Maps the "deposit-token-decimals" word to the calling context column.
@@ -375,9 +363,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS
-        );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS);
     }
 
     /// @dev Maps the "withdraw-token" word to the calling context column.
@@ -387,7 +373,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
     }
 
     /// @dev Maps the "withdraw-vault-id" word to the calling context column.
@@ -397,8 +383,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
     }
 
     /// @dev Maps the "withdraw-vault-balance-before" word to the calling context column.
@@ -408,10 +393,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE
-            );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE);
     }
 
     /// @dev Maps the "withdraw-vault-balance-after" word to the calling context column.
@@ -421,10 +403,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER
-            );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER);
     }
 
     /// @dev Maps the "withdraw-target-amount" word to the calling context column.
@@ -434,9 +413,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT
-        );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT);
     }
 
     /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
@@ -446,9 +423,8 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS
-        );
+        return
+            LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS);
     }
 
     /// @dev Maps the "signed-context" word to a signed context column/row.
@@ -459,28 +435,21 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         uint256 column = uint256(OperandV2.unwrap(operand)) & 0xFF;
-        uint256 row = (uint256(OperandV2.unwrap(operand)) >> 8) & 0xFF;
+        uint256 row = uint256(OperandV2.unwrap(operand)) >> 8;
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_START_COLUMN + column, row);
     }
 
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
-    /// column (base, calling, calculations, vault IO, signers, signed context,
-    /// deposit, withdraw). The inner arrays are flattened before encoding.
+    /// column (base, order, calculations, vault IO, deposit, withdraw, signers,
+    /// signed context; the arb column has no words). The inner arrays are flattened before encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);
 
-        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](CONTEXT_BASE_ROWS);
-        contextBaseMeta[CONTEXT_BASE_ROW_SENDER] = AuthoringMetaV2(
-            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
-            // so this conversion is safe.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32(WORD_ORDER_CLEARER),
-            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
-        );
-        contextBaseMeta[CONTEXT_BASE_ROW_CALLING_CONTRACT] =
+        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](BASE_WORDS_LENGTH);
+        contextBaseMeta[BASE_WORD_RAINDEX] =
         // constant WORD_RAINDEX defined above is less than 32 bytes, so
         // this conversion is safe.
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -503,6 +472,13 @@ library LibRaindexSubParser {
             // forge-lint: disable-next-line(unsafe-typecast)
             bytes32(WORD_ORDER_COUNTERPARTY),
             "The address of the owner of the counterparty order. Will be the order taker if there is no counterparty order."
+        );
+        contextCallingContextMeta[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] = AuthoringMetaV2(
+            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
+            // so this conversion is safe.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(WORD_ORDER_CLEARER),
+            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
         );
 
         AuthoringMetaV2[] memory contextCalculationsMeta = new AuthoringMetaV2[](CONTEXT_CALCULATIONS_ROWS);
@@ -649,7 +625,7 @@ library LibRaindexSubParser {
         // forge-lint: disable-next-line(unsafe-typecast)
         AuthoringMetaV2(bytes32(WORD_DEPOSIT_TOKEN_DECIMALS), "The decimals of the token that is being deposited.");
 
-        meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = depositMeta;
+        meta[CONTEXT_DEPOSIT_COLUMN] = depositMeta;
 
         AuthoringMetaV2[] memory withdrawMeta = new AuthoringMetaV2[](WITHDRAW_WORDS_LENGTH);
         withdrawMeta[WITHDRAW_WORD_WITHDRAWER] =
@@ -692,7 +668,7 @@ library LibRaindexSubParser {
         // forge-lint: disable-next-line(unsafe-typecast)
         AuthoringMetaV2(bytes32(WORD_WITHDRAW_TOKEN_DECIMALS), "The decimals of the token that is being withdrawn.");
 
-        meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = withdrawMeta;
+        meta[CONTEXT_WITHDRAW_COLUMN] = withdrawMeta;
 
         uint256[][] memory metaUint256;
         assembly {

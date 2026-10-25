@@ -314,7 +314,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
         LibRaindex.doPost(
             LibRaindex.callingContextColumn(
-                CONTEXT_CALLING_CONTEXT_COLUMN, LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
+                CONTEXT_CALLING_CONTEXT_COLUMN,
+                LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
             ),
             post
         );
