@@ -784,10 +784,11 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
             // This is a much clearer error message and overall is more efficient
             // than solidity generic index out of bounds errors.
-            if (calculateOrderStack.length < CALCULATE_ORDER_MIN_OUTPUTS) {
+            bool calculated = calculateOrderStack.length >= CALCULATE_ORDER_MIN_OUTPUTS;
+            if (!calculated) {
                 if (skipFailure) {
                     OrderIOCalculationV4 memory failed;
-                    return (false, failed);
+                    return (calculated, failed);
                 }
                 revert UnsupportedCalculateOutputs(calculateOrderStack.length);
             }
@@ -811,7 +812,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 LibBytes32Array.arrayFrom(Float.unwrap(orderOutputMax), Float.unwrap(orderIORatio));
 
             return (
-                true,
+                calculated,
                 OrderIOCalculationV4({
                     order: order,
                     outputIOIndex: outputIOIndex,

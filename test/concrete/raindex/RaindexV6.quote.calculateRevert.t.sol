@@ -33,10 +33,22 @@ contract RaindexV6QuoteCalculateRevertTest is RaindexV6FreshTakeOrderTest {
     }
 
     function testQuoteNoCodeInterpreterReverts() external {
-        OrderV4 memory order = addOrder("_ _:1 1;:;", address(uint160(uint256(keccak256("no.code.rain.test")))));
+        address interpreter = address(uint160(uint256(keccak256("no.code.rain.test"))));
+        assertEq(interpreter.code.length, 0);
+        OrderV4 memory order = addOrder("_ _:1 1;:;", interpreter);
 
-        vm.expectRevert(bytes(""));
-        iRaindex.quote2(QuoteV2(order, 0, 0, new SignedContextV1[](0)));
+        try iRaindex.quote2(QuoteV2(order, 0, 0, new SignedContextV1[](0))) {
+            fail();
+        } catch (bytes memory err) {
+            // forge -vvv's revert diagnostic replaces exactly this empty revert data.
+            assertTrue(
+                err.length == 0
+                    || keccak256(err)
+                        == keccak256(
+                            abi.encode(string.concat("call to non-contract address ", vm.toString(interpreter)))
+                        )
+            );
+        }
     }
 
     function testQuoteGarbageReturnDataReverts() external {

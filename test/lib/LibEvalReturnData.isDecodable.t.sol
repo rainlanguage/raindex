@@ -59,7 +59,7 @@ contract LibEvalReturnDataIsDecodableTest is Test {
 
     function writeWord(bytes memory data, uint256 offset, uint256 value) internal pure {
         for (uint256 i = 0; i < 0x20 && offset + i < data.length; i++) {
-            data[offset + i] = bytes1(uint8(value >> (8 * (31 - i))));
+            data[offset + i] = bytes32(value)[i];
         }
     }
 
