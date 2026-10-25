@@ -779,12 +779,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // and recordVaultInput so that local storage writes happen before
             // writes on the interpreter.
             StateNamespace namespace = StateNamespace.wrap(uint256(uint160(order.owner)));
-            (bool evaluated, StackItem[] memory calculateOrderStack, bytes32[] memory calculateOrderKVs) =
+            (StackItem[] memory calculateOrderStack, bytes32[] memory calculateOrderKVs) =
                 evalCalculate(order.evaluable, namespace, context, stateOverlay, skipFailure);
 
             // This is a much clearer error message and overall is more efficient
             // than solidity generic index out of bounds errors.
-            if (!evaluated || calculateOrderStack.length < CALCULATE_ORDER_MIN_OUTPUTS) {
+            if (calculateOrderStack.length < CALCULATE_ORDER_MIN_OUTPUTS) {
                 if (skipFailure) {
                     OrderIOCalculationV4 memory failed;
                     return (false, failed);
@@ -826,15 +826,16 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @dev Runs the calculate entrypoint. With `skipFailure`, a revert, a
-    /// no-code interpreter or undecodable returndata returns `false`; otherwise
-    /// a revert bubbles and undecodable returndata reverts in `abi.decode`.
+    /// no-code interpreter or undecodable returndata returns an empty stack,
+    /// which `calculateOrderIO` skips as too short; otherwise a revert bubbles
+    /// and undecodable returndata reverts in `abi.decode`.
     function evalCalculate(
         EvaluableV4 memory evaluable,
         StateNamespace namespace,
         bytes32[][] memory context,
         bytes32[] memory stateOverlay,
         bool skipFailure
-    ) internal view returns (bool, StackItem[] memory, bytes32[] memory) {
+    ) internal view returns (StackItem[] memory, bytes32[] memory) {
         // https://github.com/crytic/slither/issues/880
         //slither-disable-next-line calls-loop,low-level-calls
         (bool success, bytes memory returnData) = address(evaluable.interpreter)
@@ -858,13 +859,12 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     revert(add(returnData, 0x20), mload(returnData))
                 }
             }
-            return (false, new StackItem[](0), new bytes32[](0));
+            return (new StackItem[](0), new bytes32[](0));
         }
         if (skipFailure && !LibEvalReturnData.isDecodable(returnData)) {
-            return (false, new StackItem[](0), new bytes32[](0));
+            return (new StackItem[](0), new bytes32[](0));
         }
-        (StackItem[] memory stack, bytes32[] memory kvs) = abi.decode(returnData, (StackItem[], bytes32[]));
-        return (true, stack, kvs);
+        return abi.decode(returnData, (StackItem[], bytes32[]));
     }
 
     /// @dev Increases a vault balance by `amount`. For vault ID 0, pushes tokens
