@@ -23,6 +23,8 @@ libs = ['dependencies']
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
 
 ffi = true
+# script/Build.sol's codegen outgrows the default 2^30 gas limit.
+gas_limit = "18446744073709551615"
 solc = "0.8.25"
 evm_version = "cancun"
 
