@@ -183,12 +183,9 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     /// `CLEARER` clears an ACTOR order whose calculate source is `calculate` and
     /// handle source is `handle` against a TAKER order whose calculate source is
     /// `bobCalculate` and handle source is `bobHandle`.
-    function doClear(
-        string memory calculate,
-        string memory handle,
-        string memory bobCalculate,
-        string memory bobHandle
-    ) public {
+    function doClear(string memory calculate, string memory handle, string memory bobCalculate, string memory bobHandle)
+        public
+    {
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ACTOR);
