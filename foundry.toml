@@ -80,7 +80,7 @@ forge-std = "1.17.0"
 rainlang = "0.2.30"
 # rainlanguage/rain.raindex.interface was renamed to
 # rainlanguage/raindex.interface; Soldeer registry name follows.
-raindex-interface = "0.1.11"
+raindex-interface = { version = "0.1.13", git = "https://github.com/rainlanguage/raindex.interface.git", rev = "09614cfb7beafe4a5d1f3e30296d50e3f77e4361" }
 rain-metadata = "0.1.43"
 # The MetaBoard split out of `rain.metadata` into its own deploy repo. The
 # deploy pin lives there now; `rain-metadata` keeps the interfaces and libs.
