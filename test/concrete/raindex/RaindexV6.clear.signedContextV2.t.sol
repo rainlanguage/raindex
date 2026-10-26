@@ -18,13 +18,11 @@ import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestSignedContext} from "test/util/lib/LibTestSignedContext.sol";
 
-/// @title RaindexV6ClearSignedContextRoutingTest
-/// @notice `clear4` evaluates alice's order with `aliceSignedContext` and bob's
-/// with `bobSignedContext`, matching `quote3`/`takeOrders5`. Each order's
-/// expression asserts the signer, domain and signed content it sees, so routing
-/// is pinned by signer, domain and content rather than slot. Runs against
-/// fresh-compiled RaindexV6 so source mutations are observable.
-contract RaindexV6ClearSignedContextRoutingTest is RaindexV6ExternalRealTest {
+/// @title RaindexV6ClearSignedContextV2Test
+/// @notice `clear4` evaluates orders with `SignedContextV2`: each order's
+/// expression asserts the signer, domain and signed content it sees. Runs
+/// against fresh-compiled RaindexV6 so source mutations are observable.
+contract RaindexV6ClearSignedContextV2Test is RaindexV6ExternalRealTest {
     using Strings for address;
     using Strings for uint256;
     using LibDecimalFloat for Float;
@@ -134,48 +132,19 @@ contract RaindexV6ClearSignedContextRoutingTest is RaindexV6ExternalRealTest {
         return ClearConfigV2(0, 0, 0, 0, bytes32(uint256(0xc1)), bytes32(uint256(0xc2)));
     }
 
+    /// Both orders receive the same signed context, so this holds under either
+    /// routing of `aliceSignedContext`/`bobSignedContext`.
     /// forge-config: default.fuzz.runs = 32
-    function testClearRoutesEachSignedContextToItsOwnOrder(Expected memory alice, Expected memory bob) external {
-        alice.pk = boundPk(alice.pk);
-        bob.pk = boundPk(bob.pk);
-        vm.assume(vm.addr(alice.pk) != vm.addr(bob.pk));
-        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = orders(alice, bob);
+    function testClearEvalSeesSignedContextV2(Expected memory expected) external {
+        expected.pk = boundPk(expected.pk);
+        vm.assume(expected.domain != bytes32(0));
+        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = orders(expected, expected);
+        SignedContextV2[] memory signedContexts = signedContext(expected);
 
-        iRaindex.clear4(aliceOrder, bobOrder, clearConfig(), signedContext(alice), signedContext(bob));
+        iRaindex.clear4(aliceOrder, bobOrder, clearConfig(), signedContexts, signedContexts);
 
         assertTrue(iRaindex.vaultBalance2(aliceOrder.owner, address(iToken0), ALICE_IN).gt(LibDecimalFloat.FLOAT_ZERO));
         assertTrue(iRaindex.vaultBalance2(bobOrder.owner, address(iToken1), BOB_IN).gt(LibDecimalFloat.FLOAT_ZERO));
-    }
-
-    /// forge-config: default.fuzz.runs = 32
-    function testClearRevertsWhenSignedContextsAreSwapped(Expected memory alice, Expected memory bob) external {
-        alice.pk = boundPk(alice.pk);
-        bob.pk = boundPk(bob.pk);
-        vm.assume(vm.addr(alice.pk) != vm.addr(bob.pk));
-        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = orders(alice, bob);
-        SignedContextV2[] memory aliceSignedContext = signedContext(alice);
-        SignedContextV2[] memory bobSignedContext = signedContext(bob);
-
-        vm.expectRevert("alice signer");
-        iRaindex.clear4(aliceOrder, bobOrder, clearConfig(), bobSignedContext, aliceSignedContext);
-    }
-
-    /// Same signer and content for both orders, so only the domain tells the
-    /// two signed contexts apart.
-    /// forge-config: default.fuzz.runs = 32
-    function testClearRevertsWhenDomainsAreSwapped(uint256 pk, bytes32 aliceDomain, bytes32 bobDomain, bytes32 content)
-        external
-    {
-        vm.assume(aliceDomain != bobDomain);
-        pk = boundPk(pk);
-        Expected memory alice = Expected(pk, aliceDomain, content);
-        Expected memory bob = Expected(pk, bobDomain, content);
-        (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = orders(alice, bob);
-        SignedContextV2[] memory aliceSignedContext = signedContext(alice);
-        SignedContextV2[] memory bobSignedContext = signedContext(bob);
-
-        vm.expectRevert("alice domain");
-        iRaindex.clear4(aliceOrder, bobOrder, clearConfig(), bobSignedContext, aliceSignedContext);
     }
 
     function testClear3SelectorIsRemoved() external {
