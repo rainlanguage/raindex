@@ -52,6 +52,7 @@ import {
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY,
     CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH,
     CONTEXT_CALLING_CONTEXT_ROWS,
@@ -180,7 +181,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextWithdrawContextHandlers[WITHDRAW_WORD_TARGET_AMOUNT] = LibParseOperand.handleOperandDisallowed;
         contextWithdrawContextHandlers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibParseOperand.handleOperandDisallowed;
 
-        handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = contextWithdrawContextHandlers;
+        handlers[CONTEXT_WITHDRAW_COLUMN] = contextWithdrawContextHandlers;
 
         uint256[][] memory handlersUint256;
         assembly ("memory-safe") {
@@ -293,7 +294,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             internal
             view returns (bool, bytes memory, bytes32[] memory)[](WITHDRAW_WORDS_LENGTH);
 
-        withdrawParsers[WITHDRAW_WORD_WITHDRAWER] = LibRaindexSubParser.subParserSender;
+        withdrawParsers[WITHDRAW_WORD_WITHDRAWER] = LibRaindexSubParser.subParserWithdrawer;
         withdrawParsers[WITHDRAW_WORD_TOKEN] = LibRaindexSubParser.subParserWithdrawToken;
         withdrawParsers[WITHDRAW_WORD_VAULT_ID] = LibRaindexSubParser.subParserWithdrawVaultId;
         withdrawParsers[WITHDRAW_WORD_VAULT_BEFORE] = LibRaindexSubParser.subParserWithdrawVaultBalanceBefore;
@@ -301,7 +302,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         withdrawParsers[WITHDRAW_WORD_TARGET_AMOUNT] = LibRaindexSubParser.subParserWithdrawTargetAmount;
         withdrawParsers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibRaindexSubParser.subParserWithdrawTokenDecimals;
 
-        parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = withdrawParsers;
+        parsers[CONTEXT_WITHDRAW_COLUMN] = withdrawParsers;
 
         uint256[][] memory parsersUint256;
         assembly ("memory-safe") {

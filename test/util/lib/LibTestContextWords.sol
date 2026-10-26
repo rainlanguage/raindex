@@ -14,4 +14,16 @@ library LibTestContextWords {
         words[5] = "deposit-token-decimals()";
         return words;
     }
+
+    function withdrawWords() internal pure returns (string[] memory) {
+        string[] memory words = new string[](7);
+        words[0] = "withdrawer()";
+        words[1] = "withdraw-token()";
+        words[2] = "withdraw-vault-id()";
+        words[3] = "withdraw-vault-before()";
+        words[4] = "withdraw-vault-after()";
+        words[5] = "withdraw-target-amount()";
+        words[6] = "withdraw-token-decimals()";
+        return words;
+    }
 }

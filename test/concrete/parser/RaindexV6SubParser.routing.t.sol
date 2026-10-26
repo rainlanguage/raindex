@@ -156,50 +156,53 @@ contract RaindexV6SubParserRoutingTest is Test {
         checkRoute(LibRaindexSubParser.subParserDepositVaultBalanceAfter, 5, 3);
     }
 
-    // Withdraw words route to the calling context column (column 1), withdraw
-    // row enum.
+    // Withdraw column (column 6).
+
+    function testRouteWithdrawer() external pure {
+        checkRoute(LibRaindexSubParser.subParserWithdrawer, 6, 6);
+    }
 
     function testRouteWithdrawToken() external pure {
-        checkRoute(LibRaindexSubParser.subParserWithdrawToken, 1, 0);
+        checkRoute(LibRaindexSubParser.subParserWithdrawToken, 6, 0);
     }
 
     function testRouteWithdrawVaultId() external pure {
-        checkRoute(LibRaindexSubParser.subParserWithdrawVaultId, 1, 1);
+        checkRoute(LibRaindexSubParser.subParserWithdrawVaultId, 6, 1);
     }
 
     function testRouteWithdrawVaultBalanceBefore() external pure {
-        checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceBefore, 1, 2);
+        checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceBefore, 6, 2);
     }
 
     function testRouteWithdrawVaultBalanceAfter() external pure {
-        checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceAfter, 1, 3);
+        checkRoute(LibRaindexSubParser.subParserWithdrawVaultBalanceAfter, 6, 3);
     }
 
     function testRouteWithdrawTargetAmount() external pure {
-        checkRoute(LibRaindexSubParser.subParserWithdrawTargetAmount, 1, 4);
+        checkRoute(LibRaindexSubParser.subParserWithdrawTargetAmount, 6, 4);
     }
 
     // Operand-driven words.
 
-    /// signers routes to the signers column (column 6) and uses the raw
+    /// signers routes to the signers column (column 7) and uses the raw
     /// operand as the row.
     function testRouteSignersRowFromOperand() external pure {
-        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(0))), 6, 0);
-        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(1))), 6, 1);
-        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(7))), 6, 7);
+        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(0))), 7, 0);
+        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(1))), 7, 1);
+        checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(7))), 7, 7);
     }
 
     /// signed-context low operand byte selects a column offset added to the
-    /// signed context start column (column 7); the second byte selects the row.
+    /// signed context start column (column 8); the second byte selects the row.
     function testRouteSignedContextColumnMaskAndRowShift() external pure {
-        // operand 0x0000 -> column 7 + 0, row 0.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0000))), 7, 0);
-        // operand 0x0001 -> low byte 1 -> column 7 + 1 = 8, row 0.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0001))), 8, 0);
-        // operand 0x0100 -> low byte 0 -> column 7, second byte 1 -> row 1.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0100))), 7, 1);
-        // operand 0x0201 -> column 7 + 1 = 8, row 2. Proves column and row are
+        // operand 0x0000 -> column 8 + 0, row 0.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0000))), 8, 0);
+        // operand 0x0001 -> low byte 1 -> column 8 + 1 = 9, row 0.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0001))), 9, 0);
+        // operand 0x0100 -> low byte 0 -> column 8, second byte 1 -> row 1.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0100))), 8, 1);
+        // operand 0x0201 -> column 8 + 1 = 9, row 2. Proves column and row are
         // taken from distinct operand bytes (mask vs shift not swapped).
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0201))), 8, 2);
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0201))), 9, 2);
     }
 }

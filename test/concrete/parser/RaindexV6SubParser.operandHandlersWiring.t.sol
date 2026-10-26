@@ -14,8 +14,8 @@ import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParse
 /// (base / calling / calculations / vault-in / vault-out / deposit / withdraw)
 /// is wired to the SAME `LibParseOperand.handleOperandDisallowed` function, so
 /// those slots all share one 16-bit pointer. Only TWO slots are different:
-///   - signers (column 6, row 0) -> `handleOperandSingleFullNoDefault`
-///   - signed-context (column 7, row 0) -> `handleOperandDoublePerByteNoDefault`
+///   - signers (column 7, row 0) -> `handleOperandSingleFullNoDefault`
+///   - signed-context (column 8, row 0) -> `handleOperandDoublePerByteNoDefault`
 /// Because the build function is a freshly compiled `external pure`, this test
 /// runs against a fresh deployment WITHOUT etching or pointer regeneration. The
 /// absolute pointer values are unstable across source edits (solc reorders its
@@ -25,7 +25,7 @@ import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParse
 /// deterministically covers the operand-handler outer length, the column
 /// assignments, and the deposit/withdraw column offsets: any of those mutations
 /// changes the table length and/or relocates the two distinct handler pointers
-/// off slots 23/24.
+/// off slots 30/31.
 contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     RaindexV6SubParser internal subParser;
 
@@ -40,12 +40,12 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     //   col 3 vault inputs    (5 rows) -> 7..11
     //   col 4 vault outputs   (5 rows) -> 12..16
     //   col 5 deposit         (6 rows) -> 17..22
-    //   col 6 signers         (1 row)  -> 23
-    //   col 7 signed context  (1 row)  -> 24
-    //   col 8 withdraw        (7 rows) -> 25..31
+    //   col 6 withdraw        (7 rows) -> 23..29
+    //   col 7 signers         (1 row)  -> 30
+    //   col 8 signed context  (1 row)  -> 31
     uint256 internal constant TABLE_SLOTS = 32;
-    uint256 internal constant SLOT_SIGNERS = 23;
-    uint256 internal constant SLOT_SIGNED_CONTEXT = 24;
+    uint256 internal constant SLOT_SIGNERS = 30;
+    uint256 internal constant SLOT_SIGNED_CONTEXT = 31;
 
     /// @dev Read the big-endian 16-bit function pointer at flat `slot` from the
     /// freshly built operand-handler table, asserting the table is the expected
@@ -64,8 +64,8 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         pointerAt(0);
     }
 
-    /// Every slot before signers (base through deposit) is the shared
-    /// disallowed pointer; the signers slot (column 6, row 0) differs.
+    /// Every slot before signers (base through withdraw) is the shared
+    /// disallowed pointer; the signers slot (column 7, row 0) differs.
     function testSignersOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
         for (uint256 slot = 0; slot < SLOT_SIGNERS; slot++) {
@@ -74,7 +74,7 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         assertTrue(pointerAt(SLOT_SIGNERS) != disallowed, "signers handler must differ from handleOperandDisallowed");
     }
 
-    /// The signed-context handler (column 7, row 0) differs from both the
+    /// The signed-context handler (column 8, row 0) differs from both the
     /// disallowed default and the signers handler.
     function testSignedContextOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
@@ -88,15 +88,12 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         );
     }
 
-    /// Every deposit (slots 17..22) and withdraw (slots 25..31) slot is the
+    /// Every deposit (slots 17..22) and withdraw (slots 23..29) slot is the
     /// shared disallowed pointer.
     function testDepositWithdrawOperandHandlersAllDisallowed() external view {
         uint16 disallowed = pointerAt(0);
         for (uint256 slot = 17; slot < SLOT_SIGNERS; slot++) {
-            assertEq(pointerAt(slot), disallowed, "deposit operand slot uses handleOperandDisallowed");
-        }
-        for (uint256 slot = SLOT_SIGNED_CONTEXT + 1; slot < TABLE_SLOTS; slot++) {
-            assertEq(pointerAt(slot), disallowed, "withdraw operand slot uses handleOperandDisallowed");
+            assertEq(pointerAt(slot), disallowed, "deposit/withdraw operand slot uses handleOperandDisallowed");
         }
     }
 }
