@@ -323,7 +323,7 @@
           inherit (rainix.devShells.${system}.default) shellHook buildInputs nativeBuildInputs;
         };
         devShells.webapp-shell = pkgs.mkShell {
-          packages = with pkgs; [ nodejs_20 ];
+          packages = with pkgs; [ nodejs_22 ];
           inherit (rainix.devShells.${system}.default) buildInputs nativeBuildInputs;
         };
 
