@@ -64,7 +64,6 @@ import {
 } from "../../lib/LibRaindex.sol";
 import {RaindexV6FlashLender} from "../../abstract/RaindexV6FlashLender.sol";
 import {LibBytes32Array} from "rain-solmem-0.1.28/src/lib/LibBytes32Array.sol";
-import {LibBytes32Matrix} from "rain-solmem-0.1.28/src/lib/LibBytes32Matrix.sol";
 
 import {LibFormatDecimalFloat} from "rain-math-float-0.3.10/src/lib/format/LibFormatDecimalFloat.sol";
 import {
@@ -319,7 +318,10 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// with a context of the order hash and the caller.
     function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
         LibRaindex.doPost(
-            LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
+            LibRaindex.callingContextColumn(
+                CONTEXT_CALLING_CONTEXT_COLUMN,
+                LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))
+            ),
             post
         );
     }
@@ -351,6 +353,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             msg.sender,
             quoteConfig.signedContext,
             new bytes32[](0),
+            false,
             false
         );
         // true is quote2's "order is live" result required by IRaindexV6.
@@ -441,7 +444,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         msg.sender,
                         takeOrderConfig.signedContext,
                         new bytes32[](0),
-                        true
+                        true,
+                        false
                     );
 
                     // Skip orders that are too expensive rather than revert as we have
@@ -635,7 +639,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             bobOrder.owner,
             bobSignedContext,
             new bytes32[](0),
-            false
+            false,
+            true
         );
         (, OrderIOCalculationV4 memory bobOrderIOCalculation) = calculateOrderIO(
             bobOrder,
@@ -644,7 +649,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             aliceOrder.owner,
             aliceSignedContext,
             new bytes32[](0),
-            false
+            false,
+            true
         );
 
         // Each side must be one `takeOrders4` would take. Given this, each
@@ -720,6 +726,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// single-order callers (`quote`, `clear3`).
     /// @param skipFailure If true, a reverting calculate eval or a stack shorter
     /// than `CALCULATE_ORDER_MIN_OUTPUTS` returns false instead of reverting.
+    /// @param clearing Whether the order column includes the clearer row; true
+    /// only for `clear3`.
     /// @return False if `skipFailure` caught a failure, in which case the
     /// calculation is zeroed and MUST NOT be used.
     /// @return The order IO calculation.
@@ -730,15 +738,23 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         address counterparty,
         SignedContextV1[] memory signedContext,
         bytes32[] memory stateOverlay,
-        bool skipFailure
+        bool skipFailure,
+        bool clearing
     ) internal view returns (bool, OrderIOCalculationV4 memory) {
         unchecked {
             bytes32[][] memory context;
             {
                 bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
-                callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
-                    order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
-                );
+                callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = clearing
+                    ? LibBytes32Array.arrayFrom(
+                        order.hash(),
+                        bytes32(uint256(uint160(order.owner))),
+                        bytes32(uint256(uint160(counterparty))),
+                        bytes32(uint256(uint160(msg.sender)))
+                    )
+                    : LibBytes32Array.arrayFrom(
+                        order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
+                    );
 
                 // The calculations column holds the calculated max output and IO
                 // ratio, which only become known after the calculate eval below.

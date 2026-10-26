@@ -51,6 +51,7 @@ import {
     CONTEXT_CALCULATIONS_ROW_MAX_OUTPUT,
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY,
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
     CONTEXT_DEPOSIT_COLUMN,
     CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER,
@@ -120,6 +121,8 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextCallingContextHandlers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH] = LibParseOperand.handleOperandDisallowed;
         contextCallingContextHandlers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER] = LibParseOperand.handleOperandDisallowed;
         contextCallingContextHandlers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY] =
+        LibParseOperand.handleOperandDisallowed;
+        contextCallingContextHandlers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] =
         LibParseOperand.handleOperandDisallowed;
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextCalculationsHandlers =
@@ -216,6 +219,8 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextCallingContextParsers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER] = LibRaindexSubParser.subParserOrderOwner;
         contextCallingContextParsers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY] =
         LibRaindexSubParser.subParserOrderCounterparty;
+        contextCallingContextParsers[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] =
+        LibRaindexSubParser.subParserOrderClearer;
 
         function(uint256, uint256, OperandV2) internal view returns (bool, bytes memory, bytes32[] memory)[] memory
             contextCalculationsParsers =

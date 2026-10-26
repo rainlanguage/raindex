@@ -30,16 +30,16 @@ uint256 constant CONTEXT_COLUMNS = CALLING_CONTEXT_COLUMNS + 1;
 /// including the first signed context column.
 uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1;
 
-/// @dev Contextual data available to both calculate order and handle IO. The
-/// order hash, order owner and order counterparty. IMPORTANT NOTE that the
-/// typical base context of an order with the caller will often be an unrelated
-/// clearer of the order rather than the owner or counterparty.
+/// @dev Order column. Clear gets all rows; take and quote omit the clearer;
+/// add and remove order tasks get only the order hash and owner. IMPORTANT NOTE
+/// that the clearer will often be unrelated to the owner or counterparty.
 uint256 constant CONTEXT_CALLING_CONTEXT_COLUMN = 1;
-uint256 constant CONTEXT_CALLING_CONTEXT_ROWS = 3;
+uint256 constant CONTEXT_CALLING_CONTEXT_ROWS = 4;
 
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH = 0;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER = 1;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY = 2;
+uint256 constant CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER = 3;
 
 /// @dev Deposit column. Filled only for deposit tasks.
 uint256 constant CONTEXT_DEPOSIT_COLUMN = 5;
