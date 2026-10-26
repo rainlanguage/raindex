@@ -56,7 +56,6 @@ contract RaindexV6SubParserRoutingTest is Test {
     // Base column (column 0).
 
     function testRouteSender() external pure {
-        // order-clearer -> base column 0, sender row 0.
         checkRoute(LibRaindexSubParser.subParserSender, 0, 0);
     }
 
@@ -65,7 +64,7 @@ contract RaindexV6SubParserRoutingTest is Test {
         checkRoute(LibRaindexSubParser.subParserCallingContract, 0, 1);
     }
 
-    // Calling context column (column 1).
+    // Order column (column 1).
 
     function testRouteOrderHash() external pure {
         checkRoute(LibRaindexSubParser.subParserOrderHash, 1, 0);
@@ -77,6 +76,10 @@ contract RaindexV6SubParserRoutingTest is Test {
 
     function testRouteOrderCounterparty() external pure {
         checkRoute(LibRaindexSubParser.subParserOrderCounterparty, 1, 2);
+    }
+
+    function testRouteOrderClearer() external pure {
+        checkRoute(LibRaindexSubParser.subParserOrderClearer, 1, 3);
     }
 
     // Calculations column (column 2).
