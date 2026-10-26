@@ -43,12 +43,12 @@ pub fn get_order_hash(
     Ok(encode_prefixed(main_keccak256(order.abi_encode())))
 }
 
-/// Generates ABI-encoded calldata for the `takeOrders3()` function on the Raindex smart contract.
+/// Generates ABI-encoded calldata for the `takeOrders5()` function on the Raindex smart contract.
 ///
 /// ## Examples
 ///
 /// ```javascript
-/// const result = await getTakeOrders3Calldata(config);
+/// const result = await getTakeOrders5Calldata(config);
 /// if (result.error) {
 ///   console.error("Calldata generation failed:", result.error.readableMsg);
 /// }
@@ -56,11 +56,11 @@ pub fn get_order_hash(
 /// // Do something with the calldata
 /// ```
 #[wasm_export(
-    js_name = "getTakeOrders3Calldata",
+    js_name = "getTakeOrders5Calldata",
     unchecked_return_type = "TakeOrdersCalldata",
     return_description = "Encoded calldata ready for blockchain submission"
 )]
-pub fn get_take_orders4_calldata(
+pub fn get_take_orders5_calldata(
     #[wasm_export(
         param_description = "Complete configuration for order execution including minimumIO, maximumIO, maximumIORatio, orders array, IOIsInput, and additional data"
     )]
@@ -170,7 +170,7 @@ mod tests {
     #[wasm_bindgen_test]
     fn test_take_orders_calldata() {
         let take_orders_config = TakeOrdersConfigV6::default();
-        let result = get_take_orders4_calldata(take_orders_config.clone()).unwrap();
+        let result = get_take_orders5_calldata(take_orders_config.clone()).unwrap();
         let expected = takeOrders5Call {
             config: take_orders_config,
         }
