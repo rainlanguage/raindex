@@ -6,7 +6,7 @@ import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
 import {IRaindexV6CalculateOrderIOHarness} from "test/util/interface/IRaindexV6CalculateOrderIOHarness.sol";
 import {OrderIOCalculationV4} from "src/struct/OrderIOCalculationV4.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {OrderV4, SignedContextV1} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, SignedContextV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 
@@ -21,7 +21,7 @@ contract RaindexV6CalculateOrderIOHarness is RaindexV6, IRaindexV6CalculateOrder
         uint256 inputIOIndex,
         uint256 outputIOIndex,
         address counterparty,
-        SignedContextV1[] memory signedContext
+        SignedContextV2[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory) {
         return calculateOrderIO(order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0));
     }

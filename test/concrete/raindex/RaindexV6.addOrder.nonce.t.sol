@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -16,12 +16,12 @@ contract RaindexV6AddOrderNonceTest is RaindexV6ExternalRealTest {
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(owner);
-        bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(iRaindex.orderExists(order.hash()));
 
         vm.prank(owner);
-        stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(!stateChange);
         assert(iRaindex.orderExists(order.hash()));
     }
@@ -33,7 +33,7 @@ contract RaindexV6AddOrderNonceTest is RaindexV6ExternalRealTest {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         vm.assume(config.nonce != otherNonce);
         vm.prank(owner);
-        bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(
             iRaindex.orderExists(
@@ -43,7 +43,7 @@ contract RaindexV6AddOrderNonceTest is RaindexV6ExternalRealTest {
 
         config.nonce = otherNonce;
         vm.prank(owner);
-        stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(
             iRaindex.orderExists(
@@ -64,7 +64,7 @@ contract RaindexV6AddOrderNonceTest is RaindexV6ExternalRealTest {
         config1.nonce = config0.nonce;
         vm.assume(keccak256(abi.encode(config0)) != keccak256(abi.encode(config1)));
         vm.prank(owner);
-        bool stateChange = iRaindex.addOrder4(config0, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config0, new TaskV3[](0));
         assert(stateChange);
         assert(
             iRaindex.orderExists(
@@ -73,7 +73,7 @@ contract RaindexV6AddOrderNonceTest is RaindexV6ExternalRealTest {
         );
 
         vm.prank(owner);
-        stateChange = iRaindex.addOrder4(config1, new TaskV2[](0));
+        stateChange = iRaindex.addOrder5(config1, new TaskV3[](0));
         assert(stateChange);
         assert(
             iRaindex.orderExists(

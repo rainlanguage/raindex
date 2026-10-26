@@ -6,8 +6,8 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
-    SignedContextV1
+    TaskV3,
+    SignedContextV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
@@ -53,7 +53,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
         bytes memory err
     ) internal {
         uint256 withdrawAmount18;
-        TaskV2[] memory actions;
+        TaskV3[] memory actions;
         {
             uint256 depositAmountAbsolute;
             {
@@ -81,14 +81,14 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
                 vm.startPrank(owner);
 
                 if (depositAmountAbsolute > 0) {
-                    iRaindex.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+                    iRaindex.deposit5(address(iToken0), vaultId, depositAmount, new TaskV3[](0));
                 }
             }
 
-            actions = new TaskV2[](evalStrings.length);
+            actions = new TaskV3[](evalStrings.length);
             for (uint256 i = 0; i < evalStrings.length; i++) {
-                actions[i] = TaskV2(
-                    EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0)
+                actions[i] = TaskV3(
+                    EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV2[](0)
                 );
             }
         }
@@ -115,7 +115,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
                 withdrawAmount18
             );
         }
-        iRaindex.withdraw4(address(iToken0), vaultId, targetAmount, actions);
+        iRaindex.withdraw5(address(iToken0), vaultId, targetAmount, actions);
         if (err.length == 0) {
             checkReentrancyRW(6, 3);
             (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
@@ -320,7 +320,7 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
             abi.encodeWithSelector(IERC20.transferFrom.selector, alice, address(iRaindex), depositAmount18),
             abi.encode(true)
         );
-        iRaindex.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, depositAmount, new TaskV3[](0));
 
         vm.mockCall(
             address(iToken0),
@@ -330,12 +330,12 @@ contract RaindexV6WithdrawEvalTest is RaindexV6ExternalRealTest {
 
         bytes[] memory evals = new bytes[](1);
         evals[0] = bytes(":ensure(0 \"revert in action\");");
-        TaskV2[] memory actions = evalsToActions(evals);
+        TaskV3[] memory actions = evalsToActions(evals);
 
         assertTrue(depositAmount.eq(iRaindex.vaultBalance2(alice, address(iToken0), vaultId)));
 
         vm.expectRevert("revert in action");
-        iRaindex.withdraw4(address(iToken0), vaultId, withdrawAmount, actions);
+        iRaindex.withdraw5(address(iToken0), vaultId, withdrawAmount, actions);
 
         assertTrue(depositAmount.eq(iRaindex.vaultBalance2(alice, address(iToken0), vaultId)));
     }

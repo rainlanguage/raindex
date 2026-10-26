@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, TakeOrdersConfigV6, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
@@ -44,7 +44,7 @@ contract RaindexV6TakeOrderCalculationsContextTest is RaindexV6ExternalRealTest 
             )
         );
         OrderV4 memory order = _addOrder(expression);
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         // The calculate eval (with its in-band `ensure`s on the calculations
         // words) must run to completion. The empty output vault then clamps the
@@ -52,7 +52,7 @@ contract RaindexV6TakeOrderCalculationsContextTest is RaindexV6ExternalRealTest 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
         emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");

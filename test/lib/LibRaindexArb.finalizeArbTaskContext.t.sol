@@ -3,10 +3,10 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {EvaluableV4, SignedContextV1, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
+import {EvaluableV4, SignedContextV2, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
 import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
@@ -39,11 +39,11 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
             )
         );
 
-        TaskV2 memory task = TaskV2({
+        TaskV3 memory task = TaskV3({
             evaluable: EvaluableV4(
                 IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), taskBytecode
             ),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
 
         // Raindex has 100e18 output, pulls 80e18 input. Exchange has 100e18 input.
@@ -79,11 +79,11 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
             )
         );
 
-        TaskV2 memory task = TaskV2({
+        TaskV3 memory task = TaskV3({
             evaluable: EvaluableV4(
                 IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), taskBytecode
             ),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
 
         // Raindex has 100e18 output, pulls 80e18 input. Exchange has 80e18 input.

@@ -3,11 +3,11 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderConfigV4, OrderV4, IOV2, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotRainMetaV1, META_MAGIC_NUMBER_V1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 import {LibMeta} from "rain-metadata-0.1.43/src/lib/LibMeta.sol";
-import {IExpressionDeployerV3} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IExpressionDeployerV3.sol";
+import {IExpressionDeployerV3} from "rainlang-interface-0.2.14/src/interface/deprecated/v1/IExpressionDeployerV3.sol";
 
 /// @title RaindexV6AddOrderMockTest
 /// @notice Tests the addOrder function of the RaindexV6 contract.
@@ -19,7 +19,7 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         config.evaluable.bytecode = "";
         vm.expectRevert(abi.encodeWithSelector(OrderNoSources.selector));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
         assertTrue(!iRaindex.orderExists(orderHash));
@@ -33,7 +33,7 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
             hex"0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d02000000040000000000000000";
         config.validInputs = new IOV2[](0);
         vm.expectRevert(abi.encodeWithSelector(OrderNoInputs.selector));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
         assertTrue(!iRaindex.orderExists(orderHash));
@@ -48,7 +48,7 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
         vm.assume(config.validInputs.length > 0);
         config.validOutputs = new IOV2[](0);
         vm.expectRevert(abi.encodeWithSelector(OrderNoOutputs.selector));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
         assertTrue(!iRaindex.orderExists(orderHash));
@@ -86,7 +86,7 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
         vm.assume(config.meta.length > 0);
 
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, config.meta));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
 
         (OrderV4 memory order, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         (order);
@@ -142,7 +142,7 @@ contract RaindexV6AddOrderMockTest is RaindexV6ExternalMockTest {
         emit MetaV1_2(owner, orderHash, config.meta);
 
         vm.prank(owner);
-        assertTrue(iRaindex.addOrder4(config, new TaskV2[](0)));
+        assertTrue(iRaindex.addOrder5(config, new TaskV3[](0)));
 
         assertTrue(iRaindex.orderExists(orderHash));
     }

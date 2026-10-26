@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {TakeOrdersConfigV5, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {TakeOrdersConfigV6, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IRaindexV7OrderTaker} from "raindex-interface-0.1.10/src/interface/IRaindexV7OrderTaker.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -16,8 +16,8 @@ contract RecordingOrderTaker is IRaindexV7OrderTaker {
         iRaindex = raindex;
     }
 
-    function take(TakeOrdersConfigV5 memory config) external returns (Float, Float) {
-        return iRaindex.takeOrders4(config);
+    function take(TakeOrdersConfigV6 memory config) external returns (Float, Float) {
+        return iRaindex.takeOrders5(config);
     }
 
     function onTakeOrders2(address, address, Float, Float, bytes calldata) external {

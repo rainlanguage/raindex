@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RaindexV6FlashBorrower, TakeOrdersConfigV5} from "../../abstract/RaindexV6FlashBorrower.sol";
+import {RaindexV6FlashBorrower, TakeOrdersConfigV6} from "../../abstract/RaindexV6FlashBorrower.sol";
 import {LibGenericPoolExchange} from "../../lib/LibGenericPoolExchange.sol";
 
 /// @title GenericPoolRaindexV6FlashBorrower
@@ -22,7 +22,7 @@ contract GenericPoolRaindexV6FlashBorrower is RaindexV6FlashBorrower {
     /// @inheritdoc RaindexV6FlashBorrower
     /// @dev Decodes `exchangeData` as `(spender, pool, encodedFunctionCall)`
     /// and routes the swap through the specified pool via `LibGenericPoolExchange`.
-    function _exchange(TakeOrdersConfigV5 memory takeOrders, bytes memory exchangeData) internal virtual override {
+    function _exchange(TakeOrdersConfigV6 memory takeOrders, bytes memory exchangeData) internal virtual override {
         address borrowedToken = takeOrders.orders[0].order.validOutputs[takeOrders.orders[0].outputIOIndex].token;
         LibGenericPoolExchange.exchange(borrowedToken, exchangeData);
     }

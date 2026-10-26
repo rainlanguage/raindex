@@ -3,43 +3,45 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {EvaluableV4, SignedContextV1, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
+import {EvaluableV4, SignedContextV2, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
 import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
     TEST_EXPRESSION_DEPLOYER_ADDRESS
 } from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
-import {MessageHashUtils} from "@openzeppelin-contracts-5.7.0/utils/cryptography/MessageHashUtils.sol";
+import {LibTestSignedContext} from "test/util/lib/LibTestSignedContext.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
 import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
 import {RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE} from "src/generated/candidate/RaindexV6SubParser.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskSignedContextTest
-/// @notice `signer<i>()` and `signed-context<i j>()` read the real signers and
+/// @notice `signer<i>()`, `signer-domain<i>()` and `signed-context<i j>()` read
+/// the real signers, domains and signed data in the post-arb task.
 /// signed data in the post-arb task.
 contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
     using Strings for address;
+    using Strings for uint256;
 
     uint256 internal constant SIGNER_A_PK = 0xA11CE;
     uint256 internal constant SIGNER_B_PK = 0xB0B;
     address internal constant DATA_A = address(0xDA7A0);
     address internal constant DATA_B = address(0xDA7A1);
     address internal constant TRUSTED = address(0x7777);
+    bytes32 internal constant DOMAIN_A = keccak256("domain a");
+    bytes32 internal constant DOMAIN_B = keccak256("domain b");
 
-    function signed(uint256 pk, address datum) internal pure returns (SignedContextV1 memory) {
+    function signed(uint256 pk, bytes32 domain, address datum) internal pure returns (SignedContextV2 memory) {
         bytes32[] memory ctx = new bytes32[](1);
         ctx[0] = bytes32(uint256(uint160(datum)));
-        bytes32 h = MessageHashUtils.toEthSignedMessageHash(keccak256(abi.encodePacked(ctx)));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, h);
-        return SignedContextV1(vm.addr(pk), ctx, abi.encodePacked(r, s, v));
+        return LibTestSignedContext.sign(vm, pk, domain, ctx);
     }
 
-    function task(string memory body, SignedContextV1[] memory sc) internal returns (TaskV2 memory) {
+    function task(string memory body, SignedContextV2[] memory sc) internal returns (TaskV3 memory) {
         LibTestInterpreterDeploy.etchTestRainlang(vm);
         vm.etch(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS, SUB_PARSER_RUNTIME_CODE);
         bytes memory bytecode = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS)
@@ -50,7 +52,7 @@ contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
                     )
                 )
             );
-        return TaskV2({
+        return TaskV3({
             evaluable: EvaluableV4(
                 IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), bytecode
             ),
@@ -59,10 +61,10 @@ contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
     }
 
     function testFinalizeArbTaskSignerWordsReadRealSigners() external {
-        SignedContextV1[] memory sc = new SignedContextV1[](2);
-        sc[0] = signed(SIGNER_A_PK, DATA_A);
-        sc[1] = signed(SIGNER_B_PK, DATA_B);
-        TaskV2 memory t = task(
+        SignedContextV2[] memory sc = new SignedContextV2[](2);
+        sc[0] = signed(SIGNER_A_PK, DOMAIN_A, DATA_A);
+        sc[1] = signed(SIGNER_B_PK, DOMAIN_B, DATA_B);
+        TaskV3 memory t = task(
             string.concat(
                 ":ensure(equal-to(signer<0>() ",
                 vm.addr(SIGNER_A_PK).toHexString(),
@@ -70,6 +72,12 @@ contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
                 ":ensure(equal-to(signer<1>() ",
                 vm.addr(SIGNER_B_PK).toHexString(),
                 ") \"signer 1\"),",
+                ":ensure(equal-to(signer-domain<0>() ",
+                uint256(DOMAIN_A).toHexString(),
+                ") \"signer domain 0\"),",
+                ":ensure(equal-to(signer-domain<1>() ",
+                uint256(DOMAIN_B).toHexString(),
+                ") \"signer domain 1\"),",
                 ":ensure(equal-to(signed-context<0 0>() ",
                 DATA_A.toHexString(),
                 ") \"signed context 0\"),",
@@ -83,17 +91,17 @@ contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
     }
 
     function testFinalizeArbTaskRejectsSignerForgedInSignedData() external {
-        SignedContextV1[] memory sc = new SignedContextV1[](3);
-        sc[0] = signed(SIGNER_A_PK, DATA_A);
-        sc[1] = signed(SIGNER_A_PK, DATA_A);
-        sc[2] = signed(SIGNER_A_PK, TRUSTED);
-        TaskV2 memory t =
+        SignedContextV2[] memory sc = new SignedContextV2[](3);
+        sc[0] = signed(SIGNER_A_PK, DOMAIN_A, DATA_A);
+        sc[1] = signed(SIGNER_A_PK, DOMAIN_A, DATA_A);
+        sc[2] = signed(SIGNER_A_PK, DOMAIN_A, TRUSTED);
+        TaskV3 memory t =
             task(string.concat(":ensure(equal-to(signer<0>() ", TRUSTED.toHexString(), ") \"signer trusted\");"), sc);
         vm.expectRevert("signer trusted");
         this.externalArb(t);
     }
 
-    function externalArb(TaskV2 memory t) external {
+    function externalArb(TaskV3 memory t) external {
         LibTestArb.setupAndArb(vm, 80e18, 100e18, 100e18, 100e18, t, 0);
     }
 }

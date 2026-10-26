@@ -7,16 +7,16 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
     IRaindexV7,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
@@ -25,7 +25,7 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {ReentrantMockRaindex} from "test/util/concrete/ReentrantMockRaindex.sol";
 
 contract RaindexV6ArbOrderTakerReentrancyTest is Test {
-    /// arb5 MUST revert when re-entered via the takeOrders4 callback.
+    /// arb6 MUST revert when re-entered via the takeOrders5 callback.
     function testArb5Reentrancy() external {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
@@ -33,9 +33,9 @@ contract RaindexV6ArbOrderTakerReentrancyTest is Test {
         MockToken inputToken = new MockToken("Input", "IN", 18);
         MockToken outputToken = new MockToken("Output", "OUT", 18);
 
-        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // arb6 only trusts the canonical raindex deployment, so etch the mock's
         // code at that address. The mock re-enters from its own address, so the
-        // re-entrant arb5 call also targets the trusted raindex and reaches the
+        // re-entrant arb6 call also targets the trusted raindex and reaches the
         // reentrancy guard rather than the trust guard.
         ReentrantMockRaindex mockRaindex = new ReentrantMockRaindex();
         vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
@@ -57,13 +57,13 @@ contract RaindexV6ArbOrderTakerReentrancyTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
-        arb.arb5(
+        arb.arb6(
             IRaindexV7(address(raindex)),
-            TakeOrdersConfigV5({
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -71,9 +71,9 @@ contract RaindexV6ArbOrderTakerReentrancyTest is Test {
                 orders: orders,
                 data: ""
             }),
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
     }

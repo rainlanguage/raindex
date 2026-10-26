@@ -8,8 +8,8 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderConfigV4,
     OrderV4,
-    TaskV2,
-    TakeOrdersConfigV5
+    TaskV3,
+    TakeOrdersConfigV6
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/error/ErrRaindexV6.sol";
 
@@ -27,17 +27,17 @@ contract RaindexV6TakeOrderBadStackTest is RaindexV6ExternalRealTest {
 
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
-        TakeOrdersConfigV5 memory takeOrdersConfig =
+        TakeOrdersConfigV6 memory takeOrdersConfig =
             LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.validInputs[0].token = address(iToken0);
         config.validOutputs[0].token = address(iToken1);
 
         vm.prank(alice);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, badStackHeight));
-        iRaindex.takeOrders4(takeOrdersConfig);
+        iRaindex.takeOrders5(takeOrdersConfig);
     }
 
     /// forge-config: default.fuzz.runs = 100

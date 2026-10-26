@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, TakeOrdersConfigV6, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {MinimumIO} from "../../../src/error/ErrRaindexV6.sol";
 
@@ -40,8 +40,8 @@ contract RaindexV6TakeOrderMinimumIOOutputTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(iAlice);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
 
         // outputMax (token1) = 10, IORatio = 0.5. The order can give far more
@@ -68,7 +68,7 @@ contract RaindexV6TakeOrderMinimumIOOutputTest is RaindexV6ExternalRealTest {
     function testTakeOrderMinimumIOOutputBranchRevert() external {
         OrderV4 memory order = addFundedOrder();
 
-        TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         takeConfig.IOIsInput = false;
         // Cap the take so totalTakerOutput == maximumIO == 0.5 exactly.
         takeConfig.maximumIO = LibDecimalFloat.packLossless(5, -1);
@@ -90,7 +90,7 @@ contract RaindexV6TakeOrderMinimumIOOutputTest is RaindexV6ExternalRealTest {
                 MinimumIO.selector, LibDecimalFloat.packLossless(75, -2), LibDecimalFloat.packLossless(5, -1)
             )
         );
-        iRaindex.takeOrders4(takeConfig);
+        iRaindex.takeOrders5(takeConfig);
     }
 
     /// Positive control for the same `IOIsInput == false` path: with
@@ -101,7 +101,7 @@ contract RaindexV6TakeOrderMinimumIOOutputTest is RaindexV6ExternalRealTest {
     function testTakeOrderMinimumIOOutputBranchFillsAtZeroMinimum() external {
         OrderV4 memory order = addFundedOrder();
 
-        TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         takeConfig.IOIsInput = false;
         takeConfig.maximumIO = LibDecimalFloat.packLossless(5, -1);
         takeConfig.minimumIO = LibDecimalFloat.packLossless(0, 0);
@@ -124,7 +124,7 @@ contract RaindexV6TakeOrderMinimumIOOutputTest is RaindexV6ExternalRealTest {
         );
 
         vm.prank(iBob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeConfig);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeConfig);
 
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(1, 0)), "taker input == 1.0 token1");
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(5, -1)), "taker output == 0.5 token0");

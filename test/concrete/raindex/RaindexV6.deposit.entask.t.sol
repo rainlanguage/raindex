@@ -6,8 +6,8 @@ import {RaindexV6ExternalRealTest, LibDecimalFloat, Float} from "test/util/abstr
 import {
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
-    SignedContextV1
+    TaskV3,
+    SignedContextV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
@@ -54,13 +54,13 @@ contract RaindexV6DepositEnactTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
 
-        TaskV2[] memory actions = new TaskV2[](evalStrings.length);
+        TaskV3[] memory actions = new TaskV3[](evalStrings.length);
         for (uint256 i = 0; i < evalStrings.length; i++) {
             actions[i] =
-                TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
+                TaskV3(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV2[](0));
         }
         vm.record();
-        iRaindex.deposit4(address(iToken0), vaultId, amount, actions);
+        iRaindex.deposit5(address(iToken0), vaultId, amount, actions);
         checkReentrancyRW();
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
         assert(reads.length == expectedReads);
@@ -274,12 +274,12 @@ contract RaindexV6DepositEnactTest is RaindexV6ExternalRealTest {
         bytes[] memory evals = new bytes[](1);
         evals[0] = bytes(":ensure(0 \"revert in action\");");
 
-        TaskV2[] memory actions = evalsToActions(evals);
+        TaskV3[] memory actions = evalsToActions(evals);
 
         assertTrue(iRaindex.vaultBalance2(alice, address(iToken0), vaultId).isZero());
 
         vm.expectRevert("revert in action");
-        iRaindex.deposit4(address(iToken0), vaultId, amount, actions);
+        iRaindex.deposit5(address(iToken0), vaultId, amount, actions);
 
         assertTrue(iRaindex.vaultBalance2(alice, address(iToken0), vaultId).isZero());
     }

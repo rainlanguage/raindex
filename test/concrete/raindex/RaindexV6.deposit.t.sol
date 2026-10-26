@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {stdError} from "forge-std-1.17.0/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE, CONSOLE_ADDRESS} from "test/util/lib/LibTestConstants.sol";
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {TaskV2, EvaluableV4, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {TaskV3, EvaluableV4, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -32,7 +32,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
 
         Float amount = LibDecimalFloat.fromFixedDecimalLosslessPacked(amount18, 18);
 
-        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, amount, new TaskV3[](0));
         assertTrue(iRaindex.vaultBalance2(depositor, address(iToken0), vaultId).eq(amount));
     }
 
@@ -44,7 +44,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         vm.expectRevert(
             abi.encodeWithSelector(IRaindexV7.ZeroDepositAmount.selector, address(depositor), address(iToken0), vaultId)
         );
-        iRaindex.deposit4(address(iToken0), vaultId, LibDecimalFloat.packLossless(0, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, LibDecimalFloat.packLossless(0, 0), new TaskV3[](0));
     }
 
     /// Depositing a negative amount is caught by the same non-positive guard as
@@ -64,7 +64,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         vm.expectRevert(
             abi.encodeWithSelector(IRaindexV7.ZeroDepositAmount.selector, address(depositor), address(iToken0), vaultId)
         );
-        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, amount, new TaskV3[](0));
     }
 
     /// Depositing vaultID of zero should revert.
@@ -72,7 +72,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         vm.assume(amount.gt(Float.wrap(0)));
         vm.prank(depositor);
         vm.expectRevert(abi.encodeWithSelector(IRaindexV7.ZeroVaultId.selector, address(depositor), address(token)));
-        iRaindex.deposit4(token, bytes32(0), amount, new TaskV2[](0));
+        iRaindex.deposit5(token, bytes32(0), amount, new TaskV3[](0));
     }
 
     /// Test a warm deposit, which is the best case scenario for gas. In this
@@ -86,8 +86,8 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             abi.encodeWithSelector(IERC20.transferFrom.selector, address(this), address(iRaindex), 1),
             abi.encode(true)
         );
-        iRaindex.deposit4(
-            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV3[](0)
         );
         vm.mockCall(
             address(iToken0),
@@ -95,8 +95,8 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             abi.encode(true)
         );
         vm.resumeGasMetering();
-        iRaindex.deposit4(
-            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV3[](0)
         );
     }
 
@@ -112,8 +112,8 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             abi.encode(true)
         );
         vm.resumeGasMetering();
-        iRaindex.deposit4(
-            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken0), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, -18), new TaskV3[](0)
         );
     }
 
@@ -127,7 +127,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         // The token contract always reverts when not mocked.
         vm.prank(depositor);
         vm.expectRevert();
-        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, amount, new TaskV3[](0));
 
         // Mocking the token to return false should also revert.
         vm.prank(depositor);
@@ -138,7 +138,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         );
         // This error string appears when the call completes but returns false.
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(iToken0)));
-        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, amount, new TaskV3[](0));
     }
 
     /// Defines a deposit to be used in testDepositMany.
@@ -194,7 +194,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             emit DepositV2(actions[i].depositor, actions[i].token, actions[i].vaultId, actions[i].amount18);
             vm.record();
             vm.recordLogs();
-            iRaindex.deposit4(actions[i].token, actions[i].vaultId, actions[i].amount, new TaskV2[](0));
+            iRaindex.deposit5(actions[i].token, actions[i].vaultId, actions[i].amount, new TaskV3[](0));
             (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
             assertEq(vm.getRecordedLogs().length, 1, "logs");
             // - reentrancy guard x3
@@ -226,7 +226,7 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
         vm.expectEmit(false, false, false, true);
         emit DepositV2(depositor, address(iToken0), vaultId, amount18);
         Float amount = LibDecimalFloat.fromFixedDecimalLosslessPacked(amount18, 18);
-        iRaindex.deposit4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, amount, new TaskV3[](0));
     }
 
     /// Depositing should NOT allow reentrancy.
@@ -251,9 +251,9 @@ contract RaindexV6DepositTest is RaindexV6ExternalMockTest {
             address(reenteroor), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(18))
         );
         reenteroor.reenterWith(
-            abi.encodeWithSelector(IRaindexV7.deposit4.selector, reToken, reVaultId, reAmount, new TaskV2[](0))
+            abi.encodeWithSelector(IRaindexV7.deposit5.selector, reToken, reVaultId, reAmount, new TaskV3[](0))
         );
         vm.expectRevert(abi.encodeWithSelector(ReentrancyGuard.ReentrancyGuardReentrantCall.selector));
-        iRaindex.deposit4(address(reenteroor), vaultId, amount, new TaskV2[](0));
+        iRaindex.deposit5(address(reenteroor), vaultId, amount, new TaskV3[](0));
     }
 }

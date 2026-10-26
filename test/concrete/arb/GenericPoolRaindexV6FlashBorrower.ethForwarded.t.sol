@@ -16,10 +16,10 @@ contract GenericPoolRaindexV6FlashBorrowerEthForwardedTest is Test {
         AllowanceCheckingExchange exchange = new AllowanceCheckingExchange();
         FlashBorrowerSetup memory setup = LibTestFlashBorrowerArb.setup(vm, address(exchange), 100e18);
 
-        // Send ETH to the arb contract before calling arb4.
+        // Send ETH to the arb contract before calling arb5.
         vm.deal(address(setup.arb), 1 ether);
 
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
 
         // The exchange received the ETH during the call.
         assertEq(exchange.lastEthReceived(), 1 ether);

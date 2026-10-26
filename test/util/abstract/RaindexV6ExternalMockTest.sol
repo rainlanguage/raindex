@@ -9,14 +9,14 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/lib/LibMeta.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
 import {IRaindexV7Stub} from "test/util/abstract/IRaindexV7Stub.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {IRaindexV7, OrderConfigV4, OrderV4, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {IRaindexV7, OrderConfigV4, OrderV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
-import {EvaluableV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterCallerV4.sol";
+import {EvaluableV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
@@ -79,7 +79,7 @@ abstract contract RaindexV6ExternalMockTest is Test, IMetaV1_2, IRaindexV7Stub {
         vm.record();
         vm.recordLogs();
         vm.prank(owner);
-        assertTrue(iRaindex.addOrder4(config, new TaskV2[](0)));
+        assertTrue(iRaindex.addOrder5(config, new TaskV3[](0)));
         // MetaV1 is NOT emitted if the meta is empty.
         assertEq(vm.getRecordedLogs().length, config.meta.length > 0 ? 2 : 1);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
@@ -96,7 +96,7 @@ abstract contract RaindexV6ExternalMockTest is Test, IMetaV1_2, IRaindexV7Stub {
         vm.record();
         vm.recordLogs();
         vm.prank(owner);
-        assertFalse(iRaindex.addOrder4(config, new TaskV2[](0)));
+        assertFalse(iRaindex.addOrder5(config, new TaskV3[](0)));
         assertEq(vm.getRecordedLogs().length, 0);
         (reads, writes) = vm.accesses(address(iRaindex));
         // 3x for reentrancy guard, 1x for dead order check.
@@ -120,7 +120,7 @@ abstract contract RaindexV6ExternalMockTest is Test, IMetaV1_2, IRaindexV7Stub {
         vm.recordLogs();
         vm.prank(owner);
         // An order was removed so this is true as there is a state change.
-        assertTrue(iRaindex.removeOrder3(order, new TaskV2[](0)));
+        assertTrue(iRaindex.removeOrder4(order, new TaskV3[](0)));
         assertEq(vm.getRecordedLogs().length, 1);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
         // 3x for reentrancy guard, 1x for dead order check, 1x for dead write.
@@ -134,7 +134,7 @@ abstract contract RaindexV6ExternalMockTest is Test, IMetaV1_2, IRaindexV7Stub {
         vm.recordLogs();
         vm.prank(owner);
         // There is no state change so this is false.
-        assertFalse(iRaindex.removeOrder3(order, new TaskV2[](0)));
+        assertFalse(iRaindex.removeOrder4(order, new TaskV3[](0)));
         assertEq(vm.getRecordedLogs().length, 0);
         (reads, writes) = vm.accesses(address(iRaindex));
         // 3x for reentrancy guard, 1x for dead order check.

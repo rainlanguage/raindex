@@ -11,7 +11,7 @@ import {
 import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
 
 /// @dev Mock raindex whose `flashLoan` performs a real net-neutral ERC3156
-/// transfer of the loaned token (out then back), and whose `takeOrders4` is a
+/// transfer of the loaned token (out then back), and whose `takeOrders5` is a
 /// no-op (the inherited base does nothing). This leaves whatever token balances
 /// the arb already holds completely untouched, so a test can pre-fund the arb
 /// with a deterministic leftover of each token and assert exactly how

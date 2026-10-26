@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
-import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {TakeOrdersConfigV6, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {
     IERC3156FlashBorrower,
     ON_FLASH_LOAN_CALLBACK_SUCCESS
@@ -12,7 +12,7 @@ import {
 import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
 
 /// @dev Mock raindex identical to `RealisticFlashLendingMockRaindex` (real
-/// ERC3156 transfers, real `takeOrders4` swap) but additionally records the
+/// ERC3156 transfers, real `takeOrders5` swap) but additionally records the
 /// `token` and `amount` it was asked to flash loan so a test can pin the
 /// exact base-unit amount the arb requested.
 contract RecordingFlashLendingMockRaindex is MockRaindexBase {
@@ -41,7 +41,7 @@ contract RecordingFlashLendingMockRaindex is MockRaindexBase {
         return true;
     }
 
-    function takeOrders4(TakeOrdersConfigV5 calldata config) external override returns (Float, Float) {
+    function takeOrders5(TakeOrdersConfigV6 calldata config) external override returns (Float, Float) {
         address inputToken = config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token;
         address outputToken = config.orders[0].order.validOutputs[config.orders[0].outputIOIndex].token;
         uint256 inputBalance = IERC20(inputToken).balanceOf(msg.sender);

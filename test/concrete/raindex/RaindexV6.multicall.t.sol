@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
-import {IRaindexV7, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IRaindexV7, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// `multicall` is inherited from OpenZeppelin and not declared on the Raindex
@@ -27,7 +27,7 @@ contract RaindexV6MulticallTest is RaindexV6ExternalRealTest {
 
     /// Two deposits to different vaults, bundled into a single `multicall`,
     /// both land and are credited to alice. The returned `results` array has
-    /// one (empty, since `deposit4` is void) entry per call.
+    /// one (empty, since `deposit5` is void) entry per call.
     function testMulticallBundledDepositsBothApply() external {
         Float amount1 = LibDecimalFloat.packLossless(3, 0);
         Float amount2 = LibDecimalFloat.packLossless(5, 0);
@@ -41,9 +41,9 @@ contract RaindexV6MulticallTest is RaindexV6ExternalRealTest {
 
         bytes[] memory calls = new bytes[](2);
         calls[0] =
-            abi.encodeCall(IRaindexV7.deposit4, (address(iToken1), bytes32(uint256(0x01)), amount1, new TaskV2[](0)));
+            abi.encodeCall(IRaindexV7.deposit5, (address(iToken1), bytes32(uint256(0x01)), amount1, new TaskV3[](0)));
         calls[1] =
-            abi.encodeCall(IRaindexV7.deposit4, (address(iToken1), bytes32(uint256(0x02)), amount2, new TaskV2[](0)));
+            abi.encodeCall(IRaindexV7.deposit5, (address(iToken1), bytes32(uint256(0x02)), amount2, new TaskV3[](0)));
 
         vm.prank(iAlice);
         bytes[] memory results = IMulticall(address(iRaindex)).multicall(calls);
@@ -79,9 +79,9 @@ contract RaindexV6MulticallTest is RaindexV6ExternalRealTest {
 
         bytes[] memory calls = new bytes[](2);
         calls[0] =
-            abi.encodeCall(IRaindexV7.deposit4, (address(iToken1), bytes32(uint256(0x01)), amount1, new TaskV2[](0)));
+            abi.encodeCall(IRaindexV7.deposit5, (address(iToken1), bytes32(uint256(0x01)), amount1, new TaskV3[](0)));
         calls[1] =
-            abi.encodeCall(IRaindexV7.deposit4, (address(iToken0), bytes32(uint256(0x02)), amount2, new TaskV2[](0)));
+            abi.encodeCall(IRaindexV7.deposit5, (address(iToken0), bytes32(uint256(0x02)), amount2, new TaskV3[](0)));
 
         vm.prank(iAlice);
         vm.expectRevert();

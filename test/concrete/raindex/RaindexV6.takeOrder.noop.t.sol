@@ -9,9 +9,9 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     OrderV4,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
-    SignedContextV1
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
+    SignedContextV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
@@ -26,9 +26,9 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
     /// Take orders makes no sense without any orders in the input array and the
     /// caller has full control over this so we error.
     function testTakeOrderNoopZeroOrders() external {
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(new TakeOrderConfigV4[](0));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(new TakeOrderConfigV5[](0));
         vm.expectRevert(NoOrders.selector);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -42,7 +42,7 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
         OrderV4 memory order,
         uint256 inputIOIndex,
         uint256 outputIOIndex,
-        SignedContextV1 memory signedContext
+        SignedContextV2 memory signedContext
     ) external {
         vm.assume(order.validInputs.length > 0);
         inputIOIndex = bound(inputIOIndex, 0, order.validInputs.length - 1);
@@ -54,16 +54,16 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
 
         // We don't bound the input or output indexes as we want to allow
         // malformed orders to be passed in, and still show that nothing happens.
-        SignedContextV1[] memory signedContexts = new SignedContextV1[](1);
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = signedContext;
-        TakeOrderConfigV4 memory orderConfig = TakeOrderConfigV4(order, inputIOIndex, outputIOIndex, signedContexts);
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        TakeOrderConfigV5 memory orderConfig = TakeOrderConfigV5(order, inputIOIndex, outputIOIndex, signedContexts);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
         orders[0] = orderConfig;
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         vm.expectEmit(address(iRaindex));
         emit OrderNotFound(address(this), order.owner, order.hash());
         vm.recordLogs();
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         assertTrue(totalTakerInput.isZero());
         assertTrue(totalTakerOutput.isZero());
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -79,8 +79,8 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
         uint256 outputIOIndex1,
         uint256 inputIOIndex2,
         uint256 outputIOIndex2,
-        SignedContextV1 memory signedContext1,
-        SignedContextV1 memory signedContext2
+        SignedContextV2 memory signedContext1,
+        SignedContextV2 memory signedContext2
     ) external {
         vm.assume(order1.validInputs.length > 0);
         inputIOIndex1 = bound(inputIOIndex1, 0, order1.validInputs.length - 1);
@@ -102,21 +102,21 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
         order1.validInputs[inputIOIndex1].token = order2.validInputs[inputIOIndex2].token;
         order1.validOutputs[outputIOIndex1].token = order2.validOutputs[outputIOIndex2].token;
 
-        TakeOrdersConfigV5 memory config;
+        TakeOrdersConfigV6 memory config;
         {
-            TakeOrderConfigV4[] memory orders;
+            TakeOrderConfigV5[] memory orders;
             {
                 // We don't bound the input or output indexes as we want to allow
                 // malformed orders to be passed in, and still show that nothing happens.
-                SignedContextV1[] memory signedContexts1 = new SignedContextV1[](1);
+                SignedContextV2[] memory signedContexts1 = new SignedContextV2[](1);
                 signedContexts1[0] = signedContext1;
-                TakeOrderConfigV4 memory orderConfig1 =
-                    TakeOrderConfigV4(order1, inputIOIndex1, outputIOIndex1, signedContexts1);
-                SignedContextV1[] memory signedContexts2 = new SignedContextV1[](1);
+                TakeOrderConfigV5 memory orderConfig1 =
+                    TakeOrderConfigV5(order1, inputIOIndex1, outputIOIndex1, signedContexts1);
+                SignedContextV2[] memory signedContexts2 = new SignedContextV2[](1);
                 signedContexts2[0] = signedContext2;
-                TakeOrderConfigV4 memory orderConfig2 =
-                    TakeOrderConfigV4(order2, inputIOIndex2, outputIOIndex2, signedContexts2);
-                orders = new TakeOrderConfigV4[](2);
+                TakeOrderConfigV5 memory orderConfig2 =
+                    TakeOrderConfigV5(order2, inputIOIndex2, outputIOIndex2, signedContexts2);
+                orders = new TakeOrderConfigV5[](2);
                 orders[0] = orderConfig1;
                 orders[1] = orderConfig2;
             }
@@ -126,7 +126,7 @@ contract RaindexV6TakeOrderNoopTest is RaindexV6ExternalRealTest {
 
         vm.recordLogs();
         {
-            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
             assertTrue(totalTakerInput.isZero());
             assertTrue(totalTakerOutput.isZero());
         }

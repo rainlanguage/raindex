@@ -7,7 +7,7 @@ import {LibTestFlashBorrowerArb, FlashBorrowerSetup} from "test/util/lib/LibTest
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 
-/// arb4 grants the raindex max approval on BOTH the order's input and output
+/// arb5 grants the raindex max approval on BOTH the order's input and output
 /// tokens before taking the flash loan, then MUST revoke both back to zero
 /// after the flash loan returns. This guards against a stale max approval to
 /// the orderbook persisting after the arb completes.
@@ -16,24 +16,24 @@ contract GenericPoolRaindexV6FlashBorrowerRaindexApprovalRevokedTest is Test {
         MockExchange exchange = new MockExchange();
         FlashBorrowerSetup memory setup = LibTestFlashBorrowerArb.setup(vm, address(exchange), 100e18);
 
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
 
-        // After arb4 the raindex's allowance on the OUTPUT token (the borrowed
+        // After arb5 the raindex's allowance on the OUTPUT token (the borrowed
         // token) is revoked to zero. If the post-flashLoan output revoke is
         // dropped or set non-zero this assertion fails.
         assertEq(
             setup.outputToken.allowance(address(setup.arb), address(setup.raindex)),
             0,
-            "raindex output allowance revoked to zero after arb4"
+            "raindex output allowance revoked to zero after arb5"
         );
 
-        // After arb4 the raindex's allowance on the INPUT token is also revoked
+        // After arb5 the raindex's allowance on the INPUT token is also revoked
         // to zero. If the post-flashLoan input revoke is dropped or set
         // non-zero this assertion fails.
         assertEq(
             setup.inputToken.allowance(address(setup.arb), address(setup.raindex)),
             0,
-            "raindex input allowance revoked to zero after arb4"
+            "raindex input allowance revoked to zero after arb5"
         );
     }
 }

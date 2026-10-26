@@ -9,8 +9,8 @@ import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC
 import {ReentrancyGuard} from "@openzeppelin-contracts-5.7.0/utils/ReentrancyGuard.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {LibContext} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
-import {LibBytecode} from "rainlang-interface-0.2.13/src/lib/bytecode/LibBytecode.sol";
+import {LibContext} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
+import {LibBytecode} from "rainlang-interface-0.2.14/src/lib/bytecode/LibBytecode.sol";
 import {LibInterpreterStateDataContract} from "rainlang-0.2.19/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
@@ -18,11 +18,11 @@ import {
     IInterpreterV4,
     StackItem,
     EvalV4
-} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {LibUint256Array} from "rain-solmem-0.1.28/src/lib/LibUint256Array.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
 import {LibMeta} from "rain-metadata-0.1.43/src/lib/LibMeta.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 import {LibRaindex} from "../../lib/LibRaindex.sol";
@@ -34,16 +34,16 @@ import {
     IRaindexV7,
     OrderV4,
     OrderConfigV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     ClearConfigV2,
     ClearStateChangeV2,
-    SignedContextV1,
+    SignedContextV2,
 
     //forge-lint: disable-next-line(unused-import)
     EvaluableV4,
-    TaskV2,
-    QuoteV2,
+    TaskV3,
+    QuoteV3,
     Float,
     IOV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
@@ -150,12 +150,12 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @inheritdoc IRaindexV7
-    function entask2(TaskV2[] calldata post) external nonReentrant {
+    function entask3(TaskV3[] calldata post) external nonReentrant {
         LibRaindex.doPost(new bytes32[][](0), post);
     }
 
     /// @inheritdoc IRaindexV7
-    function deposit4(address token, bytes32 vaultId, Float depositAmount, TaskV2[] calldata post)
+    function deposit5(address token, bytes32 vaultId, Float depositAmount, TaskV3[] calldata post)
         external
         nonReentrant
         nonZeroVaultId(msg.sender, token, vaultId)
@@ -190,7 +190,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @inheritdoc IRaindexV7
-    function withdraw4(address token, bytes32 vaultId, Float targetAmount, TaskV2[] calldata post)
+    function withdraw5(address token, bytes32 vaultId, Float targetAmount, TaskV3[] calldata post)
         external
         nonReentrant
         nonZeroVaultId(msg.sender, token, vaultId)
@@ -229,7 +229,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @inheritdoc IRaindexV7
-    function addOrder4(OrderConfigV4 calldata orderConfig, TaskV2[] calldata post)
+    function addOrder5(OrderConfigV4 calldata orderConfig, TaskV3[] calldata post)
         external
         nonReentrant
         returns (bool)
@@ -285,7 +285,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @inheritdoc IRaindexV7
-    function removeOrder3(OrderV4 calldata order, TaskV2[] calldata post)
+    function removeOrder4(OrderV4 calldata order, TaskV3[] calldata post)
         external
         nonReentrant
         returns (bool stateChanged)
@@ -303,9 +303,9 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         }
     }
 
-    /// @dev Runs the post tasks for an order mutation (`addOrder4` / `removeOrder3`)
+    /// @dev Runs the post tasks for an order mutation (`addOrder5` / `removeOrder4`)
     /// with a context of the order hash and the caller.
-    function _doOrderPost(bytes32 orderHash, TaskV2[] calldata post) internal {
+    function _doOrderPost(bytes32 orderHash, TaskV3[] calldata post) internal {
         LibRaindex.doPost(
             LibBytes32Matrix.matrixFrom(LibBytes32Array.arrayFrom(orderHash, bytes32(uint256(uint160(msg.sender))))),
             post
@@ -321,11 +321,11 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     }
 
     /// @inheritdoc IRaindexV7
-    function quote2(QuoteV2 calldata quoteConfig) external view returns (bool, Float, Float) {
+    function quote3(QuoteV3 calldata quoteConfig) external view returns (bool, Float, Float) {
         bytes32 orderHash = quoteConfig.order.hash();
 
         if (sOrders[orderHash] != ORDER_LIVE) {
-            // false is quote2's "no live order" result, not a constant condition.
+            // false is quote3's "no live order" result, not a constant condition.
             // forge-lint: disable-next-line(boolean-cst)
             return (false, LibDecimalFloat.FLOAT_ZERO, LibDecimalFloat.FLOAT_ZERO);
         }
@@ -340,7 +340,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             quoteConfig.signedContext,
             new bytes32[](0)
         );
-        // true is quote2's "order is live" result required by IRaindexV7.
+        // true is quote3's "order is live" result required by IRaindexV7.
         // forge-lint: disable-next-line(boolean-cst)
         return (true, orderIOCalculation.outputMax, orderIOCalculation.IORatio);
     }
@@ -349,7 +349,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     // Most of the cyclomatic complexity here is due to the error handling within
     // the loop. The actual logic is fairly linear.
     //slither-disable-next-line cyclomatic-complexity
-    function takeOrders4(TakeOrdersConfigV5 calldata config)
+    function takeOrders5(TakeOrdersConfigV6 calldata config)
         external
         nonReentrant
         returns (Float totalTakerInput, Float totalTakerOutput)
@@ -365,7 +365,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             revert ZeroMaximumIO();
         }
 
-        TakeOrderConfigV4 memory takeOrderConfig;
+        TakeOrderConfigV5 memory takeOrderConfig;
         OrderV4 memory order;
         TakeOrdersIO memory io = TakeOrdersIO({
             inputToken: config.orders[0].order.validInputs[config.orders[0].inputIOIndex].token,
@@ -488,7 +488,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         // before it is pushed to the owner.
                         recordVaultOutput(takerInput, orderIOCalculation);
                         recordVaultInput(takerOutput, orderIOCalculation);
-                        emit TakeOrderV3(msg.sender, takeOrderConfig, takerInput, takerOutput);
+                        emit TakeOrderV4(msg.sender, takeOrderConfig, takerInput, takerOutput);
 
                         // Add the pointer to the order IO calculation to the array
                         // of order IO calculations to handle. This is
@@ -572,8 +572,8 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         OrderV4 memory aliceOrder,
         OrderV4 memory bobOrder,
         ClearConfigV2 calldata clearConfig,
-        SignedContextV1[] memory aliceSignedContext,
-        SignedContextV1[] memory bobSignedContext
+        SignedContextV2[] memory aliceSignedContext,
+        SignedContextV2[] memory bobSignedContext
     ) external nonReentrant {
         {
             if (aliceOrder.owner == bobOrder.owner) {
@@ -629,7 +629,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             new bytes32[](0)
         );
 
-        // Each side must be one `takeOrders4` would take. Given this, each
+        // Each side must be one `takeOrders5` would take. Given this, each
         // computed output is positive or the Float math reverts.
         if (
             !aliceOrderIOCalculation.outputMax.gt(LibDecimalFloat.FLOAT_ZERO)
@@ -705,7 +705,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         uint256 inputIOIndex,
         uint256 outputIOIndex,
         address counterparty,
-        SignedContextV1[] memory signedContext,
+        SignedContextV2[] memory signedContext,
         bytes32[] memory stateOverlay
     ) internal view returns (OrderIOCalculationV4 memory) {
         unchecked {
@@ -757,7 +757,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     );
                 }
 
-                context = LibContext.build(callingContext, signedContext);
+                context = LibContext.buildV2(callingContext, signedContext);
             }
 
             // The state changes produced here are handled in recordVaultOutput

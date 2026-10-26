@@ -7,11 +7,11 @@ import {
     OrderConfigV4,
     OrderV4,
     ClearConfigV2,
-    SignedContextV1,
-    TakeOrdersConfigV5,
+    SignedContextV2,
+    TakeOrdersConfigV6,
     EvaluableV4,
-    TaskV2,
-    QuoteV2,
+    TaskV3,
+    QuoteV3,
     Float
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC3156FlashLender} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashLender.sol";
@@ -19,17 +19,17 @@ import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc
 
 abstract contract IRaindexV7Stub is IRaindexV7 {
     /// @inheritdoc IRaindexV7
-    function entask2(TaskV2[] calldata) external pure {
+    function entask3(TaskV3[] calldata) external pure {
         revert("eval");
     }
 
     /// @inheritdoc IRaindexV7
-    function quote2(QuoteV2 calldata) external pure returns (bool, Float, Float) {
+    function quote3(QuoteV3 calldata) external pure returns (bool, Float, Float) {
         revert("quote");
     }
 
     /// @inheritdoc IRaindexV7
-    function addOrder4(OrderConfigV4 calldata, TaskV2[] calldata) external pure returns (bool) {
+    function addOrder5(OrderConfigV4 calldata, TaskV3[] calldata) external pure returns (bool) {
         revert("addOrder");
     }
 
@@ -39,7 +39,7 @@ abstract contract IRaindexV7Stub is IRaindexV7 {
     }
 
     /// @inheritdoc IRaindexV7
-    function removeOrder3(OrderV4 calldata, TaskV2[] calldata) external pure returns (bool) {
+    function removeOrder4(OrderV4 calldata, TaskV3[] calldata) external pure returns (bool) {
         revert("removeOrder");
     }
 
@@ -48,19 +48,19 @@ abstract contract IRaindexV7Stub is IRaindexV7 {
         OrderV4 memory,
         OrderV4 memory,
         ClearConfigV2 calldata,
-        SignedContextV1[] memory,
-        SignedContextV1[] memory
+        SignedContextV2[] memory,
+        SignedContextV2[] memory
     ) external pure {
         revert("clear");
     }
 
     /// @inheritdoc IRaindexV7
-    function deposit4(address, bytes32, Float, TaskV2[] calldata) external pure {
+    function deposit5(address, bytes32, Float, TaskV3[] calldata) external pure {
         revert("deposit");
     }
 
     /// @inheritdoc IRaindexV7
-    function takeOrders4(TakeOrdersConfigV5 calldata) external pure returns (Float, Float) {
+    function takeOrders5(TakeOrdersConfigV6 calldata) external pure returns (Float, Float) {
         revert("takeOrders");
     }
 
@@ -70,7 +70,7 @@ abstract contract IRaindexV7Stub is IRaindexV7 {
     }
 
     /// @inheritdoc IRaindexV7
-    function withdraw4(address, bytes32, Float, TaskV2[] calldata) external pure {
+    function withdraw5(address, bytes32, Float, TaskV3[] calldata) external pure {
         revert("withdraw");
     }
 

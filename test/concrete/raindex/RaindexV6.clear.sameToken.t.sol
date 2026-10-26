@@ -9,8 +9,8 @@ import {
     OrderV4,
     EvaluableV4,
     ClearConfigV2,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 
@@ -37,14 +37,14 @@ contract RaindexV6ClearSameTokenTest is RaindexV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iRaindex.addOrder4(configAlice, new TaskV2[](0));
+        iRaindex.addOrder5(configAlice, new TaskV3[](0));
 
         vm.prank(bob);
-        iRaindex.addOrder4(configBob, new TaskV2[](0));
+        iRaindex.addOrder5(configBob, new TaskV3[](0));
 
         vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
         iRaindex.clear4(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 }

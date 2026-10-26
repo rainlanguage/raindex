@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {AuthoringMetaV2, OperandV2} from "rainlang-interface-0.2.13/src/interface/ISubParserV4.sol";
+import {AuthoringMetaV2} from "rainlang-interface-0.2.14/src/interface/ISubParserV4.sol";
+import {OperandV2} from "rainlang-0.2.19/src/lib/parse/LibParse.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
 import {LibSubParse} from "rainlang-0.2.19/src/lib/parse/LibSubParse.sol";
 import {
@@ -10,7 +11,7 @@ import {
     CONTEXT_BASE_ROW_SENDER,
     CONTEXT_BASE_ROW_CALLING_CONTRACT,
     CONTEXT_BASE_ROWS
-} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
+} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_COLUMNS,
     CONTEXT_COLUMNS_EXTENDED,
@@ -34,6 +35,9 @@ import {
     CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_ROW,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS,
     CONTEXT_SIGNED_CONTEXT_START_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_ROW,
     CONTEXT_SIGNED_CONTEXT_START_ROWS,
@@ -287,6 +291,17 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, uint256(OperandV2.unwrap(operand)));
     }
 
+    /// @dev Maps the "signer-domain" word to the signed context domains column.
+    /// Uses the operand to select the row.
+    function subParserSignerDomains(uint256, uint256, OperandV2 operand)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN, uint256(OperandV2.unwrap(operand)));
+    }
+
     /// @dev Maps the "deposit-token" word to the calling context column.
     function subParserDepositToken(uint256, uint256, OperandV2)
         internal
@@ -432,8 +447,9 @@ library LibRaindexSubParser {
 
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
-    /// column (base, calling, calculations, vault IO, signers, signed context,
-    /// deposit, withdraw). The inner arrays are flattened before encoding.
+    /// column (base, calling, calculations, vault IO, signers, signer domains,
+    /// signed context, deposit, withdraw). The inner arrays are flattened
+    /// before encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);
@@ -564,6 +580,15 @@ library LibRaindexSubParser {
             "The addresses of the signers of the signed context. The indexes of the signers matches the column they signed in the signed context grid."
         );
 
+        AuthoringMetaV2[] memory contextSignerDomainsMeta = new AuthoringMetaV2[](CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS);
+        contextSignerDomainsMeta[CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW] = AuthoringMetaV2(
+            // string literal "signer-domain" is less than 32 bytes, so this
+            // conversion is safe.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32("signer-domain"),
+            "The EIP-712 domain separators the signed contexts were signed under. The indexes of the domains match the signers. The signer chooses the domain, so the expression author must pin each signer's domain."
+        );
+
         AuthoringMetaV2[] memory contextSignedMeta = new AuthoringMetaV2[](CONTEXT_SIGNED_CONTEXT_START_ROWS);
         contextSignedMeta[CONTEXT_SIGNED_CONTEXT_START_ROW] = AuthoringMetaV2(
             // string literal "signed-context" is less than 32 bytes, so this
@@ -579,6 +604,7 @@ library LibRaindexSubParser {
         meta[CONTEXT_VAULT_INPUTS_COLUMN] = contextVaultInputsMeta;
         meta[CONTEXT_VAULT_OUTPUTS_COLUMN] = contextVaultOutputsMeta;
         meta[CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN] = contextSignersMeta;
+        meta[CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN] = contextSignerDomainsMeta;
         meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN] = contextSignedMeta;
 
         AuthoringMetaV2[] memory depositMeta = new AuthoringMetaV2[](DEPOSIT_WORDS_LENGTH);

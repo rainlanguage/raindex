@@ -7,7 +7,7 @@ import {OrderIOCalculationV4} from "src/struct/OrderIOCalculationV4.sol";
 import {ClearStateChangeV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {OrderV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {IRaindexV6ClearStateChangeHarness} from "test/util/interface/IRaindexV6ClearStateChangeHarness.sol";
 
 /// @title RaindexV6ClearStateChangeTest

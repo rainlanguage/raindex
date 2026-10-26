@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, TakeOrdersConfigV6, TaskV3, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -25,8 +25,8 @@ contract RaindexV6TakeOrderExceedsMaxRatioTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
 
         // Order with outputMax=1 and IORatio=100.
@@ -41,13 +41,13 @@ contract RaindexV6TakeOrderExceedsMaxRatioTest is RaindexV6ExternalRealTest {
         );
 
         // maximumIORatio = 1, but order ratio is 100 -> skip.
-        TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         takeConfig.maximumIORatio = LibDecimalFloat.packLossless(1, 0);
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
         emit IRaindexV7.OrderExceedsMaxRatio(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeConfig);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeConfig);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");

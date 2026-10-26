@@ -16,11 +16,11 @@ import {
     OrderConfigV4,
     IOV2,
     EvaluableV4,
-    TaskV2,
-    TakeOrdersConfigV5
+    TaskV3,
+    TakeOrdersConfigV6
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {TEST_INTERPRETER_ADDRESS} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -28,7 +28,7 @@ contract GenericPoolRaindexV6ArbOrderTakerReentrantCallbackTest is RaindexV6Exte
     address internal owner = address(uint160(uint256(keccak256("owner.reentrant.callback"))));
     address internal bot = address(uint160(uint256(keccak256("bot.reentrant.callback"))));
 
-    /// An order's store re-entering `onTakeOrders2` during `arb5` is rejected,
+    /// An order's store re-entering `onTakeOrders2` during `arb6` is rejected,
     /// the arb completes and the caller's ETH is refunded to the caller.
     function testOrderStoreReentrantCallbackCannotTakeArbEth() external {
         GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
@@ -41,7 +41,7 @@ contract GenericPoolRaindexV6ArbOrderTakerReentrantCallbackTest is RaindexV6Exte
         token1.mint(owner, 10e18);
         vm.startPrank(owner);
         token1.approve(address(iRaindex), 10e18);
-        iRaindex.deposit4(address(token1), bytes32(uint256(1)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(token1), bytes32(uint256(1)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
         vm.stopPrank();
 
         IOV2[] memory ins = new IOV2[](1);
@@ -62,16 +62,16 @@ contract GenericPoolRaindexV6ArbOrderTakerReentrantCallbackTest is RaindexV6Exte
         );
         vm.recordLogs();
         vm.prank(owner);
-        iRaindex.addOrder4(cfg, new TaskV2[](0));
+        iRaindex.addOrder5(cfg, new TaskV3[](0));
         OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
-        TakeOrdersConfigV5 memory take = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory take = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         take.maximumIO = LibDecimalFloat.packLossless(1, 0);
         take.data = abi.encode(address(pool), address(pool), abi.encodeCall(MockExchange.swap, (token1, token0, 1e18)));
 
         vm.deal(bot, 1 ether);
         vm.prank(bot);
-        arb.arb5{value: 1 ether}(iRaindex, take, LibTestArb.noopTask());
+        arb.arb6{value: 1 ether}(iRaindex, take, LibTestArb.noopTask());
 
         assertEq(store.revertData(), abi.encodeWithSelector(UnexpectedOnTakeOrdersCaller.selector, address(store)));
         assertEq(address(store).balance, 0);

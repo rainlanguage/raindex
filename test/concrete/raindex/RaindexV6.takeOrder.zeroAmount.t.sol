@@ -6,7 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Test.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, TakeOrdersConfigV6, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -33,8 +33,8 @@ contract RaindexV6TakeOrderZeroAmountTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
 
         // Order with outputMax=0 and a perfectly fine IORatio=1.
@@ -44,7 +44,7 @@ contract RaindexV6TakeOrderZeroAmountTest is RaindexV6ExternalRealTest {
 
         // maximumIORatio is generous so the skip is purely due to the zero
         // output max, not a ratio rejection.
-        TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         // No token should move out of either vault token.
         vm.mockCallRevert(
@@ -56,13 +56,13 @@ contract RaindexV6TakeOrderZeroAmountTest is RaindexV6ExternalRealTest {
 
         vm.prank(bob);
         vm.recordLogs();
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeConfig);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeConfig);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
 
         // The skip path emits exactly one event (OrderZeroAmount) and does not
-        // emit a TakeOrderV3, confirming no fill occurred. Decoding the single
+        // emit a TakeOrderV4, confirming no fill occurred. Decoding the single
         // recorded log directly (rather than vm.expectEmit) avoids counting the
         // expectEmit helper's own synthetic log.
         Vm.Log[] memory logs = vm.getRecordedLogs();

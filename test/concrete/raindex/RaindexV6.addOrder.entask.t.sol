@@ -6,9 +6,9 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
+    TaskV3,
     OrderV4,
-    SignedContextV1
+    SignedContextV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
@@ -48,9 +48,9 @@ contract RaindexV6AddOrderEnactTest is RaindexV6ExternalRealTest {
     ) internal {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         vm.startPrank(owner);
-        TaskV2[] memory actions = evalsToActions(evalStrings);
+        TaskV3[] memory actions = evalsToActions(evalStrings);
         vm.record();
-        bool stateChanged = iRaindex.addOrder4(config, actions);
+        bool stateChanged = iRaindex.addOrder5(config, actions);
         assert(stateChanged != nonces[config.nonce]);
         checkReentrancyRW(nonces[config.nonce] ? 4 : 5, nonces[config.nonce] ? 2 : 3);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
@@ -161,9 +161,9 @@ contract RaindexV6AddOrderEnactTest is RaindexV6ExternalRealTest {
 
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         vm.startPrank(alice);
-        TaskV2[] memory actions = evalsToActions(evals0);
+        TaskV3[] memory actions = evalsToActions(evals0);
         vm.expectRevert("always revert");
-        bool stateChanged = iRaindex.addOrder4(config, actions);
+        bool stateChanged = iRaindex.addOrder5(config, actions);
         assert(!stateChanged);
 
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);

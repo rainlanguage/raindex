@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {NotOrderOwner} from "../../../src/error/ErrRaindexV6.sol";
 
@@ -23,7 +23,7 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
         // It will revert even if the order has not been added yet.
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(expectedOrder, new TaskV2[](0));
+        iRaindex.removeOrder4(expectedOrder, new TaskV3[](0));
 
         // And will revert after the order is added.
         (OrderV4 memory order, bytes32 orderHash) = addOrderWithChecks(alice, config, expression);
@@ -31,7 +31,7 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
 
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(order, new TaskV2[](0));
+        iRaindex.removeOrder4(order, new TaskV3[](0));
 
         // Alice can remove the order.
         removeOrderWithChecks(alice, order);
@@ -39,7 +39,7 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
         // It will revert even after the order has been removed.
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(order, new TaskV2[](0));
+        iRaindex.removeOrder4(order, new TaskV3[](0));
     }
 
     /// The same order can be added and removed multiple times.
@@ -72,7 +72,7 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
         vm.record();
         vm.recordLogs();
         vm.prank(alice);
-        assertFalse(iRaindex.removeOrder3(order, new TaskV2[](0)));
+        assertFalse(iRaindex.removeOrder4(order, new TaskV3[](0)));
         assertEq(vm.getRecordedLogs().length, 0);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
         // 3x for reentrancy guard, 1x for dead order check.
@@ -126,11 +126,11 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
         // Owners can't interfere with each other.
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
-        iRaindex.removeOrder3(orderBob, new TaskV2[](0));
+        iRaindex.removeOrder4(orderBob, new TaskV3[](0));
 
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(orderAlice, new TaskV2[](0));
+        iRaindex.removeOrder4(orderAlice, new TaskV3[](0));
 
         removeOrderWithChecks(alice, orderAlice);
         removeOrderWithChecks(bob, orderBob);
@@ -186,17 +186,17 @@ contract RaindexV6RemoveOrderMockTest is RaindexV6ExternalMockTest {
         // Owners can't interfere with each other.
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
-        iRaindex.removeOrder3(orderBobOne, new TaskV2[](0));
+        iRaindex.removeOrder4(orderBobOne, new TaskV3[](0));
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, bob));
         vm.prank(alice);
-        iRaindex.removeOrder3(orderBobTwo, new TaskV2[](0));
+        iRaindex.removeOrder4(orderBobTwo, new TaskV3[](0));
 
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(orderAliceOne, new TaskV2[](0));
+        iRaindex.removeOrder4(orderAliceOne, new TaskV3[](0));
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
         vm.prank(bob);
-        iRaindex.removeOrder3(orderAliceTwo, new TaskV2[](0));
+        iRaindex.removeOrder4(orderAliceTwo, new TaskV3[](0));
 
         removeOrderWithChecks(alice, orderAliceOne);
         removeOrderWithChecks(bob, orderBobOne);

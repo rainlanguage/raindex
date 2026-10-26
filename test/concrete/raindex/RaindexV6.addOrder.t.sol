@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {OrderConfigV4, EvaluableV4, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
+import {OrderConfigV4, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/error/ErrRaindexV6.sol";
 
 /// @title RaindexV6AddOrderTest
@@ -18,7 +18,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         config.evaluable.bytecode = hex"";
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(OrderNoSources.selector));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         (, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         assertTrue(!iRaindex.orderExists(orderHash));
     }
@@ -34,7 +34,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSelector(OrderNoHandleIO.selector));
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         (, bytes32 orderHash) = LibTestAddOrder.expectedOrder(owner, config);
         assertTrue(!iRaindex.orderExists(orderHash));
     }
@@ -47,7 +47,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2(":;:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// A stack of 1 for calculate order reverts.
@@ -58,7 +58,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("_:block-timestamp();:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// A stack of 2 for calculate order deploys.
@@ -68,7 +68,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("_ _:block-timestamp() chain-id();:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// A stack of 3 for calculate order deploys.
@@ -78,7 +78,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("_ _ _:block-timestamp() chain-id() block-number();:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// Inputs for calculate order. Tests one input.
@@ -89,7 +89,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("i:;:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// Inputs for calculate order errors. Tests two inputs.
@@ -100,7 +100,7 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("i0 i1:;:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 
     /// Inputs for calculate order errors. This takes precedent over the same
@@ -112,6 +112,6 @@ contract RaindexV6AddOrderTest is RaindexV6ExternalRealTest {
         bytes memory bytecode = iParserV2.parse2("i:;i:;");
         config.evaluable.bytecode = bytecode;
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
     }
 }

@@ -8,16 +8,16 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    SignedContextV1,
-    TaskV2
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderBatchStateAdversarialTest
 /// @notice Audit Protofire H01 (#2617): adversarial coverage of the per-owner
-/// `stateOverlay` threading in `takeOrders4`. Each test pins one behaviour of
+/// `stateOverlay` threading in `takeOrders5`. Each test pins one behaviour of
 /// the fix with a discriminating total: the value differs from what the
 /// pre-fix (or a mutated) contract would produce.
 contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTest {
@@ -38,8 +38,8 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
 
     function fund(address o) internal {
         vm.prank(o);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(100, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(100, 0), new TaskV3[](0)
         );
     }
 
@@ -50,14 +50,14 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
     }
 
     function take(OrderV4[] memory ordersList) internal returns (Float totalTakerInput) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](ordersList.length);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](ordersList.length);
         for (uint256 i = 0; i < ordersList.length; i++) {
-            orders[i] = TakeOrderConfigV4({
-                order: ordersList[i], inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+            orders[i] = TakeOrderConfigV5({
+                order: ordersList[i], inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
             });
         }
         vm.prank(iBob);
-        (totalTakerInput,) = iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+        (totalTakerInput,) = iRaindex.takeOrders5(LibTestTakeOrder.defaultTakeConfig(orders));
     }
 
     /// Threading works across DIFFERENT orders of the same owner, not just
@@ -129,7 +129,7 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
     }
 
     /// The fix does not change cross-transaction persistence: a "fill once"
-    /// order filled in one `takeOrders4` is exhausted in a later one (the
+    /// order filled in one `takeOrders5` is exhausted in a later one (the
     /// calculate write is still persisted by handleIO). tx1 fills 1, tx2 fills 0.
     function testCrossTransactionPersistenceUnchanged() external {
         mockTransfers();
@@ -191,12 +191,12 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         fund(o);
         OrderV4 memory a = addOrder(o, ":set(0 1),_ _:1 1000;:;");
         OrderV4 memory b = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] =
-            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[1] =
-            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+            TakeOrderConfigV5({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             orders: orders,
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -205,7 +205,7 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
             data: ""
         });
         vm.prank(iBob);
-        (Float total,) = iRaindex.takeOrders4(config);
+        (Float total,) = iRaindex.takeOrders5(config);
         assertTrue(total.eq(LibDecimalFloat.packLossless(1, 0)), "ratio-untaken order's write must not be visible to B");
     }
 
@@ -254,12 +254,12 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         fund(o);
         OrderV4 memory a = addOrder(o, ":set(0 1),_ _:1 1000;:;");
         OrderV4 memory b = addOrder(o, ":set(1 9),_ _:1 1;:;");
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] =
-            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[1] =
-            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+            TakeOrderConfigV5({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             orders: orders,
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -269,7 +269,7 @@ contract RaindexV6TakeOrderBatchStateAdversarialTest is RaindexV6ExternalRealTes
         });
         // tx1: A ratio-untaken, B fills; B's handleIO must commit only key 1.
         vm.prank(iBob);
-        (Float total1,) = iRaindex.takeOrders4(config);
+        (Float total1,) = iRaindex.takeOrders5(config);
         assertTrue(total1.eq(LibDecimalFloat.packLossless(1, 0)), "tx1: only B fills");
         // tx2: key-0 reader fills (A gone), key-1 reader skips (B kept) -> 1.
         OrderV4 memory readKey0 = addOrder(o, "used:get(0),_ _:if(used 0 1) 1;:;");

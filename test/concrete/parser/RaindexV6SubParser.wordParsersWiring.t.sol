@@ -35,9 +35,10 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     //   col 3 vault inputs    (5 rows) -> 7..11
     //   col 4 vault outputs   (5 rows) -> 12..16
     //   col 5 signers         (1 row)  -> 17
-    //   col 6 signed context  (1 row)  -> 18
-    //   col 7 deposit         (6 rows) -> 19..24
-    //   col 8 withdraw        (7 rows) -> 25..31
+    //   col 6 signer domains  (1 row)  -> 18
+    //   col 7 signed context  (1 row)  -> 19
+    //   col 8 deposit         (6 rows) -> 20..25
+    //   col 9 withdraw        (7 rows) -> 26..32
     uint256 internal constant SLOT_BASE_SENDER = 0;
 
     // Calling-context column (col 1) slots. Deposit/withdraw row words route to
@@ -48,27 +49,27 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     uint256 internal constant SLOT_CALLING_ORDER_OWNER = 3; // calling-context row 1
     uint256 internal constant SLOT_CALLING_ORDER_COUNTERPARTY = 4; // calling-context row 2
 
-    uint256 internal constant SLOT_DEPOSIT_DEPOSITOR = 19;
-    uint256 internal constant SLOT_DEPOSIT_TOKEN = 20;
-    uint256 internal constant SLOT_DEPOSIT_VAULT_ID = 21;
-    uint256 internal constant SLOT_DEPOSIT_VAULT_BEFORE = 22;
-    uint256 internal constant SLOT_DEPOSIT_VAULT_AFTER = 23;
-    uint256 internal constant SLOT_DEPOSIT_TOKEN_DECIMALS = 24;
+    uint256 internal constant SLOT_DEPOSIT_DEPOSITOR = 20;
+    uint256 internal constant SLOT_DEPOSIT_TOKEN = 21;
+    uint256 internal constant SLOT_DEPOSIT_VAULT_ID = 22;
+    uint256 internal constant SLOT_DEPOSIT_VAULT_BEFORE = 23;
+    uint256 internal constant SLOT_DEPOSIT_VAULT_AFTER = 24;
+    uint256 internal constant SLOT_DEPOSIT_TOKEN_DECIMALS = 25;
 
-    uint256 internal constant SLOT_WITHDRAW_WITHDRAWER = 25;
-    uint256 internal constant SLOT_WITHDRAW_TOKEN = 26;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_ID = 27;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_BEFORE = 28;
-    uint256 internal constant SLOT_WITHDRAW_VAULT_AFTER = 29;
-    uint256 internal constant SLOT_WITHDRAW_TARGET_AMOUNT = 30;
-    uint256 internal constant SLOT_WITHDRAW_TOKEN_DECIMALS = 31;
+    uint256 internal constant SLOT_WITHDRAW_WITHDRAWER = 26;
+    uint256 internal constant SLOT_WITHDRAW_TOKEN = 27;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_ID = 28;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_BEFORE = 29;
+    uint256 internal constant SLOT_WITHDRAW_VAULT_AFTER = 30;
+    uint256 internal constant SLOT_WITHDRAW_TARGET_AMOUNT = 31;
+    uint256 internal constant SLOT_WITHDRAW_TOKEN_DECIMALS = 32;
 
     /// @dev Read the big-endian 16-bit function pointer at flat `slot` from the
     /// freshly built word-parser table.
     function pointerAt(uint256 slot) internal view returns (uint16) {
         bytes memory table = subParser.buildSubParserWordParsers();
-        // 32 slots, 2 bytes each.
-        assertEq(table.length, 64, "word parser table must hold 32 16-bit pointers");
+        // 33 slots, 2 bytes each.
+        assertEq(table.length, 66, "word parser table must hold 33 16-bit pointers");
         uint256 byteIndex = slot * 2;
         return (uint16(uint8(table[byteIndex])) << 8) | uint16(uint8(table[byteIndex + 1]));
     }
@@ -176,7 +177,7 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     }
 
     /// Pins the DEPOSIT column to flat offset +1 of the signed-context start
-    /// column (i.e. column 7, slots 19..24). The deposit row words route into
+    /// column (i.e. column 8, slots 20..25). The deposit row words route into
     /// CONTEXT_CALLING_CONTEXT_COLUMN rows 0/1/2, the SAME (col,row) as
     /// order-hash/order-owner/order-counterparty, so solc deduplicates them to a
     /// shared 16-bit pointer. Asserting that the deposit token/vault-id/before
@@ -190,17 +191,17 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
         assertEq(
             pointerAt(SLOT_DEPOSIT_TOKEN),
             pointerAt(SLOT_CALLING_ORDER_HASH),
-            "deposit-token (col 7 row 0) aliases calling-context order-hash (row 0)"
+            "deposit-token (col 8 row 0) aliases calling-context order-hash (row 0)"
         );
         assertEq(
             pointerAt(SLOT_DEPOSIT_VAULT_ID),
             pointerAt(SLOT_CALLING_ORDER_OWNER),
-            "deposit-vault-id (col 7 row 1) aliases calling-context order-owner (row 1)"
+            "deposit-vault-id (col 8 row 1) aliases calling-context order-owner (row 1)"
         );
         assertEq(
             pointerAt(SLOT_DEPOSIT_VAULT_BEFORE),
             pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
-            "deposit-vault-before (col 7 row 2) aliases calling-context order-counterparty (row 2)"
+            "deposit-vault-before (col 8 row 2) aliases calling-context order-counterparty (row 2)"
         );
         // The three calling-context pointers are themselves pairwise distinct, so
         // the equalities above genuinely pin each deposit row to its own row, not
@@ -215,7 +216,7 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     }
 
     /// Pins the WITHDRAW column to flat offset +2 of the signed-context start
-    /// column (i.e. column 8, slots 25..31). Like deposits, the withdraw row
+    /// column (i.e. column 9, slots 26..32). Like deposits, the withdraw row
     /// words 0/1/2 alias the calling-context order words. withdraw-target-amount
     /// routes to CONTEXT_CALLING_CONTEXT_COLUMN row 4 — a row reached by no order
     /// word and, among the deposit/withdraw rows, shared only with
@@ -227,17 +228,17 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
         assertEq(
             pointerAt(SLOT_WITHDRAW_TOKEN),
             pointerAt(SLOT_CALLING_ORDER_HASH),
-            "withdraw-token (col 8 row 0) aliases calling-context order-hash (row 0)"
+            "withdraw-token (col 9 row 0) aliases calling-context order-hash (row 0)"
         );
         assertEq(
             pointerAt(SLOT_WITHDRAW_VAULT_ID),
             pointerAt(SLOT_CALLING_ORDER_OWNER),
-            "withdraw-vault-id (col 8 row 1) aliases calling-context order-owner (row 1)"
+            "withdraw-vault-id (col 9 row 1) aliases calling-context order-owner (row 1)"
         );
         assertEq(
             pointerAt(SLOT_WITHDRAW_VAULT_BEFORE),
             pointerAt(SLOT_CALLING_ORDER_COUNTERPARTY),
-            "withdraw-vault-before (col 8 row 2) aliases calling-context order-counterparty (row 2)"
+            "withdraw-vault-before (col 9 row 2) aliases calling-context order-counterparty (row 2)"
         );
         // withdraw-target-amount routes to calling-context row 4, distinct from
         // every order word and from deposit rows 0..3.

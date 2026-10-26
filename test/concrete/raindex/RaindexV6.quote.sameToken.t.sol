@@ -5,12 +5,12 @@ pragma solidity =0.8.25;
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     IRaindexV7,
-    QuoteV2,
+    QuoteV3,
     OrderConfigV4,
     OrderV4,
     IOV2,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
@@ -19,10 +19,10 @@ import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
     /// Same token for input and output is error.
     /// forge-config: default.fuzz.runs = 10
-    function testQuoteSameToken(QuoteV2 memory quoteConfig) external {
+    function testQuoteSameToken(QuoteV3 memory quoteConfig) external {
         vm.assume(quoteConfig.order.validInputs.length > 0);
         vm.assume(quoteConfig.order.validOutputs.length > 0);
-        // addOrder4 requires a valid serialized parser output with >= 2 sources,
+        // addOrder5 requires a valid serialized parser output with >= 2 sources,
         // so replace the fuzzed bytecode with the canonical valid order bytecode.
         // The self-trade check happens at quote time (TokenSelfTrade below), not
         // add time, so the order still adds successfully.
@@ -31,7 +31,7 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
         quoteConfig.inputIOIndex = 0;
         quoteConfig.outputIOIndex = 0;
         vm.prank(quoteConfig.order.owner);
-        iRaindex.addOrder4(
+        iRaindex.addOrder5(
             OrderConfigV4({
                 evaluable: quoteConfig.order.evaluable,
                 validInputs: quoteConfig.order.validInputs,
@@ -40,10 +40,10 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
                 secret: bytes32(0),
                 meta: ""
             }),
-            new TaskV2[](0)
+            new TaskV3[](0)
         );
         vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
-        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
+        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote3(quoteConfig);
         (success, maxOutput, ioRatio);
     }
 
@@ -82,14 +82,14 @@ contract RaindexV6QuoteSameTokenTest is RaindexV6ExternalRealTest {
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(owner);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
 
-        QuoteV2 memory quoteConfig =
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 1, signedContext: new SignedContextV1[](0)});
+        QuoteV3 memory quoteConfig =
+            QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 1, signedContext: new SignedContextV2[](0)});
 
         // validInputs[0] (tokenA) == validOutputs[1] (tokenA): self-trade.
         vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
-        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
+        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote3(quoteConfig);
         (success, maxOutput, ioRatio);
     }
 }

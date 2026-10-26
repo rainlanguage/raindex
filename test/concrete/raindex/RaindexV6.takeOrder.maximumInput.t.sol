@@ -6,15 +6,15 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest, Vm} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     IOV2,
     EvaluableV4,
     OrderConfigV4,
-    TaskV2,
+    TaskV3,
     IRaindexV7
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -28,14 +28,14 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
     /// the caller has full control over this, and it would cause none of the
     /// orders to be taken.
     /// forge-config: default.fuzz.runs = 100
-    function testTakeOrderNoopZeroMaxTakerInput(OrderV4 memory order, SignedContextV1 memory signedContext) external {
+    function testTakeOrderNoopZeroMaxTakerInput(OrderV4 memory order, SignedContextV2 memory signedContext) external {
         vm.assume(order.validInputs.length > 0);
         vm.assume(order.validOutputs.length > 0);
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        SignedContextV1[] memory signedContexts = new SignedContextV1[](1);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        SignedContextV2[] memory signedContexts = new SignedContextV2[](1);
         signedContexts[0] = signedContext;
-        orders[0] = TakeOrderConfigV4(order, 0, 0, signedContexts);
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+        orders[0] = TakeOrderConfigV5(order, 0, 0, signedContexts);
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -44,7 +44,7 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -89,7 +89,7 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
 
                 vm.prank(testOrders[i].owner);
                 vm.recordLogs();
-                iRaindex.addOrder4(orderConfig, new TaskV2[](0));
+                iRaindex.addOrder5(orderConfig, new TaskV3[](0));
                 Vm.Log[] memory entries = vm.getRecordedLogs();
                 assertEq(entries.length, 1);
                 orders[i] = LibTestTakeOrder.extractOrderFromLogs(entries);
@@ -127,8 +127,8 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
                     Float balanceBefore =
                         iRaindex.vaultBalance2(testVaults[i].owner, testVaults[i].token, testVaults[i].vaultId);
                     vm.prank(testVaults[i].owner);
-                    iRaindex.deposit4(
-                        testVaults[i].token, testVaults[i].vaultId, testVaults[i].deposit, new TaskV2[](0)
+                    iRaindex.deposit5(
+                        testVaults[i].token, testVaults[i].vaultId, testVaults[i].deposit, new TaskV3[](0)
                     );
 
                     Float balanceAfter =
@@ -140,11 +140,11 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
             }
         }
 
-        TakeOrderConfigV4[] memory takeOrders = new TakeOrderConfigV4[](orders.length);
+        TakeOrderConfigV5[] memory takeOrders = new TakeOrderConfigV5[](orders.length);
         for (uint256 i = 0; i < orders.length; i++) {
-            takeOrders[i] = TakeOrderConfigV4(orders[i], 0, 0, new SignedContextV1[](0));
+            takeOrders[i] = TakeOrderConfigV5(orders[i], 0, 0, new SignedContextV2[](0));
         }
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(takeOrders);
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(takeOrders);
         config.maximumIO = maximumTakerInput;
 
         {
@@ -178,7 +178,7 @@ contract RaindexV6TakeOrderMaximumInputTest is RaindexV6ExternalRealTest {
         }
         {
             vm.prank(bob);
-            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
             assertTrue(totalTakerInput.eq(expectedTakerInput), "totalTakerInput");
             assertTrue(totalTakerOutput.eq(expectedTakerOutput), "totalTakerOutput");
         }

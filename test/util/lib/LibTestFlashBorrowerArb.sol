@@ -6,15 +6,15 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {
     IRaindexV7,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1
+    SignedContextV2
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -34,14 +34,14 @@ struct FlashBorrowerSetup {
     MockToken inputToken;
     MockToken outputToken;
     IRaindexV7 raindex;
-    TakeOrdersConfigV5 takeOrdersConfig;
+    TakeOrdersConfigV6 takeOrdersConfig;
     bytes exchangeData;
 }
 
 library LibTestFlashBorrowerArb {
     /// Set up a flash-borrower arb scenario without executing it.
     /// The caller provides their own exchange contract. Returns everything
-    /// needed to call arb4 directly.
+    /// needed to call arb5 directly.
     ///
     /// @param vm The Vm cheatcode handle.
     /// @param exchange The exchange contract address.
@@ -70,7 +70,7 @@ library LibTestFlashBorrowerArb {
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), amount))
         );
 
-        TakeOrdersConfigV5 memory takeOrdersConfig;
+        TakeOrdersConfigV6 memory takeOrdersConfig;
         {
             IOV2[] memory validInputs = new IOV2[](1);
             validInputs[0] = IOV2(address(inputToken), bytes32(0));
@@ -87,10 +87,10 @@ library LibTestFlashBorrowerArb {
                 nonce: bytes32(0)
             });
 
-            TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-            orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+            TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+            orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
-            takeOrdersConfig = TakeOrdersConfigV5({
+            takeOrdersConfig = TakeOrdersConfigV6({
                 // Test amounts are always small enough for int256.
                 // forge-lint: disable-next-line(unsafe-typecast)
                 minimumIO: LibDecimalFloat.packLossless(int256(amount), -18),

@@ -7,16 +7,16 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
     IRaindexV7,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -26,7 +26,7 @@ import {FlashLendingMockRaindex} from "test/util/concrete/FlashLendingMockRainde
 import {ReentrantExchange} from "test/util/concrete/ReentrantExchange.sol";
 
 contract RaindexV6FlashBorrowerReentrancyTest is Test {
-    /// arb4 MUST revert when re-entered via the pool call in _exchange.
+    /// arb5 MUST revert when re-entered via the pool call in _exchange.
     function testArb4Reentrancy() external {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
@@ -44,7 +44,7 @@ contract RaindexV6FlashBorrowerReentrancyTest is Test {
 
         GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
 
-        // Deploy the reentrant exchange that will call arb4 when invoked.
+        // Deploy the reentrant exchange that will call arb5 when invoked.
         ReentrantExchange exchange = new ReentrantExchange(arb, IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS));
 
         IOV2[] memory validInputs = new IOV2[](1);
@@ -60,16 +60,16 @@ contract RaindexV6FlashBorrowerReentrancyTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
         // exchangeData: spender=exchange, pool=exchange, callData=empty (triggers fallback).
         bytes memory exchangeData = abi.encode(address(exchange), address(exchange), hex"");
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
-        arb.arb4(
+        arb.arb5(
             IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS),
-            TakeOrdersConfigV5({
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -78,9 +78,9 @@ contract RaindexV6FlashBorrowerReentrancyTest is Test {
                 data: ""
             }),
             exchangeData,
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
     }

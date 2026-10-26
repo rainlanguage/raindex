@@ -9,11 +9,11 @@ import {
     IOV2,
     EvaluableV4,
     ClearConfigV2,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 
 /// @title RaindexV6ErrorSelectorTest
 /// @notice Signature strings are the oracle for the revert data the deployed
@@ -44,8 +44,8 @@ contract RaindexV6ErrorSelectorTest is Test {
             alice,
             bob,
             ClearConfigV2(0, 0, 0, 0, bytes32(0), bytes32(0)),
-            new SignedContextV1[](0),
-            new SignedContextV1[](0)
+            new SignedContextV2[](0),
+            new SignedContextV2[](0)
         );
     }
 
@@ -53,7 +53,7 @@ contract RaindexV6ErrorSelectorTest is Test {
         vm.assume(owner != sender);
         vm.prank(sender);
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("NotOrderOwner(address)")), owner));
-        raindex.removeOrder3(order(owner, address(1), address(2)), new TaskV2[](0));
+        raindex.removeOrder4(order(owner, address(1), address(2)), new TaskV3[](0));
     }
 
     function testClearSameOwnerRevertData(address owner) external {

@@ -7,8 +7,8 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
 
 /// @title RaindexV6ClearDeadOrderTest
 /// If either order passed to `clear4` is dead (never added, or removed) the
@@ -34,7 +34,7 @@ contract RaindexV6ClearDeadOrderTest is RaindexV6ExternalRealTest {
     function addOrder(address owner, OrderConfigV4 memory config) internal returns (OrderV4 memory) {
         vm.prank(owner);
         vm.recordLogs();
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         return LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
     }
 
@@ -64,7 +64,7 @@ contract RaindexV6ClearDeadOrderTest is RaindexV6ExternalRealTest {
         emit OrderNotFound(address(this), alice, orderAlice.hash());
         vm.recordLogs();
         iRaindex.clear4(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         // Exactly one log: the OrderNotFound for alice. No ClearV3, no
@@ -108,7 +108,7 @@ contract RaindexV6ClearDeadOrderTest is RaindexV6ExternalRealTest {
         emit OrderNotFound(address(this), bob, orderBob.hash());
         vm.recordLogs();
         iRaindex.clear4(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         Vm.Log[] memory logs = vm.getRecordedLogs();

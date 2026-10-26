@@ -35,7 +35,7 @@ import {
     CONTEXT_BASE_ROW_SENDER,
     CONTEXT_BASE_ROW_CALLING_CONTRACT,
     CONTEXT_BASE_ROWS
-} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
+} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
@@ -60,7 +60,10 @@ import {
     CONTEXT_SIGNED_CONTEXT_START_ROWS,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_ROW,
-    CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS
+    CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS
 } from "../../lib/LibRaindex.sol";
 import {
     DESCRIBED_BY_META_HASH,
@@ -145,6 +148,10 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS);
         contextSignersHandlers[CONTEXT_SIGNED_CONTEXT_SIGNERS_ROW] = LibParseOperand.handleOperandSingleFullNoDefault;
 
+        function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextSignerDomainsHandlers =
+            new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS);
+        contextSignerDomainsHandlers[CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW] = LibParseOperand.handleOperandSingleFullNoDefault;
+
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextSignedContextHandlers =
             new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_SIGNED_CONTEXT_START_ROWS);
         contextSignedContextHandlers[CONTEXT_SIGNED_CONTEXT_START_ROW] =
@@ -156,6 +163,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         handlers[CONTEXT_VAULT_INPUTS_COLUMN] = contextVaultInputsHandlers;
         handlers[CONTEXT_VAULT_OUTPUTS_COLUMN] = contextVaultOutputsHandlers;
         handlers[CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN] = contextSignersHandlers;
+        handlers[CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN] = contextSignerDomainsHandlers;
         handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN] = contextSignedContextHandlers;
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextDepositContextHandlers =
@@ -253,6 +261,13 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextSignersParsers[CONTEXT_SIGNED_CONTEXT_SIGNERS_ROW] = LibRaindexSubParser.subParserSigners;
 
         function(uint256, uint256, OperandV2) internal view returns (bool, bytes memory, bytes32[] memory)[] memory
+            contextSignerDomainsParsers =
+            new function(uint256, uint256, OperandV2)
+            internal
+            view returns (bool, bytes memory, bytes32[] memory)[](CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS);
+        contextSignerDomainsParsers[CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW] = LibRaindexSubParser.subParserSignerDomains;
+
+        function(uint256, uint256, OperandV2) internal view returns (bool, bytes memory, bytes32[] memory)[] memory
             contextSignedContextParsers =
             new function(uint256, uint256, OperandV2)
             internal
@@ -265,6 +280,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         parsers[CONTEXT_VAULT_INPUTS_COLUMN] = contextVaultInputsParsers;
         parsers[CONTEXT_VAULT_OUTPUTS_COLUMN] = contextVaultOutputsParsers;
         parsers[CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN] = contextSignersParsers;
+        parsers[CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN] = contextSignerDomainsParsers;
         parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN] = contextSignedContextParsers;
 
         // Deposits

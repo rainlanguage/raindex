@@ -26,14 +26,14 @@ import {
     IRaindexV7,
     OrderV4,
     OrderConfigV4,
-    QuoteV2,
+    QuoteV3,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4, EvalV4, StackItem} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {IInterpreterV4, EvalV4, StackItem} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {ITOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
@@ -98,8 +98,8 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
     /// Build a single-input single-output order pointing at the fixed-stack
     /// interpreter. The evaluable carries the canonical two-source bytecode
-    /// (calculate + handle IO) so `addOrder4`'s source-count guard accepts it;
-    /// `calculateOrderIO`/`quote2` drive the fixed-stack interpreter regardless
+    /// (calculate + handle IO) so `addOrder5`'s source-count guard accepts it;
+    /// `calculateOrderIO`/`quote3` drive the fixed-stack interpreter regardless
     /// of the bytecode, so the sources only matter to the add path.
     function _order() internal view returns (OrderV4 memory order) {
         IOV2[] memory inputs = new IOV2[](1);
@@ -144,7 +144,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(5, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         // `LibContext.build` prepends a base column (sender, this) at index 0,
         // so the FINAL context matrix is indexed directly by the column constant
@@ -175,7 +175,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(5, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         bytes32[] memory inputCol = calc.context[CONTEXT_VAULT_INPUTS_COLUMN];
         assertEq(inputCol[CONTEXT_VAULT_IO_TOKEN], bytes32(uint256(uint160(inputToken))), "input token");
@@ -199,7 +199,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(50, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         bytes32[] memory outputCol = calc.context[CONTEXT_VAULT_OUTPUTS_COLUMN];
         assertEq(outputCol[CONTEXT_VAULT_IO_TOKEN], bytes32(uint256(uint160(outputToken))), "output token");
@@ -224,7 +224,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(ioRatio, outputMax);
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         assertTrue(calc.IORatio.eq(ioRatio), "IORatio is stack[0]");
         assertTrue(calc.outputMax.eq(outputMax), "outputMax is stack[1] (uncapped)");
@@ -240,7 +240,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(50, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         assertTrue(calc.outputMax.eq(LibDecimalFloat.packLossless(9, 0)), "output max capped to vault balance 9");
     }
@@ -254,7 +254,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(4, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         assertTrue(calc.outputMax.eq(LibDecimalFloat.packLossless(4, 0)), "output max below balance is uncapped");
     }
@@ -270,7 +270,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(50, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         assertTrue(calc.outputMax.isZero(), "output max capped to empty OUTPUT vault balance");
     }
@@ -286,7 +286,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(ioRatio, LibDecimalFloat.packLossless(50, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
 
         bytes32[] memory calculations = calc.context[CONTEXT_CALCULATIONS_COLUMN];
         assertEq(calculations.length, 2, "calculations column has two rows");
@@ -312,7 +312,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStackRaw(stack);
 
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, uint256(1)));
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// The exact boundary: a stack of EXACTLY 2 entries is accepted (not
@@ -324,7 +324,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(4, 0));
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
         assertTrue(calc.outputMax.eq(LibDecimalFloat.packLossless(4, 0)), "length-2 stack accepted");
     }
 
@@ -337,7 +337,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStackRaw(new bytes32[](0));
 
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, uint256(0)));
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// The INPUT token's TOFU decimals check reverts `TokenDecimalsReadFailure`
@@ -358,7 +358,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
                 ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, inputToken, TOFUOutcome.Inconsistent
             )
         );
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// The INPUT token's TOFU check reverts `TokenDecimalsReadFailure` with
@@ -380,7 +380,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
                 ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, inputToken, TOFUOutcome.ReadFailure
             )
         );
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// The OUTPUT token's TOFU decimals check reverts `TokenDecimalsReadFailure`
@@ -403,7 +403,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
                 ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, outputToken, TOFUOutcome.Inconsistent
             )
         );
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// The OUTPUT token's TOFU check reverts `TokenDecimalsReadFailure` with
@@ -425,7 +425,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
                 ITOFUTokenDecimals.TokenDecimalsReadFailure.selector, outputToken, TOFUOutcome.ReadFailure
             )
         );
-        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+        harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
     }
 
     /// Positive control: with both tokens' decimals CONSISTENT (a stored value
@@ -443,16 +443,16 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         harness.seedTofu(inputToken);
 
         OrderIOCalculationV4 memory calc =
-            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV1[](0));
+            harness.exposedCalculateOrderIO(order, 0, 0, counterparty, new SignedContextV2[](0));
         assertTrue(calc.outputMax.eq(LibDecimalFloat.packLossless(4, 0)), "consistent+initial accepted");
     }
 
     // ---------------------------------------------------------------------
-    // quote2 wrapper behaviors against the fresh-compiled RaindexV6.
+    // quote3 wrapper behaviors against the fresh-compiled RaindexV6.
     // ---------------------------------------------------------------------
 
     /// Add the harness's standard order so `sOrders[hash] == ORDER_LIVE`.
-    /// `addOrder4` does not call the interpreter, so the fixed-stack interpreter
+    /// `addOrder5` does not call the interpreter, so the fixed-stack interpreter
     /// is fine. Pranks the owner so the recorded owner matches.
     function _addOrder(OrderV4 memory order) internal {
         OrderConfigV4 memory config = OrderConfigV4({
@@ -464,12 +464,12 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
             meta: ""
         });
         vm.prank(order.owner);
-        IRaindexV7(address(harness)).addOrder4(config, new TaskV2[](0));
+        IRaindexV7(address(harness)).addOrder5(config, new TaskV3[](0));
     }
 
     /// A LIVE order quotes `(true, vault-capped outputMax, IORatio)`. The output
     /// vault holds 9; the calculated max (50) is capped to 9; the ratio (3)
-    /// passes through. Pins the `quote2` happy path: the `true` exists flag and
+    /// passes through. Pins the `quote3` happy path: the `true` exists flag and
     /// the (outputMax, IORatio) tuple matching `calculateOrderIO`'s capped result.
     function testQuoteLiveOrderReturnsCappedMaxAndRatio() external {
         OrderV4 memory order = _order();
@@ -477,9 +477,9 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(50, 0));
         _addOrder(order);
 
-        QuoteV2 memory quoteConfig =
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
+        QuoteV3 memory quoteConfig =
+            QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote3(quoteConfig);
 
         assertTrue(exists, "live order exists");
         assertTrue(outputMax.eq(LibDecimalFloat.packLossless(9, 0)), "quote output max vault-capped to 9");
@@ -497,9 +497,9 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(50, 0));
         // Deliberately do NOT add the order.
 
-        QuoteV2 memory quoteConfig =
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
+        QuoteV3 memory quoteConfig =
+            QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote3(quoteConfig);
 
         assertFalse(exists, "dead order does not exist");
         assertTrue(outputMax.isZero(), "dead order output max zero");
@@ -508,7 +508,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
 
     /// A removed (was-live, now dead) order also quotes `(false, 0, 0)`. Pins
     /// that the liveness check is `== ORDER_LIVE` and not merely "ever existed":
-    /// after `removeOrder3` flips the slot back to ORDER_DEAD the quote returns
+    /// after `removeOrder4` flips the slot back to ORDER_DEAD the quote returns
     /// the dead payload even though a non-zero stack is loaded.
     function testQuoteRemovedOrderReturnsFalseZeroZero() external {
         OrderV4 memory order = _order();
@@ -516,18 +516,18 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(50, 0));
         _addOrder(order);
         vm.prank(order.owner);
-        IRaindexV7(address(harness)).removeOrder3(order, new TaskV2[](0));
+        IRaindexV7(address(harness)).removeOrder4(order, new TaskV3[](0));
 
-        QuoteV2 memory quoteConfig =
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote2(quoteConfig);
+        QuoteV3 memory quoteConfig =
+            QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+        (bool exists, Float outputMax, Float ioRatio) = IRaindexV7(address(harness)).quote3(quoteConfig);
 
         assertFalse(exists, "removed order does not exist");
         assertTrue(outputMax.isZero(), "removed order output max zero");
         assertTrue(ioRatio.isZero(), "removed order io ratio zero");
     }
 
-    /// `quote2` runs `checkTokenSelfTrade` AFTER the liveness gate: a LIVE order
+    /// `quote3` runs `checkTokenSelfTrade` AFTER the liveness gate: a LIVE order
     /// whose input and output tokens are the same reverts `TokenSelfTrade`. Pins
     /// that the self-trade guard fires on a live order (the dead path would have
     /// returned false instead of reverting). A single same-token IO is used at
@@ -552,9 +552,9 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         _setStack(LibDecimalFloat.packLossless(3, 0), LibDecimalFloat.packLossless(50, 0));
         _addOrder(order);
 
-        QuoteV2 memory quoteConfig =
-            QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+        QuoteV3 memory quoteConfig =
+            QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         vm.expectRevert(abi.encodeWithSelector(IRaindexV7.TokenSelfTrade.selector));
-        IRaindexV7(address(harness)).quote2(quoteConfig);
+        IRaindexV7(address(harness)).quote3(quoteConfig);
     }
 }

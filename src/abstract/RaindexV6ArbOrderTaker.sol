@@ -6,8 +6,8 @@ import {ERC165, IERC165} from "@openzeppelin-contracts-5.7.0/utils/introspection
 import {ReentrancyGuard} from "@openzeppelin-contracts-5.7.0/utils/ReentrancyGuard.sol";
 import {IERC20, SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IRaindexV7ArbOrderTaker, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7ArbOrderTaker.sol";
-import {TakeOrdersConfigV5, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IRaindexV7ArbOrderTaker, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7ArbOrderTaker.sol";
+import {TakeOrdersConfigV6, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {RaindexV6ArbCommon, BadRaindex} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
@@ -40,7 +40,7 @@ abstract contract RaindexV6ArbOrderTaker is
     }
 
     /// @inheritdoc IRaindexV7ArbOrderTaker
-    function arb5(IRaindexV7 raindex, TakeOrdersConfigV5 calldata takeOrders, TaskV2 calldata task)
+    function arb6(IRaindexV7 raindex, TakeOrdersConfigV6 calldata takeOrders, TaskV3 calldata task)
         external
         payable
         nonReentrant
@@ -61,7 +61,7 @@ abstract contract RaindexV6ArbOrderTaker is
 
         IERC20(ordersInputToken).forceApprove(address(raindex), type(uint256).max);
         //slither-disable-next-line unused-return
-        raindex.takeOrders4(takeOrders);
+        raindex.takeOrders5(takeOrders);
         IERC20(ordersInputToken).forceApprove(address(raindex), 0);
 
         LibRaindexArb.finalizeArb(
@@ -74,10 +74,10 @@ abstract contract RaindexV6ArbOrderTaker is
     }
 
     /// @inheritdoc IRaindexV7OrderTaker
-    /// @dev While `arb5` is in flight only the trusted raindex may call this;
+    /// @dev While `arb6` is in flight only the trusted raindex may call this;
     /// any other caller reverts with `UnexpectedOnTakeOrdersCaller`. During an
     /// arb the contract holds the caller's `msg.value` and tokens, and
-    /// `takeOrders4` runs order-owner-chosen code (e.g. the order's store) that
+    /// `takeOrders5` runs order-owner-chosen code (e.g. the order's store) that
     /// could otherwise re-enter here and direct that value.
     ///
     /// Outside an arb it is a permissionless no-op: the contract holds no value

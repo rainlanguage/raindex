@@ -10,11 +10,11 @@ import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
     IRaindexV7,
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     ClearConfigV2,
-    SignedContextV1,
-    TaskV2
+    SignedContextV2,
+    TaskV3
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {NegativeBounty} from "../../../src/error/ErrRaindexV6.sol";
@@ -23,7 +23,7 @@ import {NegativeBounty} from "../../../src/error/ErrRaindexV6.sol";
 /// @notice An order with a `vaultId == 0` INPUT is settled as a direct wallet
 /// transfer to the owner (`increaseVaultBalance` -> `pushTokens`) rather than an
 /// internal vault credit. The orderbook must pull every incoming token before it
-/// pushes that input out: `takeOrders4` defers vault-0 input pushes until after
+/// pushes that input out: `takeOrders5` defers vault-0 input pushes until after
 /// the taker payment is pulled, and `clear4` pulls both orders' outputs before
 /// pushing either input. These tests use real `MockToken` ERC20s with zero
 /// ambient orderbook balance, so a vault-0 input is fully funded by the
@@ -53,11 +53,11 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token.approve(address(iRaindex), amount * 1e18);
         // amount is a whole-token test quantity, far below int256 max.
         // forge-lint: disable-next-line(unsafe-typecast)
-        iRaindex.deposit4(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0));
+        iRaindex.deposit5(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV3[](0));
         vm.stopPrank();
     }
 
-    /// `takeOrders4`: an order whose INPUT is `token0` at vault 0 fills against a
+    /// `takeOrders5`: an order whose INPUT is `token0` at vault 0 fills against a
     /// taker who holds `token0`, while the orderbook holds no ambient `token0`.
     /// The vault-0 input is pushed to the owner only after the taker's `token0`
     /// payment has been pulled, so the trade is funded by the taker alone.
@@ -74,9 +74,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0.approve(address(iRaindex), 1e18);
         assertEq(token0.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token0");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(1, 0)), "1 token0 filled");
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(1, 0)), "1 token1 filled");
@@ -116,7 +116,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         assertEq(token0.balanceOf(address(iRaindex)), 0, "orderbook starts with zero ambient token0");
 
         iRaindex.clear4(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         // Alice's vault-0 input was pushed to her wallet, funded by Bob's vault-0
@@ -138,13 +138,13 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
     }
 
     function _take(OrderV4 memory a, OrderV4 memory b) internal returns (Float, Float) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] =
-            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[1] =
-            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         vm.prank(bob);
-        return iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+        return iRaindex.takeOrders5(LibTestTakeOrder.defaultTakeConfig(orders));
     }
 
     /// Two same-owner vault-0 input orders in one batch. Their input credits
@@ -236,15 +236,15 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0.approve(address(iRaindex), 2e18);
         assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-take");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
         assertEq(token0.balanceOf(owner), 1e18, "take 1: owner receives exactly one unit");
         assertEq(token0.balanceOf(address(iRaindex)), 50e18, "take 1: pool intact");
 
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
         assertEq(token0.balanceOf(owner), 2e18, "take 2: owner receives exactly one more unit, no dangling re-push");
         assertEq(token0.balanceOf(bob), 0, "taker funded exactly two units total");
         assertEq(token0.balanceOf(address(iRaindex)), 50e18, "take 2: pool still intact, no drain from a dangling slot");
@@ -278,7 +278,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-clear");
 
         iRaindex.clear4(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         assertEq(token0.balanceOf(alice), 1e18, "alice received her vault-0 input");
@@ -316,9 +316,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0.approve(address(iRaindex), 1e18);
         assertEq(token1.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's token1 pool pre-take");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         assertEq(token1.balanceOf(owner), 0, "owner's wallet funded the vault-0 output");
         assertEq(token1.balanceOf(bob), 1e18, "taker received the vault-0 output");
@@ -357,9 +357,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0.approve(address(iRaindex), 5e18);
         assertEq(token0.balanceOf(address(iRaindex)), 50e18, "orderbook holds only carol's pool pre-take");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         assertEq(token0.balanceOf(owner), 2e18, "owner received exactly the 2 filled, not the offered 5");
         assertEq(token0.balanceOf(bob), 3e18, "taker spent only the 2 that filled, keeps 3");
@@ -451,11 +451,11 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         );
     }
 
-    /// The flash-swap reentrancy window: takeOrders4 pushes the order outputs to
+    /// The flash-swap reentrancy window: takeOrders5 pushes the order outputs to
     /// the taker and invokes its `onTakeOrders2` callback BEFORE it pulls the
     /// taker's payment and BEFORE it flushes the vault-0 input slots. So during
     /// the callback the vault-0 slot is accrued but not yet settled — the most
-    /// dangerous moment to re-enter. A malicious taker that re-enters takeOrders4
+    /// dangerous moment to re-enter. A malicious taker that re-enters takeOrders5
     /// from its callback must be stopped by the nonReentrant guard, so it can
     /// never act on the mid-flight slot. (The existing arb reentrancy test uses a
     /// mock orderbook; this exercises the real RaindexV6 guard with a live vault-0
@@ -468,12 +468,12 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
 
         Reenteroor taker = new Reenteroor();
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4({
-            order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5({
+            order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
         });
-        // Non-empty data makes takeOrders4 invoke the onTakeOrders2 callback.
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+        // Non-empty data makes takeOrders5 invoke the onTakeOrders2 callback.
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             orders: orders,
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -482,13 +482,13 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
             data: hex"01"
         });
 
-        // The taker's callback re-enters takeOrders4 (its config is irrelevant:
+        // The taker's callback re-enters takeOrders5 (its config is irrelevant:
         // the nonReentrant guard reverts at function entry).
-        taker.reenterWith(abi.encodeWithSelector(IRaindexV7.takeOrders4.selector, config));
+        taker.reenterWith(abi.encodeWithSelector(IRaindexV7.takeOrders5.selector, config));
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
         vm.prank(address(taker));
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
     }
 
     /// `clear4` where BOTH orders take their input via vault 0, so the orderbook
@@ -517,7 +517,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         assertEq(token0.balanceOf(address(iRaindex)), 51e18, "pool (50) + bob's deposited output (1)");
 
         iRaindex.clear4(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         // Both vault-0 inputs reached the respective wallets, funded by the
@@ -553,7 +553,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0d6.mint(carol, 50e6);
         vm.startPrank(carol);
         token0d6.approve(address(iRaindex), 50e6);
-        iRaindex.deposit4(address(token0d6), poolVaultId, LibDecimalFloat.packLossless(50, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(token0d6), poolVaultId, LibDecimalFloat.packLossless(50, 0), new TaskV3[](0));
         vm.stopPrank();
 
         _deposit(owner, token1, OUTPUT_VAULT_ID, 10);
@@ -566,9 +566,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         token0d6.approve(address(iRaindex), 1e6);
         assertEq(token0d6.balanceOf(address(iRaindex)), 50e6, "orderbook holds only carol's 6-decimal pool pre-take");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         assertEq(token0d6.balanceOf(owner), 1e6, "owner received the 6-decimal vault-0 input (1.0 -> 1e6)");
         assertEq(token0d6.balanceOf(bob), 0, "taker funded the input in full");
@@ -602,9 +602,9 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
         vm.prank(bob);
         token1.approve(address(iRaindex), 5e18);
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         // Filled exactly the approved 3, not the offered 5.
         assertEq(token0.balanceOf(bob), 3e18, "taker received exactly the approved 3 token0");
@@ -645,7 +645,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
 
         // 6th ClearConfig arg (bobBountyVaultId) = 0 -> bob's bounty -> clearer wallet.
         iRaindex.clear4(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
 
         assertEq(token0.balanceOf(address(this)), 1e18, "clearer received the 1 token0 bounty in their wallet");
@@ -712,7 +712,7 @@ contract RaindexV6TakeOrderVaultZeroInputTest is RaindexV6ExternalRealTest {
 
         vm.expectRevert(NegativeBounty.selector);
         iRaindex.clear4(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 }

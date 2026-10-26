@@ -3,11 +3,11 @@
 pragma solidity =0.8.25;
 
 import {ChildRaindexV6ArbOrderTaker} from "../util/concrete/ChildRaindexV6ArbOrderTaker.sol";
-import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {TaskV3, SignedContextV2, EvaluableV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
 import {
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     IOV2,
     OrderConfigV4,
     OrderV4,
@@ -18,13 +18,13 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensio
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6ArbOrderTakerFinalizeTaskArgTest
-/// @notice Proves that arb5 forwards the CALLER's `task` (the arb5 `task`
-/// parameter) into `finalizeArb`, not a default/empty TaskV2. The context
-/// tests only ASSERT context values via the task's `ensure()` — but if arb5
+/// @notice Proves that arb6 forwards the CALLER's `task` (the arb6 `task`
+/// parameter) into `finalizeArb`, not a default/empty TaskV3. The context
+/// tests only ASSERT context values via the task's `ensure()` — but if arb6
 /// passed an empty task to finalizeArb, those `ensure()` checks would silently
 /// not run and the context tests would still pass. This test pins the forward
 /// itself: the supplied task UNCONDITIONALLY reverts when its expression runs,
-/// so a correct arb5 (forwarding the real task) MUST revert. Replacing the
+/// so a correct arb6 (forwarding the real task) MUST revert. Replacing the
 /// forwarded task with a default/empty one makes the call SUCCEED, killing the
 /// mutant.
 contract RaindexV6ArbOrderTakerFinalizeTaskArgTest is RaindexV6ExternalRealTest {
@@ -45,12 +45,12 @@ contract RaindexV6ArbOrderTakerFinalizeTaskArgTest is RaindexV6ExternalRealTest 
             nonce: 0
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4({
-            order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5({
+            order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
         });
 
-        TakeOrdersConfigV5 memory takeOrdersConfig = TakeOrdersConfigV5({
+        TakeOrdersConfigV6 memory takeOrdersConfig = TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -59,17 +59,17 @@ contract RaindexV6ArbOrderTakerFinalizeTaskArgTest is RaindexV6ExternalRealTest 
             data: ""
         });
 
-        // A task whose body unconditionally reverts when it runs. If arb5
+        // A task whose body unconditionally reverts when it runs. If arb6
         // forwards this task into finalizeArb (correct), the call reverts with
-        // "task-arg-forwarded". If arb5 passes a default/empty task instead, the
+        // "task-arg-forwarded". If arb6 passes a default/empty task instead, the
         // body never runs and the call succeeds.
-        TaskV2 memory task = TaskV2({
+        TaskV3 memory task = TaskV3({
             evaluable: EvaluableV4({
                 interpreter: iInterpreter,
                 store: iStore,
                 bytecode: iParserV2.parse2(bytes(":ensure(0 \"task-arg-forwarded\");"))
             }),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
 
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.approve.selector), abi.encode(true));
@@ -87,6 +87,6 @@ contract RaindexV6ArbOrderTakerFinalizeTaskArgTest is RaindexV6ExternalRealTest 
 
         vm.prank(bob);
         vm.expectRevert(bytes("task-arg-forwarded"));
-        arbOrderTaker.arb5(iRaindex, takeOrdersConfig, task);
+        arbOrderTaker.arb6(iRaindex, takeOrdersConfig, task);
     }
 }
