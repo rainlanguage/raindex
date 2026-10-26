@@ -521,7 +521,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
     // B26: TakeOrderV4 is emitted on a successful fill with the taker's input
     // and output. Order outputMax=3, ratio=2, max input 3 => input 3, output 6.
     // ---------------------------------------------------------------------
-    function testTakeOrderV3EmittedWithAmounts() external {
+    function testTakeOrderV4EmittedWithAmounts() external {
         _depositOutput(alice, 10, VAULT1);
         OrderV4 memory order = _order(alice, "_ _:3 2;:;");
 
@@ -643,7 +643,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(8, 0)), "total output == 8");
 
         // Exactly two TakeOrderV4 events (one per filled order).
-        assertEq(_countTakeOrderV3(vm.getRecordedLogs()), 2, "both orders emit TakeOrderV4");
+        assertEq(_countTakeOrderV4(vm.getRecordedLogs()), 2, "both orders emit TakeOrderV4");
 
         // Both owners' output vaults were debited by their fill (alice 3, carol
         // 5): pins that BOTH orders' recordVaultOutput + handleIO ran, not just
@@ -686,7 +686,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(3, 0)), "total input capped at 3 (only first fills)");
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(3, 0)), "total output == 3");
 
-        assertEq(_countTakeOrderV3(vm.getRecordedLogs()), 1, "only the first order fills; loop stops when exhausted");
+        assertEq(_countTakeOrderV4(vm.getRecordedLogs()), 1, "only the first order fills; loop stops when exhausted");
     }
 
     // ---------------------------------------------------------------------
@@ -720,7 +720,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(5, 0)), "total input == 3+2 == 5");
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(10, 0)), "total output == 6+4 == 10");
         // Both orders filled, proving remaining was decremented by input not output.
-        assertEq(_countTakeOrderV3(vm.getRecordedLogs()), 2, "both orders fill (remaining tracks input)");
+        assertEq(_countTakeOrderV4(vm.getRecordedLogs()), 2, "both orders fill (remaining tracks input)");
     }
 
     // ---------------------------------------------------------------------
@@ -811,7 +811,7 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
             totalTakerOutput.eq(LibDecimalFloat.packLossless(6, 0)), "total output capped at 6 (only first fills)"
         );
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(3, 0)), "total input == 6/2 == 3");
-        assertEq(_countTakeOrderV3(vm.getRecordedLogs()), 1, "only first order fills (remaining tracks output)");
+        assertEq(_countTakeOrderV4(vm.getRecordedLogs()), 1, "only first order fills (remaining tracks output)");
     }
 
     // ---------------------------------------------------------------------
@@ -836,18 +836,13 @@ contract RaindexV6TakeOrderFreshMutationTest is RaindexV6FreshTakeOrderTest {
         iRaindex.takeOrders5(config);
     }
 
-    /// Count TakeOrderV4 events in the recorded logs. The topic is the keccak of
-    /// the fully-expanded event signature (TakeOrderConfigV5 -> OrderV4 ->
-    /// EvaluableV4/IOV2[]/SignedContextV2[]; Float is a `bytes32` user type, so
-    /// the two trailing input/output args canonicalize to `bytes32`).
-    function _countTakeOrderV3(Vm.Log[] memory logs) internal pure returns (uint256 count) {
-        bytes32 takeSig = keccak256(
-            "TakeOrderV4(address,((address,(address,address,bytes),(address,bytes32)[],(address,bytes32)[],bytes32),uint256,uint256,(address,bytes32[],bytes)[]),bytes32,bytes32)"
-        );
+    function _countTakeOrderV4(Vm.Log[] memory logs) internal pure returns (uint256) {
+        uint256 count = 0;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics.length > 0 && logs[i].topics[0] == takeSig) {
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == IRaindexV7.TakeOrderV4.selector) {
                 count++;
             }
         }
+        return count;
     }
 }

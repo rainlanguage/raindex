@@ -150,7 +150,8 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextSignerDomainsHandlers =
             new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS);
-        contextSignerDomainsHandlers[CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW] = LibParseOperand.handleOperandSingleFullNoDefault;
+        contextSignerDomainsHandlers[CONTEXT_SIGNED_CONTEXT_DOMAINS_ROW] =
+        LibParseOperand.handleOperandSingleFullNoDefault;
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextSignedContextHandlers =
             new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_SIGNED_CONTEXT_START_ROWS);
