@@ -15,6 +15,14 @@ interface IRaindexV6CalculateOrderIOHarness is IRaindexV7 {
         SignedContextV2[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory);
 
+    function exposedCalculateOrderIOClearing(
+        OrderV4 memory order,
+        uint256 inputIOIndex,
+        uint256 outputIOIndex,
+        address counterparty,
+        SignedContextV2[] memory signedContext
+    ) external view returns (OrderIOCalculationV4 memory);
+
     function seedTofu(address token) external returns (TOFUOutcome, uint8);
 
     function exposedIncrease(address owner, address token, bytes32 vaultId, Float amount) external;

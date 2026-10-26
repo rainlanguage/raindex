@@ -13,6 +13,11 @@ import {
     CONTEXT_BASE_ROWS
 } from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 import {
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
     CONTEXT_VAULT_INPUTS_COLUMN,
@@ -40,10 +45,6 @@ import {
     CONTEXT_SIGNED_CONTEXT_START_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_ROW,
     CONTEXT_SIGNED_CONTEXT_START_ROWS,
-    CONTEXT_DEPOSIT_COLUMN,
-    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
-    CONTEXT_WITHDRAW_COLUMN,
-    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE,
@@ -60,6 +61,7 @@ import {
 uint256 constant SUB_PARSER_WORD_PARSERS_LENGTH = 2;
 uint8 constant EXTERN_PARSE_META_BUILD_DEPTH = 1;
 
+bytes constant WORD_SENDER = "sender";
 bytes constant WORD_ORDER_CLEARER = "order-clearer";
 bytes constant WORD_RAINDEX = "raindex";
 bytes constant WORD_ORDER_HASH = "order-hash";
@@ -120,6 +122,16 @@ library LibRaindexSubParser {
     function subParserSender(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) {
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(CONTEXT_BASE_COLUMN, CONTEXT_BASE_ROW_SENDER);
+    }
+
+    /// @dev Maps the "order-clearer" word to the calling context column.
+    function subParserOrderClearer(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER);
     }
 
     /// @dev Maps the "depositor" word to the deposit column.
@@ -444,28 +456,26 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         uint256 column = uint256(OperandV2.unwrap(operand)) & 0xFF;
-        uint256 row = (uint256(OperandV2.unwrap(operand)) >> 8) & 0xFF;
+        uint256 row = uint256(OperandV2.unwrap(operand)) >> 8;
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_START_COLUMN + column, row);
     }
 
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
-    /// column (base, calling, calculations, vault IO, deposit, withdraw,
-    /// signers, signer domains, signed context). The inner arrays are flattened
-    /// before encoding.
+    /// column (base, order, calculations, vault IO, deposit, withdraw, signers,
+    /// signer domains, signed context). The inner arrays are flattened before
+    /// encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);
 
         AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](CONTEXT_BASE_ROWS);
-        contextBaseMeta[CONTEXT_BASE_ROW_SENDER] = AuthoringMetaV2(
-            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
-            // so this conversion is safe.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32(WORD_ORDER_CLEARER),
-            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
-        );
+        contextBaseMeta[CONTEXT_BASE_ROW_SENDER] =
+        // constant WORD_SENDER defined above is less than 32 bytes, so this
+        // conversion is safe.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        AuthoringMetaV2(bytes32(WORD_SENDER), "The address that called the raindex entrypoint.");
         contextBaseMeta[CONTEXT_BASE_ROW_CALLING_CONTRACT] =
         // constant WORD_RAINDEX defined above is less than 32 bytes, so
         // this conversion is safe.
@@ -489,6 +499,13 @@ library LibRaindexSubParser {
             // forge-lint: disable-next-line(unsafe-typecast)
             bytes32(WORD_ORDER_COUNTERPARTY),
             "The address of the owner of the counterparty order. Will be the order taker if there is no counterparty order."
+        );
+        contextCallingContextMeta[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] = AuthoringMetaV2(
+            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
+            // so this conversion is safe.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(WORD_ORDER_CLEARER),
+            "The address that called clear, matching this order against a counterparty order. Only available in clears; reverts when the order is taken or quoted."
         );
 
         AuthoringMetaV2[] memory contextCalculationsMeta = new AuthoringMetaV2[](CONTEXT_CALCULATIONS_ROWS);
