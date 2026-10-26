@@ -44,59 +44,22 @@ library LibTestTakeOrder {
         address outputToken,
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
-        return addOrderWithInterpreter(
-            vm,
-            owner,
-            expression,
-            IInterpreterV4(TEST_INTERPRETER_ADDRESS),
-            inputToken,
-            inputVaultId,
-            outputToken,
-            outputVaultId
-        );
-    }
+        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
-    function addOrderWithInterpreter(
-        Vm vm,
-        address owner,
-        bytes memory expression,
-        IInterpreterV4 interpreter,
-        address inputToken,
-        bytes32 inputVaultId,
-        address outputToken,
-        bytes32 outputVaultId
-    ) internal returns (OrderV4 memory) {
-        return addOrderWithConfig(
-            vm,
-            owner,
-            OrderConfigV4(
-                EvaluableV4(
-                    interpreter,
-                    IInterpreterStoreV3(TEST_STORE_ADDRESS),
-                    IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS).parse2(expression)
-                ),
-                singleIO(inputToken, inputVaultId),
-                singleIO(outputToken, outputVaultId),
-                bytes32(0),
-                bytes32(0),
-                ""
-            )
-        );
-    }
+        bytes memory bytecode = parser.parse2(expression);
+        IOV2[] memory inputs = new IOV2[](1);
+        inputs[0] = IOV2(inputToken, inputVaultId);
+        IOV2[] memory outputs = new IOV2[](1);
+        outputs[0] = IOV2(outputToken, outputVaultId);
 
-    function singleIO(address token, bytes32 vaultId) internal pure returns (IOV2[] memory) {
-        IOV2[] memory io = new IOV2[](1);
-        io[0] = IOV2(token, vaultId);
-        return io;
-    }
+        EvaluableV4 memory evaluable =
+            EvaluableV4(IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), bytecode);
+        OrderConfigV4 memory orderConfig = OrderConfigV4(evaluable, inputs, outputs, bytes32(0), bytes32(0), "");
 
-    function addOrderWithConfig(Vm vm, address owner, OrderConfigV4 memory orderConfig)
-        internal
-        returns (OrderV4 memory)
-    {
         vm.prank(owner);
         vm.recordLogs();
-        IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS).addOrder4(orderConfig, new TaskV2[](0));
+        raindex.addOrder4(orderConfig, new TaskV2[](0));
         return extractOrderFromLogs(vm.getRecordedLogs());
     }
 

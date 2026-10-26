@@ -26,7 +26,6 @@ import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.so
 import {LibMeta} from "rain-metadata-0.1.43/src/lib/LibMeta.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 import {LibRaindex} from "../../lib/LibRaindex.sol";
-import {LibEvalReturnData} from "../../lib/LibEvalReturnData.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTOFUTokenDecimals, TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
@@ -40,6 +39,8 @@ import {
     ClearConfigV2,
     ClearStateChangeV2,
     SignedContextV1,
+
+    //forge-lint: disable-next-line(unused-import)
     EvaluableV4,
     TaskV2,
     QuoteV2,
@@ -96,9 +97,9 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     using LibDecimalFloat for Float;
     using LibBytes32Array for bytes32;
 
-    /// The order's calculate eval reverted, had no interpreter code, returned
-    /// undecodable data or fewer than `CALCULATE_ORDER_MIN_OUTPUTS` stack items.
-    /// The order is skipped rather than reverting the batch.
+    /// The order's calculate eval reverted, or returned fewer than
+    /// `CALCULATE_ORDER_MIN_OUTPUTS` stack items. The order is skipped rather
+    /// than reverting the batch.
     event OrderCalculateReverted(address sender, address owner, bytes32 orderHash);
 
     /// All hashes of all active orders. There's nothing interesting in the value
@@ -780,16 +781,47 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // and recordVaultInput so that local storage writes happen before
             // writes on the interpreter.
             StateNamespace namespace = StateNamespace.wrap(uint256(uint160(order.owner)));
-            (StackItem[] memory calculateOrderStack, bytes32[] memory calculateOrderKVs) =
-                evalCalculate(order.evaluable, namespace, context, stateOverlay, skipFailure);
+            StackItem[] memory calculateOrderStack;
+            bytes32[] memory calculateOrderKVs;
+            // Slither false positive. External calls within loops are fine if
+            // the caller controls which orders are eval'd as they can drop
+            // failing calls and resubmit a new transaction.
+            // https://github.com/crytic/slither/issues/880
+            //slither-disable-next-line calls-loop
+            try order.evaluable.interpreter
+                .eval4(
+                    EvalV4({
+                        store: order.evaluable.store,
+                        namespace: LibNamespace.qualifyNamespace(namespace, address(this)),
+                        bytecode: order.evaluable.bytecode,
+                        sourceIndex: CALCULATE_ORDER_ENTRYPOINT,
+                        context: context,
+                        inputs: new StackItem[](0),
+                        stateOverlay: stateOverlay
+                    })
+                ) returns (
+                StackItem[] memory stack, bytes32[] memory kvs
+            ) {
+                calculateOrderStack = stack;
+                calculateOrderKVs = kvs;
+            } catch {
+                if (!skipFailure) {
+                    assembly ("memory-safe") {
+                        let ptr := mload(0x40)
+                        returndatacopy(ptr, 0, returndatasize())
+                        revert(ptr, returndatasize())
+                    }
+                }
+                OrderIOCalculationV4 memory failed;
+                return (false, failed);
+            }
 
             // This is a much clearer error message and overall is more efficient
             // than solidity generic index out of bounds errors.
-            bool calculated = calculateOrderStack.length >= CALCULATE_ORDER_MIN_OUTPUTS;
-            if (!calculated) {
+            if (calculateOrderStack.length < CALCULATE_ORDER_MIN_OUTPUTS) {
                 if (skipFailure) {
                     OrderIOCalculationV4 memory failed;
-                    return (calculated, failed);
+                    return (false, failed);
                 }
                 revert UnsupportedCalculateOutputs(calculateOrderStack.length);
             }
@@ -813,7 +845,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 LibBytes32Array.arrayFrom(Float.unwrap(orderOutputMax), Float.unwrap(orderIORatio));
 
             return (
-                calculated,
+                true,
                 OrderIOCalculationV4({
                     order: order,
                     outputIOIndex: outputIOIndex,
@@ -825,48 +857,6 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                 })
             );
         }
-    }
-
-    /// @dev Runs the calculate entrypoint. With `skipFailure`, a revert, a
-    /// no-code interpreter or undecodable returndata returns an empty stack,
-    /// which `calculateOrderIO` skips as too short; otherwise a revert bubbles
-    /// and undecodable returndata reverts in `abi.decode`.
-    function evalCalculate(
-        EvaluableV4 memory evaluable,
-        StateNamespace namespace,
-        bytes32[][] memory context,
-        bytes32[] memory stateOverlay,
-        bool skipFailure
-    ) internal view returns (StackItem[] memory, bytes32[] memory) {
-        // https://github.com/crytic/slither/issues/880
-        //slither-disable-next-line calls-loop,low-level-calls
-        (bool success, bytes memory returnData) = address(evaluable.interpreter)
-            .staticcall(
-                abi.encodeCall(
-                    IInterpreterV4.eval4,
-                    (EvalV4({
-                        store: evaluable.store,
-                        namespace: LibNamespace.qualifyNamespace(namespace, address(this)),
-                        bytecode: evaluable.bytecode,
-                        sourceIndex: CALCULATE_ORDER_ENTRYPOINT,
-                        context: context,
-                        inputs: new StackItem[](0),
-                        stateOverlay: stateOverlay
-                    }))
-                )
-            );
-        if (!success) {
-            if (!skipFailure) {
-                assembly ("memory-safe") {
-                    revert(add(returnData, 0x20), mload(returnData))
-                }
-            }
-            return (new StackItem[](0), new bytes32[](0));
-        }
-        if (skipFailure && !LibEvalReturnData.isDecodable(returnData)) {
-            return (new StackItem[](0), new bytes32[](0));
-        }
-        return abi.decode(returnData, (StackItem[], bytes32[]));
     }
 
     /// @dev Increases a vault balance by `amount`. For vault ID 0, pushes tokens

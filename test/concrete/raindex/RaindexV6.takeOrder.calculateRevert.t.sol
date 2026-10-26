@@ -14,12 +14,12 @@ import {
 } from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
-import {StateNamespace, IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {Vm} from "forge-std-1.17.0/src/Test.sol";
 
-/// A `takeOrders4` order whose calculate eval reverts, has no interpreter code,
-/// returns undecodable data or too short a stack, is skipped with `OrderCalculateReverted` and makes no state change;
+/// A `takeOrders4` order whose calculate eval reverts, or returns too short a
+/// stack, is skipped with `OrderCalculateReverted` and makes no state change;
 /// later orders still take, and handle-IO reverts still revert the batch.
 contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
     using LibDecimalFloat for Float;
@@ -64,25 +64,9 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
     }
 
     function checkSkippedThenTaken(bytes memory skippedExpression) internal {
-        checkSkippedThenTaken(addOrder(skippedExpression));
-    }
-
-    function addOrderWithInterpreter(address interpreter) internal returns (OrderV4 memory) {
-        return LibTestTakeOrder.addOrderWithInterpreter(
-            vm, alice, "_ _:1 1;:;", IInterpreterV4(interpreter), address(iToken0), VAULT_ID, address(iToken1), VAULT_ID
-        );
-    }
-
-    function checkReturnDataSkipsOrder(bytes memory returnData) internal {
-        address interpreter = address(uint160(uint256(keccak256("malformed.interpreter.rain.test"))));
-        vm.etch(interpreter, hex"00");
-        vm.mockCall(interpreter, abi.encodeWithSelector(IInterpreterV4.eval4.selector), returnData);
-        checkSkippedThenTaken(addOrderWithInterpreter(interpreter));
-    }
-
-    function checkSkippedThenTaken(OrderV4 memory skipped) internal {
         depositOutput();
         mockTakerTransfers();
+        OrderV4 memory skipped = addOrder(skippedExpression);
         OrderV4 memory taken = addOrder("_ _:1 1;:;");
 
         vm.recordLogs();
@@ -118,22 +102,6 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
 
     function testShortCalculateStackSkipsOrderAndLaterOrderTakes() external {
         checkSkippedThenTaken("_:1;:;");
-    }
-
-    function testNoCodeInterpreterSkipsOrderAndLaterOrderTakes() external {
-        checkSkippedThenTaken(addOrderWithInterpreter(address(uint160(uint256(keccak256("no.code.rain.test"))))));
-    }
-
-    function testEmptyReturnDataSkipsOrderAndLaterOrderTakes() external {
-        checkReturnDataSkipsOrder("");
-    }
-
-    function testGarbageReturnDataSkipsOrderAndLaterOrderTakes() external {
-        checkReturnDataSkipsOrder(hex"deadbeef");
-    }
-
-    function testOutOfBoundsReturnDataSkipsOrderAndLaterOrderTakes() external {
-        checkReturnDataSkipsOrder(abi.encode(uint256(0x40), uint256(0x1000), uint256(0)));
     }
 
     function testSkippedCalculateWritesNothingToStore() external {
