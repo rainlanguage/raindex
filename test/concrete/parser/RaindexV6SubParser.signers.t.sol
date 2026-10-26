@@ -82,6 +82,6 @@ contract RaindexV6SubParserSignersTest is OpTest {
         bytes memory rainlang =
             bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<256>();"));
 
-        checkUnhappyParse(rainlang, abi.encodeWithSelector(ContextGridOverflow.selector, 8, 256));
+        checkUnhappyParse(rainlang, abi.encodeWithSelector(ContextGridOverflow.selector, 7, 256));
     }
 }

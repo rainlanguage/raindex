@@ -2,11 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-/// @dev Every Raindex context word, and a raw read of the arb column, as
-/// rainlang call expressions.
+/// @dev Every Raindex sub parser context word as a rainlang call expression.
 library LibTestContextWords {
-    function allWords() internal pure returns (string[] memory words) {
-        words = new string[](31);
+    function allWords() internal pure returns (string[] memory) {
+        string[] memory words = new string[](30);
         words[0] = "raindex()";
         words[1] = "order-hash()";
         words[2] = "order-owner()";
@@ -37,6 +36,6 @@ library LibTestContextWords {
         words[27] = "withdraw-vault-after()";
         words[28] = "withdraw-target-amount()";
         words[29] = "withdraw-token-decimals()";
-        words[30] = "context<7 0>()";
+        return words;
     }
 }

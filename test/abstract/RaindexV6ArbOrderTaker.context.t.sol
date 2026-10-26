@@ -72,9 +72,9 @@ contract RaindexV6ArbOrderTakerContextTest is RaindexV6ExternalRealTest {
                 bytecode: iParserV2.parse2(
                     bytes(
                         string.concat(
-                            ":ensure(equal-to(context<7 0>() 3) \"input token\"),",
-                            ":ensure(equal-to(context<7 1>() 4) \"output token\"),",
-                            ":ensure(equal-to(context<7 2>() 5) \"gas balance\");"
+                            ":ensure(equal-to(context<1 0>() 3) \"input token\"),",
+                            ":ensure(equal-to(context<1 1>() 4) \"output token\"),",
+                            ":ensure(equal-to(context<1 2>() 5) \"gas balance\");"
                         )
                     )
                 )

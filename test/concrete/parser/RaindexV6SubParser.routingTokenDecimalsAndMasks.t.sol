@@ -51,7 +51,7 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
     /// A signed-context row wider than a byte reverts rather than wrapping onto
     /// another row.
     function testSignedContextWideRowReverts() external {
-        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, 9, 256));
+        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, 8, 256));
         this.callSignedContext(OperandV2.wrap(bytes32(uint256(0x010000))));
     }
 

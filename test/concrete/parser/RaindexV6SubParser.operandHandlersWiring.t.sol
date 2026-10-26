@@ -14,8 +14,8 @@ import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParse
 /// (base / order / calculations / vault-in / vault-out / deposit / withdraw)
 /// is wired to the SAME `LibParseOperand.handleOperandDisallowed` function, so
 /// those slots all share one 16-bit pointer. Only TWO slots are different:
-///   - signers (column 8, row 0) -> `handleOperandSingleFullNoDefault`
-///   - signed-context (column 9, row 0) -> `handleOperandDoublePerByteNoDefault`
+///   - signers (column 7, row 0) -> `handleOperandSingleFullNoDefault`
+///   - signed-context (column 8, row 0) -> `handleOperandDoublePerByteNoDefault`
 /// Because the build function is a freshly compiled `external pure`, this test
 /// runs against a fresh deployment WITHOUT etching or pointer regeneration. The
 /// absolute pointer values are unstable across source edits (solc reorders its
@@ -41,9 +41,8 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     //   col 4 vault outputs   (5 rows) -> 12..16
     //   col 5 deposit         (6 rows) -> 17..22
     //   col 6 withdraw        (7 rows) -> 23..29
-    //   col 7 arb             (0 rows)
-    //   col 8 signers         (1 row)  -> 30
-    //   col 9 signed context  (1 row)  -> 31
+    //   col 7 signers         (1 row)  -> 30
+    //   col 8 signed context  (1 row)  -> 31
     uint256 internal constant TABLE_SLOTS = 32;
     uint256 internal constant SLOT_SIGNERS = 30;
     uint256 internal constant SLOT_SIGNED_CONTEXT = 31;
@@ -69,7 +68,7 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     }
 
     /// Every slot before signers (base through withdraw) is the shared
-    /// disallowed pointer; the signers slot (column 8, row 0) differs.
+    /// disallowed pointer; the signers slot (column 7, row 0) differs.
     function testSignersOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
         // Every plain context slot before signers shares the disallowed pointer.
@@ -79,7 +78,7 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         assertTrue(pointerAt(SLOT_SIGNERS) != disallowed, "signers handler must differ from handleOperandDisallowed");
     }
 
-    /// The signed-context handler (column 9, row 0) differs from both the
+    /// The signed-context handler (column 8, row 0) differs from both the
     /// disallowed default and the signers handler.
     function testSignedContextOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);

@@ -31,11 +31,11 @@ import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.so
 /// Here the input token is 6-decimal and the output token is 9-decimal, the arb
 /// is pre-funded with a deterministic leftover of each token (3e6 input, 4e9
 /// output) that the mock raindex's no-op `takeOrders4` leaves untouched, and a
-/// REAL post-arb task asserts the swept context floats. context<7 0>() == 3 and
-/// context<7 1>() == 4 hold ONLY when each leftover is scaled by its OWN
+/// REAL post-arb task asserts the swept context floats. context<1 0>() == 3 and
+/// context<1 1>() == 4 hold ONLY when each leftover is scaled by its OWN
 /// decimals (3e6 / 1e6 == 3; 4e9 / 1e9 == 4). Swapping input-decimals for
-/// output-decimals makes context<7 0>() == 0.003 (reverts "input token"); the
-/// reverse makes context<7 1>() == 4000 (reverts "output token").
+/// output-decimals makes context<1 0>() == 0.003 (reverts "input token"); the
+/// reverse makes context<1 1>() == 4000 (reverts "output token").
 contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest {
     function testRaindexV6FlashBorrowerFinalizeUsesPerTokenDecimals() external {
         // 6-decimal input token, 9-decimal output token.
@@ -77,7 +77,7 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
         orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
 
         // Real post-arb task: assert each swept leftover was scaled by its OWN
-        // decimals. context<7 0>() is the input float, context<7 1>() the output.
+        // decimals. context<1 0>() is the input float, context<1 1>() the output.
         TaskV2 memory task = TaskV2({
             evaluable: EvaluableV4({
                 interpreter: iInterpreter,
@@ -85,8 +85,8 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
                 bytecode: iParserV2.parse2(
                     bytes(
                         string.concat(
-                            ":ensure(equal-to(context<7 0>() 3) \"input token\"),",
-                            ":ensure(equal-to(context<7 1>() 4) \"output token\");"
+                            ":ensure(equal-to(context<1 0>() 3) \"input token\"),",
+                            ":ensure(equal-to(context<1 1>() 4) \"output token\");"
                         )
                     )
                 )

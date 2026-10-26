@@ -443,7 +443,7 @@ library LibRaindexSubParser {
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
     /// column (base, order, calculations, vault IO, deposit, withdraw, signers,
-    /// signed context; the arb column has no words). The inner arrays are flattened before encoding.
+    /// signed context). The inner arrays are flattened before encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);

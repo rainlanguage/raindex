@@ -10,12 +10,7 @@ import {
     EvalV4
 } from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
 import {LibNamespace, FullyQualifiedNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
-import {
-    LibContext,
-    CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_ROW_SENDER
-} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
-import {LibBytes32Array} from "rain-solmem-0.1.28/src/lib/LibBytes32Array.sol";
+import {LibContext} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 
 /// @dev Raindex context is actually fairly complex. The calling context column
 /// is populated before calculate order, but the remaining columns are only
@@ -27,7 +22,7 @@ import {LibBytes32Array} from "rain-solmem-0.1.28/src/lib/LibBytes32Array.sol";
 /// Each entrypoint fills only its own columns and leaves the rest empty, so a
 /// word read outside the entrypoints that fill its cell reverts out of bounds
 /// instead of reading another entrypoint's value.
-uint256 constant CALLING_CONTEXT_COLUMNS = 7;
+uint256 constant CALLING_CONTEXT_COLUMNS = 6;
 
 uint256 constant CONTEXT_COLUMNS = CALLING_CONTEXT_COLUMNS + 1;
 
@@ -65,10 +60,6 @@ uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT = 4;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS = 5;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER = 6;
 
-/// @dev Post-arb column: the input, output and gas balances swept to the
-/// sender. Filled only for the post-arb task.
-uint256 constant CONTEXT_ARB_COLUMN = 7;
-
 /// @dev Calculations column contains the DECIMAL RESCALED calculations but
 /// otherwise provided as-is according to calculate order entrypoint
 uint256 constant CONTEXT_CALCULATIONS_COLUMN = 2;
@@ -105,13 +96,13 @@ uint256 constant CONTEXT_VAULT_IO_ROWS = 5;
 
 /// @dev Signed context signer addresses occupy their own column so that each
 /// signer can be matched to its corresponding signed context column.
-uint256 constant CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN = 8;
+uint256 constant CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN = CONTEXT_COLUMNS;
 uint256 constant CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS = 1;
 uint256 constant CONTEXT_SIGNED_CONTEXT_SIGNERS_ROW = 0;
 
 /// @dev Signed context data columns start after the signers column. Each
 /// signer's data is a separate column at this offset + signer index.
-uint256 constant CONTEXT_SIGNED_CONTEXT_START_COLUMN = 9;
+uint256 constant CONTEXT_SIGNED_CONTEXT_START_COLUMN = CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN + 1;
 uint256 constant CONTEXT_SIGNED_CONTEXT_START_ROWS = 1;
 uint256 constant CONTEXT_SIGNED_CONTEXT_START_ROW = 0;
 
@@ -124,21 +115,12 @@ library LibRaindex {
         return callingContext;
     }
 
-    /// @dev Evaluates each Raindex post task in `post` against `context` padded
-    /// with empty columns to `CALLING_CONTEXT_COLUMNS`. Tasks with empty
-    /// bytecode are skipped.
+    /// @dev Evaluates each task in `post` against `context` padded with empty
+    /// columns to `CALLING_CONTEXT_COLUMNS`, so the signers and signed context
+    /// columns are at `CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN` and
+    /// `CONTEXT_SIGNED_CONTEXT_START_COLUMN` as in order evaluation. Tasks with
+    /// empty bytecode are skipped.
     function doPost(bytes32[][] memory context, TaskV2[] memory post) internal {
-        evalPost(context, post, true);
-    }
-
-    /// @dev As `doPost` for the post-arb task, with `arbColumn` as
-    /// `CONTEXT_ARB_COLUMN`. The calling contract is the arb, not a raindex, so
-    /// the base column drops its calling contract row.
-    function doArbPost(bytes32[] memory arbColumn, TaskV2[] memory post) internal {
-        evalPost(callingContextColumn(CONTEXT_ARB_COLUMN, arbColumn), post, false);
-    }
-
-    function evalPost(bytes32[][] memory context, TaskV2[] memory post, bool callerIsRaindex) private {
         bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
         for (uint256 i = 0; i < context.length; ++i) {
             callingContext[i] = context[i];
@@ -151,11 +133,6 @@ library LibRaindex {
         for (uint256 i = 0; i < post.length; ++i) {
             task = post[i];
             if (task.evaluable.bytecode.length > 0) {
-                bytes32[][] memory fullContext = LibContext.build(callingContext, task.signedContext);
-                if (!callerIsRaindex) {
-                    fullContext[CONTEXT_BASE_COLUMN] =
-                        LibBytes32Array.arrayFrom(fullContext[CONTEXT_BASE_COLUMN][CONTEXT_BASE_ROW_SENDER]);
-                }
                 //slither-disable-next-line unused-return
                 (, bytes32[] memory writes) = task.evaluable.interpreter
                     .eval4(
@@ -164,7 +141,7 @@ library LibRaindex {
                             namespace: qualifiedNamespace,
                             bytecode: task.evaluable.bytecode,
                             sourceIndex: SourceIndexV2.wrap(0),
-                            context: fullContext,
+                            context: LibContext.build(callingContext, task.signedContext),
                             inputs: emptyStack,
                             stateOverlay: emptyStateOverlay
                         })
