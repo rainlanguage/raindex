@@ -12,7 +12,8 @@ import {
     EvaluableV4,
     SignedContextV1,
     TakeOrdersConfigV5,
-    QuoteV2
+    QuoteV2,
+    ClearConfigV2
 } from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
@@ -37,6 +38,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
 
     address internal constant ACTOR = address(0xD0);
     address internal constant TAKER = address(0xB0B);
+    address internal constant CLEARER = address(0xC1EA);
     bytes32 internal constant VAULT_ID = bytes32(uint256(1));
 
     struct Check {
@@ -99,6 +101,10 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
 
     function raindexCheck() internal view returns (Check memory) {
         return Check("raindex()", address(iRaindex).toHexString());
+    }
+
+    function senderCheck(address sender) internal pure returns (Check memory) {
+        return Check("sender()", sender.toHexString());
     }
 
     // Entrypoints.
@@ -174,10 +180,40 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         iRaindex.quote2(QuoteV2(order, 0, 0, new SignedContextV1[](0)));
     }
 
+    /// `CLEARER` clears an ACTOR order whose calculate source is `calculate` and
+    /// handle source is `handle` against a TAKER order.
+    function doClear(string memory calculate, string memory handle) public {
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.prank(ACTOR);
+        iRaindex.deposit4(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        vm.prank(TAKER);
+        iRaindex.deposit4(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+
+        OrderV4 memory alice = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ACTOR,
+            bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", calculate, handle)),
+            address(iToken0),
+            VAULT_ID,
+            address(iToken1),
+            VAULT_ID
+        );
+        OrderV4 memory bob = LibTestTakeOrder.addOrderWithExpression(
+            vm, TAKER, "_ _:1 1;:;", address(iToken1), VAULT_ID, address(iToken0), VAULT_ID
+        );
+        vm.prank(CLEARER);
+        iRaindex.clear3(alice, bob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0));
+        assertTrue(
+            iRaindex.vaultBalance2(ACTOR, address(iToken1), VAULT_ID).lt(LibDecimalFloat.packLossless(10, 0)),
+            "order cleared"
+        );
+    }
+
     // Families.
 
     function depositChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](7);
+        checks = new Check[](8);
         checks[0] = raindexCheck();
         checks[1] = Check("depositor()", ACTOR.toHexString());
         checks[2] = Check("deposit-token()", address(iToken0).toHexString());
@@ -185,10 +221,11 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         checks[4] = Check("deposit-vault-before()", "0");
         checks[5] = Check("deposit-vault-after()", "1");
         checks[6] = Check("deposit-token-decimals()", "18");
+        checks[7] = senderCheck(ACTOR);
     }
 
     function withdrawChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](8);
+        checks = new Check[](9);
         checks[0] = raindexCheck();
         checks[1] = Check("withdrawer()", ACTOR.toHexString());
         checks[2] = Check("withdraw-token()", address(iToken0).toHexString());
@@ -197,18 +234,21 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         checks[5] = Check("withdraw-vault-after()", "0");
         checks[6] = Check("withdraw-target-amount()", "1");
         checks[7] = Check("withdraw-token-decimals()", "18");
+        checks[8] = senderCheck(ACTOR);
     }
 
     function orderTaskChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](3);
+        checks = new Check[](4);
         checks[0] = raindexCheck();
         checks[1] = Check("order-hash()", configHash());
         checks[2] = Check("order-owner()", ACTOR.toHexString());
+        checks[3] = senderCheck(ACTOR);
     }
 
     function entaskChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](1);
+        checks = new Check[](2);
         checks[0] = raindexCheck();
+        checks[1] = senderCheck(ACTOR);
     }
 
     /// Order hash depends on the bytecode holding these checks, so
@@ -218,7 +258,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         checks[0] = raindexCheck();
         checks[1] = Check("order-owner()", ACTOR.toHexString());
         checks[2] = Check("order-counterparty()", TAKER.toHexString());
-        checks[3] = Check("order-clearer()", TAKER.toHexString());
+        checks[3] = senderCheck(TAKER);
         checks[4] = Check("calculated-max-output()", handle ? "1" : "0");
         checks[5] = Check("calculated-io-ratio()", handle ? "1" : "0");
         checks[6] = Check("input-token()", address(iToken0).toHexString());
@@ -320,5 +360,30 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(ACTOR))), address(iRaindex));
         assertEq(iStore.get(ns, bytes32(uint256(1))), orderHash, "calculate order hash");
         assertEq(iStore.get(ns, bytes32(uint256(2))), orderHash, "handle io order hash");
+    }
+
+    // Quote and clear.
+
+    function testQuoteSender() external {
+        Check[] memory checks = new Check[](1);
+        checks[0] = senderCheck(address(this));
+        this.doQuote(string.concat("_ _:1 1,", ensures(checks)));
+    }
+
+    function clearChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](5);
+        checks[0] = raindexCheck();
+        checks[1] = senderCheck(CLEARER);
+        checks[2] = Check("order-owner()", ACTOR.toHexString());
+        checks[3] = Check("order-counterparty()", TAKER.toHexString());
+        checks[4] = Check("order-clearer()", CLEARER.toHexString());
+    }
+
+    function testClearCalculateContextWords() external {
+        this.doClear(string.concat("_ _:1 1,", ensures(clearChecks())), ":;");
+    }
+
+    function testClearHandleIOContextWords() external {
+        this.doClear("_ _:1 1;", ensures(clearChecks()));
     }
 }

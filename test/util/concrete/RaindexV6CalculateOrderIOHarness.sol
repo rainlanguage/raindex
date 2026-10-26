@@ -24,7 +24,20 @@ contract RaindexV6CalculateOrderIOHarness is RaindexV6, IRaindexV6CalculateOrder
         SignedContextV1[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory) {
         (, OrderIOCalculationV4 memory orderIOCalculation) = calculateOrderIO(
-            order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0), false
+            order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0), false, false
+        );
+        return orderIOCalculation;
+    }
+
+    function exposedCalculateOrderIOClearing(
+        OrderV4 memory order,
+        uint256 inputIOIndex,
+        uint256 outputIOIndex,
+        address counterparty,
+        SignedContextV1[] memory signedContext
+    ) external view returns (OrderIOCalculationV4 memory) {
+        (, OrderIOCalculationV4 memory orderIOCalculation) = calculateOrderIO(
+            order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0), false, true
         );
         return orderIOCalculation;
     }

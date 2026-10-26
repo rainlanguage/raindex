@@ -10,6 +10,8 @@ import {
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY,
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
+    CONTEXT_CALLING_CONTEXT_ROWS,
     CONTEXT_CALCULATIONS_COLUMN,
     CONTEXT_CALCULATIONS_ROW_MAX_OUTPUT,
     CONTEXT_CALCULATIONS_ROW_IO_RATIO,
@@ -134,7 +136,7 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
         interpreter.setStack(stack);
     }
 
-    /// The calling-context column (column 0) is [orderHash, owner, counterparty].
+    /// Outside a clear the order column is [orderHash, owner, counterparty].
     /// Pins each row against a mutation that swaps a row, reuses a single value,
     /// or builds the wrong column.
     function testCallingContextColumn() external {
@@ -160,6 +162,34 @@ contract RaindexV6CalculateOrderIOHarnessTest is Test {
             callingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY],
             bytes32(uint256(uint160(counterparty))),
             "calling context counterparty"
+        );
+        assertEq(callingContext.length, CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER, "no clearer row outside a clear");
+    }
+
+    /// A clear appends the clearer (`msg.sender`) to the order column.
+    function testCallingContextColumnClearing() external {
+        OrderV4 memory order = _order();
+        harness.exposedIncrease(owner, outputToken, OUTPUT_VAULT_ID, LibDecimalFloat.packLossless(1000, 0));
+        _setStack(LibDecimalFloat.packLossless(2, 0), LibDecimalFloat.packLossless(5, 0));
+
+        OrderIOCalculationV4 memory calc =
+            harness.exposedCalculateOrderIOClearing(order, 0, 0, counterparty, new SignedContextV1[](0));
+
+        bytes32[] memory callingContext = calc.context[CONTEXT_CALLING_CONTEXT_COLUMN];
+        assertEq(callingContext.length, CONTEXT_CALLING_CONTEXT_ROWS, "clearer row in a clear");
+        assertEq(callingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH], order.hash(), "order hash");
+        assertEq(
+            callingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER], bytes32(uint256(uint160(owner))), "order owner"
+        );
+        assertEq(
+            callingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY],
+            bytes32(uint256(uint160(counterparty))),
+            "counterparty"
+        );
+        assertEq(
+            callingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER],
+            bytes32(uint256(uint160(address(this)))),
+            "clearer"
         );
     }
 

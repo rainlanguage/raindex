@@ -55,6 +55,10 @@ contract RaindexV6SubParserRoutingTest is Test {
 
     // Base column (column 0).
 
+    function testRouteSender() external pure {
+        checkRoute(LibRaindexSubParser.subParserSender, 0, 0);
+    }
+
     function testRouteCallingContract() external pure {
         // raindex -> base column 0, calling-contract row 1.
         checkRoute(LibRaindexSubParser.subParserCallingContract, 0, 1);
