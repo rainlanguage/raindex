@@ -332,13 +332,14 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
 
         checkTokenSelfTrade(quoteConfig.order, quoteConfig.inputIOIndex, quoteConfig.outputIOIndex);
 
-        OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
+        (, OrderIOCalculationV4 memory orderIOCalculation) = calculateOrderIO(
             quoteConfig.order,
             quoteConfig.inputIOIndex,
             quoteConfig.outputIOIndex,
             msg.sender,
             quoteConfig.signedContext,
-            new bytes32[](0)
+            new bytes32[](0),
+            false
         );
         // true is quote3's "order is live" result required by IRaindexV7.
         // forge-lint: disable-next-line(boolean-cst)
@@ -421,13 +422,14 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     // calculates, so a later same-owner order observes earlier
                     // TAKEN orders' writes through the store. An untaken order
                     // runs no `handleIO`, so it makes no state change at all.
-                    OrderIOCalculationV4 memory orderIOCalculation = calculateOrderIO(
+                    (bool calculated, OrderIOCalculationV4 memory orderIOCalculation) = calculateOrderIO(
                         order,
                         takeOrderConfig.inputIOIndex,
                         takeOrderConfig.outputIOIndex,
                         msg.sender,
                         takeOrderConfig.signedContext,
-                        new bytes32[](0)
+                        new bytes32[](0),
+                        true
                     );
 
                     // Skip orders that are too expensive rather than revert as we have
@@ -441,7 +443,9 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                     // nothing. The explicit `taken` flag is the order's outcome
                     // for the batch.
                     bool taken;
-                    if (orderIOCalculation.IORatio.gt(config.maximumIORatio)) {
+                    if (!calculated) {
+                        emit OrderCalculateReverted(msg.sender, order.owner, orderHash);
+                    } else if (orderIOCalculation.IORatio.gt(config.maximumIORatio)) {
                         emit OrderExceedsMaxRatio(msg.sender, order.owner, orderHash);
                     } else if (
                         !orderIOCalculation.outputMax.gt(LibDecimalFloat.FLOAT_ZERO)
@@ -612,21 +616,23 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // Emit the Clear event before `eval2`.
             emit ClearV3(msg.sender, aliceOrder, bobOrder, clearConfig);
         }
-        OrderIOCalculationV4 memory aliceOrderIOCalculation = calculateOrderIO(
+        (, OrderIOCalculationV4 memory aliceOrderIOCalculation) = calculateOrderIO(
             aliceOrder,
             clearConfig.aliceInputIOIndex,
             clearConfig.aliceOutputIOIndex,
             bobOrder.owner,
             aliceSignedContext,
-            new bytes32[](0)
+            new bytes32[](0),
+            false
         );
-        OrderIOCalculationV4 memory bobOrderIOCalculation = calculateOrderIO(
+        (, OrderIOCalculationV4 memory bobOrderIOCalculation) = calculateOrderIO(
             bobOrder,
             clearConfig.bobInputIOIndex,
             clearConfig.bobOutputIOIndex,
             aliceOrder.owner,
             bobSignedContext,
-            new bytes32[](0)
+            new bytes32[](0),
+            false
         );
 
         // Each side must be one `takeOrders5` would take. Given this, each
@@ -700,14 +706,20 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// in-memory store before the calculate eval, making earlier same-owner,
     /// same-batch calculate writes visible to this evaluation. Empty for
     /// single-order callers (`quote`, `clear4`).
+    /// @param skipFailure If true, a reverting calculate eval or a stack shorter
+    /// than `CALCULATE_ORDER_MIN_OUTPUTS` returns false instead of reverting.
+    /// @return False if `skipFailure` caught a failure, in which case the
+    /// calculation is zeroed and MUST NOT be used.
+    /// @return The order IO calculation.
     function calculateOrderIO(
         OrderV4 memory order,
         uint256 inputIOIndex,
         uint256 outputIOIndex,
         address counterparty,
         SignedContextV2[] memory signedContext,
-        bytes32[] memory stateOverlay
-    ) internal view returns (OrderIOCalculationV4 memory) {
+        bytes32[] memory stateOverlay,
+        bool skipFailure
+    ) internal view returns (bool, OrderIOCalculationV4 memory) {
         unchecked {
             bytes32[][] memory context;
             {
@@ -764,12 +776,14 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             // and recordVaultInput so that local storage writes happen before
             // writes on the interpreter.
             StateNamespace namespace = StateNamespace.wrap(uint256(uint160(order.owner)));
+            StackItem[] memory calculateOrderStack;
+            bytes32[] memory calculateOrderKVs;
             // Slither false positive. External calls within loops are fine if
             // the caller controls which orders are eval'd as they can drop
             // failing calls and resubmit a new transaction.
             // https://github.com/crytic/slither/issues/880
             //slither-disable-next-line calls-loop
-            (StackItem[] memory calculateOrderStack, bytes32[] memory calculateOrderKVs) = order.evaluable.interpreter
+            try order.evaluable.interpreter
                 .eval4(
                     EvalV4({
                         store: order.evaluable.store,
@@ -780,11 +794,29 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         inputs: new StackItem[](0),
                         stateOverlay: stateOverlay
                     })
-                );
+                ) returns (
+                StackItem[] memory stack, bytes32[] memory kvs
+            ) {
+                calculateOrderStack = stack;
+                calculateOrderKVs = kvs;
+            } catch {
+                if (!skipFailure) {
+                    assembly ("memory-safe") {
+                        let ptr := mload(0x40)
+                        returndatacopy(ptr, 0, returndatasize())
+                        revert(ptr, returndatasize())
+                    }
+                }
+            }
 
             // This is a much clearer error message and overall is more efficient
             // than solidity generic index out of bounds errors.
-            if (calculateOrderStack.length < CALCULATE_ORDER_MIN_OUTPUTS) {
+            bool calculated = calculateOrderStack.length >= CALCULATE_ORDER_MIN_OUTPUTS;
+            if (!calculated) {
+                if (skipFailure) {
+                    OrderIOCalculationV4 memory failed;
+                    return (calculated, failed);
+                }
                 revert UnsupportedCalculateOutputs(calculateOrderStack.length);
             }
 
@@ -806,15 +838,18 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             context[CONTEXT_CALCULATIONS_COLUMN] =
                 LibBytes32Array.arrayFrom(Float.unwrap(orderOutputMax), Float.unwrap(orderIORatio));
 
-            return OrderIOCalculationV4({
-                order: order,
-                outputIOIndex: outputIOIndex,
-                outputMax: orderOutputMax,
-                IORatio: orderIORatio,
-                context: context,
-                namespace: namespace,
-                kvs: calculateOrderKVs
-            });
+            return (
+                calculated,
+                OrderIOCalculationV4({
+                    order: order,
+                    outputIOIndex: outputIOIndex,
+                    outputMax: orderOutputMax,
+                    IORatio: orderIORatio,
+                    context: context,
+                    namespace: namespace,
+                    kvs: calculateOrderKVs
+                })
+            );
         }
     }
 

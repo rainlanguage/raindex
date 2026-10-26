@@ -135,7 +135,7 @@ integrity = "a2832c32c4a13a592c4c66072be5dca8b956e535467d8ce3cb6c51e9b4d5fc89"
 name = "raindex-interface"
 version = "0.1.10"
 git = "https://github.com/rainlanguage/raindex.interface.git"
-rev = "d7e43badcd35b13239f6c0196c44636c8d98e58d"
+rev = "7107727113b499347a7beb89bc7b750c298c41f0"
 
 [[dependencies]]
 name = "rainlang"
