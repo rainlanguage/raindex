@@ -134,8 +134,9 @@ integrity = "a2832c32c4a13a592c4c66072be5dca8b956e535467d8ce3cb6c51e9b4d5fc89"
 [[dependencies]]
 name = "raindex-interface"
 version = "0.1.10"
-git = "https://github.com/rainlanguage/raindex.interface.git"
-rev = "7107727113b499347a7beb89bc7b750c298c41f0"
+url = "https://soldeer-revisions.s3.amazonaws.com/raindex-interface/0_1_10_26-10-2026_18:32:26_raindex.zip"
+checksum = "f027522920deb18627febd992cdc006e801561e6a96e9dbb7fec626e2afac0e1"
+integrity = "835cd538cad10a60b0fb6a36711bc5dbf789e6ae4647f5a16bb8c335d1fb9fca"
 
 [[dependencies]]
 name = "rainlang"
