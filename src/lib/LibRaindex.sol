@@ -23,10 +23,10 @@ uint256 constant CALLING_CONTEXT_COLUMNS = 4;
 
 uint256 constant CONTEXT_COLUMNS = CALLING_CONTEXT_COLUMNS + 1;
 
-/// @dev Total number of context columns including extensions: base columns
-/// plus 3 for signers, signer domains and signed context start, 1 for deposit,
-/// 1 for withdraw.
-uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_COLUMNS + 3 + 1 + 1;
+/// @dev Total number of context columns including extensions: everything up
+/// to the signed context start column, then signed context start, deposit and
+/// withdraw.
+uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_SIGNED_CONTEXT_START_COLUMN + 3;
 
 /// @dev Contextual data available to both calculate order and handle IO. The
 /// order hash, order owner and order counterparty. IMPORTANT NOTE that the

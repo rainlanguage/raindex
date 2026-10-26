@@ -135,7 +135,7 @@ integrity = "a2832c32c4a13a592c4c66072be5dca8b956e535467d8ce3cb6c51e9b4d5fc89"
 name = "raindex-interface"
 version = "0.1.10"
 git = "https://github.com/rainlanguage/raindex.interface.git"
-rev = "cee2eff1ed714d3c2238d845ea5ecdfb432ee1c1"
+rev = "d7e43badcd35b13239f6c0196c44636c8d98e58d"
 
 [[dependencies]]
 name = "rainlang"
@@ -147,8 +147,9 @@ integrity = "b7e5e97ea63d89649f5cb4d82f630a22fc6a3cd1b529ce1deda61f7b22a3325a"
 [[dependencies]]
 name = "rainlang-interface"
 version = "0.2.14"
-git = "https://github.com/rainlanguage/rainlang.interface.git"
-rev = "f665f7fcbeade38f525853c94d61570080e07621"
+url = "https://soldeer-revisions.s3.amazonaws.com/rainlang-interface/0_2_14_26-10-2026_13:25:43_rainlang.zip"
+checksum = "854b90ada2a8756d1c3292fa1272c5630fc0ebf48955bf18f60db9d48e4f210e"
+integrity = "d3c5c2983c62b09c3dda643150a3a2a8533c0526fa530b1ded91be69ac64bda5"
 
 [[dependencies]]
 name = "rainlang-interface-rainlang"
