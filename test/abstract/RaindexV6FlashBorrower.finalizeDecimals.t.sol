@@ -8,20 +8,20 @@ import {LeftoverFlashLendingMockRaindex} from "test/util/concrete/LeftoverFlashL
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     IInterpreterV4
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
-/// @dev Discriminates that `arb4` passes the INPUT token's OWN decimals and the
+/// @dev Discriminates that `arb5` passes the INPUT token's OWN decimals and the
 /// OUTPUT token's OWN decimals to `finalizeArb` in the correct positions. The
 /// pre-existing `mixedDecimals` / `realTokenTransfers` tests leave the arb with
 /// a zero leftover balance and supply an EMPTY post-arb task, so a mutation that
@@ -30,7 +30,7 @@ import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.so
 ///
 /// Here the input token is 6-decimal and the output token is 9-decimal, the arb
 /// is pre-funded with a deterministic leftover of each token (3e6 input, 4e9
-/// output) that the mock raindex's no-op `takeOrders4` leaves untouched, and a
+/// output) that the mock raindex's no-op `takeOrders5` leaves untouched, and a
 /// REAL post-arb task asserts the swept context floats. context<1 0>() == 3 and
 /// context<1 1>() == 4 hold ONLY when each leftover is scaled by its OWN
 /// decimals (3e6 / 1e6 == 3; 4e9 / 1e9 == 4). Swapping input-decimals for
@@ -51,7 +51,7 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
         NoExchangeFlashBorrower arb = new NoExchangeFlashBorrower();
 
         // Pre-fund the arb with the exact leftovers we will assert on. The no-op
-        // takeOrders4 leaves these untouched; the flash loan of the output token
+        // takeOrders5 leaves these untouched; the flash loan of the output token
         // is net-neutral so the 4e9 output leftover survives.
         inputToken.mint(address(arb), 3e6);
         outputToken.mint(address(arb), 4e9);
@@ -73,12 +73,12 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
         // Real post-arb task: assert each swept leftover was scaled by its OWN
         // decimals. context<1 0>() is the input float, context<1 1>() the output.
-        TaskV2 memory task = TaskV2({
+        TaskV3 memory task = TaskV3({
             evaluable: EvaluableV4({
                 interpreter: iInterpreter,
                 store: iStore,
@@ -91,12 +91,12 @@ contract RaindexV6FlashBorrowerFinalizeDecimalsTest is RaindexV6ExternalRealTest
                     )
                 )
             }),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
 
-        arb.arb4(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(1, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),

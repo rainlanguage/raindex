@@ -10,9 +10,10 @@ import {
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_VAULT_IO_ROWS,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS,
     CONTEXT_SIGNED_CONTEXT_START_ROWS
 } from "../../../src/lib/LibRaindex.sol";
-import {CONTEXT_BASE_ROWS} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
+import {CONTEXT_BASE_ROWS} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 
 /// @title RaindexV6SubParserWordParsersWiringTest
 /// @notice Every word reads its own context cell, so no two word parsers can
@@ -22,7 +23,7 @@ contract RaindexV6SubParserWordParsersWiringTest is Test {
     function wordCount() internal pure returns (uint256) {
         return CONTEXT_BASE_ROWS + CONTEXT_CALLING_CONTEXT_ROWS + CONTEXT_CALCULATIONS_ROWS + CONTEXT_VAULT_IO_ROWS * 2
             + DEPOSIT_WORDS_LENGTH + WITHDRAW_WORDS_LENGTH + CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS
-            + CONTEXT_SIGNED_CONTEXT_START_ROWS;
+            + CONTEXT_SIGNED_CONTEXT_DOMAINS_ROWS + CONTEXT_SIGNED_CONTEXT_START_ROWS;
     }
 
     function testWordParsersTableHasOneSlotPerWord() external {

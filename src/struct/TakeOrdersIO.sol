@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
-/// The input and output tokens shared by every order in a `takeOrders4` batch,
+/// The input and output tokens shared by every order in a `takeOrders5` batch,
 /// and the taker IO still remaining to fill as the batch is processed.
 /// @param inputToken The input token every order in the batch must use.
 /// @param outputToken The output token every order in the batch must use.

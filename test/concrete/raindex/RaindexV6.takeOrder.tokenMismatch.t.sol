@@ -6,11 +6,11 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderV4,
     IOV2,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     EvaluableV4,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {TokenMismatch} from "../../../src/error/ErrRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
@@ -52,10 +52,10 @@ contract RaindexV6TakeOrderTokenMismatchTest is RaindexV6ExternalRealTest {
         // Line up outputs so we don't trigger that code path.
         b.validOutputs[bOutputIOIndex].token = a.validOutputs[aOutputIOIndex].token;
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(a, aInputIOIndex, aOutputIOIndex, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(b, bInputIOIndex, bOutputIOIndex, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(a, aInputIOIndex, aOutputIOIndex, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(b, bInputIOIndex, bOutputIOIndex, new SignedContextV2[](0));
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             minimumIO: Float.wrap(0),
             maximumIO: LibDecimalFloat.fromFixedDecimalLosslessPacked(maxTakerInput18, 18),
             maximumIORatio: LibDecimalFloat.fromFixedDecimalLosslessPacked(maxIORatio, 18),
@@ -64,7 +64,7 @@ contract RaindexV6TakeOrderTokenMismatchTest is RaindexV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(abi.encodeWithSelector(TokenMismatch.selector));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         (totalTakerInput, totalTakerOutput);
     }
 
@@ -98,10 +98,10 @@ contract RaindexV6TakeOrderTokenMismatchTest is RaindexV6ExternalRealTest {
         // Line up inputs so we don't trigger that code path.
         b.validInputs[bInputIOIndex].token = a.validInputs[aInputIOIndex].token;
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(a, aInputIOIndex, aOutputIOIndex, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(b, bInputIOIndex, bOutputIOIndex, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(a, aInputIOIndex, aOutputIOIndex, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(b, bInputIOIndex, bOutputIOIndex, new SignedContextV2[](0));
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             minimumIO: Float.wrap(0),
             maximumIO: LibDecimalFloat.fromFixedDecimalLosslessPacked(maxTakerInput18, 18),
             maximumIORatio: LibDecimalFloat.fromFixedDecimalLosslessPacked(maxIORatio18, 18),
@@ -110,7 +110,7 @@ contract RaindexV6TakeOrderTokenMismatchTest is RaindexV6ExternalRealTest {
             data: ""
         });
         vm.expectRevert(abi.encodeWithSelector(TokenMismatch.selector));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         (totalTakerInput, totalTakerOutput);
     }
 }

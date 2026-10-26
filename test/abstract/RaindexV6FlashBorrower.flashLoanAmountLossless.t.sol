@@ -7,18 +7,18 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LossyConversionFromFloat} from "rain-math-float-0.3.10/src/error/ErrDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
@@ -29,9 +29,9 @@ import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticFlashLendingMockRaindex} from "test/util/concrete/RealisticFlashLendingMockRaindex.sol";
 
 contract RaindexV6FlashBorrowerFlashLoanAmountLosslessTest is Test {
-    /// Build a full arb4 setup matching the realistic mock pattern but with a
+    /// Build a full arb5 setup matching the realistic mock pattern but with a
     /// caller-supplied `minimumIO` (a `Float`) so the test can exercise the
-    /// lossless-conversion guard in arb4's `flashLoanAmount` computation.
+    /// lossless-conversion guard in arb5's `flashLoanAmount` computation.
     function callArb4(Float minimumIO) internal {
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
@@ -50,9 +50,9 @@ contract RaindexV6FlashBorrowerFlashLoanAmountLosslessTest is Test {
 
         GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
 
-        arb.arb4(
-            IRaindexV6(raindex),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(raindex),
+            TakeOrdersConfigV6({
                 minimumIO: minimumIO,
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -65,9 +65,9 @@ contract RaindexV6FlashBorrowerFlashLoanAmountLosslessTest is Test {
                 address(exchange),
                 abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), 100e6))
             ),
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
     }
@@ -76,7 +76,7 @@ contract RaindexV6FlashBorrowerFlashLoanAmountLosslessTest is Test {
     function buildSingleOrder(address inputToken, address outputToken)
         internal
         pure
-        returns (TakeOrderConfigV4[] memory orders)
+        returns (TakeOrderConfigV5[] memory orders)
     {
         IOV2[] memory validInputs = new IOV2[](1);
         validInputs[0] = IOV2(inputToken, bytes32(0));
@@ -91,11 +91,11 @@ contract RaindexV6FlashBorrowerFlashLoanAmountLosslessTest is Test {
             nonce: bytes32(0)
         });
 
-        orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
     }
 
-    /// arb4 computes the flash loan amount with `toFixedDecimalLossless`: a
+    /// arb5 computes the flash loan amount with `toFixedDecimalLossless`: a
     /// `minimumIO` that cannot be represented exactly at the output token's
     /// decimals MUST revert `LossyConversionFromFloat` rather than silently
     /// truncating to a smaller loan. minimumIO = 1e-7 at 6 output decimals:

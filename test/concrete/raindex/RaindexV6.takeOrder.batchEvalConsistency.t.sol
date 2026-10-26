@@ -10,15 +10,15 @@ import {
     OrderConfigV4,
     EvaluableV4,
     IOV2,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderBatchEvalConsistencyTest
-/// @notice Within a single `takeOrders4` batch, each order's `calculate` should
+/// @notice Within a single `takeOrders5` batch, each order's `calculate` should
 /// see the complete effects of every earlier order in the batch — a sequential
 /// view. Today that holds for some state and not others, depending purely on how
 /// the effect is applied:
@@ -76,7 +76,7 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
     /// Fund the owner's iToken1 output vault so orders have output to give.
     function fundOutput(address o) internal {
         vm.prank(o);
-        iRaindex.deposit4(address(iToken1), INTERNAL_VAULT, LibDecimalFloat.packLossless(100, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), INTERNAL_VAULT, LibDecimalFloat.packLossless(100, 0), new TaskV3[](0));
     }
 
     function addOrder(address o, bytes memory expr, bytes32 inputVaultId) internal returns (OrderV4 memory) {
@@ -105,18 +105,18 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
             meta: ""
         });
         vm.prank(o);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         return OrderV4(o, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
     }
 
     function take(OrderV4 memory a, OrderV4 memory b) internal returns (Float totalTakerInput) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] =
-            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[1] =
-            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         vm.prank(iTaker);
-        (totalTakerInput,) = iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+        (totalTakerInput,) = iRaindex.takeOrders5(LibTestTakeOrder.defaultTakeConfig(orders));
     }
 
     // A: plain fill of 1, crediting its input vault.
@@ -175,15 +175,15 @@ contract RaindexV6TakeOrderBatchEvalConsistencyTest is RaindexV6ExternalRealTest
     }
 
     function take3(OrderV4 memory a, OrderV4 memory b, OrderV4 memory c) internal returns (Float totalTakerInput) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](3);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](3);
         orders[0] =
-            TakeOrderConfigV4({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: a, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[1] =
-            TakeOrderConfigV4({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: b, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         orders[2] =
-            TakeOrderConfigV4({order: c, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
+            TakeOrderConfigV5({order: c, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
         vm.prank(iTaker);
-        (totalTakerInput,) = iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(orders));
+        (totalTakerInput,) = iRaindex.takeOrders5(LibTestTakeOrder.defaultTakeConfig(orders));
     }
 
     // C: output as much as its input vault holds (reads the accumulated balance,

@@ -441,12 +441,12 @@ take-orders calldata, asks an order for its removal calldata, and fetches
 quotes—mirroring the usual "inspect -> prepare transaction -> submit" flow.
 
 ```ts
-import { getOrderHash, getTakeOrders3Calldata } from "@rainlanguage/raindex";
+import { getOrderHash, getTakeOrders5Calldata } from "@rainlanguage/raindex";
 
 const orderHashResult = getOrderHash(orderV4Struct);
 if (orderHashResult.error) throw new Error(orderHashResult.error.readableMsg);
 
-const takeOrdersResult = getTakeOrders3Calldata(takeOrdersConfig);
+const takeOrdersResult = getTakeOrders5Calldata(takeOrdersConfig);
 if (takeOrdersResult.error) throw new Error(takeOrdersResult.error.readableMsg);
 const takeOrdersCalldata = takeOrdersResult.value; // hex string ready for the contract
 
@@ -465,7 +465,7 @@ leg before building calldata.
 
 ### 5. Take orders
 
-The SDK provides two approaches for executing `takeOrders4` transactions:
+The SDK provides two approaches for executing `takeOrders5` transactions:
 auto-discovery by token pair or targeting a specific known order.
 
 #### Take orders by token pair (auto-discovery)
@@ -491,7 +491,7 @@ if (takeResult.error) throw new Error(takeResult.error.readableMsg);
 
 const {
   raindex, // Contract address to call
-  calldata, // ABI-encoded takeOrders4 calldata
+  calldata, // ABI-encoded takeOrders5 calldata
   effectivePrice, // Blended price from simulation
   prices, // Per-leg ratios (best to worst)
   expectedSell, // Simulated sell amount at current quotes

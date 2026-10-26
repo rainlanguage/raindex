@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
@@ -17,12 +17,12 @@ contract RaindexV6AddOrderOwnerTest is RaindexV6ExternalRealTest {
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(owner);
-        bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(iRaindex.orderExists(order.hash()));
 
         vm.prank(owner);
-        stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(!stateChange);
         assert(iRaindex.orderExists(order.hash()));
     }
@@ -39,12 +39,12 @@ contract RaindexV6AddOrderOwnerTest is RaindexV6ExternalRealTest {
         OrderV4 memory orderBob = OrderV4(bob, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(alice);
-        bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(iRaindex.orderExists(orderAlice.hash()));
 
         vm.prank(bob);
-        stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(iRaindex.orderExists(orderBob.hash()));
     }

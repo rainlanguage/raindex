@@ -5,12 +5,12 @@ pragma solidity =0.8.25;
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {OrderV4, TakeOrdersConfigV6, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {MinimumIO} from "../../../src/error/ErrRaindexV6.sol";
 
 /// When the total taker IO is less than the configured minimumIO,
-/// takeOrders4 must revert with MinimumIO(minimumIO, actualIO).
+/// takeOrders5 must revert with MinimumIO(minimumIO, actualIO).
 contract RaindexV6TakeOrderMinimumIOTest is RaindexV6ExternalRealTest {
     function testTakeOrderMinimumIORevert() external {
         address alice = address(uint160(uint256(keccak256("alice.rain.test"))));
@@ -23,7 +23,7 @@ contract RaindexV6TakeOrderMinimumIOTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(1, 0), new TaskV3[](0));
 
         // Order outputs 1e-18 at ratio 1.
         OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
@@ -37,7 +37,7 @@ contract RaindexV6TakeOrderMinimumIOTest is RaindexV6ExternalRealTest {
         );
 
         // Take with minimumIO = 1, but order only provides 1e-18.
-        TakeOrdersConfigV5 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory takeConfig = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         takeConfig.minimumIO = LibDecimalFloat.packLossless(1, 0);
 
         vm.prank(bob);
@@ -46,6 +46,6 @@ contract RaindexV6TakeOrderMinimumIOTest is RaindexV6ExternalRealTest {
                 MinimumIO.selector, LibDecimalFloat.packLossless(1, 0), LibDecimalFloat.packLossless(1, -18)
             )
         );
-        iRaindex.takeOrders4(takeConfig);
+        iRaindex.takeOrders5(takeConfig);
     }
 }

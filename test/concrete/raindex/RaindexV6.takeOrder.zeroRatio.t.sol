@@ -7,18 +7,18 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    TaskV3,
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {MinimumIO} from "../../../src/error/ErrRaindexV6.sol";
 import {RecordingOrderTaker} from "test/util/concrete/RecordingOrderTaker.sol";
 
-/// A `takeOrders4` order whose IO ratio is 0 gives its output for nothing: the
+/// A `takeOrders5` order whose IO ratio is 0 gives its output for nothing: the
 /// taker receives the order's output (capped by `outputMax`, and in the
 /// market-buy branch by the remaining taker IO) and pays 0.
 contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
@@ -53,15 +53,15 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(address(iToken1), bytes32(uint256(0x01)), _f(VAULT_DEPOSIT), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), bytes32(uint256(0x01)), _f(VAULT_DEPOSIT), new TaskV3[](0));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
     }
 
-    function _two(OrderV4 memory a, OrderV4 memory b) internal pure returns (TakeOrderConfigV4[] memory) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(a, 0, 0, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(b, 0, 0, new SignedContextV1[](0));
+    function _two(OrderV4 memory a, OrderV4 memory b) internal pure returns (TakeOrderConfigV5[] memory) {
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(a, 0, 0, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(b, 0, 0, new SignedContextV2[](0));
         return orders;
     }
 
@@ -82,14 +82,14 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         maximumIO = bound(maximumIO, 1, VAULT_DEPOSIT * 2);
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(outputMax, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.maximumIO = _f(maximumIO);
         uint256 expected = outputMax < maximumIO ? outputMax : maximumIO;
 
         vm.expectCall(address(iToken1), abi.encodeCall(IERC20.transfer, (bob, expected * 1e18)), 1);
         vm.expectCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), 0);
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.eq(_f(expected)), "taker input");
         assertTrue(totalTakerOutput.isZero(), "taker output");
@@ -103,7 +103,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         maximumIO = bound(maximumIO, 1, VAULT_DEPOSIT * 2);
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(outputMax, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.IOIsInput = false;
         config.maximumIO = _f(maximumIO);
 
@@ -111,8 +111,8 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         vm.expectCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), 0);
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.TakeOrderV3(bob, config.orders[0], _f(outputMax), LibDecimalFloat.FLOAT_ZERO);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        emit IRaindexV7.TakeOrderV4(bob, config.orders[0], _f(outputMax), LibDecimalFloat.FLOAT_ZERO);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.eq(_f(outputMax)), "taker input");
         assertTrue(totalTakerOutput.isZero(), "taker output");
@@ -126,7 +126,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         outputMax = bound(outputMax, 1, VAULT_DEPOSIT);
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(outputMax, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.IOIsInput = ioIsInput;
         config.maximumIORatio = LibDecimalFloat.packLossless(type(int224).max, 0);
         config.maximumIO = LibDecimalFloat.packLossless(type(int224).max, 0);
@@ -134,7 +134,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         vm.expectCall(address(iToken1), abi.encodeCall(IERC20.transfer, (bob, outputMax * 1e18)), 1);
         vm.expectCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), 0);
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.eq(_f(outputMax)), "taker input");
         assertTrue(totalTakerOutput.isZero(), "taker output");
@@ -147,14 +147,14 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         _setUpVaultAndTransfers();
         OrderV4 memory free = _order(5, "0");
         OrderV4 memory priced = _order(10, "2");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(_two(free, priced));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(_two(free, priced));
         config.IOIsInput = false;
         config.maximumIO = _f(4);
 
         vm.expectCall(address(iToken1), abi.encodeCall(IERC20.transfer, (bob, 7e18)), 1);
         vm.expectCall(address(iToken0), abi.encodeCall(IERC20.transferFrom, (bob, address(iRaindex), 4e18)), 1);
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         // free: 5 for 0. priced: takerOutput min(20, 4) = 4, takerInput 4 / 2 = 2.
         assertTrue(totalTakerInput.eq(_f(7)), "taker input");
@@ -168,13 +168,13 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         _setUpVaultAndTransfers();
         OrderV4 memory free = _order(5, "0");
         OrderV4 memory priced = _order(10, "2");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(_two(free, priced));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(_two(free, priced));
         config.maximumIO = _f(8);
 
         vm.expectCall(address(iToken1), abi.encodeCall(IERC20.transfer, (bob, 8e18)), 1);
         vm.expectCall(address(iToken0), abi.encodeCall(IERC20.transferFrom, (bob, address(iRaindex), 6e18)), 1);
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         // free: 5 for 0, remaining 3. priced: takerInput 3, takerOutput 3 * 2 = 6.
         assertTrue(totalTakerInput.eq(_f(8)), "taker input");
@@ -188,14 +188,14 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         minimumIO = bound(minimumIO, 1, VAULT_DEPOSIT * 2);
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(outputMax, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.minimumIO = _f(minimumIO);
 
         vm.prank(bob);
         if (minimumIO > outputMax) {
             vm.expectRevert(abi.encodeWithSelector(MinimumIO.selector, _f(minimumIO), _f(outputMax)));
         }
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
     }
 
     /// Market sell: `minimumIO` counts taker output, to which a 0-ratio order
@@ -204,13 +204,13 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         minimumIO = bound(minimumIO, 1, VAULT_DEPOSIT);
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(5, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.IOIsInput = false;
         config.minimumIO = _f(minimumIO);
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(MinimumIO.selector, _f(minimumIO), LibDecimalFloat.FLOAT_ZERO));
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
     }
 
     /// A 0-ratio order with a zero `outputMax` is still skipped with
@@ -218,13 +218,13 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
     function testZeroRatioZeroOutputMaxSkips(bool ioIsInput) external {
         _setUpVaultAndTransfers();
         OrderV4 memory order = _order(0, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.IOIsInput = ioIsInput;
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.isZero(), "taker input");
         assertTrue(totalTakerOutput.isZero(), "taker output");
@@ -236,7 +236,7 @@ contract RaindexV6TakeOrderZeroRatioTest is RaindexV6ExternalRealTest {
         _setUpVaultAndTransfers();
         RecordingOrderTaker taker = new RecordingOrderTaker(iRaindex);
         OrderV4 memory order = _order(5, "0");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.IOIsInput = ioIsInput;
         config.data = hex"01";
 

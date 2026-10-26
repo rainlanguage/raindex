@@ -6,19 +6,20 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6FreshTakeOrderTest} from "test/util/abstract/RaindexV6FreshTakeOrderTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
+    IRaindexV7,
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
-import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {Vm} from "forge-std-1.17.0/src/Test.sol";
 
-/// A `takeOrders4` order whose calculate eval reverts, or returns too short a
+/// A `takeOrders5` order whose calculate eval reverts, or returns too short a
 /// stack, is skipped with `OrderCalculateReverted` and makes no state change;
 /// later orders still take, and handle-IO reverts still revert the batch.
 contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
@@ -42,7 +43,7 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
     }
 
     function mockTakerTransfers() internal {
@@ -56,10 +57,10 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         );
     }
 
-    function takeConfig(OrderV4 memory first, OrderV4 memory second) internal pure returns (TakeOrdersConfigV5 memory) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(first, 0, 0, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(second, 0, 0, new SignedContextV1[](0));
+    function takeConfig(OrderV4 memory first, OrderV4 memory second) internal pure returns (TakeOrdersConfigV6 memory) {
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(first, 0, 0, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(second, 0, 0, new SignedContextV2[](0));
         return LibTestTakeOrder.defaultTakeConfig(orders);
     }
 
@@ -71,12 +72,12 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
 
         vm.recordLogs();
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeConfig(skipped, taken));
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeConfig(skipped, taken));
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 found;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == keccak256("OrderCalculateReverted(address,address,bytes32)")) {
+            if (logs[i].topics[0] == IRaindexV7.OrderCalculateReverted.selector) {
                 assertEq(logs[i].emitter, address(iRaindex), "emitter");
                 assertEq(logs[i].data, abi.encode(bob, alice, LibOrder.hash(skipped)), "event data");
                 found++;
@@ -121,7 +122,7 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         OrderV4 memory order = addOrder("_ _:1 1,:set(0x07 0x09);:;");
 
         vm.prank(bob);
-        iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order)));
+        iRaindex.takeOrders5(LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order)));
 
         assertEq(
             iStore.get(
@@ -140,6 +141,6 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
 
         vm.prank(bob);
         vm.expectRevert(bytes("handle"));
-        iRaindex.takeOrders4(takeConfig(skipped, reverting));
+        iRaindex.takeOrders5(takeConfig(skipped, reverting));
     }
 }

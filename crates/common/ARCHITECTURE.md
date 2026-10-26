@@ -23,7 +23,7 @@ require its `COMMIT_SHA` env var.
 
 - `add_order` — Compose Rainlang from DOTRAIN, parse to bytecode via on‑chain
   Parser, generate `addOrder3` call parameters, execute or simulate on a fork.
-- `remove_order` — Convert subgraph `SgOrder` to `removeOrder3` call, execute or
+- `remove_order` — Convert subgraph `SgOrder` to `removeOrder4` call, execute or
   return calldata.
 - `deposit` — ERC20 allowance check/approve and `deposit3` call
   builder/executor.
@@ -94,7 +94,7 @@ Target gating is used extensively:
 
 ### 2) Remove Order
 
-- `RemoveOrderArgs` converts `SgOrder` to `removeOrder3Call` via subgraph
+- `RemoveOrderArgs` converts `SgOrder` to `removeOrder4Call` via subgraph
   traits.
 - Native execution mirrors `add_order` (Ledger provider + `WriteTransaction`),
   or return calldata only.
@@ -356,7 +356,7 @@ are provided so frontends can submit via their own providers.
 ## Notable Dependencies (workspace crates)
 
 - `raindex_bindings` — Strongly‑typed ABI for Raindex and ERC20 contracts
-  (`addOrder3`, `removeOrder3`, `deposit3`, `withdraw3`, multicall).
+  (`addOrder3`, `removeOrder4`, `deposit3`, `withdraw3`, multicall).
 - `raindex_subgraph_client` — GraphQL types and clients for raindex data;
   provides `Sg*` models and helpers.
 - `raindex_app_settings` — DOTRAIN/raindex YAML structures, validation, and spec
@@ -384,7 +384,7 @@ are provided so frontends can submit via their own providers.
      submit via external provider (WASM).
 
 - Remove an order:
-  1. Fetch `SgOrder` from subgraph; convert to `removeOrder3Call` and execute or
+  1. Fetch `SgOrder` from subgraph; convert to `removeOrder4Call` and execute or
      export calldata.
 
 - Deposit/Withdraw:

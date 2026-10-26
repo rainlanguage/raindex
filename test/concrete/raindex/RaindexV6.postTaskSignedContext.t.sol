@@ -7,22 +7,23 @@ import {
     OrderConfigV4,
     OrderV4,
     IOV2,
-    TaskV2,
+    TaskV3,
     EvaluableV4,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
-import {MessageHashUtils} from "@openzeppelin-contracts-5.7.0/utils/cryptography/MessageHashUtils.sol";
+import {LibTestSignedContext} from "test/util/lib/LibTestSignedContext.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 
 /// @title RaindexV6PostTaskSignedContextTest
-/// @notice `signer<i>()` and `signed-context<i j>()` read the real signers and
-/// signed data in every Raindex post task, so a caller cannot forge a signer by
-/// placing an address in signed data.
+/// @notice `signer<i>()`, `signer-domain<i>()` and `signed-context<i j>()` read
+/// the real signers, domains and signed data in every Raindex post task, so a
+/// caller cannot forge a signer by placing an address in signed data.
 contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     using Strings for address;
+    using Strings for uint256;
 
     uint256 internal constant SIGNER_A_PK = 0xA11CE;
     uint256 internal constant SIGNER_B_PK = 0xB0B;
@@ -30,11 +31,11 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     address internal constant DATA_B = address(0xDA7A1);
     address internal constant TRUSTED = address(0x7777);
     address internal constant ACTOR = address(0xD0);
+    bytes32 internal constant DOMAIN_A = keccak256("domain a");
+    bytes32 internal constant DOMAIN_B = keccak256("domain b");
 
-    function signed(uint256 pk, bytes32[] memory ctx) internal pure returns (SignedContextV1 memory) {
-        bytes32 h = MessageHashUtils.toEthSignedMessageHash(keccak256(abi.encodePacked(ctx)));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, h);
-        return SignedContextV1(vm.addr(pk), ctx, abi.encodePacked(r, s, v));
+    function signed(uint256 pk, bytes32 domain, bytes32[] memory ctx) internal pure returns (SignedContextV2 memory) {
+        return LibTestSignedContext.sign(vm, pk, domain, ctx);
     }
 
     function single(address a) internal pure returns (bytes32[] memory) {
@@ -43,9 +44,9 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
         return ctx;
     }
 
-    function task(string memory body, SignedContextV1[] memory sc) internal view returns (TaskV2[] memory) {
-        TaskV2[] memory post = new TaskV2[](1);
-        post[0] = TaskV2(
+    function task(string memory body, SignedContextV2[] memory sc) internal view returns (TaskV3[] memory) {
+        TaskV3[] memory post = new TaskV3[](1);
+        post[0] = TaskV3(
             EvaluableV4(
                 iInterpreter,
                 iStore,
@@ -60,10 +61,10 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
 
     /// Two signers, each signing its own data; the task asserts each word reads
     /// its own signer and datum.
-    function realSignersTask() internal view returns (TaskV2[] memory) {
-        SignedContextV1[] memory sc = new SignedContextV1[](2);
-        sc[0] = signed(SIGNER_A_PK, single(DATA_A));
-        sc[1] = signed(SIGNER_B_PK, single(DATA_B));
+    function realSignersTask() internal view returns (TaskV3[] memory) {
+        SignedContextV2[] memory sc = new SignedContextV2[](2);
+        sc[0] = signed(SIGNER_A_PK, DOMAIN_A, single(DATA_A));
+        sc[1] = signed(SIGNER_B_PK, DOMAIN_B, single(DATA_B));
         return task(
             string.concat(
                 ":ensure(equal-to(signer<0>() ",
@@ -72,6 +73,12 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
                 ":ensure(equal-to(signer<1>() ",
                 vm.addr(SIGNER_B_PK).toHexString(),
                 ") \"signer 1\"),",
+                ":ensure(equal-to(signer-domain<0>() ",
+                uint256(DOMAIN_A).toHexString(),
+                ") \"signer domain 0\"),",
+                ":ensure(equal-to(signer-domain<1>() ",
+                uint256(DOMAIN_B).toHexString(),
+                ") \"signer domain 1\"),",
                 ":ensure(equal-to(signed-context<0 0>() ",
                 DATA_A.toHexString(),
                 ") \"signed context 0\"),",
@@ -85,29 +92,29 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
 
     /// One attacker key signs three contexts, the third holding `TRUSTED`. A
     /// task that accepts only `TRUSTED` as signer must reject it.
-    function forgedSignerTask() internal view returns (TaskV2[] memory) {
-        SignedContextV1[] memory sc = new SignedContextV1[](3);
-        sc[0] = signed(SIGNER_A_PK, single(DATA_A));
-        sc[1] = signed(SIGNER_A_PK, single(DATA_A));
-        sc[2] = signed(SIGNER_A_PK, single(TRUSTED));
+    function forgedSignerTask() internal view returns (TaskV3[] memory) {
+        SignedContextV2[] memory sc = new SignedContextV2[](3);
+        sc[0] = signed(SIGNER_A_PK, DOMAIN_A, single(DATA_A));
+        sc[1] = signed(SIGNER_A_PK, DOMAIN_A, single(DATA_A));
+        sc[2] = signed(SIGNER_A_PK, DOMAIN_A, single(TRUSTED));
         return task(string.concat(":ensure(equal-to(signer<0>() ", TRUSTED.toHexString(), ") \"signer trusted\");"), sc);
     }
 
-    function deposit(TaskV2[] memory post) internal {
+    function deposit(TaskV3[] memory post) internal {
         vm.mockCall(
             address(iToken0),
             abi.encodeWithSelector(IERC20.transferFrom.selector, ACTOR, address(iRaindex), 1e18),
             abi.encode(true)
         );
         vm.prank(ACTOR);
-        iRaindex.deposit4(address(iToken0), bytes32(uint256(1)), LibDecimalFloat.packLossless(1, 0), post);
+        iRaindex.deposit5(address(iToken0), bytes32(uint256(1)), LibDecimalFloat.packLossless(1, 0), post);
     }
 
-    function withdraw(TaskV2[] memory post) internal {
-        deposit(new TaskV2[](0));
+    function withdraw(TaskV3[] memory post) internal {
+        deposit(new TaskV3[](0));
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transfer.selector, ACTOR, 1e18), abi.encode(true));
         vm.prank(ACTOR);
-        iRaindex.withdraw4(address(iToken0), bytes32(uint256(1)), LibDecimalFloat.packLossless(1, 0), post);
+        iRaindex.withdraw5(address(iToken0), bytes32(uint256(1)), LibDecimalFloat.packLossless(1, 0), post);
     }
 
     function orderConfig() internal view returns (OrderConfigV4 memory) {
@@ -120,26 +127,26 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
         );
     }
 
-    function addOrder(TaskV2[] memory post) internal {
+    function addOrder(TaskV3[] memory post) internal {
         vm.prank(ACTOR);
-        assertTrue(iRaindex.addOrder4(orderConfig(), post));
+        assertTrue(iRaindex.addOrder5(orderConfig(), post));
     }
 
-    function removeOrder(TaskV2[] memory post) internal {
+    function removeOrder(TaskV3[] memory post) internal {
         OrderConfigV4 memory config = orderConfig();
         vm.prank(ACTOR);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         vm.prank(ACTOR);
         assertTrue(
-            iRaindex.removeOrder3(
+            iRaindex.removeOrder4(
                 OrderV4(ACTOR, config.evaluable, config.validInputs, config.validOutputs, config.nonce), post
             )
         );
     }
 
-    function entask(TaskV2[] memory post) internal {
+    function entask(TaskV3[] memory post) internal {
         vm.prank(ACTOR);
-        iRaindex.entask2(post);
+        iRaindex.entask3(post);
     }
 
     function testDepositTaskSignerWordsReadRealSigners() external {
@@ -147,7 +154,7 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     }
 
     function testDepositTaskRejectsSignerForgedInSignedData() external {
-        TaskV2[] memory post = forgedSignerTask();
+        TaskV3[] memory post = forgedSignerTask();
         vm.expectRevert("signer trusted");
         this.externalDeposit(post);
     }
@@ -157,7 +164,7 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     }
 
     function testWithdrawTaskRejectsSignerForgedInSignedData() external {
-        TaskV2[] memory post = forgedSignerTask();
+        TaskV3[] memory post = forgedSignerTask();
         vm.expectRevert("signer trusted");
         this.externalWithdraw(post);
     }
@@ -167,7 +174,7 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     }
 
     function testAddOrderTaskRejectsSignerForgedInSignedData() external {
-        TaskV2[] memory post = forgedSignerTask();
+        TaskV3[] memory post = forgedSignerTask();
         vm.expectRevert("signer trusted");
         this.externalAddOrder(post);
     }
@@ -177,7 +184,7 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     }
 
     function testRemoveOrderTaskRejectsSignerForgedInSignedData() external {
-        TaskV2[] memory post = forgedSignerTask();
+        TaskV3[] memory post = forgedSignerTask();
         vm.expectRevert("signer trusted");
         this.externalRemoveOrder(post);
     }
@@ -187,28 +194,28 @@ contract RaindexV6PostTaskSignedContextTest is RaindexV6ExternalRealTest {
     }
 
     function testEntaskRejectsSignerForgedInSignedData() external {
-        TaskV2[] memory post = forgedSignerTask();
+        TaskV3[] memory post = forgedSignerTask();
         vm.expectRevert("signer trusted");
         this.externalEntask(post);
     }
 
-    function externalDeposit(TaskV2[] memory post) external {
+    function externalDeposit(TaskV3[] memory post) external {
         deposit(post);
     }
 
-    function externalWithdraw(TaskV2[] memory post) external {
+    function externalWithdraw(TaskV3[] memory post) external {
         withdraw(post);
     }
 
-    function externalAddOrder(TaskV2[] memory post) external {
+    function externalAddOrder(TaskV3[] memory post) external {
         addOrder(post);
     }
 
-    function externalRemoveOrder(TaskV2[] memory post) external {
+    function externalRemoveOrder(TaskV3[] memory post) external {
         removeOrder(post);
     }
 
-    function externalEntask(TaskV2[] memory post) external {
+    function externalEntask(TaskV3[] memory post) external {
         entask(post);
     }
 }

@@ -7,20 +7,20 @@ import {SafeCast} from "@openzeppelin-contracts-5.7.0/utils/math/SafeCast.sol";
 import {RaindexV6FreshTakeOrderTest} from "test/util/abstract/RaindexV6FreshTakeOrderTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
-import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {Vm} from "forge-std-1.17.0/src/Test.sol";
 
-/// A `takeOrders4` order skipped for any reason, at any position in the batch,
+/// A `takeOrders5` order skipped for any reason, at any position in the batch,
 /// never runs its handle-io and never moves its vaults, while every taken order
 /// in the same batch still runs its handle-io.
 contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
@@ -80,20 +80,19 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
 
     function skipEvent(uint8 kind) internal pure returns (bytes32) {
         if (kind == CALCULATE_REVERT || kind == SHORT_STACK) {
-            return keccak256("OrderCalculateReverted(address,address,bytes32)");
+            return IRaindexV7.OrderCalculateReverted.selector;
         } else if (kind == EXCEEDS_MAX_RATIO) {
-            return IRaindexV6.OrderExceedsMaxRatio.selector;
+            return IRaindexV7.OrderExceedsMaxRatio.selector;
         } else if (kind == ZERO_AMOUNT) {
-            return IRaindexV6.OrderZeroAmount.selector;
+            return IRaindexV7.OrderZeroAmount.selector;
         } else {
-            return IRaindexV6.OrderNotFound.selector;
+            return IRaindexV7.OrderNotFound.selector;
         }
     }
 
     function isSkipEvent(bytes32 topic) internal pure returns (bool) {
-        return topic == keccak256("OrderCalculateReverted(address,address,bytes32)")
-            || topic == IRaindexV6.OrderExceedsMaxRatio.selector || topic == IRaindexV6.OrderZeroAmount.selector
-            || topic == IRaindexV6.OrderNotFound.selector;
+        return topic == IRaindexV7.OrderCalculateReverted.selector || topic == IRaindexV7.OrderExceedsMaxRatio.selector
+            || topic == IRaindexV7.OrderZeroAmount.selector || topic == IRaindexV7.OrderNotFound.selector;
     }
 
     function mockTokens() internal {
@@ -103,11 +102,11 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
     }
 
-    function addOrders(uint8[] memory kinds, bool ensureHandle) internal returns (TakeOrderConfigV4[] memory) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](kinds.length);
+    function addOrders(uint8[] memory kinds, bool ensureHandle) internal returns (TakeOrderConfigV5[] memory) {
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](kinds.length);
         for (uint256 i = 0; i < kinds.length; i++) {
             vm.prank(alice);
-            iRaindex.deposit4(address(iToken1), vaultId(i), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+            iRaindex.deposit5(address(iToken1), vaultId(i), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
             OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
                 vm,
                 alice,
@@ -119,9 +118,9 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
             );
             if (kinds[i] == NOT_FOUND) {
                 vm.prank(alice);
-                iRaindex.removeOrder3(order, new TaskV2[](0));
+                iRaindex.removeOrder4(order, new TaskV3[](0));
             }
-            orders[i] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+            orders[i] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
         }
         return orders;
     }
@@ -141,13 +140,13 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
 
     function checkBatch(uint8[] memory kinds, bool ensureHandle) internal {
         mockTokens();
-        TakeOrderConfigV4[] memory orders = addOrders(kinds, ensureHandle);
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrderConfigV5[] memory orders = addOrders(kinds, ensureHandle);
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         config.maximumIORatio = LibDecimalFloat.packLossless(15, -1);
 
         vm.recordLogs();
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         uint256 takenCount;

@@ -10,10 +10,10 @@ import {
     IOV2,
     OrderConfigV4,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
@@ -61,7 +61,7 @@ contract RaindexV6ClearHandleIORevertTest is RaindexV6ExternalRealTest {
             mockVault0Output(outputToken, owner, uint256(int256(type(int224).max)));
         } else {
             vm.prank(owner);
-            iRaindex.deposit4(outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV2[](0));
+            iRaindex.deposit5(outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, 0), new TaskV3[](0));
             Float balance = iRaindex.vaultBalance2(owner, outputToken, vaultId);
             assertTrue(balance.eq(LibDecimalFloat.packLossless(type(int224).max, 0)));
         }
@@ -75,7 +75,7 @@ contract RaindexV6ClearHandleIORevertTest is RaindexV6ExternalRealTest {
 
         vm.prank(owner);
         vm.recordLogs();
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
 
@@ -114,12 +114,12 @@ contract RaindexV6ClearHandleIORevertTest is RaindexV6ExternalRealTest {
         if (aliceErr.length > 0) {
             vm.expectRevert(aliceErr);
         }
-        iRaindex.clear3(aliceOrder, bobOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        iRaindex.clear4(aliceOrder, bobOrder, clearConfig, new SignedContextV2[](0), new SignedContextV2[](0));
 
         if (bobErr.length > 0) {
             vm.expectRevert(bobErr);
         }
-        iRaindex.clear3(bobOrder, aliceOrder, clearConfig, new SignedContextV1[](0), new SignedContextV1[](0));
+        iRaindex.clear4(bobOrder, aliceOrder, clearConfig, new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     function testClearOrderHandleIO0() external {

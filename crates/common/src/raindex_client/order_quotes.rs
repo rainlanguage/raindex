@@ -5,7 +5,7 @@ use crate::raindex_client::vaults::RaindexVault;
 use crate::utils::timing::Timing;
 use alloy::primitives::{Address, B256};
 use rain_math_float::Float;
-use raindex_bindings::IRaindexV6::{OrderV4, SignedContextV1, IOV2};
+use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV2, IOV2};
 use raindex_quote::{
     get_order_quotes, get_order_quotes_for_pairs, BatchOrderQuotesResponse, NoopInjector,
     OrderQuoteValue, Pair, SignedContextInjector,
@@ -30,7 +30,7 @@ pub struct RaindexOrderQuote {
     /// the candidate builder can reuse the same context the quote saw.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[tsify(optional)]
-    pub signed_context: Vec<SignedContextV1>,
+    pub signed_context: Vec<SignedContextV2>,
 }
 impl_wasm_traits!(RaindexOrderQuote);
 impl RaindexOrderQuote {
@@ -400,7 +400,7 @@ pub(crate) async fn get_order_quotes_batch_for_pairs(
 /// `counterparty` address and a caller-supplied [`SignedContextInjector`]
 /// through to the quote RPC. Oracle-fetched contexts come first, followed by
 /// entries produced by the injector; the composed list is attached to each
-/// `QuoteV2.signedContext` before the multicall and is therefore visible to
+/// `QuoteV3.signedContext` before the multicall and is therefore visible to
 /// any `calculate-io` execution run during quoting (e.g. gated orders that
 /// assert on `signer<0>()`).
 pub async fn get_order_quotes_batch_with_injector(
@@ -626,7 +626,7 @@ mod tests {
         );
 
         // OZ Multicall returns `bytes[]`; helper to wrap per-target
-        // `quote2Return`s into the outer multicall return payload.
+        // `quote3Return`s into the outer multicall return payload.
         fn encode_multicall_bytes(inner: Vec<quoteReturn>) -> String {
             let elements: Vec<Bytes> = inner.into_iter().map(|r| r.abi_encode().into()).collect();
             encode_prefixed(<Vec<Bytes> as SolValue>::abi_encode(&elements))

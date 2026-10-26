@@ -8,16 +8,16 @@ import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericP
 import {BadRaindex} from "../../src/abstract/RaindexV6ArbCommon.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
     EvaluableV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     IInterpreterV4,
     IInterpreterStoreV3,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -25,11 +25,11 @@ import {
 } from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RaindexV6ArbOrderTakerBadRaindexTest is GenericPoolRaindexV6ArbOrderTakerTest {
-    /// arb5 MUST revert BadRaindex when `raindex` is not the trusted deterministic
+    /// arb6 MUST revert BadRaindex when `raindex` is not the trusted deterministic
     /// deployment, before any token approval is granted. A caller-supplied
     /// untrusted `raindex` would otherwise receive an unlimited approval and could
     /// drain the arb; the guard rejects it up front (the take-orders path is never
-    /// reached). The non-revert control is exercised by every other arb5 test,
+    /// reached). The non-revert control is exercised by every other arb6 test,
     /// which calls the etched raindex at RAINDEX_DEPLOYED_ADDRESS.
     function testArb5RevertsUntrustedRaindex(address badRaindex) external {
         vm.assume(badRaindex != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
@@ -37,13 +37,13 @@ contract RaindexV6ArbOrderTakerBadRaindexTest is GenericPoolRaindexV6ArbOrderTak
         // A single valid order so the NoOrders guard passes and execution reaches
         // the raindex-trust check.
         OrderV4 memory order;
-        TakeOrderConfigV4[] memory orders = buildTakeOrderConfig(order, 0, 0);
+        TakeOrderConfigV5[] memory orders = buildTakeOrderConfig(order, 0, 0);
 
         vm.expectRevert(abi.encodeWithSelector(BadRaindex.selector, badRaindex));
         GenericPoolRaindexV6ArbOrderTaker(iArb)
-            .arb5(
-                IRaindexV6(badRaindex),
-                TakeOrdersConfigV5({
+            .arb6(
+                IRaindexV7(badRaindex),
+                TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -51,11 +51,11 @@ contract RaindexV6ArbOrderTakerBadRaindexTest is GenericPoolRaindexV6ArbOrderTak
                 orders: orders,
                 data: abi.encode(iRefundoor, iRefundoor, "")
             }),
-                TaskV2({
+                TaskV3({
                 evaluable: EvaluableV4(
                     IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), ""
                 ),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
             );
     }

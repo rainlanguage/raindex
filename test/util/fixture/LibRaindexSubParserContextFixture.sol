@@ -40,6 +40,7 @@ import {
     WORD_OUTPUT_VAULT_BALANCE_BEFORE,
     WORD_OUTPUT_VAULT_BALANCE_DECREASE,
     CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN,
+    CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_COLUMN
 } from "../../../src/lib/LibRaindexSubParser.sol";
 import {
@@ -47,7 +48,7 @@ import {
     CONTEXT_BASE_ROWS,
     CONTEXT_BASE_ROW_SENDER,
     CONTEXT_BASE_ROW_CALLING_CONTRACT
-} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
+} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 
 library LibRaindexSubParserContextFixture {
     function hashedNamesContext() internal pure returns (bytes32[][] memory) {
@@ -85,6 +86,10 @@ library LibRaindexSubParserContextFixture {
         contextSigners[0] = keccak256("signer-0");
         contextSigners[1] = keccak256("signer-1");
 
+        bytes32[] memory contextSignerDomains = new bytes32[](2);
+        contextSignerDomains[0] = keccak256("signer-domain-0");
+        contextSignerDomains[1] = keccak256("signer-domain-1");
+
         bytes32[] memory contextSignedContext0 = new bytes32[](2);
         contextSignedContext0[0] = keccak256("signed-context-0-0");
         contextSignedContext0[1] = keccak256("signed-context-0-1");
@@ -99,6 +104,7 @@ library LibRaindexSubParserContextFixture {
         context[CONTEXT_VAULT_INPUTS_COLUMN] = contextVaultInputs;
         context[CONTEXT_VAULT_OUTPUTS_COLUMN] = contextVaultOutputs;
         context[CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN] = contextSigners;
+        context[CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN] = contextSignerDomains;
         context[CONTEXT_SIGNED_CONTEXT_START_COLUMN] = contextSignedContext0;
         context[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = contextSignedContext1;
 

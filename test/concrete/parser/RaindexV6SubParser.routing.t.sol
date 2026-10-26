@@ -3,8 +3,8 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {OperandV2} from "rainlang-interface-0.2.13/src/interface/ISubParserV4.sol";
-import {OPCODE_CONTEXT} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {OperandV2} from "rainlang-0.2.26/src/lib/parse/LibParse.sol";
+import {OPCODE_CONTEXT} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {LibRaindexSubParser} from "../../../src/lib/LibRaindexSubParser.sol";
 
 /// @title RaindexV6SubParserRoutingTest
@@ -195,17 +195,25 @@ contract RaindexV6SubParserRoutingTest is Test {
         checkRouteOperand(LibRaindexSubParser.subParserSigners, OperandV2.wrap(bytes32(uint256(7))), 7, 7);
     }
 
+    /// signer-domain routes to the signer domains column (column 8) and uses
+    /// the raw operand as the row.
+    function testRouteSignerDomainsRowFromOperand() external pure {
+        checkRouteOperand(LibRaindexSubParser.subParserSignerDomains, OperandV2.wrap(bytes32(uint256(0))), 8, 0);
+        checkRouteOperand(LibRaindexSubParser.subParserSignerDomains, OperandV2.wrap(bytes32(uint256(1))), 8, 1);
+        checkRouteOperand(LibRaindexSubParser.subParserSignerDomains, OperandV2.wrap(bytes32(uint256(7))), 8, 7);
+    }
+
     /// signed-context low operand byte selects a column offset added to the
-    /// signed context start column (column 8); the second byte selects the row.
+    /// signed context start column (column 9); the second byte selects the row.
     function testRouteSignedContextColumnMaskAndRowShift() external pure {
-        // operand 0x0000 -> column 8 + 0, row 0.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0000))), 8, 0);
-        // operand 0x0001 -> low byte 1 -> column 8 + 1 = 9, row 0.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0001))), 9, 0);
-        // operand 0x0100 -> low byte 0 -> column 8, second byte 1 -> row 1.
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0100))), 8, 1);
-        // operand 0x0201 -> column 8 + 1 = 9, row 2. Proves column and row are
+        // operand 0x0000 -> column 9 + 0, row 0.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0000))), 9, 0);
+        // operand 0x0001 -> low byte 1 -> column 9 + 1 = 10, row 0.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0001))), 10, 0);
+        // operand 0x0100 -> low byte 0 -> column 9, second byte 1 -> row 1.
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0100))), 9, 1);
+        // operand 0x0201 -> column 9 + 1 = 10, row 2. Proves column and row are
         // taken from distinct operand bytes (mask vs shift not swapped).
-        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0201))), 9, 2);
+        checkRouteOperand(LibRaindexSubParser.subParserSignedContext, OperandV2.wrap(bytes32(uint256(0x0201))), 10, 2);
     }
 }

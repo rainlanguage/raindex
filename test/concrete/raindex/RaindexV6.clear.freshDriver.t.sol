@@ -12,11 +12,11 @@ import {
     ClearConfigV2,
     ClearStateChangeV2,
     EvaluableV4,
-    SignedContextV1,
+    SignedContextV2,
     IInterpreterV4,
     IInterpreterStoreV3,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -24,10 +24,10 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
 import {CalcInterpreter} from "test/util/concrete/CalcInterpreter.sol";
 import {IRaindexV6ClearDriverHarness} from "test/util/interface/IRaindexV6ClearDriverHarness.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
-import {FullyQualifiedNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {LibNamespace} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
+import {FullyQualifiedNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
 import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
@@ -39,12 +39,12 @@ import {
 } from "rain-math-float-deploy-0.1.7/src/generated/0_1_5/DecimalFloat.sol";
 
 /// @title RaindexV6ClearFreshDriverTest
-/// @notice Drives the FULL `clear3` against fresh-compiled RaindexV6 bytecode so
+/// @notice Drives the FULL `clear4` against fresh-compiled RaindexV6 bytecode so
 /// source mutations to the bounty computation, the NegativeBounty guard, the
 /// record-vault ordering, the bounty crediting, ClearZeroAmount and AfterClearV2
 /// are actually observable (the etched mock/real suites are blind to src
 /// mutations). Uses internal (non-zero) vaults so the IO legs are pure internal
-/// balance changes with no token plumbing, isolating the clear3 accounting.
+/// balance changes with no token plumbing, isolating the clear4 accounting.
 contract RaindexV6ClearFreshDriverTest is Test {
     using LibDecimalFloat for Float;
     using LibOrder for OrderV4;
@@ -64,7 +64,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
     bytes32 internal constant ALICE_BOUNTY_VAULT = bytes32(uint256(0xaab0));
     bytes32 internal constant BOB_BOUNTY_VAULT = bytes32(uint256(0xbbb0));
 
-    // Events mirrored from IRaindexV6 for expectEmit.
+    // Events mirrored from IRaindexV7 for expectEmit.
     event AfterClearV2(address sender, ClearStateChangeV2 clearStateChange);
     event ClearV3(address sender, OrderV4 alice, OrderV4 bob, ClearConfigV2 clearConfig);
 
@@ -138,7 +138,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
     function doClear(OrderV4 memory aliceOrder, OrderV4 memory bobOrder) internal {
         vm.prank(bountyBot);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     // ---------------------------------------------------------------------
@@ -232,7 +232,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
     /// Both ratios > 1 so each side's required input exceeds the counterparty's
     /// output: aliceInput caps to bob.outputMax, but aliceOutput = input/ratio <
-    /// input, making aliceBounty = aliceOutput - bobInput negative. clear3 must
+    /// input, making aliceBounty = aliceOutput - bobInput negative. clear4 must
     /// revert NegativeBounty (the spread is unprofitable / would drain the dex).
     function testFreshClearNegativeBountyReverts() external {
         (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) =
@@ -240,7 +240,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(NegativeBounty.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// ASYMMETRIC: ONLY alice's bounty is negative, bob's is exactly zero.
@@ -257,7 +257,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(NegativeBounty.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// ASYMMETRIC mirror: ONLY bob's bounty is negative, alice's is exactly zero.
@@ -272,7 +272,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(NegativeBounty.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// The NegativeBounty guard must run BEFORE any bounty vault is credited and
@@ -285,7 +285,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
             wireOrders(f(11, -1), f(1, 0), f(11, -1), f(1, 0), f(10, 0));
 
         vm.prank(bountyBot);
-        try raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0)) {
+        try raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0)) {
             revert("clear should have reverted");
         } catch {}
 
@@ -307,7 +307,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(ClearZeroAmount.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     function testFreshClearBothZeroOutputReverts() external {
@@ -363,7 +363,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(ClearZeroAmount.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
 
         assertEq(store.get(aliceNamespace, bytes32(uint256(1))), bytes32(0), "alice store unchanged");
     }
@@ -413,7 +413,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectPartialRevert(ExponentUnderflow.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     function testFreshClearBobCappedOutputUnderflowReverts() external {
@@ -422,7 +422,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectPartialRevert(ExponentUnderflow.selector);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     // ---------------------------------------------------------------------
@@ -527,7 +527,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
         // SameOwner is selector-checked from src; import not needed because we
         // use the raw 4-byte selector of the error in the src file.
         vm.expectRevert(bytes4(keccak256("SameOwner()")));
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// TokenMismatch (leg 1 ONLY): alice's OUTPUT token must equal bob's INPUT
@@ -544,7 +544,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(bytes4(keccak256("TokenMismatch()")));
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// TokenMismatch (leg 2): bob's OUTPUT token must equal alice's INPUT token.
@@ -559,7 +559,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(bytes4(keccak256("TokenMismatch()")));
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
     /// TokenSelfTrade: alice's input token == alice's output token reverts
@@ -574,10 +574,10 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.prank(bountyBot);
         vm.expectRevert(bytes4(keccak256("TokenSelfTrade()")));
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
     }
 
-    /// Dead alice order (never made live): clear3 emits OrderNotFound for alice's
+    /// Dead alice order (never made live): clear4 emits OrderNotFound for alice's
     /// hash and RETURNS without reverting (best-effort bulk-clear semantics).
     /// Exactly one log, no ClearV3/AfterClearV2. Pins the first dead-order check
     /// (B17) AND that ClearV3 has not been emitted yet (B18 ordering).
@@ -588,7 +588,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.recordLogs();
         vm.prank(bountyBot);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertEq(logs.length, 1, "only OrderNotFound emitted");
@@ -610,7 +610,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
 
         vm.recordLogs();
         vm.prank(bountyBot);
-        raindex.clear3(aliceOrder, bobOrder, clearConfig(), new SignedContextV1[](0), new SignedContextV1[](0));
+        raindex.clear4(aliceOrder, bobOrder, clearConfig(), new SignedContextV2[](0), new SignedContextV2[](0));
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertEq(logs.length, 1, "only OrderNotFound emitted");

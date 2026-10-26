@@ -8,15 +8,15 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderDirtyFreeMemoryTest
-/// @notice `takeOrders4` settles exactly the taken orders when the memory past
+/// @notice `takeOrders5` settles exactly the taken orders when the memory past
 /// the free memory pointer is nonzero on entry.
 contract RaindexV6TakeOrderDirtyFreeMemoryTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
@@ -46,7 +46,7 @@ contract RaindexV6TakeOrderDirtyFreeMemoryTest is RaindexV6ExternalRealTest {
         vm.startPrank(who);
         token.approve(address(iRaindex), amount * 1e18);
         // forge-lint: disable-next-line(unsafe-typecast)
-        iRaindex.deposit4(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0));
+        iRaindex.deposit5(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV3[](0));
         vm.stopPrank();
     }
 
@@ -63,14 +63,14 @@ contract RaindexV6TakeOrderDirtyFreeMemoryTest is RaindexV6ExternalRealTest {
         vm.prank(bob);
         token0.approve(address(iRaindex), 3e18);
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(taken, 0, 0, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(zeroAmount, 0, 0, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(taken, 0, 0, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(zeroAmount, 0, 0, new SignedContextV2[](0));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         config.maximumIO = LibDecimalFloat.packLossless(10, 0);
 
         vm.prank(bob);
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.eq(LibDecimalFloat.packLossless(3, 0)), "taker input");
         assertTrue(totalTakerOutput.eq(LibDecimalFloat.packLossless(3, 0)), "taker output");

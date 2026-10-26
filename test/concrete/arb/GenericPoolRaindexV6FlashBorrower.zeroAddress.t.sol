@@ -18,7 +18,7 @@ contract GenericPoolRaindexV6FlashBorrowerZeroAddressTest is Test {
 
         bytes memory badExchangeData = abi.encode(address(0), address(exchange), bytes(""));
         vm.expectRevert(ZeroExchangeSpender.selector);
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
     }
 
     function testArbZeroPoolReverts() external {
@@ -27,6 +27,6 @@ contract GenericPoolRaindexV6FlashBorrowerZeroAddressTest is Test {
 
         bytes memory badExchangeData = abi.encode(address(exchange), address(0), bytes(""));
         vm.expectRevert(ZeroExchangePool.selector);
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
     }
 }

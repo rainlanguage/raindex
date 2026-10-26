@@ -2,7 +2,7 @@
   "abi": [
     {
       "type": "function",
-      "name": "addOrder4",
+      "name": "addOrder5",
       "inputs": [
         {
           "name": "config",
@@ -85,7 +85,7 @@
         {
           "name": "tasks",
           "type": "tuple[]",
-          "internalType": "struct TaskV2[]",
+          "internalType": "struct TaskV3[]",
           "components": [
             {
               "name": "evaluable",
@@ -112,12 +112,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -145,7 +150,7 @@
     },
     {
       "type": "function",
-      "name": "clear3",
+      "name": "clear4",
       "inputs": [
         {
           "name": "alice",
@@ -333,12 +338,17 @@
         {
           "name": "aliceSignedContext",
           "type": "tuple[]",
-          "internalType": "struct SignedContextV1[]",
+          "internalType": "struct SignedContextV2[]",
           "components": [
             {
               "name": "signer",
               "type": "address",
               "internalType": "address"
+            },
+            {
+              "name": "domainSeparator",
+              "type": "bytes32",
+              "internalType": "bytes32"
             },
             {
               "name": "context",
@@ -355,12 +365,17 @@
         {
           "name": "bobSignedContext",
           "type": "tuple[]",
-          "internalType": "struct SignedContextV1[]",
+          "internalType": "struct SignedContextV2[]",
           "components": [
             {
               "name": "signer",
               "type": "address",
               "internalType": "address"
+            },
+            {
+              "name": "domainSeparator",
+              "type": "bytes32",
+              "internalType": "bytes32"
             },
             {
               "name": "context",
@@ -380,7 +395,7 @@
     },
     {
       "type": "function",
-      "name": "deposit4",
+      "name": "deposit5",
       "inputs": [
         {
           "name": "token",
@@ -400,7 +415,7 @@
         {
           "name": "tasks",
           "type": "tuple[]",
-          "internalType": "struct TaskV2[]",
+          "internalType": "struct TaskV3[]",
           "components": [
             {
               "name": "evaluable",
@@ -427,12 +442,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -454,12 +474,12 @@
     },
     {
       "type": "function",
-      "name": "entask2",
+      "name": "entask3",
       "inputs": [
         {
           "name": "tasks",
           "type": "tuple[]",
-          "internalType": "struct TaskV2[]",
+          "internalType": "struct TaskV3[]",
           "components": [
             {
               "name": "evaluable",
@@ -486,12 +506,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -609,12 +634,12 @@
     },
     {
       "type": "function",
-      "name": "quote2",
+      "name": "quote3",
       "inputs": [
         {
           "name": "quoteConfig",
           "type": "tuple",
-          "internalType": "struct QuoteV2",
+          "internalType": "struct QuoteV3",
           "components": [
             {
               "name": "order",
@@ -702,12 +727,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -745,7 +775,7 @@
     },
     {
       "type": "function",
-      "name": "removeOrder3",
+      "name": "removeOrder4",
       "inputs": [
         {
           "name": "order",
@@ -823,7 +853,7 @@
         {
           "name": "tasks",
           "type": "tuple[]",
-          "internalType": "struct TaskV2[]",
+          "internalType": "struct TaskV3[]",
           "components": [
             {
               "name": "evaluable",
@@ -850,12 +880,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -883,12 +918,12 @@
     },
     {
       "type": "function",
-      "name": "takeOrders4",
+      "name": "takeOrders5",
       "inputs": [
         {
           "name": "config",
           "type": "tuple",
-          "internalType": "struct TakeOrdersConfigV5",
+          "internalType": "struct TakeOrdersConfigV6",
           "components": [
             {
               "name": "minimumIO",
@@ -913,7 +948,7 @@
             {
               "name": "orders",
               "type": "tuple[]",
-              "internalType": "struct TakeOrderConfigV4[]",
+              "internalType": "struct TakeOrderConfigV5[]",
               "components": [
                 {
                   "name": "order",
@@ -1001,12 +1036,17 @@
                 {
                   "name": "signedContext",
                   "type": "tuple[]",
-                  "internalType": "struct SignedContextV1[]",
+                  "internalType": "struct SignedContextV2[]",
                   "components": [
                     {
                       "name": "signer",
                       "type": "address",
                       "internalType": "address"
+                    },
+                    {
+                      "name": "domainSeparator",
+                      "type": "bytes32",
+                      "internalType": "bytes32"
                     },
                     {
                       "name": "context",
@@ -1075,7 +1115,7 @@
     },
     {
       "type": "function",
-      "name": "withdraw4",
+      "name": "withdraw5",
       "inputs": [
         {
           "name": "token",
@@ -1095,7 +1135,7 @@
         {
           "name": "tasks",
           "type": "tuple[]",
-          "internalType": "struct TaskV2[]",
+          "internalType": "struct TaskV3[]",
           "components": [
             {
               "name": "evaluable",
@@ -1122,12 +1162,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",
@@ -1532,6 +1577,31 @@
     },
     {
       "type": "event",
+      "name": "OrderCalculateReverted",
+      "inputs": [
+        {
+          "name": "sender",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "owner",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "orderHash",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "OrderExceedsMaxRatio",
       "inputs": [
         {
@@ -1700,7 +1770,7 @@
     },
     {
       "type": "event",
-      "name": "TakeOrderV3",
+      "name": "TakeOrderV4",
       "inputs": [
         {
           "name": "sender",
@@ -1712,7 +1782,7 @@
           "name": "config",
           "type": "tuple",
           "indexed": false,
-          "internalType": "struct TakeOrderConfigV4",
+          "internalType": "struct TakeOrderConfigV5",
           "components": [
             {
               "name": "order",
@@ -1800,12 +1870,17 @@
             {
               "name": "signedContext",
               "type": "tuple[]",
-              "internalType": "struct SignedContextV1[]",
+              "internalType": "struct SignedContextV2[]",
               "components": [
                 {
                   "name": "signer",
                   "type": "address",
                   "internalType": "address"
+                },
+                {
+                  "name": "domainSeparator",
+                  "type": "bytes32",
+                  "internalType": "bytes32"
                 },
                 {
                   "name": "context",

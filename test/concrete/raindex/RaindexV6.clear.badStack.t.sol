@@ -9,9 +9,9 @@ import {
     OrderV4,
     EvaluableV4,
     ClearConfigV2,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {UnsupportedCalculateOutputs} from "../../../src/error/ErrRaindexV6.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 
@@ -43,14 +43,14 @@ contract RaindexV6ClearOrderBadStackTest is RaindexV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iRaindex.addOrder4(configAlice, new TaskV2[](0));
+        iRaindex.addOrder5(configAlice, new TaskV3[](0));
 
         vm.prank(bob);
-        iRaindex.addOrder4(configBob, new TaskV2[](0));
+        iRaindex.addOrder5(configBob, new TaskV3[](0));
 
         vm.expectRevert(abi.encodeWithSelector(UnsupportedCalculateOutputs.selector, badStackHeight));
-        iRaindex.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        iRaindex.clear4(
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 

@@ -4,14 +4,14 @@ pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest, console2} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
-    IRaindexV6,
-    QuoteV2,
+    IRaindexV7,
+    QuoteV3,
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
+    TaskV3,
     OrderV4,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
@@ -29,8 +29,8 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
 
     /// Dead orders always eval to false.
     /// forge-config: default.fuzz.runs = 100
-    function testQuoteDeadOrder(QuoteV2 memory quoteConfig) external view {
-        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
+    function testQuoteDeadOrder(QuoteV3 memory quoteConfig) external view {
+        (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote3(quoteConfig);
         assert(!success);
         assertTrue(maxOutput.isZero(), "max output");
         assertTrue(ioRatio.isZero(), "io ratio");
@@ -89,8 +89,8 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
                 abi.encode(true)
             );
             vm.prank(owner);
-            iRaindex.deposit4(
-                config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV2[](0)
+            iRaindex.deposit5(
+                config.validOutputs[0].token, config.validOutputs[0].vaultId, depositAmount, new TaskV3[](0)
             );
         }
         if (inputVaultId == bytes32(0)) {
@@ -101,7 +101,7 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
         for (uint256 i = 0; i < rainlang.length; i++) {
             config.evaluable.bytecode = iParserV2.parse2(rainlang[i]);
             vm.prank(owner);
-            iRaindex.addOrder4(config, new TaskV2[](0));
+            iRaindex.addOrder5(config, new TaskV3[](0));
 
             OrderV4 memory order = OrderV4({
                 owner: owner,
@@ -111,9 +111,9 @@ contract RaindexV6QuoteTest is RaindexV6ExternalRealTest {
                 nonce: config.nonce
             });
 
-            QuoteV2 memory quoteConfig =
-                QuoteV2({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)});
-            (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote2(quoteConfig);
+            QuoteV3 memory quoteConfig =
+                QuoteV3({order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)});
+            (bool success, Float maxOutput, Float ioRatio) = iRaindex.quote3(quoteConfig);
             assert(success);
 
             assertTrue(maxOutput.eq(expectedMaxOutput[i]), "max output");

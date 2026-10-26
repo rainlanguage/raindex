@@ -8,18 +8,18 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {FlashLoanFailed} from "../../src/abstract/RaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -28,7 +28,7 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {FalseFlashLoanMockRaindex} from "test/util/concrete/FalseFlashLoanMockRaindex.sol";
 
 contract RaindexV6FlashBorrowerFlashLoanFailedTest is Test {
-    /// arb4 reverts with FlashLoanFailed when the raindex's flashLoan
+    /// arb5 reverts with FlashLoanFailed when the raindex's flashLoan
     /// returns false.
     function testFlashLoanFailed() external {
         LibRainDeploy.etchZoltuFactory(vm);
@@ -55,13 +55,13 @@ contract RaindexV6FlashBorrowerFlashLoanFailedTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
         vm.expectRevert(FlashLoanFailed.selector);
-        arb.arb4(
-            IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -70,9 +70,9 @@ contract RaindexV6FlashBorrowerFlashLoanFailedTest is Test {
                 data: ""
             }),
             "",
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
     }

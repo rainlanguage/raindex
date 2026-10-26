@@ -6,15 +6,15 @@ import {GenericPoolRaindexV6ArbOrderTakerTest} from "test/util/abstract/GenericP
 
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     EvaluableV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     IInterpreterV4,
     IInterpreterStoreV3,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -22,15 +22,15 @@ import {
 } from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RaindexV6ArbOrderTakerNoOrdersTest is GenericPoolRaindexV6ArbOrderTakerTest {
-    /// arb5 MUST revert with NoOrders when given an empty orders array.
+    /// arb6 MUST revert with NoOrders when given an empty orders array.
     function testArb5NoOrders() external {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](0);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](0);
 
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.NoOrders.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.NoOrders.selector));
         GenericPoolRaindexV6ArbOrderTaker(iArb)
-            .arb5(
+            .arb6(
                 iRaindex,
-                TakeOrdersConfigV5({
+                TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -38,11 +38,11 @@ contract RaindexV6ArbOrderTakerNoOrdersTest is GenericPoolRaindexV6ArbOrderTaker
                 orders: orders,
                 data: abi.encode(iRefundoor, iRefundoor, "")
             }),
-                TaskV2({
+                TaskV3({
                 evaluable: EvaluableV4(
                     IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), ""
                 ),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
             );
     }

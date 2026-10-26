@@ -7,18 +7,18 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -73,25 +73,25 @@ contract RaindexV6FlashBorrowerOrders0SelectionTest is Test {
         });
     }
 
-    /// arb4 reads `ordersOutputToken`/`ordersInputToken` from `orders[0]`
+    /// arb5 reads `ordersOutputToken`/`ordersInputToken` from `orders[0]`
     /// specifically (the FIRST order), NOT a later order. With a two-order
     /// config whose SECOND order references tokens neither the raindex nor the
     /// exchange holds, the full arb cycle still completes using ONLY the FIRST
     /// order's tokens (outputToken loaned/repaid, inputToken swapped in and
     /// handed to raindex), and the second order's decoy tokens are never
-    /// touched. If arb4 read `orders[1]` instead it would try to flash-loan the
+    /// touched. If arb5 read `orders[1]` instead it would try to flash-loan the
     /// decoy output token (raindex holds none) and revert.
     function testArb4SelectsFirstOrderTokens() external {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] =
-            TakeOrderConfigV4(buildOrder(address(inputToken), address(outputToken)), 0, 0, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(
-            buildOrder(address(decoyInputToken), address(decoyOutputToken)), 0, 0, new SignedContextV1[](0)
+            TakeOrderConfigV5(buildOrder(address(inputToken), address(outputToken)), 0, 0, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(
+            buildOrder(address(decoyInputToken), address(decoyOutputToken)), 0, 0, new SignedContextV2[](0)
         );
 
-        arb.arb4(
-            IRaindexV6(raindex),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(raindex),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -104,9 +104,9 @@ contract RaindexV6FlashBorrowerOrders0SelectionTest is Test {
                 address(exchange),
                 abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), 100e18))
             ),
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
 

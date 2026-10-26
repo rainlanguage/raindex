@@ -5,18 +5,18 @@ pragma solidity ^0.8.19;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
     IOV2,
     EvaluableV4,
     OrderConfigV4,
-    TaskV2,
-    IRaindexV6
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
-import {SignedContextV1} from "rainlang-interface-0.2.13/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
+    TaskV3,
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -26,7 +26,7 @@ import {
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {
-    /// Extract OrderV4 from the first log entry emitted by addOrder4.
+    /// Extract OrderV4 from the first log entry emitted by addOrder5.
     function extractOrderFromLogs(Vm.Log[] memory entries) internal pure returns (OrderV4 memory) {
         (,, OrderV4 memory order) = abi.decode(entries[0].data, (address, bytes32, OrderV4));
         return order;
@@ -45,7 +45,7 @@ library LibTestTakeOrder {
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
         IParserV2 parser = IParserV2(TEST_COMPILER_ADDRESS);
-        IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
+        IRaindexV7 raindex = IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         bytes memory bytecode = parser.parse2(expression);
         IOV2[] memory inputs = new IOV2[](1);
@@ -59,22 +59,22 @@ library LibTestTakeOrder {
 
         vm.prank(owner);
         vm.recordLogs();
-        raindex.addOrder4(orderConfig, new TaskV2[](0));
+        raindex.addOrder5(orderConfig, new TaskV3[](0));
         return extractOrderFromLogs(vm.getRecordedLogs());
     }
 
-    /// Wrap a single order into a TakeOrderConfigV4 array with default IO
+    /// Wrap a single order into a TakeOrderConfigV5 array with default IO
     /// indices (0, 0) and empty signed context.
-    function wrapSingle(OrderV4 memory order) internal pure returns (TakeOrderConfigV4[] memory) {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+    function wrapSingle(OrderV4 memory order) internal pure returns (TakeOrderConfigV5[] memory) {
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
         return orders;
     }
 
-    /// Build a TakeOrdersConfigV5 with standard defaults: minimumIO=0,
+    /// Build a TakeOrdersConfigV6 with standard defaults: minimumIO=0,
     /// maximumIO=max, maximumIORatio=max, IOIsInput=true, data="".
-    function defaultTakeConfig(TakeOrderConfigV4[] memory orders) internal pure returns (TakeOrdersConfigV5 memory) {
-        return TakeOrdersConfigV5({
+    function defaultTakeConfig(TakeOrderConfigV5[] memory orders) internal pure returns (TakeOrdersConfigV6 memory) {
+        return TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),

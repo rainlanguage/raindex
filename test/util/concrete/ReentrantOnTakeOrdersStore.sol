@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
-import {StateNamespace} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {MockToken} from "./MockToken.sol";
 import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 

@@ -4,10 +4,10 @@ pragma solidity =0.8.25;
 
 import {RaindexV6FreshTakeOrderTest} from "test/util/abstract/RaindexV6FreshTakeOrderTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, ClearConfigV2, SignedContextV1} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {OrderV4, ClearConfigV2, SignedContextV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
 /// A clear cannot drop one side, so a reverting calculate eval reverts
-/// `clear3` with the eval's own revert data.
+/// `clear4` with the eval's own revert data.
 contract RaindexV6ClearCalculateRevertTest is RaindexV6FreshTakeOrderTest {
     address internal alice = address(uint160(uint256(keccak256("alice.rain.test"))));
     address internal bob = address(uint160(uint256(keccak256("bob.rain.test"))));
@@ -21,8 +21,8 @@ contract RaindexV6ClearCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         );
 
         vm.expectRevert(err);
-        iRaindex.clear3(
-            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        iRaindex.clear4(
+            aliceOrder, bobOrder, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 

@@ -7,14 +7,14 @@ import {ArbTest} from "test/util/abstract/ArbTest.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
+    TakeOrderConfigV5,
     EvaluableV4,
-    TakeOrdersConfigV5,
+    TakeOrdersConfigV6,
     IInterpreterV4,
     IInterpreterStoreV3,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
@@ -34,12 +34,12 @@ contract GenericPoolRaindexV6FlashBorrowerTest is ArbTest {
         uint256 inputIOIndex,
         uint256 outputIOIndex
     ) public {
-        TakeOrderConfigV4[] memory orders = buildTakeOrderConfig(order, inputIOIndex, outputIOIndex);
+        TakeOrderConfigV5[] memory orders = buildTakeOrderConfig(order, inputIOIndex, outputIOIndex);
 
         GenericPoolRaindexV6FlashBorrower(iArb)
-            .arb4(
+            .arb5(
                 iRaindex,
-                TakeOrdersConfigV5({
+                TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -48,11 +48,11 @@ contract GenericPoolRaindexV6FlashBorrowerTest is ArbTest {
                 data: ""
             }),
                 abi.encode(iRefundoor, iRefundoor, ""),
-                TaskV2({
+                TaskV3({
                 evaluable: EvaluableV4(
                     IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), ""
                 ),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
             );
     }

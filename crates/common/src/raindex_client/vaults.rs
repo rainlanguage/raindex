@@ -25,7 +25,7 @@ use alloy::{
 };
 use async_trait::async_trait;
 use rain_math_float::Float;
-use raindex_bindings::{IRaindexV6::deposit4Call, IERC20::approveCall};
+use raindex_bindings::{IRaindexV7::deposit5Call, IERC20::approveCall};
 use raindex_subgraph_client::{
     performance::vol::{VaultVolume, VolumeDetails},
     types::{
@@ -711,7 +711,7 @@ impl RaindexVault {
         let approval = self.build_approval_calldata(amount).await?;
 
         let deposit_args = self.get_deposit_args(amount);
-        let deposit = Bytes::copy_from_slice(&deposit4Call::try_from(deposit_args)?.abi_encode());
+        let deposit = Bytes::copy_from_slice(&deposit5Call::try_from(deposit_args)?.abi_encode());
 
         let withdraw = self.build_withdraw_calldata(amount).await?;
 
@@ -2647,7 +2647,7 @@ mod tests {
         use alloy::sol_types::SolCall;
         use httpmock::MockServer;
         use raindex_bindings::{
-            IRaindexV6::{deposit4Call, withdraw4Call},
+            IRaindexV7::{deposit5Call, withdraw5Call},
             IERC20::{allowanceCall, approveCall},
         };
         use raindex_subgraph_client::utils::float::*;
@@ -3916,7 +3916,7 @@ mod tests {
             assert_eq!(
                 result.deposit,
                 Bytes::copy_from_slice(
-                    &deposit4Call {
+                    &deposit5Call {
                         token,
                         vaultId: vault_id,
                         depositAmount: amount.get_inner(),
@@ -3928,7 +3928,7 @@ mod tests {
             assert_eq!(
                 result.withdraw,
                 Bytes::copy_from_slice(
-                    &withdraw4Call {
+                    &withdraw5Call {
                         token,
                         vaultId: vault_id,
                         targetAmount: amount.get_inner(),
@@ -3946,7 +3946,7 @@ mod tests {
             assert_eq!(
                 result.deposit,
                 Bytes::copy_from_slice(
-                    &deposit4Call {
+                    &deposit5Call {
                         token,
                         vaultId: vault_id,
                         depositAmount: amount.get_inner(),
@@ -3958,7 +3958,7 @@ mod tests {
             assert_eq!(
                 result.withdraw,
                 Bytes::copy_from_slice(
-                    &withdraw4Call {
+                    &withdraw5Call {
                         token,
                         vaultId: vault_id,
                         targetAmount: amount.get_inner(),

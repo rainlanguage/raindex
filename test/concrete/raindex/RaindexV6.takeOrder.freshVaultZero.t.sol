@@ -7,13 +7,13 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderFreshVaultZeroTest
@@ -44,7 +44,7 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
         token.approve(address(iRaindex), amount * 1e18);
         // amount is a whole-token test quantity, far below int256 max.
         // forge-lint: disable-next-line(unsafe-typecast)
-        iRaindex.deposit4(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0));
+        iRaindex.deposit5(address(token), vaultId, LibDecimalFloat.packLossless(int256(amount), 0), new TaskV3[](0));
         vm.stopPrank();
     }
 
@@ -68,11 +68,11 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
         token0.approve(address(iRaindex), 3e18);
         assertEq(token0.balanceOf(address(iRaindex)), 0, "no ambient token0 in orderbook");
 
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.maximumIO = LibDecimalFloat.packLossless(3, 0);
 
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         // Owner received the vault-0 input in their wallet; taker funded it.
         assertEq(token0.balanceOf(owner), 3e18, "owner received vault-0 input pushed to wallet");
@@ -108,14 +108,14 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
         vm.prank(bob);
         token0.approve(address(iRaindex), 3e18);
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4(orderA, 0, 0, new SignedContextV1[](0));
-        orders[1] = TakeOrderConfigV4(orderB, 0, 0, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5(orderA, 0, 0, new SignedContextV2[](0));
+        orders[1] = TakeOrderConfigV5(orderB, 0, 0, new SignedContextV2[](0));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         config.maximumIO = LibDecimalFloat.packLossless(3, 0);
 
         vm.prank(bob);
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
 
         // Owner's wallet nets both vault-0 inputs (1 + 2 == 3), settled once.
         assertEq(token0.balanceOf(owner), 3e18, "owner wallet nets both vault-0 inputs");
@@ -125,7 +125,7 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
     }
 
     // ---------------------------------------------------------------------
-    // B39: the nonReentrant guard. A taker that re-enters takeOrders4 from its
+    // B39: the nonReentrant guard. A taker that re-enters takeOrders5 from its
     // onTakeOrders2 callback is reverted with ReentrancyGuardReentrantCall. A
     // mutation removing nonReentrant lets the re-entry proceed (no such revert).
     // ---------------------------------------------------------------------
@@ -140,17 +140,17 @@ contract RaindexV6TakeOrderFreshVaultZeroTest is RaindexV6FreshTakeOrderTest {
         vm.prank(address(taker));
         token0.approve(address(iRaindex), 1e18);
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
         config.maximumIO = LibDecimalFloat.packLossless(1, 0);
         config.data = hex"01";
 
-        // The callback re-enters takeOrders4; the nonReentrant guard reverts it.
-        taker.reenterWith(abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, config));
+        // The callback re-enters takeOrders5; the nonReentrant guard reverts it.
+        taker.reenterWith(abi.encodeWithSelector(IRaindexV7.takeOrders5.selector, config));
 
         vm.expectRevert(abi.encodeWithSelector(bytes4(keccak256("ReentrancyGuardReentrantCall()"))));
         vm.prank(address(taker));
-        iRaindex.takeOrders4(config);
+        iRaindex.takeOrders5(config);
     }
 }

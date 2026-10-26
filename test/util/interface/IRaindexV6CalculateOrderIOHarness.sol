@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRaindexV6, OrderV4, SignedContextV1, Float} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+import {IRaindexV7, OrderV4, SignedContextV2, Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
 import {OrderIOCalculationV4} from "src/struct/OrderIOCalculationV4.sol";
 
-interface IRaindexV6CalculateOrderIOHarness is IRaindexV6 {
+interface IRaindexV6CalculateOrderIOHarness is IRaindexV7 {
     function exposedCalculateOrderIO(
         OrderV4 memory order,
         uint256 inputIOIndex,
         uint256 outputIOIndex,
         address counterparty,
-        SignedContextV1[] memory signedContext
+        SignedContextV2[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory);
 
     function exposedCalculateOrderIOClearing(
@@ -20,7 +20,7 @@ interface IRaindexV6CalculateOrderIOHarness is IRaindexV6 {
         uint256 inputIOIndex,
         uint256 outputIOIndex,
         address counterparty,
-        SignedContextV1[] memory signedContext
+        SignedContextV2[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory);
 
     function seedTofu(address token) external returns (TOFUOutcome, uint8);

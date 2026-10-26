@@ -12,7 +12,7 @@ use crate::{
 use alloy::primitives::{Address, U256};
 use alloy::providers::Provider;
 use raindex_bindings::provider::mk_read_provider;
-use raindex_bindings::IRaindexV6::{OrderV4, QuoteV2, SignedContextV1};
+use raindex_bindings::IRaindexV7::{OrderV4, QuoteV3, SignedContextV2};
 use raindex_subgraph_client::types::common::SgOrder;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
@@ -110,7 +110,7 @@ pub struct BatchOrderQuotesResponse {
     /// quote call saw, rather than re-fetching or re-composing.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[cfg_attr(target_family = "wasm", tsify(optional))]
-    pub signed_context: Vec<SignedContextV1>,
+    pub signed_context: Vec<SignedContextV2>,
 }
 #[cfg(target_family = "wasm")]
 impl_wasm_traits!(BatchOrderQuotesResponse);
@@ -134,7 +134,7 @@ impl_wasm_traits!(Pair);
 /// is fetched in one batch POST. Different URL batches execute concurrently.
 /// Any additional entries produced by `injector` are appended after the oracle
 /// entries (composition order: `[oracle..., injected...]`), and the composed
-/// list is attached to the `QuoteV2.signedContext` before the multicall is
+/// list is attached to the `QuoteV3.signedContext` before the multicall is
 /// issued. This matters for gated orders whose `calculate-io` asserts on
 /// signed context during quoting.
 pub async fn get_order_quotes(
@@ -300,7 +300,7 @@ async fn get_order_quotes_inner(
                     },
                     quote_target: QuoteTarget {
                         raindex,
-                        quote_config: QuoteV2 {
+                        quote_config: QuoteV3 {
                             order: order_struct.clone(),
                             inputIOIndex: U256::from(input_index),
                             outputIOIndex: U256::from(output_index),
@@ -365,7 +365,7 @@ async fn get_order_quotes_inner(
         oracle_batch_request_count,
         "starting bounded batched quote oracle context fetches"
     );
-    let oracle_batch_results: Vec<Result<Vec<Result<SignedContextV1, String>>, String>> =
+    let oracle_batch_results: Vec<Result<Vec<Result<SignedContextV2, String>>, String>> =
         if oracle_batch_requests.is_empty() {
             vec![]
         } else {
@@ -393,7 +393,7 @@ async fn get_order_quotes_inner(
                 }
             }
         };
-    let mut oracle_results: Vec<Option<Result<SignedContextV1, String>>> =
+    let mut oracle_results: Vec<Option<Result<SignedContextV2, String>>> =
         std::iter::repeat_with(|| None)
             .take(pair_preparations.len())
             .collect();
@@ -467,7 +467,7 @@ async fn get_order_quotes_inner(
                     )
                     .await;
                 injected_context_count += injected.len();
-                let composed: Vec<SignedContextV1> =
+                let composed: Vec<SignedContextV2> =
                     oracle_context.into_iter().chain(injected).collect();
                 let mut quote_target = preparation.quote_target;
                 quote_target.quote_config.signedContext = composed;
@@ -735,7 +735,7 @@ mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     struct TestInjector {
-        context: SignedContextV1,
+        context: SignedContextV2,
         call_count: Arc<AtomicUsize>,
     }
 
@@ -748,7 +748,7 @@ mod tests {
             _input_io_index: u32,
             _output_io_index: u32,
             _counterparty: Address,
-        ) -> Vec<SignedContextV1> {
+        ) -> Vec<SignedContextV2> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             vec![self.context.clone()]
         }
@@ -1183,13 +1183,15 @@ amount price: 2 3;
         let inputs = vec![vault2.clone(), vault1.clone()];
         let outputs = vec![vault2, vault1];
         let oracle_contexts = [
-            SignedContextV1 {
+            SignedContextV2 {
                 signer: address!("0x1111111111111111111111111111111111111111"),
+                domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
                 context: vec![B256::with_last_byte(1)],
                 signature: vec![0xaa].into(),
             },
-            SignedContextV1 {
+            SignedContextV2 {
                 signer: address!("0x3333333333333333333333333333333333333333"),
+                domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
                 context: vec![B256::with_last_byte(3)],
                 signature: vec![0xcc].into(),
             },
@@ -1202,6 +1204,7 @@ amount price: 2 3;
                 if index == 0 {
                     Ok(crate::oracle::OracleResponse {
                         signer: context.signer,
+                        domain_separator: context.domainSeparator,
                         context: context.context,
                         signature: context.signature,
                     })
@@ -1223,8 +1226,9 @@ amount price: 2 3;
         let (oracle_url, oracle_server) = start_batch_oracle_server(oracle_responses).await;
         let oracle_order = with_oracle_url(base_oracle_order, &oracle_url);
         let plain_order = create_sg_order(&setup, order_bytes, inputs, outputs);
-        let injected_context = SignedContextV1 {
+        let injected_context = SignedContextV2 {
             signer: address!("0x2222222222222222222222222222222222222222"),
+            domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
             context: vec![B256::with_last_byte(2)],
             signature: vec![0xbb].into(),
         };
@@ -1243,8 +1247,8 @@ amount price: 2 3;
             .iter()
             .map(|(output_max, ratio)| {
                 Bytes::from(
-                    raindex_bindings::IRaindexV6::quote2Call::abi_encode_returns(
-                        &raindex_bindings::IRaindexV6::quote2Return {
+                    raindex_bindings::IRaindexV7::quote3Call::abi_encode_returns(
+                        &raindex_bindings::IRaindexV7::quote3Return {
                             exists: true,
                             outputMax: output_max.get_inner(),
                             ioRatio: ratio.get_inner(),
@@ -1254,8 +1258,8 @@ amount price: 2 3;
             })
             .collect::<Vec<_>>();
         let expected_oracle_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
-                quoteConfig: QuoteV2 {
+            raindex_bindings::IRaindexV7::quote3Call {
+                quoteConfig: QuoteV3 {
                     order: order_struct.clone(),
                     inputIOIndex: U256::ZERO,
                     outputIOIndex: U256::from(1),
@@ -1265,8 +1269,8 @@ amount price: 2 3;
             .abi_encode(),
         );
         let expected_plain_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
-                quoteConfig: QuoteV2 {
+            raindex_bindings::IRaindexV7::quote3Call {
+                quoteConfig: QuoteV3 {
                     order: order_struct.clone(),
                     inputIOIndex: U256::ZERO,
                     outputIOIndex: U256::from(1),
@@ -1276,8 +1280,8 @@ amount price: 2 3;
             .abi_encode(),
         );
         let expected_second_plain_quote_call = Bytes::from(
-            raindex_bindings::IRaindexV6::quote2Call {
-                quoteConfig: QuoteV2 {
+            raindex_bindings::IRaindexV7::quote3Call {
+                quoteConfig: QuoteV3 {
                     order: order_struct,
                     inputIOIndex: U256::from(1),
                     outputIOIndex: U256::ZERO,

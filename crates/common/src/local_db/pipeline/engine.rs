@@ -421,7 +421,7 @@ mod tests {
         token: Address,
         tx: u8,
     ) -> DecodedEventData<DecodedEvent> {
-        use raindex_bindings::IRaindexV6::DepositV2;
+        use raindex_bindings::IRaindexV7::DepositV2;
         DecodedEventData {
             event_type: EventType::DepositV2,
             block_number: U256::from(block),
@@ -445,7 +445,7 @@ mod tests {
         output_token: Address,
         tx: u8,
     ) -> DecodedEventData<DecodedEvent> {
-        use raindex_bindings::IRaindexV6::{AddOrderV3, EvaluableV4, OrderV4, IOV2};
+        use raindex_bindings::IRaindexV7::{AddOrderV3, EvaluableV4, OrderV4, IOV2};
         DecodedEventData {
             event_type: EventType::AddOrderV3,
             block_number: U256::from(block),

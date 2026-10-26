@@ -22,7 +22,7 @@ use raindex_app_settings::token::TokenCfg;
 #[cfg(not(target_family = "wasm"))]
 use raindex_bindings::provider::mk_read_provider;
 #[cfg(not(target_family = "wasm"))]
-use raindex_bindings::IRaindexV6::OrderV4;
+use raindex_bindings::IRaindexV7::OrderV4;
 use serde_json::Value;
 #[cfg(not(target_family = "wasm"))]
 use std::cmp::Ordering;

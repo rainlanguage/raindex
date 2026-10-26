@@ -6,9 +6,9 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
 contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
     function checkReentrancyRW() internal view {
@@ -29,13 +29,13 @@ contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
         internal
     {
         vm.startPrank(owner);
-        TaskV2[] memory actions = new TaskV2[](evalStrings.length);
+        TaskV3[] memory actions = new TaskV3[](evalStrings.length);
         for (uint256 i = 0; i < evalStrings.length; i++) {
             actions[i] =
-                TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
+                TaskV3(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV2[](0));
         }
         vm.record();
-        iRaindex.entask2(actions);
+        iRaindex.entask3(actions);
         checkReentrancyRW();
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
         assert(reads.length == expectedReads);

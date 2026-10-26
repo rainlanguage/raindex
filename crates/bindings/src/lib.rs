@@ -3,7 +3,7 @@ use alloy::sol;
 sol!(
     #![sol(all_derives = true, rpc)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    IRaindexV6, "./abis/IRaindexV6.json"
+    IRaindexV7, "./abis/IRaindexV7.json"
 );
 
 sol!(
@@ -57,8 +57,8 @@ pub mod wasm_traits;
 pub mod topics {
     use crate::{
         IInterpreterStoreV3::Set,
-        IRaindexV6::{
-            AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
+        IRaindexV7::{
+            AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV4, WithdrawV2,
         },
         Raindex::MetaV1_2,
     };
@@ -66,7 +66,7 @@ pub mod topics {
 
     pub const RAINDEX_EVENT_TOPICS: [B256; 8] = [
         AddOrderV3::SIGNATURE_HASH,
-        TakeOrderV3::SIGNATURE_HASH,
+        TakeOrderV4::SIGNATURE_HASH,
         WithdrawV2::SIGNATURE_HASH,
         DepositV2::SIGNATURE_HASH,
         RemoveOrderV3::SIGNATURE_HASH,

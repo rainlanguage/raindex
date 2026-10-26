@@ -7,17 +7,17 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -68,15 +68,15 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
         );
     }
 
-    function noopTask() internal pure returns (TaskV2 memory) {
-        return TaskV2({
+    function noopTask() internal pure returns (TaskV3 memory) {
+        return TaskV3({
             evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
     }
 
-    function takeOrdersConfig(TakeOrderConfigV4[] memory orders) internal pure returns (TakeOrdersConfigV5 memory) {
-        return TakeOrdersConfigV5({
+    function takeOrdersConfig(TakeOrderConfigV5[] memory orders) internal pure returns (TakeOrdersConfigV6 memory) {
+        return TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(100, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -92,11 +92,11 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
     /// `orders[1]` it would approve the decoy and the exchange's pull of the
     /// real output token would revert.
     function testExchangeSelectsFirstOrderBorrowedToken() external {
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
         orders[0] = singleIoOrder(address(inputToken), address(outputToken));
         orders[1] = singleIoOrder(address(inputToken), address(decoyToken));
 
-        arb.arb4(IRaindexV6(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
+        arb.arb5(IRaindexV7(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
 
         // The real output token was the one swapped through the exchange.
         assertEq(outputToken.balanceOf(address(exchange)), 100e18, "exchange pulled first order output");
@@ -124,11 +124,11 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
         // inputIOIndex 0, outputIOIndex 1.
-        orders[0] = TakeOrderConfigV4(order, 0, 1, new SignedContextV1[](0));
+        orders[0] = TakeOrderConfigV5(order, 0, 1, new SignedContextV2[](0));
 
-        arb.arb4(IRaindexV6(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
+        arb.arb5(IRaindexV7(raindex), takeOrdersConfig(orders), exchangeData(), noopTask());
 
         // validOutputs[1] (the real output) was swapped through the exchange.
         assertEq(outputToken.balanceOf(address(exchange)), 100e18, "exchange pulled outputIOIndex token");
@@ -136,7 +136,7 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
         assertEq(decoyToken.allowance(address(arb), address(exchange)), 0, "decoy at index 0 never approved");
     }
 
-    function singleIoOrder(address inTok, address outTok) internal pure returns (TakeOrderConfigV4 memory) {
+    function singleIoOrder(address inTok, address outTok) internal pure returns (TakeOrderConfigV5 memory) {
         IOV2[] memory validInputs = new IOV2[](1);
         validInputs[0] = IOV2(inTok, bytes32(0));
         IOV2[] memory validOutputs = new IOV2[](1);
@@ -148,6 +148,6 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeTokenSelectionTest is Test {
             validOutputs: validOutputs,
             nonce: bytes32(0)
         });
-        return TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        return TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
     }
 }

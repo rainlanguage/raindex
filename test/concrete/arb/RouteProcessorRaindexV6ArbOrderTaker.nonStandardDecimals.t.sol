@@ -7,18 +7,18 @@ import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -31,7 +31,7 @@ import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
 
-/// arb5 with RouteProcessor MUST correctly convert Float amounts to
+/// arb6 with RouteProcessor MUST correctly convert Float amounts to
 /// fixed-point using the token's decimals, not hardcoded 18.
 contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
     function testRouteProcessorArb5SixDecimalTokens() external {
@@ -43,7 +43,7 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
         MockToken outputToken = new MockToken("USDT", "USDT", 6);
 
         // Raindex will send 100 USDT (100e6) to the taker, then pull 100 USDC.
-        // arb5 only trusts the canonical raindex deployment, so etch the mock's
+        // arb6 only trusts the canonical raindex deployment, so etch the mock's
         // runtime code (immutables included) at that address.
         RealisticOrderTakerMockRaindex mockRaindex = new RealisticOrderTakerMockRaindex(100e6);
         vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(mockRaindex).code);
@@ -75,14 +75,14 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
 
         bytes memory takeOrdersData = abi.encode(hex"");
 
-        arb.arb5(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb6(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -90,11 +90,11 @@ contract RouteProcessorRaindexV6ArbOrderTakerNonStandardDecimalsTest is Test {
                 orders: orders,
                 data: takeOrdersData
             }),
-            TaskV2({
+            TaskV3({
                 evaluable: EvaluableV4(
                     IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), hex""
                 ),
-                signedContext: new SignedContextV1[](0)
+                signedContext: new SignedContextV2[](0)
             })
         );
 

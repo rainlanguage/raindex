@@ -7,7 +7,7 @@ import {LibTestFlashBorrowerArb, FlashBorrowerSetup} from "test/util/lib/LibTest
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
 import {RevertingExchange} from "test/util/concrete/RevertingExchange.sol";
 
-/// If the exchange call reverts, the entire arb4 reverts with the
+/// If the exchange call reverts, the entire arb5 reverts with the
 /// exchange's revert reason bubbled up.
 contract GenericPoolRaindexV6FlashBorrowerExchangeRevertTest is Test {
     function testExchangeRevertPropagates() external {
@@ -15,6 +15,6 @@ contract GenericPoolRaindexV6FlashBorrowerExchangeRevertTest is Test {
         FlashBorrowerSetup memory setup = LibTestFlashBorrowerArb.setup(vm, address(exchange), 100e18);
 
         vm.expectRevert("exchange failed");
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, setup.exchangeData, LibTestArb.noopTask());
     }
 }

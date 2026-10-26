@@ -6,13 +6,13 @@ import {Vm} from "forge-std-1.17.0/src/Test.sol";
 import {RaindexV6ExternalRealTest, IERC20} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     OrderV4,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     IOV2,
     OrderConfigV4,
     EvaluableV4,
-    TaskV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
@@ -126,7 +126,7 @@ contract RaindexV6TakeOrderPrecisionTest is RaindexV6ExternalRealTest {
 
         {
             if (outputVaultId != bytes32(0) && expectedTakerTotalInput.gt(LibDecimalFloat.packLossless(0, 0))) {
-                iRaindex.deposit4(outputToken, outputVaultId, expectedTakerTotalInput, new TaskV2[](0));
+                iRaindex.deposit5(outputToken, outputVaultId, expectedTakerTotalInput, new TaskV3[](0));
             }
             if (outputVaultId != bytes32(0)) {
                 assertTrue(
@@ -134,14 +134,14 @@ contract RaindexV6TakeOrderPrecisionTest is RaindexV6ExternalRealTest {
                 );
             }
             vm.recordLogs();
-            iRaindex.addOrder4(config, new TaskV2[](0));
+            iRaindex.addOrder5(config, new TaskV3[](0));
             Vm.Log[] memory entries = vm.getRecordedLogs();
             assertEq(entries.length, 1);
             OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(entries);
 
-            TakeOrdersConfigV5 memory takeOrdersConfig =
+            TakeOrdersConfigV6 memory takeOrdersConfig =
                 LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
-            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeOrdersConfig);
+            (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeOrdersConfig);
             assertTrue(totalTakerInput.eq(expectedTakerTotalInput), "input");
             assertTrue(totalTakerOutput.eq(expectedTakerTotalOutput), "output");
         }

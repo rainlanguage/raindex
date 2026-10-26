@@ -15,7 +15,7 @@ use alloy::{
 use futures::future::join_all;
 use rain_error_decoding::{AbiDecodedErrorType, ErrorRegistry};
 use raindex_bindings::provider::{mk_read_provider, ReadProvider};
-use raindex_bindings::IRaindexV6::quote2Call;
+use raindex_bindings::IRaindexV7::quote3Call;
 use raindex_bindings::Raindex::multicallCall;
 #[cfg(not(target_family = "wasm"))]
 use std::future::Future;
@@ -47,8 +47,8 @@ fn single_quote_failure(err: &Error) -> QuoteResult {
     )))
 }
 
-/// Issue a single `raindex.multicall([quote2, quote2, ...])` RPC call with
-/// `from = counterparty` so each inner `quote2` sees `msg.sender = counterparty`.
+/// Issue a single `raindex.multicall([quote3, quote3, ...])` RPC call with
+/// `from = counterparty` so each inner `quote3` sees `msg.sender = counterparty`.
 ///
 /// RaindexV6 inherits OpenZeppelin's `Multicall` which `delegatecall`s each
 /// element back into the raindex itself. `delegatecall` preserves the outer
@@ -81,7 +81,7 @@ async fn quote_chunk_once(
         .iter()
         .map(|t| {
             Bytes::from(
-                quote2Call {
+                quote3Call {
                     quoteConfig: t.quote_config.clone(),
                 }
                 .abi_encode(),
@@ -139,7 +139,7 @@ async fn quote_chunk_once(
 
             let mut results: Vec<QuoteResult> = Vec::with_capacity(decoded.len());
             for element in decoded {
-                match quote2Call::abi_decode_returns(&element) {
+                match quote3Call::abi_decode_returns(&element) {
                     Ok(ret) => {
                         if ret.exists {
                             results.push(Ok(ret.into()));
@@ -148,7 +148,7 @@ async fn quote_chunk_once(
                         }
                     }
                     Err(e) => results.push(Err(FailedQuote::CorruptReturnData(format!(
-                        "Failed to decode quote2 return: {e}"
+                        "Failed to decode quote3 return: {e}"
                     )))),
                 }
             }
@@ -296,7 +296,7 @@ fn chunk_err_to_quote_result(err: &Error) -> QuoteResult {
 /// Targets are partitioned by their `raindex` address so that each raindex
 /// gets its own `multicall(bytes[])` RPC call. Using the raindex's own OZ
 /// `Multicall` (rather than Multicall3) ensures `msg.sender` inside each
-/// inner `quote2` is preserved as `counterparty` — critical for gated
+/// inner `quote3` is preserved as `counterparty` — critical for gated
 /// strategies that read `order-counterparty()` inside `calculate-io`.
 ///
 /// Within each raindex group, targets are chunked by `chunk_size` and each
@@ -526,7 +526,7 @@ mod tests {
     use httpmock::{Method::POST, MockServer};
     use rain_error_decoding::ErrorRegistry;
     use rain_math_float::Float;
-    use raindex_bindings::IRaindexV6::{quote2Call, quote2Return};
+    use raindex_bindings::IRaindexV7::{quote3Call, quote3Return};
     use serde_json::json;
 
     #[test]
@@ -539,10 +539,10 @@ mod tests {
         assert_eq!(normalize_chunk_size(Some(0)), 1);
     }
 
-    // Encode a single `quote2Return` into its ABI-encoded form (this is what
+    // Encode a single `quote3Return` into its ABI-encoded form (this is what
     // ends up as one element of the outer `bytes[]` returned by OZ Multicall).
-    fn encode_quote2_return_bytes(exists: bool, output_max: Float, io_ratio: Float) -> Bytes {
-        Bytes::from(quote2Call::abi_encode_returns(&quote2Return {
+    fn encode_quote3_return_bytes(exists: bool, output_max: Float, io_ratio: Float) -> Bytes {
+        Bytes::from(quote3Call::abi_encode_returns(&quote3Return {
             exists,
             outputMax: output_max.get_inner(),
             ioRatio: io_ratio.get_inner(),
@@ -651,7 +651,7 @@ mod tests {
     async fn test_batch_quote_applies_timeout_per_chunk_request() {
         let rpc_server = MockServer::start_async().await;
         let one = Float::parse("1".to_string()).unwrap();
-        let response = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, one)]);
+        let response = encode_multicall_return(vec![encode_quote3_return_bytes(true, one, one)]);
         let quote = rpc_server.mock(|when, then| {
             when.method(POST).path("/rpc");
             then.delay(std::time::Duration::from_millis(1_600))
@@ -690,7 +690,7 @@ mod tests {
             then.json_body(json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                "result": encode_multicall_return(vec![encode_quote3_return_bytes(
                     true,
                     Float::parse("2".into()).unwrap(),
                     Float::parse("3".into()).unwrap(),
@@ -739,7 +739,7 @@ mod tests {
             then.json_body(json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                "result": encode_multicall_return(vec![encode_quote3_return_bytes(
                     true,
                     Float::parse("2".into()).unwrap(),
                     Float::parse("3".into()).unwrap(),
@@ -780,7 +780,7 @@ mod tests {
             then.json_body(json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                "result": encode_multicall_return(vec![encode_quote3_return_bytes(
                     true,
                     Float::parse("2".into()).unwrap(),
                     Float::parse("3".into()).unwrap(),
@@ -812,7 +812,7 @@ mod tests {
             then.json_body(json!({
                 "jsonrpc": "2.0",
                 "id": 1,
-                "result": encode_multicall_return(vec![encode_quote2_return_bytes(
+                "result": encode_multicall_return(vec![encode_quote3_return_bytes(
                     true,
                     Float::parse("2".into()).unwrap(),
                     Float::parse("3".into()).unwrap(),
@@ -842,7 +842,7 @@ mod tests {
         let two = Float::parse("2".to_string()).unwrap();
 
         // One target → one multicall call with a single inner return.
-        let inner = vec![encode_quote2_return_bytes(true, one, two)];
+        let inner = vec![encode_quote3_return_bytes(true, one, two)];
         mock_eth_call_static(&rpc_server, "/rpc", &encode_multicall_return(inner));
 
         let quote_targets = vec![QuoteTarget::default()];
@@ -872,8 +872,8 @@ mod tests {
         let four = Float::parse("4".to_string()).unwrap();
 
         let inner = vec![
-            encode_quote2_return_bytes(true, one, two),
-            encode_quote2_return_bytes(true, three, four),
+            encode_quote3_return_bytes(true, one, two),
+            encode_quote3_return_bytes(true, three, four),
         ];
         mock_eth_call_static(&rpc_server, "/rpc", &encode_multicall_return(inner));
 
@@ -903,7 +903,7 @@ mod tests {
         let rpc_server = MockServer::start_async().await;
         let zero = Float::parse("0".to_string()).unwrap();
 
-        let inner = vec![encode_quote2_return_bytes(false, zero, zero)];
+        let inner = vec![encode_quote3_return_bytes(false, zero, zero)];
         mock_eth_call_static(&rpc_server, "/rpc", &encode_multicall_return(inner));
 
         let quote_targets = vec![QuoteTarget::default()];
@@ -1034,7 +1034,7 @@ mod tests {
 
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
-        let inner = vec![encode_quote2_return_bytes(true, one, two)];
+        let inner = vec![encode_quote3_return_bytes(true, one, two)];
         let ret_hex = encode_multicall_return(inner);
 
         // alloy serialises `from` lowercased in JSON-RPC params; asserting the
@@ -1119,17 +1119,17 @@ mod tests {
     // ---------------------------------------------------------------------
 
     use alloy::primitives::U256;
-    use raindex_bindings::IRaindexV6::QuoteV2;
+    use raindex_bindings::IRaindexV7::QuoteV3;
 
     // Build a `QuoteTarget` with a specific raindex address and a distinctive
-    // `inputIOIndex`. The index is ABI-encoded into the inner `quote2` calldata,
+    // `inputIOIndex`. The index is ABI-encoded into the inner `quote3` calldata,
     // so a large/unusual value (e.g. 0xAAAA) gives a hex substring that uniquely
     // identifies this target inside the outer multicall request body. This lets
     // a mock respond differently per-target / per-chunk without per-target paths.
     fn target_with(raindex: Address, input_index: u64) -> QuoteTarget {
         QuoteTarget {
             raindex,
-            quote_config: QuoteV2 {
+            quote_config: QuoteV3 {
                 inputIOIndex: U256::from(input_index),
                 ..Default::default()
             },
@@ -1137,7 +1137,7 @@ mod tests {
     }
 
     // Mock an eth_call that only matches when the request body contains
-    // `needle` (a hex substring identifying a specific inner quote2 call or the
+    // `needle` (a hex substring identifying a specific inner quote3 call or the
     // raindex `to` address), returning the given multicall hex.
     fn mock_eth_call_when_body_contains(
         server: &MockServer,
@@ -1178,8 +1178,8 @@ mod tests {
         let four = Float::parse("4".to_string()).unwrap();
 
         // Group A (raindex_a) -> quote (1, 2); Group B (raindex_b) -> quote (3, 4).
-        let ret_a = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, two)]);
-        let ret_b = encode_multicall_return(vec![encode_quote2_return_bytes(true, three, four)]);
+        let ret_a = encode_multicall_return(vec![encode_quote3_return_bytes(true, one, two)]);
+        let ret_b = encode_multicall_return(vec![encode_quote3_return_bytes(true, three, four)]);
         mock_eth_call_when_body_contains(&rpc_server, "/rpc", "aaaaaaaaaaaaaaaaaa", &ret_a);
         mock_eth_call_when_body_contains(&rpc_server, "/rpc", "bbbbbbbbbbbbbbbbbb", &ret_b);
 
@@ -1236,13 +1236,13 @@ mod tests {
         // Chunk one (targets 0 and 1) returns TWO inner results; matched by the
         // presence of target 1's index (only present in the first chunk).
         let ret_chunk1 = encode_multicall_return(vec![
-            encode_quote2_return_bytes(true, one, two),
-            encode_quote2_return_bytes(true, three, four),
+            encode_quote3_return_bytes(true, one, two),
+            encode_quote3_return_bytes(true, three, four),
         ]);
         mock_eth_call_when_body_contains(&rpc_server, "/rpc", &needle1, &ret_chunk1);
         // Chunk two (target 2 only) returns ONE inner result; matched by target
         // 2's index, which never appears in the first chunk.
-        let ret_chunk2 = encode_multicall_return(vec![encode_quote2_return_bytes(true, five, six)]);
+        let ret_chunk2 = encode_multicall_return(vec![encode_quote3_return_bytes(true, five, six)]);
         mock_eth_call_when_body_contains(&rpc_server, "/rpc", &needle2, &ret_chunk2);
         // Target 0's index is bound for parity with the other chunk needles;
         // chunk one is matched by target 1's index, so it is unused here.
@@ -1290,9 +1290,9 @@ mod tests {
         let one = Float::parse("1".to_string()).unwrap();
         let two = Float::parse("2".to_string()).unwrap();
         let first_return =
-            encode_multicall_return(vec![encode_quote2_return_bytes(true, one, one)]);
+            encode_multicall_return(vec![encode_quote3_return_bytes(true, one, one)]);
         let second_return =
-            encode_multicall_return(vec![encode_quote2_return_bytes(true, two, two)]);
+            encode_multicall_return(vec![encode_quote3_return_bytes(true, two, two)]);
 
         let first_success = first_rpc.mock(|when, then| {
             when.method(POST)
@@ -1350,8 +1350,8 @@ mod tests {
         let two = Float::parse("2".to_string()).unwrap();
         // ONE target but TWO returned inner elements.
         let ret = encode_multicall_return(vec![
-            encode_quote2_return_bytes(true, one, two),
-            encode_quote2_return_bytes(true, one, two),
+            encode_quote3_return_bytes(true, one, two),
+            encode_quote3_return_bytes(true, one, two),
         ]);
         mock_eth_call_static(&rpc_server, "/rpc", &ret);
 
@@ -1433,7 +1433,7 @@ mod tests {
         });
         // OK singleton: body contains the OK index but not the revert index, so
         // only this mock matches it.
-        let ok_ret = encode_multicall_return(vec![encode_quote2_return_bytes(true, one, two)]);
+        let ok_ret = encode_multicall_return(vec![encode_quote3_return_bytes(true, one, two)]);
         rpc_server.mock(|when, then| {
             when.method(POST)
                 .path("/rpc")
@@ -1549,8 +1549,8 @@ mod tests {
         // Success mock for the [2,4) half: matches only when BOTH s2 and s3 are
         // present (the 2-element sub-chunk). Returns a 2-element multicall.
         let ok_pair = encode_multicall_return(vec![
-            encode_quote2_return_bytes(true, three, four),
-            encode_quote2_return_bytes(true, five, six),
+            encode_quote3_return_bytes(true, three, four),
+            encode_quote3_return_bytes(true, five, six),
         ]);
         rpc_server.mock(|when, then| {
             when.method(POST)

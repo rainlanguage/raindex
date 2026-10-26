@@ -5,9 +5,9 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {ChildRaindexV6ArbTaskGated} from "test/util/concrete/ChildRaindexV6ArbTaskGated.sol";
 import {RaindexV6ArbConfig} from "../../src/abstract/RaindexV6ArbCommon.sol";
-import {TaskV2, EvaluableV4, SignedContextV1} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
+import {TaskV3, EvaluableV4, SignedContextV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
@@ -19,16 +19,16 @@ import {
 /// This pins the comparator to `!= 0` (i.e. `>= 1`); an off-by-one mutation
 /// such as `> 1` would wrongly leave a one-byte task ungated.
 contract RaindexV6ArbTaskGatedITaskHashBoundaryTest is Test {
-    function buildTask(bytes memory bytecode) internal pure returns (TaskV2 memory) {
-        return TaskV2(
+    function buildTask(bytes memory bytecode) internal pure returns (TaskV3 memory) {
+        return TaskV3(
             EvaluableV4(IInterpreterV4(TEST_INTERPRETER_ADDRESS), IInterpreterStoreV3(TEST_STORE_ADDRESS), bytecode),
-            new SignedContextV1[](0)
+            new SignedContextV2[](0)
         );
     }
 
     /// Zero-length bytecode: hash stays exactly zero.
     function testITaskHashBoundaryZeroLength() external {
-        TaskV2 memory task = buildTask("");
+        TaskV3 memory task = buildTask("");
         ChildRaindexV6ArbTaskGated child = new ChildRaindexV6ArbTaskGated(RaindexV6ArbConfig(task));
         assertEq(child.iTaskHash(), bytes32(0), "empty bytecode must leave iTaskHash zero");
     }
@@ -36,7 +36,7 @@ contract RaindexV6ArbTaskGatedITaskHashBoundaryTest is Test {
     /// One-byte bytecode is over the boundary: hash is the keccak of the task
     /// and is necessarily nonzero.
     function testITaskHashBoundaryOneByteLength() external {
-        TaskV2 memory task = buildTask(hex"01");
+        TaskV3 memory task = buildTask(hex"01");
         ChildRaindexV6ArbTaskGated child = new ChildRaindexV6ArbTaskGated(RaindexV6ArbConfig(task));
         bytes32 expected = keccak256(abi.encode(task));
         assertEq(child.iTaskHash(), expected, "one byte of bytecode must store the keccak task hash");

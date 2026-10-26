@@ -9,9 +9,9 @@ import {Refundoor} from "test/util/concrete/Refundoor.sol";
 import {
     FlashLendingMockRaindex,
     OrderV4,
-    TakeOrderConfigV4,
+    TakeOrderConfigV5,
     IOV2,
-    SignedContextV1,
+    SignedContextV2,
     EvaluableV4
 } from "test/util/concrete/FlashLendingMockRaindex.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -51,7 +51,7 @@ abstract contract ArbTest is Test {
     function buildTakeOrderConfig(OrderV4 memory order, uint256 inputIOIndex, uint256 outputIOIndex)
         internal
         view
-        returns (TakeOrderConfigV4[] memory)
+        returns (TakeOrderConfigV5[] memory)
     {
         if (order.validInputs.length == 0) {
             order.validInputs = new IOV2[](1);
@@ -65,8 +65,8 @@ abstract contract ArbTest is Test {
         order.validInputs[inputIOIndex].token = address(iTakerOutput);
         order.validOutputs[outputIOIndex].token = address(iTakerInput);
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, inputIOIndex, outputIOIndex, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, inputIOIndex, outputIOIndex, new SignedContextV2[](0));
         return orders;
     }
 

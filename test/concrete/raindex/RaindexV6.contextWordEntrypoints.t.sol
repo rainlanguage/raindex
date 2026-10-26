@@ -8,13 +8,13 @@ import {
     OrderConfigV4,
     OrderV4,
     IOV2,
-    TaskV2,
+    TaskV3,
     EvaluableV4,
-    SignedContextV1,
-    TakeOrdersConfigV5,
-    QuoteV2,
+    SignedContextV2,
+    TakeOrdersConfigV6,
+    QuoteV3,
     ClearConfigV2
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -26,7 +26,7 @@ import {
     LibNamespace,
     FullyQualifiedNamespace,
     StateNamespace
-} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
+} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
 
 /// @title RaindexV6ContextWordEntrypointsTest
 /// @notice Every context word reads its true value in the entrypoints that fill
@@ -77,9 +77,9 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             iParserV2.parse2(bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", body)));
     }
 
-    function task(string memory body) internal view returns (TaskV2[] memory post) {
-        post = new TaskV2[](1);
-        post[0] = TaskV2(EvaluableV4(iInterpreter, iStore, parse(body)), new SignedContextV1[](0));
+    function task(string memory body) internal view returns (TaskV3[] memory post) {
+        post = new TaskV3[](1);
+        post[0] = TaskV3(EvaluableV4(iInterpreter, iStore, parse(body)), new SignedContextV2[](0));
     }
 
     function orderConfig() internal view returns (OrderConfigV4 memory) {
@@ -109,37 +109,37 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
 
     // Entrypoints.
 
-    function doDeposit(TaskV2[] memory post) public {
+    function doDeposit(TaskV3[] memory post) public {
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ACTOR);
-        iRaindex.deposit4(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
+        iRaindex.deposit5(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
     }
 
-    function doWithdraw(TaskV2[] memory post) public {
-        doDeposit(new TaskV2[](0));
+    function doWithdraw(TaskV3[] memory post) public {
+        doDeposit(new TaskV3[](0));
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
         vm.prank(ACTOR);
-        iRaindex.withdraw4(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
+        iRaindex.withdraw5(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
     }
 
-    function doAddOrder(TaskV2[] memory post) public {
+    function doAddOrder(TaskV3[] memory post) public {
         vm.prank(ACTOR);
-        iRaindex.addOrder4(orderConfig(), post);
+        iRaindex.addOrder5(orderConfig(), post);
     }
 
-    function doRemoveOrder(TaskV2[] memory post) public {
+    function doRemoveOrder(TaskV3[] memory post) public {
         OrderConfigV4 memory config = orderConfig();
         vm.prank(ACTOR);
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         vm.prank(ACTOR);
-        iRaindex.removeOrder3(
+        iRaindex.removeOrder4(
             OrderV4(ACTOR, config.evaluable, config.validInputs, config.validOutputs, config.nonce), post
         );
     }
 
-    function doEntask(TaskV2[] memory post) public {
+    function doEntask(TaskV3[] memory post) public {
         vm.prank(ACTOR);
-        iRaindex.entask2(post);
+        iRaindex.entask3(post);
     }
 
     /// Takes an order whose calculate source is `calculate` and handle source is
@@ -147,7 +147,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     function doTake(string memory calculate, string memory handle) public returns (OrderV4 memory order) {
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ACTOR);
-        iRaindex.deposit4(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
 
         order = LibTestTakeOrder.addOrderWithExpression(
             vm,
@@ -158,15 +158,15 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             address(iToken1),
             VAULT_ID
         );
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
         vm.prank(TAKER);
-        (Float totalTakerInput,) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput,) = iRaindex.takeOrders5(config);
         assertTrue(totalTakerInput.gt(LibDecimalFloat.FLOAT_ZERO), "order taken");
     }
 
-    /// `quote2` bubbles a calculate revert that `takeOrders4` skips.
+    /// `quote3` bubbles a calculate revert that `takeOrders5` skips.
     function doQuote(string memory calculate) public {
         OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
             vm,
@@ -177,7 +177,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             address(iToken1),
             VAULT_ID
         );
-        iRaindex.quote2(QuoteV2(order, 0, 0, new SignedContextV1[](0)));
+        iRaindex.quote3(QuoteV3(order, 0, 0, new SignedContextV2[](0)));
     }
 
     /// `CLEARER` clears an ACTOR order whose calculate source is `calculate` and
@@ -186,9 +186,9 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ACTOR);
-        iRaindex.deposit4(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
         vm.prank(TAKER);
-        iRaindex.deposit4(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
 
         OrderV4 memory alice = LibTestTakeOrder.addOrderWithExpression(
             vm,
@@ -203,7 +203,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             vm, TAKER, "_ _:1 1;:;", address(iToken1), VAULT_ID, address(iToken0), VAULT_ID
         );
         vm.prank(CLEARER);
-        iRaindex.clear3(alice, bob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0));
+        iRaindex.clear4(alice, bob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0));
         assertTrue(
             iRaindex.vaultBalance2(ACTOR, address(iToken1), VAULT_ID).lt(LibDecimalFloat.packLossless(10, 0)),
             "order cleared"
@@ -280,7 +280,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
 
     // Task entrypoint runner.
 
-    function checkTaskFamily(function(TaskV2[] memory) external run, Check[] memory checks) internal {
+    function checkTaskFamily(function(TaskV3[] memory) external run, Check[] memory checks) internal {
         uint256 start = vm.snapshotState();
         run(task(ensures(checks)));
         vm.revertToState(start);
@@ -290,7 +290,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
                 continue;
             }
             uint256 snapshot = vm.snapshotState();
-            TaskV2[] memory post = task(string.concat(":set(0 ", words[i], ");"));
+            TaskV3[] memory post = task(string.concat(":set(0 ", words[i], ");"));
             vm.expectRevert(stdError.indexOOBError);
             run(post);
             vm.revertToState(snapshot);

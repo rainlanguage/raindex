@@ -4,16 +4,16 @@ pragma solidity =0.8.25;
 
 import {Test, Vm, console2} from "forge-std-1.17.0/src/Test.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
-import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.13/src/interface/IInterpreterStoreV3.sol";
-import {IParserV2} from "rainlang-interface-0.2.13/src/interface/IParserV2.sol";
+import {IRaindexV7Stub} from "test/util/abstract/IRaindexV7Stub.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     IInterpreterV4,
-    TaskV2,
+    TaskV3,
     EvaluableV4,
-    SignedContextV1
-} from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
@@ -33,11 +33,11 @@ import {
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
 
-abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
+abstract contract RaindexV6ExternalRealTest is Test, IRaindexV7Stub {
     IInterpreterV4 internal immutable iInterpreter;
     IInterpreterStoreV3 internal immutable iStore;
     IParserV2 internal immutable iParserV2;
-    IRaindexV6 internal immutable iRaindex;
+    IRaindexV7 internal immutable iRaindex;
     IERC20 internal immutable iToken0;
     IERC20 internal immutable iToken1;
     RaindexV6SubParser internal immutable iSubParser;
@@ -54,7 +54,7 @@ abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
         iStore = IInterpreterStoreV3(TEST_STORE_ADDRESS);
         iParserV2 = IParserV2(TEST_COMPILER_ADDRESS);
 
-        iRaindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
+        iRaindex = IRaindexV7(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         iToken0 = IERC20(address(uint160(uint256(keccak256("token0.rain.test")))));
         vm.etch(address(iToken0), REVERTING_MOCK_BYTECODE);
@@ -85,10 +85,10 @@ abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
         vm.assume(account != address(0x000000000000000000636F6e736F6c652e6c6f67));
     }
 
-    function evalsToActions(bytes[] memory evals) internal view returns (TaskV2[] memory) {
-        TaskV2[] memory actions = new TaskV2[](evals.length);
+    function evalsToActions(bytes[] memory evals) internal view returns (TaskV3[] memory) {
+        TaskV3[] memory actions = new TaskV3[](evals.length);
         for (uint256 i = 0; i < evals.length; i++) {
-            actions[i] = TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evals[i])), new SignedContextV1[](0));
+            actions[i] = TaskV3(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evals[i])), new SignedContextV2[](0));
         }
         return actions;
     }
