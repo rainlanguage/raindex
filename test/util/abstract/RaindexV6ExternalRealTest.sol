@@ -23,9 +23,9 @@ import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
-    TEST_EXPRESSION_DEPLOYER_ADDRESS,
+    TEST_COMPILER_ADDRESS,
     TEST_PARSER_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {
     CREATION_CODE as DECIMAL_FLOAT_CREATION_CODE
@@ -52,7 +52,7 @@ abstract contract RaindexV6ExternalRealTest is Test, IRaindexV6Stub {
 
         iInterpreter = IInterpreterV4(TEST_INTERPRETER_ADDRESS);
         iStore = IInterpreterStoreV3(TEST_STORE_ADDRESS);
-        iParserV2 = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        iParserV2 = IParserV2(TEST_COMPILER_ADDRESS);
 
         iRaindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 

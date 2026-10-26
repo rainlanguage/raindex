@@ -21,8 +21,8 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalF
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
-    TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+    TEST_COMPILER_ADDRESS
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 
 library LibTestTakeOrder {
@@ -44,7 +44,7 @@ library LibTestTakeOrder {
         address outputToken,
         bytes32 outputVaultId
     ) internal returns (OrderV4 memory) {
-        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_COMPILER_ADDRESS);
         IRaindexV6 raindex = IRaindexV6(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS);
 
         bytes memory bytecode = parser.parse2(expression);
