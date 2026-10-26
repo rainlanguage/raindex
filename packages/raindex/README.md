@@ -441,12 +441,12 @@ take-orders calldata, asks an order for its removal calldata, and fetches
 quotes—mirroring the usual "inspect -> prepare transaction -> submit" flow.
 
 ```ts
-import { getOrderHash, getTakeOrders3Calldata } from "@rainlanguage/raindex";
+import { getOrderHash, getTakeOrders5Calldata } from "@rainlanguage/raindex";
 
 const orderHashResult = getOrderHash(orderV4Struct);
 if (orderHashResult.error) throw new Error(orderHashResult.error.readableMsg);
 
-const takeOrdersResult = getTakeOrders3Calldata(takeOrdersConfig);
+const takeOrdersResult = getTakeOrders5Calldata(takeOrdersConfig);
 if (takeOrdersResult.error) throw new Error(takeOrdersResult.error.readableMsg);
 const takeOrdersCalldata = takeOrdersResult.value; // hex string ready for the contract
 
