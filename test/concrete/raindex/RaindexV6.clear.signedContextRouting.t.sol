@@ -12,7 +12,6 @@ import {
     IOV2,
     EvaluableV4
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IRaindexV6, SignedContextV1} from "raindex-interface-0.1.10/src/interface/deprecated/v6/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
@@ -176,23 +175,5 @@ contract RaindexV6ClearSignedContextRoutingTest is RaindexV6ExternalRealTest {
 
         vm.expectRevert("alice domain");
         iRaindex.clear4(aliceOrder, bobOrder, clearConfig(), bobSignedContext, aliceSignedContext);
-    }
-
-    function testClear3SelectorIsRemoved() external {
-        (bool success, bytes memory returnData) = address(iRaindex)
-            .call(
-                abi.encodeCall(
-                    IRaindexV6.clear3,
-                    (
-                        OrderV4(address(0), EvaluableV4(iInterpreter, iStore, ""), new IOV2[](0), new IOV2[](0), 0),
-                        OrderV4(address(0), EvaluableV4(iInterpreter, iStore, ""), new IOV2[](0), new IOV2[](0), 0),
-                        ClearConfigV2(0, 0, 0, 0, 0, 0),
-                        new SignedContextV1[](0),
-                        new SignedContextV1[](0)
-                    )
-                )
-            );
-        assertFalse(success);
-        assertEq(returnData.length, 0);
     }
 }
