@@ -19,7 +19,6 @@ path = [
   "remappings.txt",
   "soldeer.lock",
   "slither.config.json",
-  "typeshare.toml",
   "REUSE.toml",
   "package.json",
   "package-lock.json",
