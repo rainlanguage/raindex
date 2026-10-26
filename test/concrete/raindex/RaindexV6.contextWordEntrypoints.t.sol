@@ -1,0 +1,261 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity =0.8.25;
+
+import {stdError} from "forge-std-1.17.0/src/StdError.sol";
+import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
+import {
+    OrderConfigV4,
+    OrderV4,
+    IOV2,
+    TaskV3,
+    EvaluableV4,
+    SignedContextV2,
+    TakeOrdersConfigV6,
+    QuoteV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
+import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
+import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
+import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
+
+/// @title RaindexV6ContextWordEntrypointsTest
+/// @notice Every deposit and withdraw context word reads its true value in its
+/// own task entrypoint and reverts out of bounds in every other entrypoint.
+contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
+    using Strings for address;
+    using Strings for uint256;
+    using LibDecimalFloat for Float;
+
+    address internal constant ACTOR = address(0xD0);
+    address internal constant TAKER = address(0xB0B);
+    bytes32 internal constant VAULT_ID = bytes32(uint256(1));
+
+    struct Check {
+        string word;
+        string value;
+    }
+
+    function ensures(Check[] memory checks) internal pure returns (string memory body) {
+        for (uint256 i = 0; i < checks.length; i++) {
+            body = string.concat(
+                body,
+                i == 0 ? "" : ",",
+                ":ensure(equal-to(",
+                checks[i].word,
+                " ",
+                checks[i].value,
+                ") \"",
+                checks[i].word,
+                "\")"
+            );
+        }
+        body = string.concat(body, ";");
+    }
+
+    function inFamily(Check[] memory checks, string memory word) internal pure returns (bool) {
+        for (uint256 i = 0; i < checks.length; i++) {
+            if (keccak256(bytes(checks[i].word)) == keccak256(bytes(word))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function parse(string memory body) internal view returns (bytes memory) {
+        return
+            iParserV2.parse2(bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", body)));
+    }
+
+    function task(string memory body) internal view returns (TaskV3[] memory post) {
+        post = new TaskV3[](1);
+        post[0] = TaskV3(EvaluableV4(iInterpreter, iStore, parse(body)), new SignedContextV2[](0));
+    }
+
+    function orderConfig() internal view returns (OrderConfigV4 memory) {
+        IOV2[] memory inputs = new IOV2[](1);
+        inputs[0] = IOV2(address(iToken0), VAULT_ID);
+        IOV2[] memory outputs = new IOV2[](1);
+        outputs[0] = IOV2(address(iToken1), VAULT_ID);
+        return OrderConfigV4(
+            EvaluableV4(iInterpreter, iStore, LibTestAddOrder.VALID_ORDER_BYTECODE), inputs, outputs, bytes32(0), "", ""
+        );
+    }
+
+    // Entrypoints.
+
+    function doDeposit(TaskV3[] memory post) public {
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.prank(ACTOR);
+        iRaindex.deposit5(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
+    }
+
+    function doWithdraw(TaskV3[] memory post) public {
+        doDeposit(new TaskV3[](0));
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
+        vm.prank(ACTOR);
+        iRaindex.withdraw5(address(iToken0), VAULT_ID, LibDecimalFloat.packLossless(1, 0), post);
+    }
+
+    function doAddOrder(TaskV3[] memory post) public {
+        vm.prank(ACTOR);
+        iRaindex.addOrder5(orderConfig(), post);
+    }
+
+    function doRemoveOrder(TaskV3[] memory post) public {
+        OrderConfigV4 memory config = orderConfig();
+        vm.prank(ACTOR);
+        iRaindex.addOrder5(config, new TaskV3[](0));
+        vm.prank(ACTOR);
+        iRaindex.removeOrder4(
+            OrderV4(ACTOR, config.evaluable, config.validInputs, config.validOutputs, config.nonce), post
+        );
+    }
+
+    function doEntask(TaskV3[] memory post) public {
+        vm.prank(ACTOR);
+        iRaindex.entask3(post);
+    }
+
+    /// Takes an order whose calculate source is `calculate` and handle source is
+    /// `handle`, against a 10 token output vault.
+    function doTake(string memory calculate, string memory handle) public returns (OrderV4 memory order) {
+        vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.prank(ACTOR);
+        iRaindex.deposit5(address(iToken1), VAULT_ID, LibDecimalFloat.packLossless(10, 0), new TaskV3[](0));
+
+        order = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ACTOR,
+            bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", calculate, handle)),
+            address(iToken0),
+            VAULT_ID,
+            address(iToken1),
+            VAULT_ID
+        );
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
+        vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
+        vm.prank(TAKER);
+        (Float totalTakerInput,) = iRaindex.takeOrders5(config);
+        assertTrue(totalTakerInput.gt(LibDecimalFloat.FLOAT_ZERO), "order taken");
+    }
+
+    /// `quote3` bubbles a calculate revert that `takeOrders5` skips.
+    function doQuote(string memory calculate) public {
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ACTOR,
+            bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", calculate, ":;")),
+            address(iToken0),
+            VAULT_ID,
+            address(iToken1),
+            VAULT_ID
+        );
+        iRaindex.quote3(QuoteV3(order, 0, 0, new SignedContextV2[](0)));
+    }
+
+    // Families.
+
+    function depositChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](6);
+        checks[0] = Check("depositor()", ACTOR.toHexString());
+        checks[1] = Check("deposit-token()", address(iToken0).toHexString());
+        checks[2] = Check("deposit-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[3] = Check("deposit-vault-before()", "0");
+        checks[4] = Check("deposit-vault-after()", "1");
+        checks[5] = Check("deposit-token-decimals()", "18");
+    }
+
+    function withdrawChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](7);
+        checks[0] = Check("withdrawer()", ACTOR.toHexString());
+        checks[1] = Check("withdraw-token()", address(iToken0).toHexString());
+        checks[2] = Check("withdraw-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[3] = Check("withdraw-vault-before()", "1");
+        checks[4] = Check("withdraw-vault-after()", "0");
+        checks[5] = Check("withdraw-target-amount()", "1");
+        checks[6] = Check("withdraw-token-decimals()", "18");
+    }
+
+    function words() internal pure returns (string[] memory all) {
+        string[] memory deposit = LibTestContextWords.depositWords();
+        string[] memory withdraw = LibTestContextWords.withdrawWords();
+        all = new string[](deposit.length + withdraw.length);
+        for (uint256 i = 0; i < deposit.length; i++) {
+            all[i] = deposit[i];
+        }
+        for (uint256 i = 0; i < withdraw.length; i++) {
+            all[deposit.length + i] = withdraw[i];
+        }
+    }
+
+    // Task entrypoint runner.
+
+    function checkTaskFamily(function(TaskV3[] memory) external run, Check[] memory checks) internal {
+        uint256 start = vm.snapshotState();
+        run(task(checks.length > 0 ? ensures(checks) : ":;"));
+        vm.revertToState(start);
+        string[] memory all = words();
+        for (uint256 i = 0; i < all.length; i++) {
+            if (inFamily(checks, all[i])) {
+                continue;
+            }
+            uint256 snapshot = vm.snapshotState();
+            TaskV3[] memory post = task(string.concat(":set(0 ", all[i], ");"));
+            vm.expectRevert(stdError.indexOOBError);
+            run(post);
+            vm.revertToState(snapshot);
+        }
+    }
+
+    function testDepositContextWords() external {
+        checkTaskFamily(this.doDeposit, depositChecks());
+    }
+
+    function testWithdrawContextWords() external {
+        checkTaskFamily(this.doWithdraw, withdrawChecks());
+    }
+
+    function testAddOrderContextWords() external {
+        checkTaskFamily(this.doAddOrder, new Check[](0));
+    }
+
+    function testRemoveOrderContextWords() external {
+        checkTaskFamily(this.doRemoveOrder, new Check[](0));
+    }
+
+    function testEntaskContextWords() external {
+        checkTaskFamily(this.doEntask, new Check[](0));
+    }
+
+    // Order eval runner.
+
+    function checkOrderEvalFamily(bool handle) internal {
+        uint256 start = vm.snapshotState();
+        this.doTake("_ _:1 1;", ":;");
+        vm.revertToState(start);
+        string[] memory all = words();
+        for (uint256 i = 0; i < all.length; i++) {
+            uint256 snapshot = vm.snapshotState();
+            string memory read = string.concat(":set(0 ", all[i], ");");
+            vm.expectRevert(stdError.indexOOBError);
+            if (handle) {
+                this.doTake("_ _:1 1;", read);
+            } else {
+                this.doQuote(string.concat("_ _:1 1,", read));
+            }
+            vm.revertToState(snapshot);
+        }
+    }
+
+    function testCalculateOrderContextWords() external {
+        checkOrderEvalFamily(false);
+    }
+
+    function testHandleIOContextWords() external {
+        checkOrderEvalFamily(true);
+    }
+}

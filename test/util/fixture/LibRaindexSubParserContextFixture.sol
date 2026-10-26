@@ -8,7 +8,6 @@ import {
     WORD_ORDER_HASH,
     WORD_ORDER_OWNER,
     WORD_ORDER_COUNTERPARTY,
-    CONTEXT_COLUMNS,
     CONTEXT_BASE_ROWS,
     CONTEXT_BASE_ROW_SENDER,
     CONTEXT_BASE_ROW_CALLING_CONTRACT,
@@ -49,8 +48,7 @@ import {
 
 library LibRaindexSubParserContextFixture {
     function hashedNamesContext() internal pure returns (bytes32[][] memory) {
-        // Add 4 to account for the signers, domains and 2x signed context columns.
-        bytes32[][] memory context = new bytes32[][](CONTEXT_COLUMNS + 4);
+        bytes32[][] memory context = new bytes32[][](CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2);
 
         bytes32[] memory contextBase = new bytes32[](CONTEXT_BASE_ROWS);
         contextBase[CONTEXT_BASE_ROW_SENDER] = keccak256(WORD_ORDER_CLEARER);

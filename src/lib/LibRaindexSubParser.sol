@@ -13,7 +13,6 @@ import {
     CONTEXT_BASE_ROWS
 } from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 import {
-    CONTEXT_COLUMNS,
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
     CONTEXT_VAULT_INPUTS_COLUMN,
@@ -41,6 +40,10 @@ import {
     CONTEXT_SIGNED_CONTEXT_START_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_ROW,
     CONTEXT_SIGNED_CONTEXT_START_ROWS,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
+    CONTEXT_WITHDRAW_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE,
@@ -117,6 +120,26 @@ library LibRaindexSubParser {
     function subParserSender(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) {
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(CONTEXT_BASE_COLUMN, CONTEXT_BASE_ROW_SENDER);
+    }
+
+    /// @dev Maps the "depositor" word to the deposit column.
+    function subParserDepositor(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR);
+    }
+
+    /// @dev Maps the "withdrawer" word to the withdraw column.
+    function subParserWithdrawer(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER);
     }
 
     /// @dev Maps the "calling-contract" word to the base context column.
@@ -302,134 +325,115 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_DOMAINS_COLUMN, uint256(OperandV2.unwrap(operand)));
     }
 
-    /// @dev Maps the "deposit-token" word to the calling context column.
+    /// @dev Maps the "deposit-token" word to the deposit column.
     function subParserDepositToken(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
     }
 
-    /// @dev Maps the "deposit-vault-id" word to the calling context column.
+    /// @dev Maps the "deposit-vault-id" word to the deposit column.
     function subParserDepositVaultId(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
     }
 
-    /// @dev Maps the "deposit-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-before" word to the deposit column.
     function subParserDepositVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE
-            );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "deposit-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-after" word to the deposit column.
     function subParserDepositVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER
-            );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER);
     }
 
-    /// @dev Maps the "deposit-token-decimals" word to the calling context column.
+    /// @dev Maps the "deposit-token-decimals" word to the deposit column.
     function subParserDepositTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS
-        );
+        return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS);
     }
 
-    /// @dev Maps the "withdraw-token" word to the calling context column.
+    /// @dev Maps the "withdraw-token" word to the withdraw column.
     function subParserWithdrawToken(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
     }
 
-    /// @dev Maps the "withdraw-vault-id" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-id" word to the withdraw column.
     function subParserWithdrawVaultId(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-before" word to the withdraw column.
     function subParserWithdrawVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE
-            );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-after" word to the withdraw column.
     function subParserWithdrawVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return
-            LibSubParse.subParserContext(
-                CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER
-            );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER);
     }
 
-    /// @dev Maps the "withdraw-target-amount" word to the calling context column.
+    /// @dev Maps the "withdraw-target-amount" word to the withdraw column.
     function subParserWithdrawTargetAmount(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT
-        );
+        return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT);
     }
 
-    /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
+    /// @dev Maps the "withdraw-token-decimals" word to the withdraw column.
     function subParserWithdrawTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
         returns (bool, bytes memory, bytes32[] memory)
     {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(
-            CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS
-        );
+        return
+            LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS);
     }
 
     /// @dev Maps the "signed-context" word to a signed context column/row.
@@ -447,8 +451,8 @@ library LibRaindexSubParser {
 
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
-    /// column (base, calling, calculations, vault IO, signers, signer domains,
-    /// signed context, deposit, withdraw). The inner arrays are flattened
+    /// column (base, calling, calculations, vault IO, deposit, withdraw,
+    /// signers, signer domains, signed context). The inner arrays are flattened
     /// before encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
@@ -641,7 +645,7 @@ library LibRaindexSubParser {
         // forge-lint: disable-next-line(unsafe-typecast)
         AuthoringMetaV2(bytes32(WORD_DEPOSIT_TOKEN_DECIMALS), "The decimals of the token that is being deposited.");
 
-        meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = depositMeta;
+        meta[CONTEXT_DEPOSIT_COLUMN] = depositMeta;
 
         AuthoringMetaV2[] memory withdrawMeta = new AuthoringMetaV2[](WITHDRAW_WORDS_LENGTH);
         withdrawMeta[WITHDRAW_WORD_WITHDRAWER] =
@@ -684,7 +688,7 @@ library LibRaindexSubParser {
         // forge-lint: disable-next-line(unsafe-typecast)
         AuthoringMetaV2(bytes32(WORD_WITHDRAW_TOKEN_DECIMALS), "The decimals of the token that is being withdrawn.");
 
-        meta[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = withdrawMeta;
+        meta[CONTEXT_WITHDRAW_COLUMN] = withdrawMeta;
 
         uint256[][] memory metaUint256;
         assembly {
