@@ -10,7 +10,6 @@ import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericP
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
-import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.3/src/lib/LibMetaBoardDeploy.sol";
 
 /// @title RaindexDeployDeclarationTest
 /// @notice The suite fields only a dispatch, a verifier or a broadcast reads.
@@ -33,14 +32,10 @@ contract RaindexDeployDeclarationTest is RaindexDeploySuites, RainDeployVerifyDe
     }
 
     function externalDeployments() internal pure override returns (ExternalDeployment[] memory) {
-        ExternalDeployment[] memory externals = new ExternalDeployment[](2);
+        ExternalDeployment[] memory externals = new ExternalDeployment[](1);
         externals[0] = ExternalDeployment({
             deployedAddress: address(LibTOFUTokenDecimals.TOFU_DECIMALS_DEPLOYMENT),
             codeHash: LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CODE_HASH
-        });
-        externals[1] = ExternalDeployment({
-            deployedAddress: LibMetaBoardDeploy.META_BOARD_DEPLOYED_ADDRESS,
-            codeHash: LibMetaBoardDeploy.META_BOARD_DEPLOYED_CODEHASH
         });
         return externals;
     }
