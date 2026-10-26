@@ -63,7 +63,7 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
         if (kind == TAKEN) {
             return bytes.concat("_ _:1 1;", setHandle(takenKey(i)));
         }
-        bytes memory handle = ensureHandle ? bytes(":ensure(0 \"skipped handle\");") : setHandle(skippedKey(i));
+        bytes memory handle = ensureHandle ? bytes(":ensure(0 \"handle ran\");") : setHandle(skippedKey(i));
         if (kind == CALCULATE_REVERT) {
             return bytes.concat(":ensure(0 \"calc\"),_ _:1 1;", handle);
         } else if (kind == SHORT_STACK) {
