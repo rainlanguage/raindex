@@ -7,11 +7,14 @@ import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol"
 import {LibSubParse} from "rainlang-0.2.19/src/lib/parse/LibSubParse.sol";
 import {
     CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_ROW_SENDER,
-    CONTEXT_BASE_ROW_CALLING_CONTRACT,
-    CONTEXT_BASE_ROWS
+    CONTEXT_BASE_ROW_CALLING_CONTRACT
 } from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
+    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
     CONTEXT_VAULT_INPUTS_COLUMN,
@@ -36,10 +39,6 @@ import {
     CONTEXT_SIGNED_CONTEXT_START_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_ROW,
     CONTEXT_SIGNED_CONTEXT_START_ROWS,
-    CONTEXT_DEPOSIT_COLUMN,
-    CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR,
-    CONTEXT_WITHDRAW_COLUMN,
-    CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID,
     CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE,
@@ -89,6 +88,9 @@ bytes constant WORD_WITHDRAW_VAULT_AFTER = "withdraw-vault-after";
 bytes constant WORD_WITHDRAW_TARGET_AMOUNT = "withdraw-target-amount";
 bytes constant WORD_WITHDRAW_TOKEN_DECIMALS = "withdraw-token-decimals";
 
+uint256 constant BASE_WORD_RAINDEX = 0;
+uint256 constant BASE_WORDS_LENGTH = 1;
+
 uint256 constant DEPOSIT_WORD_DEPOSITOR = 0;
 uint256 constant DEPOSIT_WORD_TOKEN = 1;
 uint256 constant DEPOSIT_WORD_VAULT_ID = 2;
@@ -112,10 +114,14 @@ uint256 constant WITHDRAW_WORDS_LENGTH = 7;
 library LibRaindexSubParser {
     using LibUint256Matrix for uint256[][];
 
-    /// @dev Maps the "sender" word to the base context column sender row.
-    function subParserSender(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) {
+    /// @dev Maps the "order-clearer" word to the calling context column.
+    function subParserOrderClearer(uint256, uint256, OperandV2)
+        internal
+        pure
+        returns (bool, bytes memory, bytes32[] memory)
+    {
         //slither-disable-next-line unused-return
-        return LibSubParse.subParserContext(CONTEXT_BASE_COLUMN, CONTEXT_BASE_ROW_SENDER);
+        return LibSubParse.subParserContext(CONTEXT_CALLING_CONTEXT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER);
     }
 
     /// @dev Maps the "depositor" word to the deposit column.
@@ -310,7 +316,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, uint256(OperandV2.unwrap(operand)));
     }
 
-    /// @dev Maps the "deposit-token" word to the deposit column.
+    /// @dev Maps the "deposit-token" word to the calling context column.
     function subParserDepositToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -320,7 +326,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
     }
 
-    /// @dev Maps the "deposit-vault-id" word to the deposit column.
+    /// @dev Maps the "deposit-vault-id" word to the calling context column.
     function subParserDepositVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -330,7 +336,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
     }
 
-    /// @dev Maps the "deposit-vault-balance-before" word to the deposit column.
+    /// @dev Maps the "deposit-vault-balance-before" word to the calling context column.
     function subParserDepositVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -340,7 +346,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "deposit-vault-balance-after" word to the deposit column.
+    /// @dev Maps the "deposit-vault-balance-after" word to the calling context column.
     function subParserDepositVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -350,7 +356,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER);
     }
 
-    /// @dev Maps the "deposit-token-decimals" word to the deposit column.
+    /// @dev Maps the "deposit-token-decimals" word to the calling context column.
     function subParserDepositTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
@@ -360,7 +366,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS);
     }
 
-    /// @dev Maps the "withdraw-token" word to the withdraw column.
+    /// @dev Maps the "withdraw-token" word to the calling context column.
     function subParserWithdrawToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -370,7 +376,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
     }
 
-    /// @dev Maps the "withdraw-vault-id" word to the withdraw column.
+    /// @dev Maps the "withdraw-vault-id" word to the calling context column.
     function subParserWithdrawVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -380,7 +386,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-before" word to the withdraw column.
+    /// @dev Maps the "withdraw-vault-balance-before" word to the calling context column.
     function subParserWithdrawVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -390,7 +396,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-after" word to the withdraw column.
+    /// @dev Maps the "withdraw-vault-balance-after" word to the calling context column.
     function subParserWithdrawVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -400,7 +406,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER);
     }
 
-    /// @dev Maps the "withdraw-target-amount" word to the withdraw column.
+    /// @dev Maps the "withdraw-target-amount" word to the calling context column.
     function subParserWithdrawTargetAmount(uint256, uint256, OperandV2)
         internal
         pure
@@ -410,7 +416,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT);
     }
 
-    /// @dev Maps the "withdraw-token-decimals" word to the withdraw column.
+    /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
     function subParserWithdrawTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
@@ -436,21 +442,14 @@ library LibRaindexSubParser {
 
     /// @dev Builds the complete authoring metadata for all raindex context
     /// words. Returns ABI-encoded `AuthoringMetaV2[]` covering every context
-    /// column (base, calling, calculations, vault IO, deposit, withdraw,
-    /// signers, signed context). The inner arrays are flattened before encoding.
+    /// column (base, order, calculations, vault IO, deposit, withdraw, signers,
+    /// signed context). The inner arrays are flattened before encoding.
     //slither-disable-next-line dead-code
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);
 
-        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](CONTEXT_BASE_ROWS);
-        contextBaseMeta[CONTEXT_BASE_ROW_SENDER] = AuthoringMetaV2(
-            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
-            // so this conversion is safe.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            bytes32(WORD_ORDER_CLEARER),
-            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
-        );
-        contextBaseMeta[CONTEXT_BASE_ROW_CALLING_CONTRACT] =
+        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](BASE_WORDS_LENGTH);
+        contextBaseMeta[BASE_WORD_RAINDEX] =
         // constant WORD_RAINDEX defined above is less than 32 bytes, so
         // this conversion is safe.
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -473,6 +472,13 @@ library LibRaindexSubParser {
             // forge-lint: disable-next-line(unsafe-typecast)
             bytes32(WORD_ORDER_COUNTERPARTY),
             "The address of the owner of the counterparty order. Will be the order taker if there is no counterparty order."
+        );
+        contextCallingContextMeta[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] = AuthoringMetaV2(
+            // constant WORD_ORDER_CLEARER defined above is less than 32 bytes,
+            // so this conversion is safe.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes32(WORD_ORDER_CLEARER),
+            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
         );
 
         AuthoringMetaV2[] memory contextCalculationsMeta = new AuthoringMetaV2[](CONTEXT_CALCULATIONS_ROWS);

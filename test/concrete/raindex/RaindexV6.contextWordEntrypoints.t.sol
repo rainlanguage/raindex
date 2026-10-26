@@ -19,11 +19,17 @@ import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
+import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
+import {
+    LibNamespace,
+    FullyQualifiedNamespace,
+    StateNamespace
+} from "rainlang-interface-0.2.13/src/lib/ns/LibNamespace.sol";
 
 /// @title RaindexV6ContextWordEntrypointsTest
-/// @notice Every deposit and withdraw context word reads its true value in its
-/// own task entrypoint and reverts out of bounds in every other entrypoint.
+/// @notice Every context word reads its true value in the entrypoints that fill
+/// its cell and reverts out of bounds in every other entrypoint.
 contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     using Strings for address;
     using Strings for uint256;
@@ -82,6 +88,17 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         return OrderConfigV4(
             EvaluableV4(iInterpreter, iStore, LibTestAddOrder.VALID_ORDER_BYTECODE), inputs, outputs, bytes32(0), "", ""
         );
+    }
+
+    function configHash() internal view returns (string memory) {
+        OrderConfigV4 memory config = orderConfig();
+        return uint256(
+                LibOrder.hash(OrderV4(ACTOR, config.evaluable, config.validInputs, config.validOutputs, config.nonce))
+            ).toHexString();
+    }
+
+    function raindexCheck() internal view returns (Check memory) {
+        return Check("raindex()", address(iRaindex).toHexString());
     }
 
     // Entrypoints.
@@ -160,51 +177,80 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     // Families.
 
     function depositChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](6);
-        checks[0] = Check("depositor()", ACTOR.toHexString());
-        checks[1] = Check("deposit-token()", address(iToken0).toHexString());
-        checks[2] = Check("deposit-vault-id()", uint256(VAULT_ID).toHexString());
-        checks[3] = Check("deposit-vault-before()", "0");
-        checks[4] = Check("deposit-vault-after()", "1");
-        checks[5] = Check("deposit-token-decimals()", "18");
+        checks = new Check[](7);
+        checks[0] = raindexCheck();
+        checks[1] = Check("depositor()", ACTOR.toHexString());
+        checks[2] = Check("deposit-token()", address(iToken0).toHexString());
+        checks[3] = Check("deposit-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[4] = Check("deposit-vault-before()", "0");
+        checks[5] = Check("deposit-vault-after()", "1");
+        checks[6] = Check("deposit-token-decimals()", "18");
     }
 
     function withdrawChecks() internal view returns (Check[] memory checks) {
-        checks = new Check[](7);
-        checks[0] = Check("withdrawer()", ACTOR.toHexString());
-        checks[1] = Check("withdraw-token()", address(iToken0).toHexString());
-        checks[2] = Check("withdraw-vault-id()", uint256(VAULT_ID).toHexString());
-        checks[3] = Check("withdraw-vault-before()", "1");
-        checks[4] = Check("withdraw-vault-after()", "0");
-        checks[5] = Check("withdraw-target-amount()", "1");
-        checks[6] = Check("withdraw-token-decimals()", "18");
+        checks = new Check[](8);
+        checks[0] = raindexCheck();
+        checks[1] = Check("withdrawer()", ACTOR.toHexString());
+        checks[2] = Check("withdraw-token()", address(iToken0).toHexString());
+        checks[3] = Check("withdraw-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[4] = Check("withdraw-vault-before()", "1");
+        checks[5] = Check("withdraw-vault-after()", "0");
+        checks[6] = Check("withdraw-target-amount()", "1");
+        checks[7] = Check("withdraw-token-decimals()", "18");
     }
 
-    function words() internal pure returns (string[] memory all) {
-        string[] memory deposit = LibTestContextWords.depositWords();
-        string[] memory withdraw = LibTestContextWords.withdrawWords();
-        all = new string[](deposit.length + withdraw.length);
-        for (uint256 i = 0; i < deposit.length; i++) {
-            all[i] = deposit[i];
-        }
-        for (uint256 i = 0; i < withdraw.length; i++) {
-            all[deposit.length + i] = withdraw[i];
-        }
+    function orderTaskChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](3);
+        checks[0] = raindexCheck();
+        checks[1] = Check("order-hash()", configHash());
+        checks[2] = Check("order-owner()", ACTOR.toHexString());
+    }
+
+    function entaskChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](1);
+        checks[0] = raindexCheck();
+    }
+
+    /// Order hash depends on the bytecode holding these checks, so
+    /// `testOrderEvalOrderHash` pins it separately.
+    function orderEvalChecks(bool handle) internal view returns (Check[] memory checks) {
+        checks = new Check[](16);
+        checks[0] = raindexCheck();
+        checks[1] = Check("order-owner()", ACTOR.toHexString());
+        checks[2] = Check("order-counterparty()", TAKER.toHexString());
+        checks[3] = Check("order-clearer()", TAKER.toHexString());
+        checks[4] = Check("calculated-max-output()", handle ? "1" : "0");
+        checks[5] = Check("calculated-io-ratio()", handle ? "1" : "0");
+        checks[6] = Check("input-token()", address(iToken0).toHexString());
+        checks[7] = Check("input-token-decimals()", "18");
+        checks[8] = Check("input-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[9] = Check("input-vault-before()", "0");
+        checks[10] = Check("input-vault-increase()", handle ? "1" : "0");
+        checks[11] = Check("output-token()", address(iToken1).toHexString());
+        checks[12] = Check("output-token-decimals()", "18");
+        checks[13] = Check("output-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[14] = Check("output-vault-before()", "10");
+        checks[15] = Check("output-vault-decrease()", handle ? "1" : "0");
+    }
+
+    /// Words the order eval fills but `orderEvalChecks` cannot pin by value.
+    function orderEvalUnpinned(string memory word) internal pure returns (bool) {
+        return keccak256(bytes(word)) == keccak256("order-hash()");
     }
 
     // Task entrypoint runner.
 
     function checkTaskFamily(function(TaskV2[] memory) external run, Check[] memory checks) internal {
         uint256 start = vm.snapshotState();
-        run(task(checks.length > 0 ? ensures(checks) : ":;"));
+        run(task(ensures(checks)));
         vm.revertToState(start);
-        string[] memory all = words();
-        for (uint256 i = 0; i < all.length; i++) {
-            if (inFamily(checks, all[i])) {
+        string[] memory words = LibTestContextWords.allWords();
+        for (uint256 i = 0; i < words.length; i++) {
+            if (inFamily(checks, words[i])) {
                 continue;
             }
             uint256 snapshot = vm.snapshotState();
-            TaskV2[] memory post = task(string.concat(":set(0 ", all[i], ");"));
+            TaskV2[] memory post = task(string.concat(":set(0 ", words[i], ");"));
             vm.expectRevert(stdError.indexOOBError);
             run(post);
             vm.revertToState(snapshot);
@@ -220,27 +266,34 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     }
 
     function testAddOrderContextWords() external {
-        checkTaskFamily(this.doAddOrder, new Check[](0));
+        checkTaskFamily(this.doAddOrder, orderTaskChecks());
     }
 
     function testRemoveOrderContextWords() external {
-        checkTaskFamily(this.doRemoveOrder, new Check[](0));
+        checkTaskFamily(this.doRemoveOrder, orderTaskChecks());
     }
 
     function testEntaskContextWords() external {
-        checkTaskFamily(this.doEntask, new Check[](0));
+        checkTaskFamily(this.doEntask, entaskChecks());
     }
 
     // Order eval runner.
 
     function checkOrderEvalFamily(bool handle) internal {
-        uint256 start = vm.snapshotState();
-        this.doTake("_ _:1 1;", ":;");
-        vm.revertToState(start);
-        string[] memory all = words();
-        for (uint256 i = 0; i < all.length; i++) {
+        Check[] memory checks = orderEvalChecks(handle);
+        string memory body = ensures(checks);
+        if (handle) {
+            this.doTake("_ _:1 1;", body);
+        } else {
+            this.doTake(string.concat("_ _:1 1,", body), ":;");
+        }
+        string[] memory words = LibTestContextWords.allWords();
+        for (uint256 i = 0; i < words.length; i++) {
+            if (inFamily(checks, words[i]) || orderEvalUnpinned(words[i])) {
+                continue;
+            }
             uint256 snapshot = vm.snapshotState();
-            string memory read = string.concat(":set(0 ", all[i], ");");
+            string memory read = string.concat(":set(0 ", words[i], ");");
             vm.expectRevert(stdError.indexOOBError);
             if (handle) {
                 this.doTake("_ _:1 1;", read);
@@ -257,5 +310,15 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
 
     function testHandleIOContextWords() external {
         checkOrderEvalFamily(true);
+    }
+
+    /// The order hash word reads the hash of the order being evaluated, in both
+    /// calculate and handle IO.
+    function testOrderEvalOrderHash() external {
+        bytes32 orderHash = LibOrder.hash(this.doTake("_ _:1 1,:set(1 order-hash());", ":set(2 order-hash());"));
+        FullyQualifiedNamespace ns =
+            LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(ACTOR))), address(iRaindex));
+        assertEq(iStore.get(ns, bytes32(uint256(1))), orderHash, "calculate order hash");
+        assertEq(iStore.get(ns, bytes32(uint256(2))), orderHash, "handle io order hash");
     }
 }

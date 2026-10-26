@@ -11,7 +11,7 @@ import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParse
 /// `[column][row]` matrix of internal operand-handler function pointers into a
 /// flat table of 16-bit pointers (two bytes per slot, column-major then row
 /// order), exactly mirroring the word-parser table. EVERY plain context word
-/// (base / calling / calculations / vault-in / vault-out / deposit / withdraw)
+/// (base / order / calculations / vault-in / vault-out / deposit / withdraw)
 /// is wired to the SAME `LibParseOperand.handleOperandDisallowed` function, so
 /// those slots all share one 16-bit pointer. Only TWO slots are different:
 ///   - signers (column 7, row 0) -> `handleOperandSingleFullNoDefault`
@@ -34,8 +34,8 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     }
 
     // Flat slot indices into the operand-handler pointer table (column-major):
-    //   col 0 base            (2 rows) -> 0, 1
-    //   col 1 calling context (3 rows) -> 2, 3, 4
+    //   col 0 base            (1 row)  -> 0
+    //   col 1 order           (4 rows) -> 1..4
     //   col 2 calculations    (2 rows) -> 5, 6
     //   col 3 vault inputs    (5 rows) -> 7..11
     //   col 4 vault outputs   (5 rows) -> 12..16
@@ -57,10 +57,13 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         return (uint16(uint8(table[byteIndex])) << 8) | uint16(uint8(table[byteIndex + 1]));
     }
 
-    /// The operand-handler table holds exactly 32 slots (64 bytes); any outer
-    /// length or column offset mutation that drops a column is caught by the
-    /// guard inside `pointerAt`.
+    /// The operand-handler table holds exactly 32 slots (64 bytes), matching the
+    /// extended context column/row layout. A mutation to the outer matrix length
+    /// (`new ...[][](CONTEXT_COLUMNS_EXTENDED)`) or to the deposit/withdraw column
+    /// offset (which displaces or drops a whole column) changes this length and
+    /// is caught by the guard inside `pointerAt`. Reading slot 0 exercises it.
     function testOperandHandlerTableLength() external view {
+        // pointerAt asserts table.length == 64; any wrong length reverts here.
         pointerAt(0);
     }
 
@@ -68,6 +71,7 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     /// disallowed pointer; the signers slot (column 7, row 0) differs.
     function testSignersOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
+        // Every plain context slot before signers shares the disallowed pointer.
         for (uint256 slot = 0; slot < SLOT_SIGNERS; slot++) {
             assertEq(pointerAt(slot), disallowed, "plain context slot uses handleOperandDisallowed");
         }

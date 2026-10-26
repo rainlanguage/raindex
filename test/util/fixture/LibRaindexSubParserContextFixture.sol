@@ -8,14 +8,11 @@ import {
     WORD_ORDER_HASH,
     WORD_ORDER_OWNER,
     WORD_ORDER_COUNTERPARTY,
-    CONTEXT_BASE_ROWS,
-    CONTEXT_BASE_ROW_SENDER,
-    CONTEXT_BASE_ROW_CALLING_CONTRACT,
     CONTEXT_CALLING_CONTEXT_ROWS,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY,
-    CONTEXT_BASE_COLUMN,
+    CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
     CONTEXT_CALLING_CONTEXT_COLUMN,
     CONTEXT_CALCULATIONS_COLUMN,
     CONTEXT_CALCULATIONS_ROWS,
@@ -44,19 +41,24 @@ import {
     CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN,
     CONTEXT_SIGNED_CONTEXT_START_COLUMN
 } from "../../../src/lib/LibRaindexSubParser.sol";
+import {
+    CONTEXT_BASE_COLUMN,
+    CONTEXT_BASE_ROWS,
+    CONTEXT_BASE_ROW_CALLING_CONTRACT
+} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 
 library LibRaindexSubParserContextFixture {
     function hashedNamesContext() internal pure returns (bytes32[][] memory) {
         bytes32[][] memory context = new bytes32[][](CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2);
 
         bytes32[] memory contextBase = new bytes32[](CONTEXT_BASE_ROWS);
-        contextBase[CONTEXT_BASE_ROW_SENDER] = keccak256(WORD_ORDER_CLEARER);
         contextBase[CONTEXT_BASE_ROW_CALLING_CONTRACT] = keccak256(WORD_RAINDEX);
 
         bytes32[] memory contextCallingContext = new bytes32[](CONTEXT_CALLING_CONTEXT_ROWS);
         contextCallingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH] = keccak256(WORD_ORDER_HASH);
         contextCallingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER] = keccak256(WORD_ORDER_OWNER);
         contextCallingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY] = keccak256(WORD_ORDER_COUNTERPARTY);
+        contextCallingContext[CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER] = keccak256(WORD_ORDER_CLEARER);
 
         bytes32[] memory contextCalculations = new bytes32[](CONTEXT_CALCULATIONS_ROWS);
         contextCalculations[CONTEXT_CALCULATIONS_ROW_MAX_OUTPUT] = keccak256(WORD_CALCULATED_MAX_OUTPUT);
