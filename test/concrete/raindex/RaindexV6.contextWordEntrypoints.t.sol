@@ -11,11 +11,12 @@ import {
     TaskV2,
     EvaluableV4,
     SignedContextV1,
-    TakeOrdersConfigV5
+    TakeOrdersConfigV5,
+    QuoteV2
 } from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
-import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
@@ -26,6 +27,7 @@ import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
 contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     using Strings for address;
     using Strings for uint256;
+    using LibDecimalFloat for Float;
 
     address internal constant ACTOR = address(0xD0);
     address internal constant TAKER = address(0xB0B);
@@ -137,7 +139,22 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector), abi.encode(true));
         vm.prank(TAKER);
-        iRaindex.takeOrders4(config);
+        (Float totalTakerInput,) = iRaindex.takeOrders4(config);
+        assertTrue(totalTakerInput.gt(LibDecimalFloat.FLOAT_ZERO), "order taken");
+    }
+
+    /// `quote2` bubbles a calculate revert that `takeOrders4` skips.
+    function doQuote(string memory calculate) public {
+        OrderV4 memory order = LibTestTakeOrder.addOrderWithExpression(
+            vm,
+            ACTOR,
+            bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", calculate, ":;")),
+            address(iToken0),
+            VAULT_ID,
+            address(iToken1),
+            VAULT_ID
+        );
+        iRaindex.quote2(QuoteV2(order, 0, 0, new SignedContextV1[](0)));
     }
 
     // Families.
@@ -205,7 +222,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
             if (handle) {
                 this.doTake("_ _:1 1;", read);
             } else {
-                this.doTake(string.concat("_ _:1 1,", read), ":;");
+                this.doQuote(string.concat("_ _:1 1,", read));
             }
             vm.revertToState(snapshot);
         }
