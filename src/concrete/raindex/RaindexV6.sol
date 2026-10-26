@@ -632,7 +632,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             clearConfig.aliceInputIOIndex,
             clearConfig.aliceOutputIOIndex,
             bobOrder.owner,
-            bobSignedContext,
+            aliceSignedContext,
             new bytes32[](0),
             false,
             true
@@ -642,7 +642,7 @@ contract RaindexV6 is IRaindexV7, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             clearConfig.bobInputIOIndex,
             clearConfig.bobOutputIOIndex,
             aliceOrder.owner,
-            aliceSignedContext,
+            bobSignedContext,
             new bytes32[](0),
             false,
             true
