@@ -15,14 +15,10 @@ import {LibRaindexSubParser} from "../../../src/lib/LibRaindexSubParser.sol";
 /// `LibRaindexSubParser.subParser*` functions are called directly, so no etched
 /// pointers / regen are involved and any source-constant change is observed):
 ///
-/// 1. `subParserWithdrawTokenDecimals` absolute (column, row). The
-///    word-parser-wiring suite only pins this slot RELATIVELY (it asserts the
-///    16-bit pointer is `!=` withdraw-target-amount / deposit-token-decimals /
-///    sender), so an absolute (column, row) shift that lands on a pointer still
-///    distinct from those three survives there. The deposit counterpart is
-///    pinned absolutely by the wiring suite (its pointer must EQUAL
-///    withdraw-target-amount at (1,4)), but withdraw-token-decimals has no such
-///    equality anchor, so it needs a direct (column, row) assertion.
+/// 1. The absolute (column, row) of `subParserWithdrawTokenDecimals` and
+///    `subParserDepositTokenDecimals`. The word-parser-wiring suite only pins
+///    their slots RELATIVELY (pointer inequalities), so an absolute
+///    (column, row) shift that lands on a still-distinct pointer survives there.
 ///
 /// 2. The `& 0xFF` ROW mask in `subParserSignedContext`. The operand row is
 ///    `(operand >> 8) & 0xFF`. Because `LibSubParse.subParserContext` REVERTS
@@ -54,23 +50,21 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
         assertEq(row, 5, "withdraw-token-decimals row is 5");
     }
 
-    /// deposit-token-decimals routes to the calling context column (1), row 4.
-    /// The wiring suite pins this via pointer equality to withdraw-target-amount;
-    /// this is the direct (column, row) assertion as a self-contained anchor.
+    /// deposit-token-decimals routes to the deposit column (5), row 4.
     function testRouteDepositTokenDecimalsAbsolute() external pure {
         (bool success, bytes memory bytecode,) =
             LibRaindexSubParser.subParserDepositTokenDecimals(0, 0, OperandV2.wrap(0));
         assertTrue(success, "parser must succeed");
         (uint8 row, uint8 column) = decode(bytecode);
-        assertEq(column, 1, "deposit-token-decimals column is calling-context (1)");
+        assertEq(column, 5, "deposit-token-decimals column is deposit (5)");
         assertEq(row, 4, "deposit-token-decimals row is 4");
     }
 
     /// The signed-context ROW is `(operand >> 8) & 0xFF`. An operand of
-    /// `0x010000` has low byte 0 (column offset 0 -> column 6) and `>> 8` =
+    /// `0x010000` has low byte 0 (column offset 0 -> column 7) and `>> 8` =
     /// `0x0100` = 256. WITH the mask the row is `0x0100 & 0xFF` = 0, so the
-    /// parser succeeds and returns (column 6, row 0). WITHOUT the mask the row is
-    /// 256, which exceeds uint8 and reverts `ContextGridOverflow(6, 256)`. This
+    /// parser succeeds and returns (column 7, row 0). WITHOUT the mask the row is
+    /// 256, which exceeds uint8 and reverts `ContextGridOverflow(7, 256)`. This
     /// asserts the masked, non-reverting outcome, so dropping the row mask flips
     /// success into a revert and fails the test.
     function testSignedContextRowMaskKeepsRowInRange() external pure {
@@ -78,21 +72,21 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
             LibRaindexSubParser.subParserSignedContext(0, 0, OperandV2.wrap(bytes32(uint256(0x010000))));
         assertTrue(success, "parser must succeed (row mask keeps row in range)");
         (uint8 row, uint8 column) = decode(bytecode);
-        assertEq(column, 6, "column is signed-context start (6) + low byte 0");
+        assertEq(column, 7, "column is signed-context start (7) + low byte 0");
         assertEq(row, 0, "row is (0x010000 >> 8) & 0xFF = 0");
     }
 
     /// Confirms the discriminator above is genuine: the SAME wide operand, with
     /// the row mask DROPPED (`>> 8` without `& 0xFF`), drives the row to 256 and
-    /// `LibSubParse.subParserContext` reverts `ContextGridOverflow(6, 256)`. This
+    /// `LibSubParse.subParserContext` reverts `ContextGridOverflow(7, 256)`. This
     /// documents the exact revert the production mask prevents, so the pairing of
     /// these two tests pins the mask: removing it makes the happy test above
     /// revert with this very selector/args.
     function testSignedContextUnmaskedRowWouldOverflow() external {
         uint256 column = uint256(0x010000) & 0xFF; // low byte 0
         uint256 unmaskedRow = uint256(0x010000) >> 8; // 256
-        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, column + 6, unmaskedRow));
-        this.callContext(column + 6, unmaskedRow);
+        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, column + 7, unmaskedRow));
+        this.callContext(column + 7, unmaskedRow);
     }
 
     /// @dev External wrapper so `vm.expectRevert` can catch the library revert.
