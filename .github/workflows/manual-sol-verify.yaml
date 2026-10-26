@@ -1,0 +1,67 @@
+name: Manual sol verify
+# Explorer source verification for a suite that is ALREADY on chain, run by
+# hand.
+#
+# `manual-sol-artifacts.yaml` submits source only for what its own run
+# broadcast, and the broadcast is idempotent: a rerun against networks that
+# already hold the code broadcasts nothing, so there is nothing for `--verify`
+# to submit and the run is green having verified nothing. A deploy that landed
+# and then went unverified — a bad explorer key, a rate limit, an explorer that
+# was down, or `verify: false` because the retry loop would have outlasted the
+# deploy — is repaired here rather than by re-dispatching the deploy.
+#
+# Deliberately `workflow_dispatch` only, like the deploy. Unlike the deploy this
+# never broadcasts and never reads `DEPLOYMENT_KEY`: `forge verify-contract`
+# talks to the explorer API and nothing else, so it is safe to re-run and is
+# already a no-op ("already verified") against an explorer that has the source.
+#
+# Five of this repo's six suites can be dispatched here. `route-processor`
+# cannot: its `artifactPath` is the bare name `RouteProcessor4`, and this repo
+# holds no Solidity source for it — only the pinned
+# `ROUTE_PROCESSOR_4_CREATION_CODE` bytes taken from sushiswap — so `forge
+# build` emits no artifact under that name and `forge verify-contract` has
+# nothing to submit. Recorded here so the next person does not spend a run
+# finding out.
+on:
+  workflow_dispatch:
+    inputs:
+      contract:
+        type: string
+        required: true
+        description: |
+          Artifact path of the contract to submit, `path:Contract`. Paired with
+          `address` on the `manual verification command:` line
+          `script/Deploy.sol` prints for every network, whether it deployed
+          there or skipped it, so a run of the deploy is where both values come
+          from. They are also the `artifactPath` and the generated
+          `DEPLOYED_ADDRESS` of the suites in
+          `src/abstract/RaindexDeploySuites.sol`.
+      address:
+        type: string
+        required: true
+        description: |
+          The deployed address. One value for every network, because the Zoltu
+          factory derives one address from the creation code.
+      networks:
+        type: string
+        required: true
+        default: arbitrum base base-sepolia mainnet flare hyperliquid polygon
+        description: |
+          Which explorers to submit to. FOUNDRY's chain names, not the
+          `[rpc_endpoints]` aliases, and the two differ on three of the seven:
+          the aliases `base_sepolia`, `ethereum` and `hyperevm` are rejected
+          outright, and the chain names are `base-sepolia`, `mainnet` and
+          `hyperliquid`. The `manual verification command:` line is NOT a source
+          for this field — it prints `--chain` with the alias it broadcast
+          under, which is the spelling that gets rejected here. The default is
+          `LibRainDeploy.supportedNetworks()` spelled the working way, i.e.
+          every network `script/Deploy.sol` broadcasts to, so it has to move
+          when that does.
+jobs:
+  verify:
+    uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-verify.yaml@main
+    with:
+      contract: ${{ inputs.contract }}
+      address: ${{ inputs.address }}
+      networks: ${{ inputs.networks }}
+    secrets: inherit
