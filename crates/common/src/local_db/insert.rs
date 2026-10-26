@@ -10,7 +10,7 @@ use alloy::{
 };
 use rain_math_float::Float;
 use raindex_bindings::IRaindexV7::{
-    AddOrderV3, AfterClearV2, ClearV3, DepositV2, OrderV4, RemoveOrderV3, TakeOrderV3, WithdrawV2,
+    AddOrderV3, AfterClearV2, ClearV3, DepositV2, OrderV4, RemoveOrderV3, TakeOrderV4, WithdrawV2,
     IOV2,
 };
 use raindex_bindings::Raindex::MetaV1_2;
@@ -114,7 +114,7 @@ pub fn decoded_events_to_statements(
                 batch.add(generate_remove_order_statement(&context, remove_event));
                 batch.extend(generate_order_ios_statements(&context, &remove_event.order));
             }
-            DecodedEvent::TakeOrderV3(decoded) => {
+            DecodedEvent::TakeOrderV4(decoded) => {
                 let take_event = decoded.as_ref();
                 batch.add(generate_take_order_statement(&context, take_event)?);
             }
@@ -410,7 +410,7 @@ fn generate_remove_order_statement(
 
 fn generate_take_order_statement(
     context: &EventContext,
-    decoded: &TakeOrderV3,
+    decoded: &TakeOrderV4,
 ) -> Result<SqlStatement, InsertError> {
     let input_io_index_u64 = u256_to_u64(&decoded.config.inputIOIndex, "inputIOIndex")?;
     let output_io_index_u64 = u256_to_u64(&decoded.config.outputIOIndex, "outputIOIndex")?;
@@ -777,7 +777,7 @@ mod tests {
     use itertools::Itertools;
     use raindex_bindings::IInterpreterStoreV3::Set;
     use raindex_bindings::IRaindexV7::{
-        ClearConfigV2, ClearStateChangeV2, EvaluableV4, SignedContextV1, TakeOrderConfigV4,
+        ClearConfigV2, ClearStateChangeV2, EvaluableV4, SignedContextV2, TakeOrderConfigV5,
     };
     use std::collections::HashMap;
 
@@ -917,14 +917,15 @@ mod tests {
     }
 
     fn sample_take_event() -> DecodedEventData<DecodedEvent> {
-        let take = TakeOrderV3 {
+        let take = TakeOrderV4 {
             sender: Address::from([0x09; 20]),
-            config: TakeOrderConfigV4 {
+            config: TakeOrderConfigV5 {
                 order: sample_order(),
                 inputIOIndex: U256::from(0),
                 outputIOIndex: U256::from(0),
-                signedContext: vec![SignedContextV1 {
+                signedContext: vec![SignedContextV2 {
                     signer: Address::from([0x0a; 20]),
+                    domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
                     context: vec![U256::from(0x2a).into()],
                     signature: Bytes::from(vec![0x11, 0x22, 0x33]),
                 }],
@@ -934,12 +935,12 @@ mod tests {
         };
 
         build_event(
-            EventType::TakeOrderV3,
+            EventType::TakeOrderV4,
             "0x101",
             "0x201",
             b256!("0x000000000000000000000000000000000000000000000000000000000000def0"),
             "0x2",
-            DecodedEvent::TakeOrderV3(Box::new(take)),
+            DecodedEvent::TakeOrderV4(Box::new(take)),
         )
     }
 
@@ -1184,7 +1185,7 @@ mod tests {
     fn take_order_sql_generation() {
         let event = sample_take_event();
         let context = event_context(&RaindexIdentifier::new(1, Address::ZERO), &event).unwrap();
-        let DecodedEvent::TakeOrderV3(decoded) = &event.decoded_data else {
+        let DecodedEvent::TakeOrderV4(decoded) = &event.decoded_data else {
             unreachable!()
         };
         let statement = generate_take_order_statement(&context, decoded).unwrap();

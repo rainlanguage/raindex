@@ -5,7 +5,7 @@ use alloy::primitives::{
 };
 use alloy::sol_types::SolType;
 use clap::Args;
-use raindex_bindings::IRaindexV7::{OrderV4, QuoteV2};
+use raindex_bindings::IRaindexV7::{OrderV4, QuoteV3};
 use std::str::FromStr;
 
 /// Group of valid input formats
@@ -146,7 +146,7 @@ impl TryFrom<&Vec<String>> for BatchQuoteTarget {
 
             batch_quote_target.0.push(QuoteTarget {
                 raindex: Address::from_hex(raindex_str)?,
-                quote_config: QuoteV2 {
+                quote_config: QuoteV3 {
                     signedContext: vec![],
                     inputIOIndex: U256::from_str(input_io_index_str)?,
                     outputIOIndex: U256::from_str(output_io_index_str)?,
@@ -295,7 +295,7 @@ mod tests {
         let expected = BatchQuoteTarget(vec![
             QuoteTarget {
                 raindex: raindex1,
-                quote_config: QuoteV2 {
+                quote_config: QuoteV3 {
                     inputIOIndex: U256::from(input_index),
                     outputIOIndex: U256::from(output_index),
                     signedContext: vec![],
@@ -304,7 +304,7 @@ mod tests {
             },
             QuoteTarget {
                 raindex: raindex2,
-                quote_config: QuoteV2 {
+                quote_config: QuoteV3 {
                     inputIOIndex: U256::from(input_index),
                     outputIOIndex: U256::from(output_index),
                     signedContext: vec![],

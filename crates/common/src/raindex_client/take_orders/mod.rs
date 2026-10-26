@@ -189,7 +189,7 @@ fn log_selected_legs(
 
 #[wasm_export]
 impl RaindexClient {
-    /// Generates calldata for `IRaindexV7.takeOrders4` using a mode + price-cap policy.
+    /// Generates calldata for `IRaindexV7.takeOrders5` using a mode + price-cap policy.
     ///
     /// This method includes preflight simulation to validate the transaction will succeed
     /// and automatically removes failing orders from the config.
@@ -204,7 +204,7 @@ impl RaindexClient {
     /// - `priceCap`: human-readable decimal string for max sell per 1 buy
     ///
     /// Returns calldata plus pricing info:
-    /// - `calldata`: ABI-encoded bytes for `takeOrders4`.
+    /// - `calldata`: ABI-encoded bytes for `takeOrders5`.
     /// - `effectivePrice`: expected blended sell per 1 buy from the simulation.
     /// - `prices`: per-leg ratios, best→worst.
     /// - `expectedSell`: simulated sell at current quotes.
@@ -229,7 +229,7 @@ impl RaindexClient {
     /// ```
     #[wasm_export(
         js_name = "getTakeOrdersCalldata",
-        return_description = "Encoded takeOrders4 calldata and price information",
+        return_description = "Encoded takeOrders5 calldata and price information",
         unchecked_return_type = "TakeOrdersCalldataResult",
         preserve_js_class
     )]
@@ -249,7 +249,7 @@ impl RaindexClient {
 impl RaindexClient {
     /// Non-wasm variant of [`Self::get_take_orders_calldata`] that accepts a
     /// caller-supplied [`SignedContextInjector`]. The injector contributes
-    /// additional `SignedContextV1` entries appended after any oracle-fetched
+    /// additional `SignedContextV2` entries appended after any oracle-fetched
     /// contexts for each candidate (composition order: `[oracle..., injected...]`).
     pub async fn get_take_orders_calldata_with_injector(
         &self,
@@ -608,7 +608,7 @@ mod tests {
         use crate::test_helpers::candidates::make_candidate;
         use alloy::primitives::{Address, Bytes, FixedBytes, U256};
         use rain_math_float::Float;
-        use raindex_bindings::IRaindexV7::SignedContextV1;
+        use raindex_bindings::IRaindexV7::SignedContextV2;
 
         fn float(value: &str) -> Float {
             Float::parse(value.to_string()).unwrap()
@@ -628,9 +628,10 @@ mod tests {
             }
         }
 
-        fn signed_context(value: u8) -> SignedContextV1 {
-            SignedContextV1 {
+        fn signed_context(value: u8) -> SignedContextV2 {
+            SignedContextV2 {
                 signer: Address::from([value; 20]),
+                domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
                 context: vec![FixedBytes::<32>::from(
                     U256::from(value).to_be_bytes::<32>(),
                 )],

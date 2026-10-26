@@ -2,7 +2,7 @@ use alloy::primitives::{Address, Bytes, FixedBytes, U256};
 use alloy::sol_types::SolValue;
 use futures::{stream::FuturesUnordered, StreamExt};
 use once_cell::sync::{Lazy, OnceCell};
-use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV1};
+use raindex_bindings::IRaindexV7::{OrderV4, SignedContextV2};
 use raindex_subgraph_client::types::common::SgOrder;
 use reqwest::Client;
 use serde::de::DeserializeOwned;
@@ -81,14 +81,18 @@ fn sanitized_endpoint(url: &Url) -> String {
 }
 
 /// JSON response format from an oracle endpoint.
-/// Maps directly to `SignedContextV1` in the raindex contract.
+/// Maps directly to `SignedContextV2` in the raindex contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OracleResponse {
-    /// The signer address (EIP-191 signer of the context data)
+    /// The signer address (EIP-712 signer of the context data)
     pub signer: Address,
+    /// The EIP-712 domain separator the signer chose
+    #[serde(rename = "domainSeparator")]
+    pub domain_separator: FixedBytes<32>,
     /// The signed context data as bytes32[] values
     pub context: Vec<FixedBytes<32>>,
-    /// The EIP-191 signature over keccak256(abi.encodePacked(context))
+    /// The EIP-712 signature over `SignedContextV2(address signer,bytes32[] context)`
+    /// under `domain_separator`
     pub signature: Bytes,
 }
 
@@ -103,7 +107,7 @@ pub struct OracleBatchItemError {
 }
 
 /// Result for one item in an `allowFailure=true` oracle batch.
-pub type OracleBatchItemResult = Result<SignedContextV1, OracleBatchItemError>;
+pub type OracleBatchItemResult = Result<SignedContextV2, OracleBatchItemError>;
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "status", content = "body", rename_all = "lowercase")]
@@ -119,10 +123,11 @@ enum OracleBatchResponse {
     Legacy(Vec<OracleResponse>),
 }
 
-impl From<OracleResponse> for SignedContextV1 {
+impl From<OracleResponse> for SignedContextV2 {
     fn from(resp: OracleResponse) -> Self {
-        SignedContextV1 {
+        SignedContextV2 {
             signer: resp.signer,
+            domainSeparator: resp.domain_separator,
             context: resp.context,
             signature: resp.signature,
         }
@@ -242,7 +247,7 @@ impl OracleClient {
         &self,
         url: &str,
         body: Vec<u8>,
-    ) -> Result<SignedContextV1, OracleError> {
+    ) -> Result<SignedContextV2, OracleError> {
         let url = validate_oracle_url(url)?;
         self.fetch_signed_context_at(&url, body).await
     }
@@ -251,7 +256,7 @@ impl OracleClient {
         &self,
         url: &Url,
         body: Vec<u8>,
-    ) -> Result<SignedContextV1, OracleError> {
+    ) -> Result<SignedContextV2, OracleError> {
         let response: Vec<OracleResponse> = self.fetch_json(url, body).await?;
 
         let [response]: [OracleResponse; 1] =
@@ -298,7 +303,7 @@ impl OracleClient {
         url: &str,
         body: Vec<u8>,
         expected_count: usize,
-    ) -> Result<Vec<SignedContextV1>, OracleError> {
+    ) -> Result<Vec<SignedContextV2>, OracleError> {
         let url = validate_oracle_url(url)?;
         let response: Vec<OracleResponse> = self.fetch_json(&url, body).await?;
 
@@ -428,7 +433,7 @@ pub fn encode_oracle_body_batch(requests: Vec<(&OrderV4, u32, u32, Address)>) ->
 pub async fn fetch_signed_context(
     url: &str,
     body: Vec<u8>,
-) -> Result<SignedContextV1, OracleError> {
+) -> Result<SignedContextV2, OracleError> {
     OracleClient::new()?.fetch_signed_context(url, body).await
 }
 
@@ -443,7 +448,7 @@ pub async fn fetch_signed_context_batch(
     url: &str,
     body: Vec<u8>,
     expected_count: usize,
-) -> Result<Vec<SignedContextV1>, OracleError> {
+) -> Result<Vec<SignedContextV2>, OracleError> {
     OracleClient::new()?
         .fetch_signed_context_batch(url, body, expected_count)
         .await
@@ -496,18 +501,50 @@ mod tests {
         let ctx_val = FixedBytes::<32>::from([0x2a; 32]);
         let response = OracleResponse {
             signer: address!("0x1234567890123456789012345678901234567890"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![ctx_val],
             signature: Bytes::from(vec![0xaa, 0xbb, 0xcc]),
         };
 
-        let signed: SignedContextV1 = response.into();
+        let signed: SignedContextV2 = response.into();
         assert_eq!(
             signed.signer,
             address!("0x1234567890123456789012345678901234567890")
         );
+        assert_eq!(
+            signed.domainSeparator,
+            FixedBytes::<32>::repeat_byte(0xd5)
+        );
         assert_eq!(signed.context.len(), 1);
         assert_eq!(signed.context[0], ctx_val);
         assert_eq!(signed.signature, Bytes::from(vec![0xaa, 0xbb, 0xcc]));
+    }
+
+    #[test]
+    fn test_oracle_response_json_requires_domain_separator() {
+        let domain = format!("0x{}", "d5".repeat(32));
+        let with_domain: OracleResponse = serde_json::from_value(json!({
+            "signer": "0x1234567890123456789012345678901234567890",
+            "domainSeparator": domain,
+            "context": [format!("0x{}", "2a".repeat(32))],
+            "signature": "0xaabbcc",
+        }))
+        .unwrap();
+        assert_eq!(
+            with_domain.domain_separator,
+            FixedBytes::<32>::repeat_byte(0xd5)
+        );
+        assert_eq!(
+            serde_json::to_value(&with_domain).unwrap()["domainSeparator"],
+            json!(domain)
+        );
+
+        let without_domain = serde_json::from_value::<OracleResponse>(json!({
+            "signer": "0x1234567890123456789012345678901234567890",
+            "context": [format!("0x{}", "2a".repeat(32))],
+            "signature": "0xaabbcc",
+        }));
+        assert!(without_domain.is_err());
     }
 
     #[test]
@@ -598,11 +635,13 @@ mod tests {
         let server = MockServer::start_async().await;
         let first_response = OracleResponse {
             signer: address!("0x1111111111111111111111111111111111111111"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![FixedBytes::with_last_byte(1)],
             signature: vec![0xaa].into(),
         };
         let third_response = OracleResponse {
             signer: address!("0x3333333333333333333333333333333333333333"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![FixedBytes::with_last_byte(3)],
             signature: vec![0xcc].into(),
         };
@@ -676,11 +715,13 @@ mod tests {
         let server = MockServer::start_async().await;
         let first = OracleResponse {
             signer: address!("0x1111111111111111111111111111111111111111"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![FixedBytes::with_last_byte(1)],
             signature: vec![0xaa].into(),
         };
         let second = OracleResponse {
             signer: address!("0x2222222222222222222222222222222222222222"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![FixedBytes::with_last_byte(2)],
             signature: vec![0xbb].into(),
         };
@@ -718,6 +759,7 @@ mod tests {
         let server = MockServer::start_async().await;
         let response = OracleResponse {
             signer: address!("0x1111111111111111111111111111111111111111"),
+            domain_separator: FixedBytes::<32>::repeat_byte(0xd5),
             context: vec![FixedBytes::with_last_byte(1)],
             signature: vec![0xaa].into(),
         };

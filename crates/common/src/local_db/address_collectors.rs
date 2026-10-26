@@ -13,7 +13,7 @@ pub fn collect_token_addresses(
             DecodedEvent::WithdrawV2(withdraw) => Some(vec![withdraw.token]),
             DecodedEvent::AddOrderV3(add) => Some(order_tokens_vec(&add.order)),
             DecodedEvent::RemoveOrderV3(remove) => Some(order_tokens_vec(&remove.order)),
-            DecodedEvent::TakeOrderV3(take) => Some(order_tokens_vec(&take.config.order)),
+            DecodedEvent::TakeOrderV4(take) => Some(order_tokens_vec(&take.config.order)),
             DecodedEvent::ClearV3(clear) => {
                 let mut tokens = order_tokens_vec(&clear.alice);
                 tokens.extend(order_tokens_vec(&clear.bob));
@@ -38,7 +38,7 @@ pub fn collect_store_addresses(
             DecodedEvent::RemoveOrderV3(remove) => {
                 out.insert(remove.order.evaluable.store);
             }
-            DecodedEvent::TakeOrderV3(take) => {
+            DecodedEvent::TakeOrderV4(take) => {
                 out.insert(take.config.order.evaluable.store);
             }
             DecodedEvent::InterpreterStoreSet(set) => {
@@ -69,8 +69,8 @@ mod tests {
     use alloy::primitives::{b256, Address, Bytes, FixedBytes, U256};
     use raindex_bindings::IInterpreterStoreV3::Set;
     use raindex_bindings::IRaindexV7::{
-        AddOrderV3, DepositV2, OrderV4, RemoveOrderV3, SignedContextV1, TakeOrderConfigV4,
-        TakeOrderV3, WithdrawV2, IOV2,
+        AddOrderV3, DepositV2, OrderV4, RemoveOrderV3, SignedContextV2, TakeOrderConfigV5,
+        TakeOrderV4, WithdrawV2, IOV2,
     };
 
     fn build_event(event: DecodedEvent) -> DecodedEventData<DecodedEvent> {
@@ -215,14 +215,15 @@ mod tests {
 
         let mut take_order = sample_order();
         take_order.evaluable.store = Address::from([0x33; 20]);
-        let take_event = TakeOrderV3 {
+        let take_event = TakeOrderV4 {
             sender: Address::from([0x23; 20]),
-            config: TakeOrderConfigV4 {
+            config: TakeOrderConfigV5 {
                 order: take_order,
                 inputIOIndex: U256::from(0),
                 outputIOIndex: U256::from(0),
-                signedContext: vec![SignedContextV1 {
+                signedContext: vec![SignedContextV2 {
                     signer: Address::from([0x24; 20]),
+                    domainSeparator: alloy::primitives::B256::repeat_byte(0xd5),
                     context: vec![U256::from(1).into()],
                     signature: Bytes::from(vec![0xde, 0xad]),
                 }],
@@ -243,7 +244,7 @@ mod tests {
         let events = vec![
             build_event(DecodedEvent::AddOrderV3(Box::new(add_event))),
             build_event(DecodedEvent::RemoveOrderV3(Box::new(remove_event))),
-            build_event(DecodedEvent::TakeOrderV3(Box::new(take_event))),
+            build_event(DecodedEvent::TakeOrderV4(Box::new(take_event))),
             build_event(DecodedEvent::InterpreterStoreSet(Box::new(store_event))),
         ];
 

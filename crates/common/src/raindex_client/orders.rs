@@ -753,7 +753,7 @@ impl RaindexOrder {
         Ok(sg_order)
     }
 
-    /// Generates calldata for `IRaindexV7.takeOrders4` targeting this specific order.
+    /// Generates calldata for `IRaindexV7.takeOrders5` targeting this specific order.
     ///
     /// Unlike `getTakeOrdersCalldata` on `RaindexClient` which discovers orders from the subgraph,
     /// this method generates calldata for taking this single known order that the user has already
@@ -770,7 +770,7 @@ impl RaindexOrder {
     /// - `priceCap`: human-readable decimal string for max sell per 1 buy
     ///
     /// Returns calldata plus pricing info:
-    /// - `calldata`: ABI-encoded bytes for `takeOrders4`.
+    /// - `calldata`: ABI-encoded bytes for `takeOrders5`.
     /// - `effectivePrice`: expected blended sell per 1 buy from the simulation.
     /// - `prices`: per-leg ratios (single entry for this order).
     /// - `expectedSell`: simulated sell at current quotes.
@@ -794,7 +794,7 @@ impl RaindexOrder {
     /// ```
     #[wasm_export(
         js_name = "getTakeCalldata",
-        return_description = "Encoded takeOrders4 calldata and price information for this order",
+        return_description = "Encoded takeOrders5 calldata and price information for this order",
         unchecked_return_type = "TakeOrdersCalldataResult",
         preserve_js_class
     )]
@@ -901,10 +901,10 @@ impl RaindexOrder {
     /// caller-supplied [`SignedContextInjector`] through the quote pipeline.
     ///
     /// Mirrors the shape of [`RaindexClient::get_take_orders_calldata_with_injector`]:
-    /// any injector-contributed `SignedContextV1` entries are appended after
-    /// any oracle-fetched context on each `QuoteV2` before the quote multicall
+    /// any injector-contributed `SignedContextV2` entries are appended after
+    /// any oracle-fetched context on each `QuoteV3` before the quote multicall
     /// (composition order: `[oracle..., injected...]`). The candidate inherits
-    /// that exact composed list, so `takeOrders4` executes with the same
+    /// that exact composed list, so `takeOrders5` executes with the same
     /// signed context the quote saw — required for gated orders whose
     /// `calculate-io` asserts on `signer<0>()` or similar.
     ///

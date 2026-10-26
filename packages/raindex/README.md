@@ -465,7 +465,7 @@ leg before building calldata.
 
 ### 5. Take orders
 
-The SDK provides two approaches for executing `takeOrders4` transactions:
+The SDK provides two approaches for executing `takeOrders5` transactions:
 auto-discovery by token pair or targeting a specific known order.
 
 #### Take orders by token pair (auto-discovery)
@@ -491,7 +491,7 @@ if (takeResult.error) throw new Error(takeResult.error.readableMsg);
 
 const {
   raindex, // Contract address to call
-  calldata, // ABI-encoded takeOrders4 calldata
+  calldata, // ABI-encoded takeOrders5 calldata
   effectivePrice, // Blended price from simulation
   prices, // Per-leg ratios (best to worst)
   expectedSell, // Simulated sell amount at current quotes

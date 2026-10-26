@@ -964,7 +964,7 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         .thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
       await mockServer.forPost("/rpc1").once().thenSendJsonRpcResult("0x01");
       // OZ Multicall returns `bytes[]` — 1 element whose contents are the
-      // ABI-encoded `quote2Return` tuple `(bool exists, Float outputMax, Float ioRatio)` (96 bytes).
+      // ABI-encoded `quote3Return` tuple `(bool exists, Float outputMax, Float ioRatio)` (96 bytes).
       await mockServer
         .forPost("/rpc1")
         .thenSendJsonRpcResult(
@@ -1074,7 +1074,7 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         .forPost("/sg1")
         .thenReply(200, JSON.stringify({ data: { orders: [order1] } }));
       await mockServer.forPost("/rpc1").once().thenSendJsonRpcResult("0x01");
-      // OZ Multicall `bytes[]` with 2 elements, each a 96-byte `quote2Return`.
+      // OZ Multicall `bytes[]` with 2 elements, each a 96-byte `quote3Return`.
       // elem[0] maxOutput=1/ioRatio=2, elem[1] maxOutput=2/ioRatio=1
       await mockServer
         .forPost("/rpc1")

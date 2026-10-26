@@ -8,7 +8,7 @@ use alloy::{
     },
     sol_types::SolCall,
 };
-use raindex_bindings::IRaindexV7::{takeOrders4Call, OrderV4, TakeOrdersConfigV5};
+use raindex_bindings::IRaindexV7::{takeOrders5Call, OrderV4, TakeOrdersConfigV6};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen_utils::{impl_wasm_traits, prelude::*};
 
@@ -64,9 +64,9 @@ pub fn get_take_orders4_calldata(
     #[wasm_export(
         param_description = "Complete configuration for order execution including minimumIO, maximumIO, maximumIORatio, orders array, IOIsInput, and additional data"
     )]
-    take_orders_config: TakeOrdersConfigV5,
+    take_orders_config: TakeOrdersConfigV6,
 ) -> Result<TakeOrdersCalldata, Error> {
-    let calldata = takeOrders4Call {
+    let calldata = takeOrders5Call {
         config: take_orders_config,
     }
     .abi_encode();
@@ -169,9 +169,9 @@ mod tests {
 
     #[wasm_bindgen_test]
     fn test_take_orders_calldata() {
-        let take_orders_config = TakeOrdersConfigV5::default();
+        let take_orders_config = TakeOrdersConfigV6::default();
         let result = get_take_orders4_calldata(take_orders_config.clone()).unwrap();
-        let expected = takeOrders4Call {
+        let expected = takeOrders5Call {
             config: take_orders_config,
         }
         .abi_encode();

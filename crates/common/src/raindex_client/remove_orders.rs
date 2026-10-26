@@ -8,7 +8,7 @@ use crate::retry::{retry_with_constant_interval, RetryError};
 use crate::utils::timing::Timing;
 use alloy::primitives::{hex::decode, Bytes, B256};
 use alloy::sol_types::{SolCall, SolValue};
-use raindex_bindings::IRaindexV7::{removeOrder3Call, OrderV4};
+use raindex_bindings::IRaindexV7::{removeOrder4Call, OrderV4};
 use raindex_subgraph_client::types::order_detail_traits::OrderDetailError;
 use tracing::{error, info, info_span};
 
@@ -221,7 +221,7 @@ impl RaindexOrder {
                 return Err(RaindexError::from(err));
             }
         };
-        let remove_order_call = removeOrder3Call {
+        let remove_order_call = removeOrder4Call {
             order,
             tasks: vec![],
         };

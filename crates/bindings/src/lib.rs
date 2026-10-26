@@ -58,7 +58,7 @@ pub mod topics {
     use crate::{
         IInterpreterStoreV3::Set,
         IRaindexV7::{
-            AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV3, WithdrawV2,
+            AddOrderV3, AfterClearV2, ClearV3, DepositV2, RemoveOrderV3, TakeOrderV4, WithdrawV2,
         },
         Raindex::MetaV1_2,
     };
@@ -66,7 +66,7 @@ pub mod topics {
 
     pub const RAINDEX_EVENT_TOPICS: [B256; 8] = [
         AddOrderV3::SIGNATURE_HASH,
-        TakeOrderV3::SIGNATURE_HASH,
+        TakeOrderV4::SIGNATURE_HASH,
         WithdrawV2::SIGNATURE_HASH,
         DepositV2::SIGNATURE_HASH,
         RemoveOrderV3::SIGNATURE_HASH,

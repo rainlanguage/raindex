@@ -416,7 +416,7 @@ pub mod local_evm {
         let raw_amount = Float::from_fixed_decimal(amount, 18).unwrap().get_inner();
 
         raindex_instance
-            .deposit4(token, vault_id, raw_amount, vec![])
+            .deposit5(token, vault_id, raw_amount, vec![])
             .from(setup.owner)
             .send()
             .await

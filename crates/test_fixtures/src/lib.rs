@@ -372,7 +372,7 @@ impl LocalEvm {
 
         let tx = self
             .raindex
-            .deposit4(token, vault_id, raw_deposit_amount, vec![])
+            .deposit5(token, vault_id, raw_deposit_amount, vec![])
             .from(from)
             .into_transaction_request();
 
