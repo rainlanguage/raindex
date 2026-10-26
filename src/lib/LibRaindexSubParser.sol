@@ -322,7 +322,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, uint256(OperandV2.unwrap(operand)));
     }
 
-    /// @dev Maps the "deposit-token" word to the calling context column.
+    /// @dev Maps the "deposit-token" word to the deposit column.
     function subParserDepositToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -332,7 +332,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
     }
 
-    /// @dev Maps the "deposit-vault-id" word to the calling context column.
+    /// @dev Maps the "deposit-vault-id" word to the deposit column.
     function subParserDepositVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -342,7 +342,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
     }
 
-    /// @dev Maps the "deposit-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-before" word to the deposit column.
     function subParserDepositVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -352,7 +352,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "deposit-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-after" word to the deposit column.
     function subParserDepositVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -362,7 +362,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER);
     }
 
-    /// @dev Maps the "deposit-token-decimals" word to the calling context column.
+    /// @dev Maps the "deposit-token-decimals" word to the deposit column.
     function subParserDepositTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
@@ -372,7 +372,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS);
     }
 
-    /// @dev Maps the "withdraw-token" word to the calling context column.
+    /// @dev Maps the "withdraw-token" word to the withdraw column.
     function subParserWithdrawToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -382,7 +382,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
     }
 
-    /// @dev Maps the "withdraw-vault-id" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-id" word to the withdraw column.
     function subParserWithdrawVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -392,7 +392,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-before" word to the withdraw column.
     function subParserWithdrawVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -402,7 +402,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-after" word to the withdraw column.
     function subParserWithdrawVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -412,7 +412,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER);
     }
 
-    /// @dev Maps the "withdraw-target-amount" word to the calling context column.
+    /// @dev Maps the "withdraw-target-amount" word to the withdraw column.
     function subParserWithdrawTargetAmount(uint256, uint256, OperandV2)
         internal
         pure
@@ -422,7 +422,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT);
     }
 
-    /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
+    /// @dev Maps the "withdraw-token-decimals" word to the withdraw column.
     function subParserWithdrawTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
