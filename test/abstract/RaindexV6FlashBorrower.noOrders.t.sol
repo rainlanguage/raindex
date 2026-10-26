@@ -19,7 +19,7 @@ import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.so
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 contract RaindexV6FlashBorrowerNoOrdersTest is ArbTest {
     function buildArb() internal override returns (address payable) {
