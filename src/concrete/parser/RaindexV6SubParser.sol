@@ -51,6 +51,8 @@ import {
     CONTEXT_CALCULATIONS_ROW_MAX_OUTPUT,
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_COUNTERPARTY,
+    CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_OWNER,
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_HASH,
     CONTEXT_CALLING_CONTEXT_ROWS,
@@ -167,7 +169,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextDepositContextHandlers[DEPOSIT_WORD_VAULT_AFTER] = LibParseOperand.handleOperandDisallowed;
         contextDepositContextHandlers[DEPOSIT_WORD_TOKEN_DECIMALS] = LibParseOperand.handleOperandDisallowed;
 
-        handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = contextDepositContextHandlers;
+        handlers[CONTEXT_DEPOSIT_COLUMN] = contextDepositContextHandlers;
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextWithdrawContextHandlers =
             new function(bytes32[] memory) internal pure returns (OperandV2)[](WITHDRAW_WORDS_LENGTH);
@@ -179,7 +181,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         contextWithdrawContextHandlers[WITHDRAW_WORD_TARGET_AMOUNT] = LibParseOperand.handleOperandDisallowed;
         contextWithdrawContextHandlers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibParseOperand.handleOperandDisallowed;
 
-        handlers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = contextWithdrawContextHandlers;
+        handlers[CONTEXT_WITHDRAW_COLUMN] = contextWithdrawContextHandlers;
 
         uint256[][] memory handlersUint256;
         assembly ("memory-safe") {
@@ -275,14 +277,14 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             internal
             view returns (bool, bytes memory, bytes32[] memory)[](DEPOSIT_WORDS_LENGTH);
 
-        depositParsers[DEPOSIT_WORD_DEPOSITOR] = LibRaindexSubParser.subParserSender;
+        depositParsers[DEPOSIT_WORD_DEPOSITOR] = LibRaindexSubParser.subParserDepositor;
         depositParsers[DEPOSIT_WORD_TOKEN] = LibRaindexSubParser.subParserDepositToken;
         depositParsers[DEPOSIT_WORD_VAULT_ID] = LibRaindexSubParser.subParserDepositVaultId;
         depositParsers[DEPOSIT_WORD_VAULT_BEFORE] = LibRaindexSubParser.subParserDepositVaultBalanceBefore;
         depositParsers[DEPOSIT_WORD_VAULT_AFTER] = LibRaindexSubParser.subParserDepositVaultBalanceAfter;
         depositParsers[DEPOSIT_WORD_TOKEN_DECIMALS] = LibRaindexSubParser.subParserDepositTokenDecimals;
 
-        parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1] = depositParsers;
+        parsers[CONTEXT_DEPOSIT_COLUMN] = depositParsers;
 
         // Withdraws
 
@@ -292,7 +294,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             internal
             view returns (bool, bytes memory, bytes32[] memory)[](WITHDRAW_WORDS_LENGTH);
 
-        withdrawParsers[WITHDRAW_WORD_WITHDRAWER] = LibRaindexSubParser.subParserSender;
+        withdrawParsers[WITHDRAW_WORD_WITHDRAWER] = LibRaindexSubParser.subParserWithdrawer;
         withdrawParsers[WITHDRAW_WORD_TOKEN] = LibRaindexSubParser.subParserWithdrawToken;
         withdrawParsers[WITHDRAW_WORD_VAULT_ID] = LibRaindexSubParser.subParserWithdrawVaultId;
         withdrawParsers[WITHDRAW_WORD_VAULT_BEFORE] = LibRaindexSubParser.subParserWithdrawVaultBalanceBefore;
@@ -300,7 +302,7 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
         withdrawParsers[WITHDRAW_WORD_TARGET_AMOUNT] = LibRaindexSubParser.subParserWithdrawTargetAmount;
         withdrawParsers[WITHDRAW_WORD_TOKEN_DECIMALS] = LibRaindexSubParser.subParserWithdrawTokenDecimals;
 
-        parsers[CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2] = withdrawParsers;
+        parsers[CONTEXT_WITHDRAW_COLUMN] = withdrawParsers;
 
         uint256[][] memory parsersUint256;
         assembly ("memory-safe") {
