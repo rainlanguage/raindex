@@ -511,10 +511,7 @@ mod tests {
             signed.signer,
             address!("0x1234567890123456789012345678901234567890")
         );
-        assert_eq!(
-            signed.domainSeparator,
-            FixedBytes::<32>::repeat_byte(0xd5)
-        );
+        assert_eq!(signed.domainSeparator, FixedBytes::<32>::repeat_byte(0xd5));
         assert_eq!(signed.context.len(), 1);
         assert_eq!(signed.context[0], ctx_val);
         assert_eq!(signed.signature, Bytes::from(vec![0xaa, 0xbb, 0xcc]));
@@ -523,7 +520,7 @@ mod tests {
     #[test]
     fn test_oracle_response_json_requires_domain_separator() {
         let domain = format!("0x{}", "d5".repeat(32));
-        let with_domain: OracleResponse = serde_json::from_value(json!({
+        let with_domain: OracleResponse = serde_json::from_value(serde_json::json!({
             "signer": "0x1234567890123456789012345678901234567890",
             "domainSeparator": domain,
             "context": [format!("0x{}", "2a".repeat(32))],
@@ -536,10 +533,10 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_value(&with_domain).unwrap()["domainSeparator"],
-            json!(domain)
+            serde_json::json!(domain)
         );
 
-        let without_domain = serde_json::from_value::<OracleResponse>(json!({
+        let without_domain = serde_json::from_value::<OracleResponse>(serde_json::json!({
             "signer": "0x1234567890123456789012345678901234567890",
             "context": [format!("0x{}", "2a".repeat(32))],
             "signature": "0xaabbcc",
