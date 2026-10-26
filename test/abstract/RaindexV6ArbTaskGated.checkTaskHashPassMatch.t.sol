@@ -11,7 +11,7 @@ import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInte
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 
 /// _checkTaskHash MUST pass when the runtime task matches the configured task.
 contract RaindexV6ArbTaskGatedCheckTaskHashPassMatchTest is Test {

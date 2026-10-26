@@ -21,7 +21,7 @@ import {
 } from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
 import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
-import {TEST_INTERPRETER_ADDRESS} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+import {TEST_INTERPRETER_ADDRESS} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 contract GenericPoolRaindexV6ArbOrderTakerReentrantCallbackTest is RaindexV6ExternalRealTest {
