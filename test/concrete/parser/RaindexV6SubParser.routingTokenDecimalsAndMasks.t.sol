@@ -37,7 +37,7 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
         column = uint8(bytecode[3]);
     }
 
-    /// withdraw-token-decimals routes to the calling context column (1), row 5.
+    /// withdraw-token-decimals routes to the withdraw column (6), row 5.
     /// A mutation of either the column or the row constant lands a different
     /// byte in the decoded bytecode and fails here.
     function testRouteWithdrawTokenDecimalsAbsolute() external pure {
@@ -46,7 +46,7 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
         assertTrue(success, "parser must succeed");
         assertEq(constants.length, 0, "context has no constants");
         (uint8 row, uint8 column) = decode(bytecode);
-        assertEq(column, 1, "withdraw-token-decimals column is calling-context (1)");
+        assertEq(column, 6, "withdraw-token-decimals column is withdraw (6)");
         assertEq(row, 5, "withdraw-token-decimals row is 5");
     }
 
@@ -61,10 +61,10 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
     }
 
     /// The signed-context ROW is `(operand >> 8) & 0xFF`. An operand of
-    /// `0x010000` has low byte 0 (column offset 0 -> column 7) and `>> 8` =
+    /// `0x010000` has low byte 0 (column offset 0 -> column 8) and `>> 8` =
     /// `0x0100` = 256. WITH the mask the row is `0x0100 & 0xFF` = 0, so the
-    /// parser succeeds and returns (column 7, row 0). WITHOUT the mask the row is
-    /// 256, which exceeds uint8 and reverts `ContextGridOverflow(7, 256)`. This
+    /// parser succeeds and returns (column 8, row 0). WITHOUT the mask the row is
+    /// 256, which exceeds uint8 and reverts `ContextGridOverflow(8, 256)`. This
     /// asserts the masked, non-reverting outcome, so dropping the row mask flips
     /// success into a revert and fails the test.
     function testSignedContextRowMaskKeepsRowInRange() external pure {
@@ -72,21 +72,21 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
             LibRaindexSubParser.subParserSignedContext(0, 0, OperandV2.wrap(bytes32(uint256(0x010000))));
         assertTrue(success, "parser must succeed (row mask keeps row in range)");
         (uint8 row, uint8 column) = decode(bytecode);
-        assertEq(column, 7, "column is signed-context start (7) + low byte 0");
+        assertEq(column, 8, "column is signed-context start (8) + low byte 0");
         assertEq(row, 0, "row is (0x010000 >> 8) & 0xFF = 0");
     }
 
     /// Confirms the discriminator above is genuine: the SAME wide operand, with
     /// the row mask DROPPED (`>> 8` without `& 0xFF`), drives the row to 256 and
-    /// `LibSubParse.subParserContext` reverts `ContextGridOverflow(7, 256)`. This
+    /// `LibSubParse.subParserContext` reverts `ContextGridOverflow(8, 256)`. This
     /// documents the exact revert the production mask prevents, so the pairing of
     /// these two tests pins the mask: removing it makes the happy test above
     /// revert with this very selector/args.
     function testSignedContextUnmaskedRowWouldOverflow() external {
         uint256 column = uint256(0x010000) & 0xFF; // low byte 0
         uint256 unmaskedRow = uint256(0x010000) >> 8; // 256
-        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, column + 7, unmaskedRow));
-        this.callContext(column + 7, unmaskedRow);
+        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, column + 8, unmaskedRow));
+        this.callContext(column + 8, unmaskedRow);
     }
 
     /// @dev External wrapper so `vm.expectRevert` can catch the library revert.

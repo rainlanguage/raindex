@@ -53,6 +53,7 @@ import {
     CALLING_CONTEXT_COLUMNS,
     CONTEXT_CALLING_CONTEXT_COLUMN,
     CONTEXT_DEPOSIT_COLUMN,
+    CONTEXT_WITHDRAW_COLUMN,
     CONTEXT_CALCULATIONS_COLUMN,
     CONTEXT_CALCULATIONS_ROWS,
     CONTEXT_VAULT_IO_BALANCE_DIFF,
@@ -215,19 +216,22 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             emit WithdrawV2(msg.sender, token, vaultId, targetAmount, withdrawAmount, withdrawAmountUint256);
         }
 
-        bytes32[] memory contextColumn = LibBytes32Array.arrayFrom(
-            bytes32(uint256(uint160(token))),
-            vaultId,
-            Float.unwrap(beforeBalance),
-            Float.unwrap(afterBalance),
-            Float.unwrap(targetAmount),
-            bytes32(uint256(decimals))
-        );
-
-        bytes32[][] memory context = LibBytes32Matrix.matrixFrom(contextColumn);
-
         if (post.length != 0) {
-            LibRaindex.doPost(context, post);
+            LibRaindex.doPost(
+                LibRaindex.callingContextColumn(
+                    CONTEXT_WITHDRAW_COLUMN,
+                    LibBytes32Array.arrayFrom(
+                        bytes32(uint256(uint160(token))),
+                        vaultId,
+                        Float.unwrap(beforeBalance),
+                        Float.unwrap(afterBalance),
+                        Float.unwrap(targetAmount),
+                        bytes32(uint256(decimals)),
+                        bytes32(uint256(uint160(msg.sender)))
+                    )
+                ),
+                post
+            );
         }
     }
 

@@ -21,8 +21,8 @@ import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
 
 /// @title RaindexV6ContextWordEntrypointsTest
-/// @notice Every deposit context word reads its true value in deposit tasks and
-/// reverts out of bounds in every other entrypoint.
+/// @notice Every deposit and withdraw context word reads its true value in its
+/// own task entrypoint and reverts out of bounds in every other entrypoint.
 contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     using Strings for address;
     using Strings for uint256;
@@ -152,19 +152,42 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         checks[5] = Check("deposit-token-decimals()", "18");
     }
 
+    function withdrawChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](7);
+        checks[0] = Check("withdrawer()", ACTOR.toHexString());
+        checks[1] = Check("withdraw-token()", address(iToken0).toHexString());
+        checks[2] = Check("withdraw-vault-id()", uint256(VAULT_ID).toHexString());
+        checks[3] = Check("withdraw-vault-before()", "1");
+        checks[4] = Check("withdraw-vault-after()", "0");
+        checks[5] = Check("withdraw-target-amount()", "1");
+        checks[6] = Check("withdraw-token-decimals()", "18");
+    }
+
+    function words() internal pure returns (string[] memory all) {
+        string[] memory deposit = LibTestContextWords.depositWords();
+        string[] memory withdraw = LibTestContextWords.withdrawWords();
+        all = new string[](deposit.length + withdraw.length);
+        for (uint256 i = 0; i < deposit.length; i++) {
+            all[i] = deposit[i];
+        }
+        for (uint256 i = 0; i < withdraw.length; i++) {
+            all[deposit.length + i] = withdraw[i];
+        }
+    }
+
     // Task entrypoint runner.
 
     function checkTaskFamily(function(TaskV2[] memory) external run, Check[] memory checks) internal {
         uint256 start = vm.snapshotState();
         run(task(checks.length > 0 ? ensures(checks) : ":;"));
         vm.revertToState(start);
-        string[] memory words = LibTestContextWords.depositWords();
-        for (uint256 i = 0; i < words.length; i++) {
-            if (inFamily(checks, words[i])) {
+        string[] memory all = words();
+        for (uint256 i = 0; i < all.length; i++) {
+            if (inFamily(checks, all[i])) {
                 continue;
             }
             uint256 snapshot = vm.snapshotState();
-            TaskV2[] memory post = task(string.concat(":set(0 ", words[i], ");"));
+            TaskV2[] memory post = task(string.concat(":set(0 ", all[i], ");"));
             vm.expectRevert(stdError.indexOOBError);
             run(post);
             vm.revertToState(snapshot);
@@ -176,7 +199,7 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
     }
 
     function testWithdrawContextWords() external {
-        checkTaskFamily(this.doWithdraw, new Check[](0));
+        checkTaskFamily(this.doWithdraw, withdrawChecks());
     }
 
     function testAddOrderContextWords() external {
@@ -197,10 +220,10 @@ contract RaindexV6ContextWordEntrypointsTest is RaindexV6ExternalRealTest {
         uint256 start = vm.snapshotState();
         this.doTake("_ _:1 1;", ":;");
         vm.revertToState(start);
-        string[] memory words = LibTestContextWords.depositWords();
-        for (uint256 i = 0; i < words.length; i++) {
+        string[] memory all = words();
+        for (uint256 i = 0; i < all.length; i++) {
             uint256 snapshot = vm.snapshotState();
-            string memory read = string.concat(":set(0 ", words[i], ");");
+            string memory read = string.concat(":set(0 ", all[i], ");");
             vm.expectRevert(stdError.indexOOBError);
             if (handle) {
                 this.doTake("_ _:1 1;", read);

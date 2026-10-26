@@ -22,13 +22,13 @@ import {LibContext} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.so
 /// Each entrypoint fills only its own columns and leaves the rest empty, so a
 /// word read outside the entrypoints that fill its cell reverts out of bounds
 /// instead of reading another entrypoint's value.
-uint256 constant CALLING_CONTEXT_COLUMNS = 5;
+uint256 constant CALLING_CONTEXT_COLUMNS = 6;
 
 uint256 constant CONTEXT_COLUMNS = CALLING_CONTEXT_COLUMNS + 1;
 
-/// @dev Number of sub parser word tables: one per context column up to and
-/// including the first signed context column, plus the withdraw table.
-uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_SIGNED_CONTEXT_START_COLUMN + 2;
+/// @dev Number of sub parser word tables, one per context column up to and
+/// including the first signed context column.
+uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1;
 
 /// @dev Contextual data available to both calculate order and handle IO. The
 /// order hash, order owner and order counterparty. IMPORTANT NOTE that the
@@ -50,14 +50,15 @@ uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER = 3;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS = 4;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_DEPOSITOR = 5;
 
-/// @dev Context rows for the withdraw calling context column. Available to the
-/// withdraw post-action entrypoint.
+/// @dev Withdraw column. Filled only for withdraw tasks.
+uint256 constant CONTEXT_WITHDRAW_COLUMN = 6;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN = 0;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID = 1;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE = 2;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER = 3;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT = 4;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN_DECIMALS = 5;
+uint256 constant CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_WITHDRAWER = 6;
 
 /// @dev Calculations column contains the DECIMAL RESCALED calculations but
 /// otherwise provided as-is according to calculate order entrypoint
