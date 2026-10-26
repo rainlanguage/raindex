@@ -435,7 +435,7 @@ library LibRaindexSubParser {
         returns (bool, bytes memory, bytes32[] memory)
     {
         uint256 column = uint256(OperandV2.unwrap(operand)) & 0xFF;
-        uint256 row = (uint256(OperandV2.unwrap(operand)) >> 8) & 0xFF;
+        uint256 row = uint256(OperandV2.unwrap(operand)) >> 8;
         //slither-disable-next-line unused-return
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_START_COLUMN + column, row);
     }

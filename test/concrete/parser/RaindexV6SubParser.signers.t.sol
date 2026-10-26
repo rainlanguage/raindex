@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {StackAllocationMismatch} from "rainlang-0.2.19/src/error/ErrIntegrity.sol";
 import {ExpectedOperand, UnexpectedOperandValue} from "rainlang-0.2.19/src/error/ErrParse.sol";
+import {ContextGridOverflow} from "rainlang-0.2.19/src/error/ErrSubParse.sol";
 import {OpTest, StackItem} from "rainlang-0.2.19/src/../test/abstract/OpTest.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibRaindexSubParserContextFixture} from "test/util/fixture/LibRaindexSubParserContextFixture.sol";
@@ -71,5 +72,16 @@ contract RaindexV6SubParserSignersTest is OpTest {
             bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<0>(0);"));
 
         checkUnhappyParse2(rainlang, abi.encodeWithSelector(StackAllocationMismatch.selector, 2, 1));
+    }
+
+    /// A signer index past the last context row reverts rather than wrapping
+    /// onto another signer.
+    function testSubParserContextSignerUnhappyIndexOverflow() external {
+        address subParserAddress = LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
+
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<256>();"));
+
+        checkUnhappyParse(rainlang, abi.encodeWithSelector(ContextGridOverflow.selector, 7, 256));
     }
 }
