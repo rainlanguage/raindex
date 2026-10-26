@@ -11,8 +11,8 @@ import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
-    TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+    TEST_COMPILER_ADDRESS
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {MessageHashUtils} from "@openzeppelin-contracts-5.7.0/utils/cryptography/MessageHashUtils.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
@@ -42,7 +42,7 @@ contract LibRaindexArbFinalizeArbTaskSignedContextTest is Test {
     function task(string memory body, SignedContextV1[] memory sc) internal returns (TaskV2 memory) {
         LibTestInterpreterDeploy.etchTestRainlang(vm);
         vm.etch(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS, SUB_PARSER_RUNTIME_CODE);
-        bytes memory bytecode = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS)
+        bytes memory bytecode = IParserV2(TEST_COMPILER_ADDRESS)
             .parse2(
                 bytes(
                     string.concat(
