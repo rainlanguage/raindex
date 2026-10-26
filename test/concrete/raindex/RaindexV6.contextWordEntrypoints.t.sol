@@ -22,11 +22,7 @@ import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
-import {
-    LibNamespace,
-    FullyQualifiedNamespace,
-    StateNamespace
-} from "rainlang-0.2.30/src/lib/ns/LibNamespace.sol";
+import {LibNamespace, FullyQualifiedNamespace, StateNamespace} from "rainlang-0.2.30/src/lib/ns/LibNamespace.sol";
 
 /// @title RaindexV6ContextWordEntrypointsTest
 /// @notice Every context word reads its true value in the entrypoints that fill
