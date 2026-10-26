@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
+import {SafeCast} from "@openzeppelin-contracts-5.7.0/utils/math/SafeCast.sol";
 import {RaindexV6FreshTakeOrderTest} from "test/util/abstract/RaindexV6FreshTakeOrderTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
@@ -165,7 +166,7 @@ contract RaindexV6TakeOrderSkippedOrderTest is RaindexV6FreshTakeOrderTest {
         }
         assertEq(skipEvents, kinds.length - takenCount, "skip event count");
 
-        Float expected = LibDecimalFloat.packLossless(int256(takenCount), 0);
+        Float expected = LibDecimalFloat.packLossless(SafeCast.toInt256(takenCount), 0);
         assertTrue(totalTakerInput.eq(expected), "totalTakerInput");
         assertTrue(totalTakerOutput.eq(expected), "totalTakerOutput");
     }
