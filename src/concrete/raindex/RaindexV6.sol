@@ -11,7 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensio
 
 import {LibContext} from "rainlang-interface-0.2.14/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rainlang-interface-0.2.14/src/lib/bytecode/LibBytecode.sol";
-import {LibInterpreterStateDataContract} from "rainlang-0.2.19/src/lib/state/LibInterpreterStateDataContract.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.2.26/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,

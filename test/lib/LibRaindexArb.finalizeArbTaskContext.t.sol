@@ -11,8 +11,8 @@ import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
-    TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+    TEST_COMPILER_ADDRESS
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibTestArb, ArbResult} from "test/util/lib/LibTestArb.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskContextTest
@@ -23,7 +23,7 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
     function testFinalizeArbTaskContextValues() external {
         LibTestInterpreterDeploy.etchTestRainlang(vm);
 
-        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_COMPILER_ADDRESS);
 
         // Task expression: ensure context values match expected Floats.
         // 20e18 input profit with 18 decimals → Float(20).
@@ -65,7 +65,7 @@ contract LibRaindexArbFinalizeArbTaskContextTest is Test {
     function testFinalizeArbContextNonZeroOutputAndGas() external {
         LibTestInterpreterDeploy.etchTestRainlang(vm);
 
-        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_COMPILER_ADDRESS);
 
         // 0 input profit → Float(0); 20e18 output profit (18 dp) → Float(20);
         // 1 ether gas swept (packed at -18) → Float(1).
