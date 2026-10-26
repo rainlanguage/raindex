@@ -1,4 +1,5 @@
 use super::*;
+use crate::erc20::TokenInfo;
 use crate::raindex_client::vaults::AccountBalance;
 use futures::StreamExt;
 use rain_math_float::Float;
@@ -63,12 +64,6 @@ impl RaindexOrderBuilder {
             return Err(RaindexOrderBuilderError::TokenNotFound(key.clone()));
         }
 
-        if TokenCfg::parse_from_yaml(self.dotrain_order.dotrain_yaml().documents, &key, None)
-            .is_ok()
-        {
-            TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
-        }
-
         let address = Address::from_str(&address)?;
 
         let order_key = DeploymentCfg::parse_order_key(
@@ -80,8 +75,21 @@ impl RaindexOrderBuilder {
         let rpcs =
             NetworkCfg::parse_rpcs(self.dotrain_order.dotrain_yaml().documents, &network_key)?;
 
-        let erc20 = ERC20::new(rpcs, address);
-        let token_info = erc20.token_info(None).await?;
+        // Selecting the same token address for multiple slots (e.g. both the
+        // input and output side of an order) costs a single token_info fetch:
+        // later selections reuse the metadata already recorded in the yaml.
+        // The lookup runs before the key's own stale record is removed, so
+        // re-selecting a key with its current address also skips the fetch.
+        let token_info = match self.recorded_token_info(&network_key, address) {
+            Some(token_info) => token_info,
+            None => ERC20::new(rpcs, address).token_info(None).await?,
+        };
+
+        if TokenCfg::parse_from_yaml(self.dotrain_order.dotrain_yaml().documents, &key, None)
+            .is_ok()
+        {
+            TokenCfg::remove_record_from_yaml(self.dotrain_order.raindex_yaml().documents, &key)?;
+        }
 
         TokenCfg::add_record_to_yaml(
             self.dotrain_order.raindex_yaml().documents,
@@ -94,6 +102,33 @@ impl RaindexOrderBuilder {
         )?;
 
         Ok(())
+    }
+
+    /// Returns the metadata of a token already recorded in the yaml for
+    /// `address` on `network_key`, when such a record carries the full
+    /// decimals/name/symbol set. Incomplete records don't qualify: their
+    /// missing fields still have to come from an on-chain fetch. The lookup
+    /// is best-effort - an unparseable tokens section reads as "nothing
+    /// recorded" rather than an error, so it can only ever save a fetch.
+    fn recorded_token_info(&self, network_key: &str, address: Address) -> Option<TokenInfo> {
+        self.dotrain_order
+            .raindex_yaml()
+            .get_tokens()
+            .unwrap_or_default()
+            .into_values()
+            .find_map(|token| {
+                if token.network.key != network_key || token.address != address {
+                    return None;
+                }
+                match (token.decimals, token.label, token.symbol) {
+                    (Some(decimals), Some(label), Some(symbol)) => Some(TokenInfo {
+                        decimals,
+                        name: label,
+                        symbol,
+                    }),
+                    _ => None,
+                }
+            })
     }
 
     pub fn unset_select_token(&mut self, key: String) -> Result<(), RaindexOrderBuilderError> {
@@ -790,6 +825,225 @@ networks:
                 err.to_readable_msg(),
                 "No tokens have been configured for selection. Please check your YAML configuration."
             );
+        }
+
+        // A deployment whose order uses two distinct select-token slots (input
+        // token3, output token4) plus a spare slot (token5), and a tokens
+        // section holding an incomplete record (decimals only) for the address
+        // token5 gets selected to, plus a complete record for the shared
+        // address on a different network (which must never satisfy a selection
+        // on this order's network).
+        const SHARED_ADDRESS_YAML_TEMPLATE: &str = r#"
+builder:
+  name: Fixed limit
+  description: Fixed limit order
+  deployments:
+    some-deployment:
+      name: Select token deployment
+      description: Select token deployment description
+      deposits:
+        - token: token3
+      fields:
+        - binding: binding-1
+          name: Field 1 name
+          description: Field 1 description
+          presets:
+            - name: Preset 1
+              value: "0"
+      select-tokens:
+        - key: token3
+          name: Token 3
+          description: Token 3 description
+        - key: token4
+          name: Token 4
+          description: Token 4 description
+        - key: token5
+          name: Token 5
+          description: Token 5 description
+subgraphs:
+  some-sg: https://www.some-sg.com
+metaboards:
+  some-network: https://metaboard.com
+rainlangs:
+  some-deployer:
+    network: some-network
+    address: 0xF14E09601A47552De6aBd3A0B165607FaFd2B5Ba
+raindexes:
+  some-raindex:
+    address: 0xc95A5f8eFe14d7a20BD2E5BAFEC4E71f8Ce0B9A6
+    network: some-network
+    subgraph: some-sg
+    deployment-block: 12345
+tokens:
+  partial-token:
+    network: some-network
+    address: 0x00000000000000000000000000000000000000bb
+    decimals: 6
+  foreign-token:
+    network: other-network
+    address: 0x00000000000000000000000000000000000000aa
+    decimals: 18
+    label: Foreign Token
+    symbol: FT
+scenarios:
+  some-scenario:
+    rainlang: some-deployer
+    bindings:
+      test-binding: 5
+orders:
+  some-order:
+    rainlang: some-deployer
+    inputs:
+      - token: token3
+    outputs:
+      - token: token4
+deployments:
+  some-deployment:
+    scenario: some-scenario
+    order: some-order
+---
+#test-binding !
+#calculate-io
+_ _: 0 0;
+#handle-io
+:;
+#handle-add-order
+:;
+"#;
+
+        const TOKEN_INFO_RESULT: &str = "0x000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000007546f6b656e2031000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000025431000000000000000000000000000000000000000000000000000000000000";
+
+        // Selecting the same token address for two slots costs a single
+        // token_info fetch: the second selection reuses the yaml record the
+        // first one wrote. An incomplete pre-existing record (decimals only)
+        // never shortcuts the fetch.
+        #[tokio::test]
+        async fn test_set_select_token_same_address_fetches_once() {
+            let server = MockServer::start_async().await;
+            let yaml = format!(
+                r#"
+version: {spec_version}
+networks:
+  some-network:
+    rpcs:
+      - {rpc_url}
+    chain-id: 123
+    network-id: 123
+    currency: ETH
+  other-network:
+    rpcs:
+      - {rpc_url}
+    chain-id: 456
+    network-id: 456
+    currency: ETH
+{yaml}
+"#,
+                spec_version = SpecVersion::current(),
+                yaml = SHARED_ADDRESS_YAML_TEMPLATE,
+                rpc_url = server.url("/rpc")
+            );
+
+            // Each mock is pinned to the token address inside the multicall
+            // aggregate calldata, so hit counts are per-address.
+            let shared_info_mock = server.mock(|when, then| {
+                when.method("POST")
+                    .path("/rpc")
+                    .body_contains("252dba42")
+                    .body_contains("00000000000000000000000000000000000000aa");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": TOKEN_INFO_RESULT,
+                }));
+            });
+            let partial_info_mock = server.mock(|when, then| {
+                when.method("POST")
+                    .path("/rpc")
+                    .body_contains("252dba42")
+                    .body_contains("00000000000000000000000000000000000000bb");
+                then.json_body(json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "result": TOKEN_INFO_RESULT,
+                }));
+            });
+
+            let mut builder = RaindexOrderBuilder::new_with_deployment(
+                yaml.to_string(),
+                None,
+                "some-deployment".to_string(),
+            )
+            .await
+            .unwrap();
+
+            // foreign-token records this address in full on other-network, but
+            // metadata only carries over within the order's network: the first
+            // selection still fetches, and gets some-network's values (6
+            // decimals, "Token 1"), not other-network's (18, "Foreign Token").
+            builder
+                .set_select_token(
+                    "token3".to_string(),
+                    "0x00000000000000000000000000000000000000aa".to_string(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(shared_info_mock.hits(), 1);
+
+            // Output slot selects the same address: no second fetch.
+            builder
+                .set_select_token(
+                    "token4".to_string(),
+                    "0x00000000000000000000000000000000000000aa".to_string(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(shared_info_mock.hits(), 1);
+
+            // The reused metadata lands on the output slot's record in full.
+            let deployment = builder.get_current_deployment().unwrap();
+            let input_token = deployment.deployment.order.inputs[0]
+                .token
+                .as_ref()
+                .unwrap();
+            let output_token = deployment.deployment.order.outputs[0]
+                .token
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                output_token.address,
+                Address::from_str("0x00000000000000000000000000000000000000aa").unwrap()
+            );
+            assert_eq!(output_token.decimals, Some(6));
+            assert_eq!(output_token.label, Some("Token 1".to_string()));
+            assert_eq!(output_token.symbol, Some("T1".to_string()));
+            assert_eq!(input_token.decimals, output_token.decimals);
+            assert_eq!(input_token.label, output_token.label);
+            assert_eq!(input_token.symbol, output_token.symbol);
+
+            // partial-token records this address with decimals only, which is
+            // not enough to satisfy a selection: the full info gets fetched.
+            builder
+                .set_select_token(
+                    "token5".to_string(),
+                    "0x00000000000000000000000000000000000000bb".to_string(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(partial_info_mock.hits(), 1);
+            assert_eq!(shared_info_mock.hits(), 1);
+
+            // Re-selecting a key with its current address reuses the record
+            // that same key wrote (token5 holds the only complete record for
+            // this address): no refetch.
+            builder
+                .set_select_token(
+                    "token5".to_string(),
+                    "0x00000000000000000000000000000000000000bb".to_string(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(partial_info_mock.hits(), 1);
+            assert_eq!(shared_info_mock.hits(), 1);
         }
 
         #[tokio::test]
