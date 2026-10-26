@@ -23,7 +23,10 @@ contract RaindexV6CalculateOrderIOHarness is RaindexV6, IRaindexV6CalculateOrder
         address counterparty,
         SignedContextV1[] memory signedContext
     ) external view returns (OrderIOCalculationV4 memory) {
-        return calculateOrderIO(order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0));
+        (, OrderIOCalculationV4 memory orderIOCalculation) = calculateOrderIO(
+            order, inputIOIndex, outputIOIndex, counterparty, signedContext, new bytes32[](0), false
+        );
+        return orderIOCalculation;
     }
 
     /// Persist the token's decimals into the TOFU store via the mutating read,
