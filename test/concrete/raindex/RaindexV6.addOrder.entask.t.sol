@@ -9,7 +9,7 @@ import {
     TaskV3,
     OrderV4,
     SignedContextV2
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 

@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {RaindexV6FreshTakeOrderTest} from "test/util/abstract/RaindexV6FreshTakeOrderTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, QuoteV3, SignedContextV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4, QuoteV3, SignedContextV2} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 
 /// `quote3` surfaces a reverting calculate eval as the eval's own revert data.
 contract RaindexV6QuoteCalculateRevertTest is RaindexV6FreshTakeOrderTest {

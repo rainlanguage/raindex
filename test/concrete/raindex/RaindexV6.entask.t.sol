@@ -8,7 +8,7 @@ import {
     EvaluableV4,
     TaskV3,
     SignedContextV2
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 
 contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
     function checkReentrancyRW() internal view {

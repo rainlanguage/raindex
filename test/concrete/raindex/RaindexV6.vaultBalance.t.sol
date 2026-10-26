@@ -3,8 +3,8 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
+import {IRaindexV7} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 
 /// @title RaindexV6VaultBalanceTest
 /// Tests the basic functionality of reading from the vault balance.

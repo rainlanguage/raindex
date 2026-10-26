@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {ChildRaindexV6ArbOrderTaker} from "../util/concrete/ChildRaindexV6ArbOrderTaker.sol";
-import {TaskV3, SignedContextV2, EvaluableV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {TaskV3, SignedContextV2, EvaluableV4} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     TakeOrdersConfigV6,
@@ -12,10 +12,10 @@ import {
     OrderConfigV4,
     OrderV4,
     IInterpreterV4
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6ArbOrderTakerFinalizeTaskArgTest
 /// @notice Proves that arb6 forwards the CALLER's `task` (the arb6 `task`

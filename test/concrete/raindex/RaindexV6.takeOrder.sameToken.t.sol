@@ -11,9 +11,9 @@ import {
     TakeOrderConfigV5,
     SignedContextV2,
     TakeOrdersConfigV6
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 
 contract RaindexV6TakeOrderSameTokenTest is RaindexV6ExternalRealTest {
     /// forge-config: default.fuzz.runs = 10

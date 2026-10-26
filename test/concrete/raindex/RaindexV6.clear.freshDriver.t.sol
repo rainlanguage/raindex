@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {NegativeBounty, ClearZeroAmount} from "src/error/ErrRaindexV6.sol";
-import {ExponentUnderflow} from "rain-math-float-0.3.10/src/error/ErrDecimalFloat.sol";
+import {ExponentUnderflow} from "rain-math-float-0.3.11/src/error/ErrDecimalFloat.sol";
 import {
     OrderV4,
     OrderConfigV4,
@@ -16,27 +16,27 @@ import {
     IInterpreterV4,
     IInterpreterStoreV3,
     TaskV3
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.11/src/interface/IRaindexV7.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
 import {CalcInterpreter} from "test/util/concrete/CalcInterpreter.sol";
 import {IRaindexV6ClearDriverHarness} from "test/util/interface/IRaindexV6ClearDriverHarness.sol";
-import {IParserV2} from "rainlang-interface-0.2.14/src/interface/IParserV2.sol";
-import {FullyQualifiedNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
-import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
-import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
+import {IParserV2} from "rainlang-0.2.30/src/interface/IParserV2.sol";
+import {FullyQualifiedNamespace} from "rainlang-0.2.30/src/interface/IInterpreterStoreV3.sol";
+import {StateNamespace} from "rainlang-0.2.30/src/interface/IInterpreterV4.sol";
+import {LibNamespace} from "rainlang-0.2.30/src/lib/ns/LibNamespace.sol";
 import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
     TEST_COMPILER_ADDRESS
-} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.30/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {
     CREATION_CODE as DECIMAL_FLOAT_CREATION_CODE
-} from "rain-math-float-deploy-0.1.7/src/generated/0_1_5/DecimalFloat.sol";
+} from "rain-math-float-deploy-0.1.9/src/generated/0_1_5/DecimalFloat.sol";
 
 /// @title RaindexV6ClearFreshDriverTest
 /// @notice Drives the FULL `clear4` against fresh-compiled RaindexV6 bytecode so
