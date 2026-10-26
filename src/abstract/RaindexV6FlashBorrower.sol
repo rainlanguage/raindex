@@ -11,7 +11,7 @@ import {
 } from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
 import {IRaindexV7, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
+import {RaindexV6ArbCommon, BadRaindex} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
@@ -125,7 +125,8 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
     /// remaining assets are sent to the sender via `finalizeArb`.
     ///
     /// @param raindex The `Raindex` contract to take orders from and flash
-    /// loan against.
+    /// loan against. MUST be the deterministic deployment, else reverts
+    /// `BadRaindex`.
     /// @param takeOrders As per `IRaindexV7.takeOrders4`.
     /// @param exchangeData Arbitrary bytes that will be passed to `_exchange`
     /// after the flash loan is taken. The inheriting contract is responsible
@@ -143,6 +144,9 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         // Mimic what Raindex would do anyway if called with zero orders.
         if (takeOrders.orders.length == 0) {
             revert IRaindexV7.NoOrders();
+        }
+        if (address(raindex) != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS) {
+            revert BadRaindex(address(raindex));
         }
         // The flash-loan amount below reads `minimumIO` as the order output the
         // taker receives, which only matches when `minimumIO` is the taker
