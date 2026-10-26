@@ -63,6 +63,13 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         return LibTestTakeOrder.defaultTakeConfig(orders);
     }
 
+    function aliceStore(bytes32 key) internal view returns (bytes32) {
+        return
+            iStore.get(
+                LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(alice))), address(iRaindex)), key
+            );
+    }
+
     function checkSkippedThenTaken(bytes memory skippedExpression) internal {
         depositOutput();
         mockTakerTransfers();
@@ -104,15 +111,27 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         checkSkippedThenTaken("_:1;:;");
     }
 
+    function testCalculateRevertSkipsRevertingHandleIO() external {
+        checkSkippedThenTaken(":ensure(0 \"calc\"),_ _:1 1;:ensure(0 \"skipped handle\");");
+    }
+
+    function testShortCalculateStackSkipsRevertingHandleIO() external {
+        checkSkippedThenTaken("_:1;:ensure(0 \"skipped handle\");");
+    }
+
+    function testCalculateRevertSkipsHandleIOStoreWrite() external {
+        checkSkippedThenTaken(":ensure(0 \"calc\"),_ _:1 1;:set(0x08 0x0a);");
+        assertEq(aliceStore(bytes32(uint256(8))), bytes32(0));
+    }
+
+    function testShortCalculateStackSkipsHandleIOStoreWrite() external {
+        checkSkippedThenTaken("_:1;:set(0x08 0x0a);");
+        assertEq(aliceStore(bytes32(uint256(8))), bytes32(0));
+    }
+
     function testSkippedCalculateWritesNothingToStore() external {
         checkSkippedThenTaken(":set(0x07 0x09);:;");
-        assertEq(
-            iStore.get(
-                LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(alice))), address(iRaindex)),
-                bytes32(uint256(7))
-            ),
-            bytes32(0)
-        );
+        assertEq(aliceStore(bytes32(uint256(7))), bytes32(0));
     }
 
     function testTakenCalculateWritesReachStore() external {
@@ -123,13 +142,7 @@ contract RaindexV6TakeOrderCalculateRevertTest is RaindexV6FreshTakeOrderTest {
         vm.prank(bob);
         iRaindex.takeOrders4(LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order)));
 
-        assertEq(
-            iStore.get(
-                LibNamespace.qualifyNamespace(StateNamespace.wrap(uint256(uint160(alice))), address(iRaindex)),
-                bytes32(uint256(7))
-            ),
-            bytes32(uint256(9))
-        );
+        assertEq(aliceStore(bytes32(uint256(7))), bytes32(uint256(9)));
     }
 
     function testHandleIORevertAfterSkippedCalculateRevertsBatch() external {
