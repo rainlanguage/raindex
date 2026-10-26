@@ -33,7 +33,7 @@ dataSources:
           handler: handleAddOrder
         - event: RemoveOrderV3(address,bytes32,(address,(address,address,bytes),(address,bytes32)[],(address,bytes32)[],bytes32))
           handler: handleRemoveOrder
-        - event: TakeOrderV3(address,((address,(address,address,bytes),(address,bytes32)[],(address,bytes32)[],bytes32),uint256,uint256,(address,bytes32[],bytes)[]),bytes32,bytes32)
+        - event: TakeOrderV4(address,((address,(address,address,bytes),(address,bytes32)[],(address,bytes32)[],bytes32),uint256,uint256,(address,bytes32,bytes32[],bytes)[]),bytes32,bytes32)
           handler: handleTakeOrder
         - event: MetaV1_2(address,bytes32,bytes)
           handler: handleMeta
