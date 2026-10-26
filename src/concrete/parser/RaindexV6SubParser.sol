@@ -7,15 +7,13 @@ import {
     BaseRainlangSubParser,
     OperandV2,
     IParserToolingV1
-} from "rainlang-0.2.19/src/abstract/BaseRainlangSubParser.sol";
+} from "rainlang-0.2.26/src/abstract/BaseRainlangSubParser.sol";
 import {LibConvert} from "rain-lib-typecast-0.1.4/src/LibConvert.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
 
 import {
     LibRaindexSubParser,
     SUB_PARSER_WORD_PARSERS_LENGTH,
-    BASE_WORD_RAINDEX,
-    BASE_WORDS_LENGTH,
     DEPOSIT_WORD_VAULT_ID,
     DEPOSIT_WORD_TOKEN,
     DEPOSIT_WORD_DEPOSITOR,
@@ -32,7 +30,12 @@ import {
     WITHDRAW_WORD_TOKEN_DECIMALS,
     WITHDRAW_WORDS_LENGTH
 } from "../../lib/LibRaindexSubParser.sol";
-import {CONTEXT_BASE_COLUMN} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
+import {
+    CONTEXT_BASE_COLUMN,
+    CONTEXT_BASE_ROW_SENDER,
+    CONTEXT_BASE_ROW_CALLING_CONTRACT,
+    CONTEXT_BASE_ROWS
+} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_COLUMNS_EXTENDED,
     CONTEXT_VAULT_OUTPUTS_COLUMN,
@@ -72,8 +75,8 @@ import {IDescribedByMetaV1} from "rain-metadata-0.1.43/src/interface/IDescribedB
 import {ISubParserToolingV1} from "rain-sol-codegen-0.1.39/src/interface/ISubParserToolingV1.sol";
 
 /// @title RaindexV6SubParser
-/// @notice Sub-parser that provides raindex-specific context words (raindex,
-/// order hash, clearer, vault IO, deposit/withdraw, signed context, etc.) to the
+/// @notice Sub-parser that provides raindex-specific context words (sender,
+/// order hash, vault IO, deposit/withdraw, signed context, etc.) to the
 /// Rain interpreter.
 contract RaindexV6SubParser is BaseRainlangSubParser {
     using LibUint256Matrix for uint256[][];
@@ -109,8 +112,9 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             new function(bytes32[] memory) internal pure returns (OperandV2)[][](CONTEXT_COLUMNS_EXTENDED);
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextBaseHandlers =
-            new function(bytes32[] memory) internal pure returns (OperandV2)[](BASE_WORDS_LENGTH);
-        contextBaseHandlers[BASE_WORD_RAINDEX] = LibParseOperand.handleOperandDisallowed;
+            new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_BASE_ROWS);
+        contextBaseHandlers[CONTEXT_BASE_ROW_SENDER] = LibParseOperand.handleOperandDisallowed;
+        contextBaseHandlers[CONTEXT_BASE_ROW_CALLING_CONTRACT] = LibParseOperand.handleOperandDisallowed;
 
         function(bytes32[] memory) internal pure returns (OperandV2)[] memory contextCallingContextHandlers =
             new function(bytes32[] memory) internal pure returns (OperandV2)[](CONTEXT_CALLING_CONTEXT_ROWS);
@@ -202,8 +206,9 @@ contract RaindexV6SubParser is BaseRainlangSubParser {
             contextBaseParsers =
             new function(uint256, uint256, OperandV2)
             internal
-            view returns (bool, bytes memory, bytes32[] memory)[](BASE_WORDS_LENGTH);
-        contextBaseParsers[BASE_WORD_RAINDEX] = LibRaindexSubParser.subParserCallingContract;
+            view returns (bool, bytes memory, bytes32[] memory)[](CONTEXT_BASE_ROWS);
+        contextBaseParsers[CONTEXT_BASE_ROW_SENDER] = LibRaindexSubParser.subParserSender;
+        contextBaseParsers[CONTEXT_BASE_ROW_CALLING_CONTRACT] = LibRaindexSubParser.subParserCallingContract;
 
         function(uint256, uint256, OperandV2) internal view returns (bool, bytes memory, bytes32[] memory)[] memory
             contextCallingContextParsers =

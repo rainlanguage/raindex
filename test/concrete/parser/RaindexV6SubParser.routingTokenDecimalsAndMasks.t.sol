@@ -5,8 +5,9 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {OperandV2} from "rainlang-interface-0.2.13/src/interface/ISubParserV4.sol";
 import {OPCODE_CONTEXT} from "rainlang-interface-0.2.13/src/interface/IInterpreterV4.sol";
-import {ContextGridOverflow} from "rainlang-0.2.19/src/error/ErrSubParse.sol";
+import {ContextGridOverflow} from "rainlang-0.2.26/src/error/ErrSubParse.sol";
 import {LibRaindexSubParser} from "../../../src/lib/LibRaindexSubParser.sol";
+import {CONTEXT_SIGNED_CONTEXT_START_COLUMN} from "../../../src/lib/LibRaindex.sol";
 
 /// @title RaindexV6SubParserRoutingTokenDecimalsAndMasksTest
 /// @notice Pins the absolute (column, row) of the deposit and withdraw token
@@ -51,7 +52,7 @@ contract RaindexV6SubParserRoutingTokenDecimalsAndMasksTest is Test {
     /// A signed-context row wider than a byte reverts rather than wrapping onto
     /// another row.
     function testSignedContextWideRowReverts() external {
-        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, 8, 256));
+        vm.expectRevert(abi.encodeWithSelector(ContextGridOverflow.selector, CONTEXT_SIGNED_CONTEXT_START_COLUMN, 256));
         this.callSignedContext(OperandV2.wrap(bytes32(uint256(0x010000))));
     }
 

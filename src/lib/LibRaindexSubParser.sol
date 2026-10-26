@@ -4,10 +4,12 @@ pragma solidity ^0.8.19;
 
 import {AuthoringMetaV2, OperandV2} from "rainlang-interface-0.2.13/src/interface/ISubParserV4.sol";
 import {LibUint256Matrix} from "rain-solmem-0.1.28/src/lib/LibUint256Matrix.sol";
-import {LibSubParse} from "rainlang-0.2.19/src/lib/parse/LibSubParse.sol";
+import {LibSubParse} from "rainlang-0.2.26/src/lib/parse/LibSubParse.sol";
 import {
     CONTEXT_BASE_COLUMN,
-    CONTEXT_BASE_ROW_CALLING_CONTRACT
+    CONTEXT_BASE_ROW_SENDER,
+    CONTEXT_BASE_ROW_CALLING_CONTRACT,
+    CONTEXT_BASE_ROWS
 } from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {
     CONTEXT_CALLING_CONTEXT_ROW_ORDER_CLEARER,
@@ -55,6 +57,7 @@ import {
 uint256 constant SUB_PARSER_WORD_PARSERS_LENGTH = 2;
 uint8 constant EXTERN_PARSE_META_BUILD_DEPTH = 1;
 
+bytes constant WORD_SENDER = "sender";
 bytes constant WORD_ORDER_CLEARER = "order-clearer";
 bytes constant WORD_RAINDEX = "raindex";
 bytes constant WORD_ORDER_HASH = "order-hash";
@@ -88,9 +91,6 @@ bytes constant WORD_WITHDRAW_VAULT_AFTER = "withdraw-vault-after";
 bytes constant WORD_WITHDRAW_TARGET_AMOUNT = "withdraw-target-amount";
 bytes constant WORD_WITHDRAW_TOKEN_DECIMALS = "withdraw-token-decimals";
 
-uint256 constant BASE_WORD_RAINDEX = 0;
-uint256 constant BASE_WORDS_LENGTH = 1;
-
 uint256 constant DEPOSIT_WORD_DEPOSITOR = 0;
 uint256 constant DEPOSIT_WORD_TOKEN = 1;
 uint256 constant DEPOSIT_WORD_VAULT_ID = 2;
@@ -113,6 +113,12 @@ uint256 constant WITHDRAW_WORDS_LENGTH = 7;
 /// context columns (base, calling, calculations, vault IO, signed).
 library LibRaindexSubParser {
     using LibUint256Matrix for uint256[][];
+
+    /// @dev Maps the "sender" word to the base context column sender row.
+    function subParserSender(uint256, uint256, OperandV2) internal pure returns (bool, bytes memory, bytes32[] memory) {
+        //slither-disable-next-line unused-return
+        return LibSubParse.subParserContext(CONTEXT_BASE_COLUMN, CONTEXT_BASE_ROW_SENDER);
+    }
 
     /// @dev Maps the "order-clearer" word to the calling context column.
     function subParserOrderClearer(uint256, uint256, OperandV2)
@@ -316,7 +322,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, uint256(OperandV2.unwrap(operand)));
     }
 
-    /// @dev Maps the "deposit-token" word to the calling context column.
+    /// @dev Maps the "deposit-token" word to the deposit column.
     function subParserDepositToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -326,7 +332,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN);
     }
 
-    /// @dev Maps the "deposit-vault-id" word to the calling context column.
+    /// @dev Maps the "deposit-vault-id" word to the deposit column.
     function subParserDepositVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -336,7 +342,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_ID);
     }
 
-    /// @dev Maps the "deposit-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-before" word to the deposit column.
     function subParserDepositVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -346,7 +352,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "deposit-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "deposit-vault-balance-after" word to the deposit column.
     function subParserDepositVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -356,7 +362,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_VAULT_AFTER);
     }
 
-    /// @dev Maps the "deposit-token-decimals" word to the calling context column.
+    /// @dev Maps the "deposit-token-decimals" word to the deposit column.
     function subParserDepositTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
@@ -366,7 +372,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_DEPOSIT_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_DEPOSIT_TOKEN_DECIMALS);
     }
 
-    /// @dev Maps the "withdraw-token" word to the calling context column.
+    /// @dev Maps the "withdraw-token" word to the withdraw column.
     function subParserWithdrawToken(uint256, uint256, OperandV2)
         internal
         pure
@@ -376,7 +382,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TOKEN);
     }
 
-    /// @dev Maps the "withdraw-vault-id" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-id" word to the withdraw column.
     function subParserWithdrawVaultId(uint256, uint256, OperandV2)
         internal
         pure
@@ -386,7 +392,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_ID);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-before" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-before" word to the withdraw column.
     function subParserWithdrawVaultBalanceBefore(uint256, uint256, OperandV2)
         internal
         pure
@@ -396,7 +402,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_BEFORE);
     }
 
-    /// @dev Maps the "withdraw-vault-balance-after" word to the calling context column.
+    /// @dev Maps the "withdraw-vault-balance-after" word to the withdraw column.
     function subParserWithdrawVaultBalanceAfter(uint256, uint256, OperandV2)
         internal
         pure
@@ -406,7 +412,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_VAULT_AFTER);
     }
 
-    /// @dev Maps the "withdraw-target-amount" word to the calling context column.
+    /// @dev Maps the "withdraw-target-amount" word to the withdraw column.
     function subParserWithdrawTargetAmount(uint256, uint256, OperandV2)
         internal
         pure
@@ -416,7 +422,7 @@ library LibRaindexSubParser {
         return LibSubParse.subParserContext(CONTEXT_WITHDRAW_COLUMN, CONTEXT_CALLING_CONTEXT_ROW_WITHDRAW_TARGET_AMOUNT);
     }
 
-    /// @dev Maps the "withdraw-token-decimals" word to the calling context column.
+    /// @dev Maps the "withdraw-token-decimals" word to the withdraw column.
     function subParserWithdrawTokenDecimals(uint256, uint256, OperandV2)
         internal
         pure
@@ -448,8 +454,13 @@ library LibRaindexSubParser {
     function authoringMetaV2() internal pure returns (bytes memory) {
         AuthoringMetaV2[][] memory meta = new AuthoringMetaV2[][](CONTEXT_COLUMNS_EXTENDED);
 
-        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](BASE_WORDS_LENGTH);
-        contextBaseMeta[BASE_WORD_RAINDEX] =
+        AuthoringMetaV2[] memory contextBaseMeta = new AuthoringMetaV2[](CONTEXT_BASE_ROWS);
+        contextBaseMeta[CONTEXT_BASE_ROW_SENDER] =
+        // constant WORD_SENDER defined above is less than 32 bytes, so this
+        // conversion is safe.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        AuthoringMetaV2(bytes32(WORD_SENDER), "The address that called the raindex entrypoint.");
+        contextBaseMeta[CONTEXT_BASE_ROW_CALLING_CONTRACT] =
         // constant WORD_RAINDEX defined above is less than 32 bytes, so
         // this conversion is safe.
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -478,7 +489,7 @@ library LibRaindexSubParser {
             // so this conversion is safe.
             // forge-lint: disable-next-line(unsafe-typecast)
             bytes32(WORD_ORDER_CLEARER),
-            "The order clearer is the address that submitted the transaction that is causing the order to execute. This MAY be the counterparty, e.g. when an order is being taken directly, but it MAY NOT be the counterparty if a third party is clearing two orders against each other."
+            "The address that called clear, matching this order against a counterparty order. Only available in clears; reverts when the order is taken or quoted."
         );
 
         AuthoringMetaV2[] memory contextCalculationsMeta = new AuthoringMetaV2[](CONTEXT_CALCULATIONS_ROWS);

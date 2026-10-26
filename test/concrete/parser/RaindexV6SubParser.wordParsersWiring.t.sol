@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
-import {BASE_WORDS_LENGTH, DEPOSIT_WORDS_LENGTH, WITHDRAW_WORDS_LENGTH} from "../../../src/lib/LibRaindexSubParser.sol";
+import {DEPOSIT_WORDS_LENGTH, WITHDRAW_WORDS_LENGTH} from "../../../src/lib/LibRaindexSubParser.sol";
 import {
     CONTEXT_CALLING_CONTEXT_ROWS,
     CONTEXT_CALCULATIONS_ROWS,
@@ -12,6 +12,7 @@ import {
     CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS,
     CONTEXT_SIGNED_CONTEXT_START_ROWS
 } from "../../../src/lib/LibRaindex.sol";
+import {CONTEXT_BASE_ROWS} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 
 /// @title RaindexV6SubParserWordParsersWiringTest
 /// @notice Every word reads its own context cell, so no two word parsers can
@@ -19,7 +20,7 @@ import {
 /// and no two slots share a pointer.
 contract RaindexV6SubParserWordParsersWiringTest is Test {
     function wordCount() internal pure returns (uint256) {
-        return BASE_WORDS_LENGTH + CONTEXT_CALLING_CONTEXT_ROWS + CONTEXT_CALCULATIONS_ROWS + CONTEXT_VAULT_IO_ROWS * 2
+        return CONTEXT_BASE_ROWS + CONTEXT_CALLING_CONTEXT_ROWS + CONTEXT_CALCULATIONS_ROWS + CONTEXT_VAULT_IO_ROWS * 2
             + DEPOSIT_WORDS_LENGTH + WITHDRAW_WORDS_LENGTH + CONTEXT_SIGNED_CONTEXT_SIGNERS_ROWS
             + CONTEXT_SIGNED_CONTEXT_START_ROWS;
     }

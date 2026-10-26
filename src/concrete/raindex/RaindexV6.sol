@@ -11,7 +11,7 @@ import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensio
 
 import {LibContext} from "rainlang-interface-0.2.13/src/lib/caller/LibContext.sol";
 import {LibBytecode} from "rainlang-interface-0.2.13/src/lib/bytecode/LibBytecode.sol";
-import {LibInterpreterStateDataContract} from "rainlang-0.2.19/src/lib/state/LibInterpreterStateDataContract.sol";
+import {LibInterpreterStateDataContract} from "rainlang-0.2.26/src/lib/state/LibInterpreterStateDataContract.sol";
 import {
     SourceIndexV2,
     StateNamespace,
@@ -353,6 +353,7 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             msg.sender,
             quoteConfig.signedContext,
             new bytes32[](0),
+            false,
             false
         );
         // true is quote2's "order is live" result required by IRaindexV6.
@@ -443,7 +444,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
                         msg.sender,
                         takeOrderConfig.signedContext,
                         new bytes32[](0),
-                        true
+                        true,
+                        false
                     );
 
                     // Skip orders that are too expensive rather than revert as we have
@@ -637,7 +639,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             bobOrder.owner,
             bobSignedContext,
             new bytes32[](0),
-            false
+            false,
+            true
         );
         (, OrderIOCalculationV4 memory bobOrderIOCalculation) = calculateOrderIO(
             bobOrder,
@@ -646,7 +649,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
             aliceOrder.owner,
             aliceSignedContext,
             new bytes32[](0),
-            false
+            false,
+            true
         );
 
         // Each side must be one `takeOrders4` would take. Given this, each
@@ -722,6 +726,8 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
     /// single-order callers (`quote`, `clear3`).
     /// @param skipFailure If true, a reverting calculate eval or a stack shorter
     /// than `CALCULATE_ORDER_MIN_OUTPUTS` returns false instead of reverting.
+    /// @param clearing Whether the order column includes the clearer row; true
+    /// only for `clear3`.
     /// @return False if `skipFailure` caught a failure, in which case the
     /// calculation is zeroed and MUST NOT be used.
     /// @return The order IO calculation.
@@ -732,18 +738,23 @@ contract RaindexV6 is IRaindexV6, IMetaV1_2, ReentrancyGuard, Multicall, Raindex
         address counterparty,
         SignedContextV1[] memory signedContext,
         bytes32[] memory stateOverlay,
-        bool skipFailure
+        bool skipFailure,
+        bool clearing
     ) internal view returns (bool, OrderIOCalculationV4 memory) {
         unchecked {
             bytes32[][] memory context;
             {
                 bytes32[][] memory callingContext = new bytes32[][](CALLING_CONTEXT_COLUMNS);
-                callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = LibBytes32Array.arrayFrom(
-                    order.hash(),
-                    bytes32(uint256(uint160(order.owner))),
-                    bytes32(uint256(uint160(counterparty))),
-                    bytes32(uint256(uint160(msg.sender)))
-                );
+                callingContext[CONTEXT_CALLING_CONTEXT_COLUMN - 1] = clearing
+                    ? LibBytes32Array.arrayFrom(
+                        order.hash(),
+                        bytes32(uint256(uint160(order.owner))),
+                        bytes32(uint256(uint160(counterparty))),
+                        bytes32(uint256(uint160(msg.sender)))
+                    )
+                    : LibBytes32Array.arrayFrom(
+                        order.hash(), bytes32(uint256(uint160(order.owner))), bytes32(uint256(uint160(counterparty)))
+                    );
 
                 // The calculations column holds the calculated max output and IO
                 // ratio, which only become known after the calculate eval below.

@@ -18,7 +18,7 @@ import {
     TaskV2
 } from "raindex-interface-0.1.8/src/interface/IRaindexV6.sol";
 import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.22/src/lib/LibRainDeploy.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {LibOrder} from "src/lib/LibOrder.sol";
@@ -32,8 +32,8 @@ import {
     LibTestInterpreterDeploy,
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS,
-    TEST_EXPRESSION_DEPLOYER_ADDRESS
-} from "rainlang-0.2.19/test/lib/deploy/LibTestInterpreterDeploy.sol";
+    TEST_COMPILER_ADDRESS
+} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {
     CREATION_CODE as DECIMAL_FLOAT_CREATION_CODE
 } from "rain-math-float-deploy-0.1.7/src/generated/0_1_5/DecimalFloat.sol";
@@ -343,7 +343,7 @@ contract RaindexV6ClearFreshDriverTest is Test {
     function testFreshClearAliceZeroOutputLeavesStoreUnchanged() external {
         LibRainDeploy.deployZoltu(DECIMAL_FLOAT_CREATION_CODE);
         LibTestInterpreterDeploy.etchTestRainlang(vm);
-        IParserV2 parser = IParserV2(TEST_EXPRESSION_DEPLOYER_ADDRESS);
+        IParserV2 parser = IParserV2(TEST_COMPILER_ADDRESS);
         IInterpreterStoreV3 store = IInterpreterStoreV3(TEST_STORE_ADDRESS);
 
         (OrderV4 memory aliceOrder, OrderV4 memory bobOrder) = wireOrders(f(1, 0), f(1, 0), f(1, 0), f(1, 0), f(10, 0));

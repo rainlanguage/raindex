@@ -30,9 +30,9 @@ uint256 constant CONTEXT_COLUMNS = CALLING_CONTEXT_COLUMNS + 1;
 /// including the first signed context column.
 uint256 constant CONTEXT_COLUMNS_EXTENDED = CONTEXT_SIGNED_CONTEXT_START_COLUMN + 1;
 
-/// @dev Order column. Calculate order and handle IO get all rows; add and
-/// remove order tasks get only the order hash and owner. IMPORTANT NOTE that
-/// the clearer will often be unrelated to the owner or counterparty.
+/// @dev Order column. Clear gets all rows; take and quote omit the clearer;
+/// add and remove order tasks get only the order hash and owner. IMPORTANT NOTE
+/// that the clearer will often be unrelated to the owner or counterparty.
 uint256 constant CONTEXT_CALLING_CONTEXT_COLUMN = 1;
 uint256 constant CONTEXT_CALLING_CONTEXT_ROWS = 4;
 
