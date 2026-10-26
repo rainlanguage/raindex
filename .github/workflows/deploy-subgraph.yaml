@@ -33,8 +33,10 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 1G
       # subgraph-deploy builds from the committed subgraph/abis + subgraph/generated,
-      # so it needs no forge build and runs on the slim subgraph shell.
-      - run: nix develop github:rainlanguage/rainix#subgraph-shell -c subgraph-deploy
+      # so it needs no forge build and runs on the slim subgraph shell. The shell
+      # comes from this repo's flake.lock (the rainix rev it pins), not from
+      # rainix main, so the step that holds ORMI_DEPLOY_KEY runs reviewed tooling.
+      - run: nix develop .#subgraph-shell -c subgraph-deploy
         env:
           # GitHub secret ORMI_DEPLOY_KEY, from Vault secret/infra/rain/ormi (deploy_key).
           ORMI_DEPLOY_KEY: ${{ secrets.ORMI_DEPLOY_KEY }}

@@ -388,6 +388,32 @@ export class MetaV1_2__Params {
   }
 }
 
+export class OrderCalculateReverted extends ethereum.Event {
+  get params(): OrderCalculateReverted__Params {
+    return new OrderCalculateReverted__Params(this);
+  }
+}
+
+export class OrderCalculateReverted__Params {
+  _event: OrderCalculateReverted;
+
+  constructor(event: OrderCalculateReverted) {
+    this._event = event;
+  }
+
+  get sender(): Address {
+    return this._event.parameters[0].value.toAddress();
+  }
+
+  get owner(): Address {
+    return this._event.parameters[1].value.toAddress();
+  }
+
+  get orderHash(): Bytes {
+    return this._event.parameters[2].value.toBytes();
+  }
+}
+
 export class OrderExceedsMaxRatio extends ethereum.Event {
   get params(): OrderExceedsMaxRatio__Params {
     return new OrderExceedsMaxRatio__Params(this);

@@ -45,7 +45,7 @@ if [ -z "${HARNESS_FONT_DIR:-}" ]; then
 fi
 export HARNESS_FONT_DIR
 
-# Node/npm come from the repo's webapp devShell (nodejs_20). Run the driver
+# Node/npm come from the repo's webapp devShell. Run the driver
 # there so `vite` resolves from the repo-root node_modules.
 exec nix develop "$REPO_ROOT#webapp-shell" --command \
 	node "$HARNESS_DIR/screenshot.mjs" \
