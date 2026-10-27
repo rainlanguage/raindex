@@ -6,6 +6,14 @@ pragma solidity ^0.8.25;
 
 import {DeployDependency, DeployMechanism, DeploySuite} from "rain-deploy-0.1.25/src/abstract/RainDeploySuitesBase.sol";
 
+import {
+    DEPLOYED_ADDRESS as GenericPoolRaindexV7FlashBorrower_0_1_16_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as GenericPoolRaindexV7FlashBorrower_0_1_16_BYTECODE_HASH,
+    CREATION_CODE as GenericPoolRaindexV7FlashBorrower_0_1_16_CREATION_CODE,
+    RUNTIME_CODE as GenericPoolRaindexV7FlashBorrower_0_1_16_RUNTIME_CODE,
+    DEPENDENCIES as GenericPoolRaindexV7FlashBorrower_0_1_16_DEPENDENCIES
+} from "../generated/0_1_16/GenericPoolRaindexV7FlashBorrower.sol";
+
 /// @title LibGenericPoolRaindexV7FlashBorrowerReleased
 /// @notice Every frozen release of `GenericPoolRaindexV7FlashBorrower`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -26,7 +34,18 @@ library LibGenericPoolRaindexV7FlashBorrowerReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "arb-generic-pool-flash-borrower@0_1_16",
+            creationCode: GenericPoolRaindexV7FlashBorrower_0_1_16_CREATION_CODE,
+            storedDeployedAddress: GenericPoolRaindexV7FlashBorrower_0_1_16_DEPLOYED_ADDRESS,
+            storedBytecodeHash: GenericPoolRaindexV7FlashBorrower_0_1_16_BYTECODE_HASH,
+            storedRuntimeCode: GenericPoolRaindexV7FlashBorrower_0_1_16_RUNTIME_CODE,
+            artifactPath: "src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol:GenericPoolRaindexV7FlashBorrower",
+            dependencies: abi.decode(GenericPoolRaindexV7FlashBorrower_0_1_16_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
         return suites;
     }
 }
