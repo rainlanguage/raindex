@@ -62,6 +62,7 @@ pub mod take_orders;
 pub mod trades;
 pub mod transactions;
 pub mod types;
+mod vaultless_balances;
 pub mod vaults;
 pub mod vaults_list;
 
@@ -766,6 +767,31 @@ pub(crate) mod tests {
 
     #[cfg(not(target_family = "wasm"))]
     pub const CHAIN_ID_1_RAINDEX_ADDRESS: &str = "0x1234567890123456789012345678901234567890";
+
+    #[cfg(not(target_family = "wasm"))]
+    pub fn mock_vaultless_balances<'a>(
+        server: &'a httpmock::MockServer,
+        rpc_path: &str,
+        balances: &[rain_math_float::Float],
+    ) -> httpmock::Mock<'a> {
+        use alloy::sol_types::SolCall;
+        use raindex_bindings::{IRaindexV6::vaultBalance2Call, Raindex::multicallCall};
+        let results: Vec<alloy::primitives::Bytes> = balances
+            .iter()
+            .map(|balance| balance.get_inner().to_vec().into())
+            .collect();
+        let result = alloy::hex::encode_prefixed(multicallCall::abi_encode_returns(&results));
+        let path = rpc_path.to_string();
+        server.mock(move |when, then| {
+            when.path(path)
+                .body_contains(alloy::hex::encode(vaultBalance2Call::SELECTOR));
+            then.status(200).json_body(serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": result,
+            }));
+        })
+    }
     pub fn get_test_yaml(subgraph1: &str, subgraph2: &str, rpc1: &str, rpc2: &str) -> String {
         format!(
             r#"

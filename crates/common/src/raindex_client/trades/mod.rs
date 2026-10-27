@@ -1102,7 +1102,9 @@ mod test_helpers {
         use super::*;
         use crate::{
             local_db::RaindexIdentifier,
-            raindex_client::tests::{get_test_yaml, CHAIN_ID_1_RAINDEX_ADDRESS},
+            raindex_client::tests::{
+                get_test_yaml, mock_vaultless_balances, CHAIN_ID_1_RAINDEX_ADDRESS,
+            },
         };
         use alloy::primitives::{b256, Bytes};
         use httpmock::MockServer;
@@ -1439,11 +1441,12 @@ mod test_helpers {
                 }));
             });
 
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg"),
                     "http://localhost:3000",
-                    "http://localhost:3000",
+                    &sg_server.url("/rpc1"),
                     "http://localhost:3000",
                 )],
                 None,
@@ -1635,11 +1638,12 @@ mod test_helpers {
                 }));
             });
 
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg"),
                     "http://localhost:3000",
-                    "http://localhost:3000",
+                    &sg_server.url("/rpc1"),
                     "http://localhost:3000",
                 )],
                 None,

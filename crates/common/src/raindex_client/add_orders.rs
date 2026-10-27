@@ -118,7 +118,8 @@ impl RaindexClient {
 
                 match local_result {
                     Ok(orders) => {
-                        let orders = fetch_orders_dotrain_sources(orders).await?;
+                        let mut orders = fetch_orders_dotrain_sources(orders).await?;
+                        self.read_orders_vaultless_balances(&mut orders).await?;
                         Ok(orders)
                     }
                     Err(RetryError::Operation(PollError::Inner(e))) => Err(e),
@@ -156,7 +157,8 @@ impl RaindexClient {
 
                 match subgraph_result {
                     Ok(orders) => {
-                        let orders = fetch_orders_dotrain_sources(orders).await?;
+                        let mut orders = fetch_orders_dotrain_sources(orders).await?;
+                        self.read_orders_vaultless_balances(&mut orders).await?;
                         Ok(orders)
                     }
                     Err(RetryError::Operation(PollError::Inner(e))) => Err(e),

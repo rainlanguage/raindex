@@ -136,6 +136,20 @@ impl RaindexVault {
     pub fn is_vaultless(&self) -> bool {
         self.vault_id == U256::ZERO
     }
+    pub(crate) fn chain_id_raw(&self) -> u32 {
+        self.chain_id
+    }
+    pub(crate) fn owner_address(&self) -> Address {
+        self.owner
+    }
+    pub(crate) fn raindex_address(&self) -> Address {
+        self.raindex
+    }
+    pub(crate) fn set_balance(&mut self, balance: Float) -> Result<(), RaindexError> {
+        self.formatted_balance = balance.format()?;
+        self.balance = balance;
+        Ok(())
+    }
 }
 
 #[cfg(target_family = "wasm")]
@@ -1356,6 +1370,7 @@ impl RaindexClient {
             all_vaults.extend(vaults);
         }
 
+        self.read_vaultless_balances(all_vaults.iter_mut()).await?;
         Ok(RaindexVaultsList::new(all_vaults))
     }
 
@@ -1474,7 +1489,7 @@ impl RaindexClient {
             ));
         }
 
-        match self.query_source(raindex_id.chain_id) {
+        let mut vault = match self.query_source(raindex_id.chain_id) {
             QuerySource::LocalDb(local_db) => {
                 let local_source = LocalDbVaults::new(&local_db, ClientRef::new(self.clone()));
                 local_source
@@ -1498,7 +1513,10 @@ impl RaindexClient {
                         vault_id.to_string(),
                     )
                 }),
-        }
+        }?;
+        self.read_vaultless_balances(std::iter::once(&mut vault))
+            .await?;
+        Ok(vault)
     }
 }
 
