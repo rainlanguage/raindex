@@ -25,8 +25,8 @@ use strict_yaml_rust::{strict_yaml::Hash as StrictYamlHash, StrictYaml, StrictYa
 use thiserror::Error;
 use wasm_bindgen_utils::prelude::*;
 
-/// RPC URLs can embed API keys; `rpcs` is required, so a parseable placeholder replaces them.
-const STRIPPED_RPC_PLACEHOLDER: &str = "https://rpc.example.com";
+/// Endpoint URLs can embed API keys; a parseable placeholder keeps required URL fields valid.
+const STRIPPED_URL_PLACEHOLDER: &str = "https://example.com";
 
 /// DotrainOrder represents a parsed and validated dotrain configuration that combines
 /// YAML frontmatter with Rainlang code for raindex operations.
@@ -695,10 +695,11 @@ impl DotrainOrder {
         }
 
         if let Some(subgraph_key) = subgraph_key {
-            let subgraph_value = clone_section_entry(&documents, "subgraphs", &subgraph_key)
-                .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
             let mut subgraphs_hash = StrictYamlHash::new();
-            subgraphs_hash.insert(StrictYaml::String(subgraph_key.clone()), subgraph_value);
+            subgraphs_hash.insert(
+                StrictYaml::String(subgraph_key.clone()),
+                StrictYaml::String(STRIPPED_URL_PLACEHOLDER.to_string()),
+            );
             root_hash.insert(
                 StrictYaml::String("subgraphs".to_string()),
                 StrictYaml::Hash(subgraphs_hash),
@@ -706,10 +707,11 @@ impl DotrainOrder {
         }
 
         if let Some(metaboard_key) = metaboard_key {
-            let metaboard_value = clone_section_entry(&documents, "metaboards", &metaboard_key)
-                .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
             let mut metaboards_hash = StrictYamlHash::new();
-            metaboards_hash.insert(StrictYaml::String(metaboard_key.clone()), metaboard_value);
+            metaboards_hash.insert(
+                StrictYaml::String(metaboard_key.clone()),
+                StrictYaml::String(STRIPPED_URL_PLACEHOLDER.to_string()),
+            );
             root_hash.insert(
                 StrictYaml::String("metaboards".to_string()),
                 StrictYaml::Hash(metaboards_hash),
@@ -826,7 +828,7 @@ impl DotrainOrder {
             let rpcs_key = StrictYaml::String("rpcs".to_string());
             if let Some(StrictYaml::Array(rpcs)) = network_hash.get_mut(&rpcs_key) {
                 for rpc in rpcs.iter_mut() {
-                    *rpc = StrictYaml::String(STRIPPED_RPC_PLACEHOLDER.to_string());
+                    *rpc = StrictYaml::String(STRIPPED_URL_PLACEHOLDER.to_string());
                 }
             }
         }
@@ -1313,36 +1315,64 @@ deployments:
         ));
     }
 
-    #[tokio::test]
-    async fn test_generate_dotrain_for_deployment_strips_rpc_api_tokens() {
-        let secret_path_key = "deadbeefcafebabe0123456789abcdef";
-        let secret_query_token = "sk_live_TOPSECRET_TOKEN_42";
-        let rpc_with_path = format!("https://eth-mainnet.example.com/v2/{secret_path_key}");
-        let rpc_with_query = format!("https://rpc.example.org/?apikey={secret_query_token}");
+    fn collect_urls(yaml: &StrictYaml, path: String, urls: &mut Vec<(String, String)>) {
+        match yaml {
+            StrictYaml::String(value) => {
+                if url::Url::parse(value).is_ok_and(|parsed| parsed.has_host()) {
+                    urls.push((path, value.clone()));
+                }
+            }
+            StrictYaml::Array(items) => {
+                for (i, item) in items.iter().enumerate() {
+                    collect_urls(item, format!("{path}[{i}]"), urls);
+                }
+            }
+            StrictYaml::Hash(hash) => {
+                for (key, value) in hash {
+                    let key = key.as_str().unwrap_or_default();
+                    collect_urls(value, format!("{path}.{key}"), urls);
+                }
+            }
+            _ => {}
+        }
+    }
 
+    #[tokio::test]
+    async fn test_generate_dotrain_for_deployment_replaces_endpoint_urls_keeps_oracle_url() {
+        let secrets = [
+            "rpcPathKey0123456789",
+            "rpcQueryToken42",
+            "subgraphPathKeyabcdef",
+            "subgraphQueryToken77",
+            "metaboardPathKey9876",
+            "metaboardQueryToken13",
+        ];
+        let oracle_url = "https://oracle.example.org/v1/context?pair=eth-usdc";
         let dotrain = format!(
             r#"
 version: {spec_version}
 networks:
   polygon:
     rpcs:
-      - {rpc_with_path}
-      - {rpc_with_query}
+      - https://eth-mainnet.example.org/v2/{rpc_path}
+      - https://rpc.example.org/?apikey={rpc_query}
     chain-id: 137
     network-id: 137
     currency: MATIC
 rainlangs:
   polygon:
     address: 0x1234567890123456789012345678901234567890
-orders:
-  polygon-order:
     network: polygon
-    inputs:
-      - token: t1
-        vault-id: 1
-    outputs:
-      - token: t2
-        vault-id: 2
+raindexes:
+  primary:
+    address: 0x0101010101010101010101010101010101010101
+    network: polygon
+    subgraph: sg-primary
+    deployment-block: 1
+subgraphs:
+  sg-primary: https://gateway.thegraph.com/api/{sg_path}/subgraphs/id/abc?key={sg_query}
+metaboards:
+  polygon: https://gateway.thegraph.com/api/{mb_path}/subgraphs/id/def?key={mb_query}
 tokens:
   t1:
     network: polygon
@@ -1350,6 +1380,17 @@ tokens:
   t2:
     network: polygon
     address: 0x2222222222222222222222222222222222222222
+orders:
+  polygon-order:
+    network: polygon
+    raindex: primary
+    oracle-url: {oracle_url}
+    inputs:
+      - token: t1
+        vault-id: 1
+    outputs:
+      - token: t2
+        vault-id: 2
 deployments:
   polygon-deployment:
     scenario: polygon
@@ -1357,55 +1398,103 @@ deployments:
 scenarios:
   polygon:
     rainlang: polygon
+builder:
+  name: Builder
+  description: Builder description
+  short-description: Short
+  deployments:
+    polygon-deployment:
+      name: Deployment
+      description: Deployment description
+      fields: []
 ---
 #calculate-io
 _ _: 0 0;
 #handle-io
 :;"#,
-            spec_version = SpecVersion::current()
+            spec_version = SpecVersion::current(),
+            rpc_path = secrets[0],
+            rpc_query = secrets[1],
+            sg_path = secrets[2],
+            sg_query = secrets[3],
+            mb_path = secrets[4],
+            mb_query = secrets[5],
         );
 
         let dotrain_order = DotrainOrder::create(dotrain.to_string(), None)
             .await
             .unwrap();
-
         let generated = dotrain_order
             .generate_dotrain_for_deployment("polygon-deployment")
             .unwrap();
 
+        for secret in secrets {
+            assert!(!generated.contains(secret), "{secret} leaked");
+        }
+
         let (frontmatter, _body) = split_frontmatter_and_body(&generated);
         let root = get_root_hash(&frontmatter);
-        let StrictYaml::Hash(networks) = root
-            .get(&StrictYaml::String("networks".to_string()))
-            .expect("networks present")
-        else {
-            panic!("networks not a hash");
-        };
-        assert!(!networks.is_empty(), "generated dotrain has no networks");
-        let mut rpc_count = 0;
-        for (network_key, network) in networks {
-            let StrictYaml::Hash(network) = network else {
-                panic!("network {network_key:?} not a hash");
-            };
-            let Some(StrictYaml::Array(rpcs)) =
-                network.get(&StrictYaml::String("rpcs".to_string()))
-            else {
-                panic!("network {network_key:?} rpcs missing or not an array");
-            };
-            for rpc in rpcs {
-                assert_eq!(
-                    rpc,
-                    &StrictYaml::String(STRIPPED_RPC_PLACEHOLDER.to_string()),
-                    "network {network_key:?} rpc not replaced with the placeholder"
-                );
-                rpc_count += 1;
+        let mut urls = vec![];
+        collect_urls(&StrictYaml::Hash(root), String::new(), &mut urls);
+        let mut paths: Vec<&str> = urls.iter().map(|(path, _)| path.as_str()).collect();
+        paths.sort();
+        assert_eq!(
+            paths,
+            vec![
+                ".metaboards.polygon",
+                ".networks.polygon.rpcs[0]",
+                ".networks.polygon.rpcs[1]",
+                ".orders.polygon-order.oracle-url",
+                ".subgraphs.sg-primary",
+            ]
+        );
+        for (path, value) in &urls {
+            if path == ".orders.polygon-order.oracle-url" {
+                assert_eq!(value, oracle_url);
+            } else {
+                assert_eq!(value, STRIPPED_URL_PLACEHOLDER, "{path} not replaced");
             }
         }
-        assert_eq!(rpc_count, 2);
 
-        DotrainOrder::create(generated, None)
+        let tokens_settings = format!(
+            r#"
+version: {spec_version}
+tokens:
+  t1:
+    network: polygon
+    address: 0x1111111111111111111111111111111111111111
+  t2:
+    network: polygon
+    address: 0x2222222222222222222222222222222222222222
+"#,
+            spec_version = SpecVersion::current()
+        );
+        let reparsed = DotrainOrder::create(generated, Some(vec![tokens_settings]))
             .await
-            .expect("generated dotrain with stripped rpcs should still parse");
+            .expect("generated dotrain should parse");
+        let placeholder = url::Url::parse(STRIPPED_URL_PLACEHOLDER).unwrap();
+        let raindex_yaml = reparsed.raindex_yaml();
+        assert_eq!(
+            raindex_yaml.get_network("polygon").unwrap().rpcs,
+            vec![placeholder.clone(), placeholder.clone()]
+        );
+        assert_eq!(
+            raindex_yaml.get_subgraph("sg-primary").unwrap().url,
+            placeholder
+        );
+        assert_eq!(
+            raindex_yaml.get_metaboard("polygon").unwrap().url,
+            placeholder
+        );
+        assert_eq!(
+            reparsed
+                .dotrain_yaml()
+                .get_order("polygon-order")
+                .unwrap()
+                .oracle_url
+                .as_deref(),
+            Some(oracle_url)
+        );
     }
 
     #[tokio::test]
