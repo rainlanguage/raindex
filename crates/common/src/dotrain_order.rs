@@ -25,12 +25,7 @@ use strict_yaml_rust::{strict_yaml::Hash as StrictYamlHash, StrictYaml, StrictYa
 use thiserror::Error;
 use wasm_bindgen_utils::prelude::*;
 
-/// Placeholder substituted for every RPC URL in the networks section of a
-/// dotrain generated for deployment. User RPC URLs can embed private API tokens,
-/// so they are never emitted into the shared/on-chain dotrain; consumers
-/// (e.g. the webapp or local settings) inject their own RPCs at use time. The
-/// value must remain a parseable, non-empty URL because `rpcs` is a required
-/// network field.
+/// RPC URLs can embed API keys; `rpcs` is required, so a parseable placeholder replaces them.
 const STRIPPED_RPC_PLACEHOLDER: &str = "https://rpc.example.com";
 
 /// DotrainOrder represents a parsed and validated dotrain configuration that combines
@@ -826,11 +821,6 @@ impl DotrainOrder {
         Ok(Some(StrictYaml::Hash(builder_hash)))
     }
 
-    /// Replace every RPC URL in a network entry with a non-secret placeholder.
-    /// User RPC URLs can carry private API tokens, so they must never end up in
-    /// the dotrain that is shared or written to on-chain order metadata. The
-    /// placeholder keeps the required, non-empty `rpcs` array structurally
-    /// valid so the generated dotrain still parses.
     fn strip_rpcs_from_network(network_yaml: &mut StrictYaml) {
         if let StrictYaml::Hash(network_hash) = network_yaml {
             let rpcs_key = StrictYaml::String("rpcs".to_string());
@@ -1325,9 +1315,6 @@ deployments:
 
     #[tokio::test]
     async fn test_generate_dotrain_for_deployment_strips_rpc_api_tokens() {
-        // Structural invariant: every RPC entry in the generated dotrain must be
-        // replaced with STRIPPED_RPC_PLACEHOLDER — no original URL survives.
-        // Two secret-bearing RPC URLs are used to make the fixture discriminating.
         let secret_path_key = "deadbeefcafebabe0123456789abcdef";
         let secret_query_token = "sk_live_TOPSECRET_TOKEN_42";
         let rpc_with_path = format!("https://eth-mainnet.example.com/v2/{secret_path_key}");
@@ -1386,41 +1373,36 @@ _ _: 0 0;
             .generate_dotrain_for_deployment("polygon-deployment")
             .unwrap();
 
-        // The required rpcs array is preserved structurally, with every entry
-        // replaced with the non-secret placeholder (one per original entry).
         let (frontmatter, _body) = split_frontmatter_and_body(&generated);
         let root = get_root_hash(&frontmatter);
         let StrictYaml::Hash(networks) = root
             .get(&StrictYaml::String("networks".to_string()))
             .expect("networks present")
-            .clone()
         else {
             panic!("networks not a hash");
         };
-        let StrictYaml::Hash(polygon) = networks
-            .get(&StrictYaml::String("polygon".to_string()))
-            .expect("polygon network present")
-            .clone()
-        else {
-            panic!("polygon network not a hash");
-        };
-        let StrictYaml::Array(rpcs) = polygon
-            .get(&StrictYaml::String("rpcs".to_string()))
-            .expect("rpcs present")
-            .clone()
-        else {
-            panic!("rpcs not an array");
-        };
-        assert_eq!(rpcs.len(), 2, "every rpc entry should be preserved");
-        for rpc in &rpcs {
-            assert_eq!(
-                rpc,
-                &StrictYaml::String(STRIPPED_RPC_PLACEHOLDER.to_string()),
-                "every rpc should be replaced with the placeholder"
-            );
+        assert!(!networks.is_empty(), "generated dotrain has no networks");
+        let mut rpc_count = 0;
+        for (network_key, network) in networks {
+            let StrictYaml::Hash(network) = network else {
+                panic!("network {network_key:?} not a hash");
+            };
+            let Some(StrictYaml::Array(rpcs)) =
+                network.get(&StrictYaml::String("rpcs".to_string()))
+            else {
+                panic!("network {network_key:?} rpcs missing or not an array");
+            };
+            for rpc in rpcs {
+                assert_eq!(
+                    rpc,
+                    &StrictYaml::String(STRIPPED_RPC_PLACEHOLDER.to_string()),
+                    "network {network_key:?} rpc not replaced with the placeholder"
+                );
+                rpc_count += 1;
+            }
         }
+        assert_eq!(rpc_count, 2);
 
-        // The placeholder must keep the dotrain parseable end-to-end.
         DotrainOrder::create(generated, None)
             .await
             .expect("generated dotrain with stripped rpcs should still parse");
