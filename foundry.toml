@@ -58,6 +58,7 @@ fs_permissions = [
   # `src/generated/` and the generated released-suites libs under `src/lib/`.
   { access = "read-write", path = "./src" },
   { access = "read", path = "./subgraph" },
+  { access = "read-write", path = "./subgraph/networks.json" },
   # script/Build.sol reads `[external.package].version` to name the frozen
   # per-release snapshot dir.
   { access = "read", path = "foundry.toml" },
