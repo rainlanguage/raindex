@@ -210,6 +210,7 @@ mod tests {
                     target_block: 1234,
                     fetched_logs: 10,
                     decoded_events: 5,
+                    caught_up: true,
                 },
             },
             ExportMetadata {

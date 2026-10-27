@@ -231,17 +231,18 @@ async fn run_network_loop<R: NativeRunner>(
     tracing::info!(network = %network_key, chain_id, "starting native sync loop");
     status_store.record_network_status(NetworkSyncStatus::syncing(chain_id));
 
-    let mut consecutive_failures: u32 = 0;
+    let mut backoff = super::CycleBackoff::default();
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
         }
 
-        match runner.run_once(&db).await {
+        let result = runner.run_once(&db).await;
+        let cycle = super::CycleResult::of(&result);
+        match result {
             Ok(outcome) => match outcome {
                 RunOutcome::Report(report) => {
-                    if report.failures.is_empty() {
-                        consecutive_failures = 0;
+                    if report.failures.is_empty() && cycle == super::CycleResult::CaughtUp {
                         sync_readiness.mark_ready(chain_id);
                         status_store.record_chain_ready(chain_id);
                         status_store.record_network_status(NetworkSyncStatus::active(
@@ -254,8 +255,14 @@ async fn run_network_loop<R: NativeRunner>(
                             successes = report.successes.len(),
                             "sync cycle completed"
                         );
+                    } else if report.failures.is_empty() {
+                        status_store.record_network_status(NetworkSyncStatus::syncing(chain_id));
+                        tracing::debug!(
+                            network = %network_key,
+                            chain_id,
+                            "sync cycle stopped short of the head, continuing"
+                        );
                     } else {
-                        consecutive_failures = consecutive_failures.saturating_add(1);
                         for failure in &report.failures {
                             let msg = failure.error.to_readable_msg();
                             status_store.record_raindex_status(RaindexSyncStatus::failure(
@@ -276,7 +283,6 @@ async fn run_network_loop<R: NativeRunner>(
                     }
                 }
                 RunOutcome::NotLeader => {
-                    consecutive_failures = 0;
                     sync_readiness.mark_ready(chain_id);
                     status_store.record_chain_ready(chain_id);
                     status_store.record_network_status(NetworkSyncStatus::active(
@@ -291,7 +297,6 @@ async fn run_network_loop<R: NativeRunner>(
                 }
             },
             Err(err) => {
-                consecutive_failures = consecutive_failures.saturating_add(1);
                 status_store.record_network_status(NetworkSyncStatus::new(
                     chain_id,
                     LocalDbStatus::Failure,
@@ -307,24 +312,31 @@ async fn run_network_loop<R: NativeRunner>(
             }
         }
 
-        if stop_flag.load(Ordering::SeqCst) {
-            break;
-        }
-
-        let delay_ms = super::next_cycle_delay_ms(interval_ms, consecutive_failures);
-        if consecutive_failures > 0 {
+        let delay_ms = backoff.next_delay_ms(interval_ms, cycle);
+        if backoff.consecutive_failures() > 0 {
             tracing::warn!(
                 network = %network_key,
                 chain_id,
-                consecutive_failures,
+                consecutive_failures = backoff.consecutive_failures(),
                 delay_ms,
                 "backing off before the next sync cycle"
             );
         }
-        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        sleep_unless_stopped(&stop_flag, delay_ms).await;
     }
 
     tracing::info!(network = %network_key, chain_id, "native sync loop stopped");
+}
+
+/// Sleeps `delay_ms` in short steps, returning early once `stop_flag` is set
+/// so a long backoff never delays shutdown.
+async fn sleep_unless_stopped(stop_flag: &AtomicBool, delay_ms: u64) {
+    let mut remaining = delay_ms;
+    while remaining > 0 && !stop_flag.load(Ordering::SeqCst) {
+        let step = remaining.min(super::STOP_POLL_MS);
+        tokio::time::sleep(std::time::Duration::from_millis(step)).await;
+        remaining -= step;
+    }
 }
 
 #[cfg(test)]

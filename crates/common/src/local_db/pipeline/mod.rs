@@ -78,6 +78,11 @@ pub struct SyncOutcome {
     pub target_block: u64,
     /// Count of raw logs fetched across raindex and stores.
     pub fetched_logs: usize,
+    /// Whether the cycle reached the block it was asked to sync to (the
+    /// finality-clamped safe head, or the end override). False when
+    /// `max_blocks_per_cycle` stopped it short, so the caller knows the
+    /// target is still behind.
+    pub caught_up: bool,
     /// Count of decoded events materialized during the cycle.
     pub decoded_events: usize,
 }

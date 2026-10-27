@@ -44,6 +44,18 @@ pub struct SyncInputs {
     pub manifest_end_block: u64,
 }
 
+/// The block a cycle is asked to reach before any per-cycle cap: the
+/// finality-clamped safe head, or the end override when it is lower. Mirrors
+/// the clamping in `DefaultWindowPipeline::compute`.
+fn requested_end_block(cfg: &SyncConfig, latest_block: u64) -> u64 {
+    let safe_head = latest_block
+        .saturating_sub(u64::from(cfg.finality.depth))
+        .max(cfg.deployment_block);
+    cfg.window_overrides
+        .end_block
+        .map_or(safe_head, |end| end.min(safe_head))
+}
+
 impl<B, W, E, T, A, S> SyncEngine<B, W, E, T, A, S>
 where
     B: BootstrapPipeline,
@@ -71,6 +83,7 @@ where
     {
         let latest_block = self.bootstrap_phase(db, input).await?;
         let (start_block, target_block) = self.compute_window(db, input, latest_block).await?;
+        let caught_up = target_block >= requested_end_block(&input.cfg, latest_block);
         if start_block > target_block {
             self.status.send(SyncPhase::Idle).await?;
             return Ok(SyncOutcome {
@@ -78,6 +91,7 @@ where
                 start_block,
                 target_block,
                 fetched_logs: 0,
+                caught_up: true,
                 decoded_events: 0,
             });
         }
@@ -133,6 +147,7 @@ where
             start_block,
             target_block,
             fetched_logs: all_raw_logs.len(),
+            caught_up,
             decoded_events: decoded_events.len(),
         })
     }
