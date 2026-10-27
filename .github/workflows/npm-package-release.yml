@@ -23,7 +23,7 @@ jobs:
       # checkout with SSH key to allow pushing version bump commits back to repo
       - uses: actions/checkout@v4
         with:
-          ssh-key: ${{ secrets.PUBLISH_PRIVATE_KEY }}
+          ssh-key: ${{ secrets.AUTOPUBLISH_SSH_DEPLOY_KEY }}
       # WASM builds require significant disk space; free up space to prevent build failures
       - name: Free disk space
         uses: jlumbroso/free-disk-space@v1.3.1
