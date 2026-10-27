@@ -7,7 +7,7 @@ import {LibRainDeploySnapshot} from "rain-deploy-0.1.25/src/lib/LibRainDeploySna
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {LibGenParseMeta} from "rainlang-interface-0.2.14/src/lib/codegen/LibGenParseMeta.sol";
+import {LibGenParseMeta} from "rainlang-0.2.30/src/lib/codegen/LibGenParseMeta.sol";
 import {DeployCandidate} from "../src/abstract/RainDeploySuitesBase.sol";
 import {RaindexDeploySuites} from "../src/abstract/RaindexDeploySuites.sol";
 import {RaindexV7SubParser} from "../src/concrete/parser/RaindexV7SubParser.sol";

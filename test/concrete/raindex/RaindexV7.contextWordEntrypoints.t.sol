@@ -14,19 +14,15 @@ import {
     TakeOrdersConfigV6,
     QuoteV3,
     ClearConfigV2
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+} from "raindex-interface-0.1.13/src/interface/IRaindexV7.sol";
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {LibTestContextWords} from "test/util/lib/LibTestContextWords.sol";
-import {
-    LibNamespace,
-    FullyQualifiedNamespace,
-    StateNamespace
-} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
+import {LibNamespace, FullyQualifiedNamespace, StateNamespace} from "rainlang-0.2.30/src/lib/ns/LibNamespace.sol";
 
 /// @title RaindexV7ContextWordEntrypointsTest
 /// @notice Every context word reads its true value in the entrypoints that fill
@@ -181,8 +177,11 @@ contract RaindexV7ContextWordEntrypointsTest is RaindexV7ExternalRealTest {
     }
 
     /// `CLEARER` clears an ACTOR order whose calculate source is `calculate` and
-    /// handle source is `handle` against a TAKER order.
-    function doClear(string memory calculate, string memory handle) public {
+    /// handle source is `handle` against a TAKER order whose calculate source is
+    /// `bobCalculate` and handle source is `bobHandle`.
+    function doClear(string memory calculate, string memory handle, string memory bobCalculate, string memory bobHandle)
+        public
+    {
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ACTOR);
@@ -200,7 +199,13 @@ contract RaindexV7ContextWordEntrypointsTest is RaindexV7ExternalRealTest {
             VAULT_ID
         );
         OrderV4 memory bob = LibTestTakeOrder.addOrderWithExpression(
-            vm, TAKER, "_ _:1 1;:;", address(iToken1), VAULT_ID, address(iToken0), VAULT_ID
+            vm,
+            TAKER,
+            bytes(string.concat("using-words-from ", address(iSubParser).toHexString(), "\n", bobCalculate, bobHandle)),
+            address(iToken1),
+            VAULT_ID,
+            address(iToken0),
+            VAULT_ID
         );
         vm.prank(CLEARER);
         iRaindex.clear4(alice, bob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0));
@@ -379,11 +384,29 @@ contract RaindexV7ContextWordEntrypointsTest is RaindexV7ExternalRealTest {
         checks[4] = Check("order-clearer()", CLEARER.toHexString());
     }
 
+    function bobClearChecks() internal view returns (Check[] memory checks) {
+        checks = new Check[](5);
+        checks[0] = raindexCheck();
+        checks[1] = senderCheck(CLEARER);
+        checks[2] = Check("order-owner()", TAKER.toHexString());
+        checks[3] = Check("order-counterparty()", ACTOR.toHexString());
+        checks[4] = Check("order-clearer()", CLEARER.toHexString());
+    }
+
     function testClearCalculateContextWords() external {
-        this.doClear(string.concat("_ _:1 1,", ensures(clearChecks())), ":;");
+        this.doClear(string.concat("_ _:1 1,", ensures(clearChecks())), ":;", "_ _:1 1;", ":;");
     }
 
     function testClearHandleIOContextWords() external {
-        this.doClear("_ _:1 1;", ensures(clearChecks()));
+        this.doClear("_ _:1 1;", ensures(clearChecks()), "_ _:1 1;", ":;");
+    }
+
+    function testClearBothOrdersContextWords() external {
+        this.doClear(
+            string.concat("_ _:1 1,", ensures(clearChecks())),
+            ensures(clearChecks()),
+            string.concat("_ _:1 1,", ensures(bobClearChecks())),
+            ensures(bobClearChecks())
+        );
     }
 }
