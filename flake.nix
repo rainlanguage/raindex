@@ -88,12 +88,12 @@
               mkdir -p meta;
               forge script --silent ./script/BuildAuthoringMeta.sol;
               rain meta build \
-                -i <(cat ./meta/RaindexV6SubParserAuthoringMeta.rain.meta) \
+                -i <(cat ./meta/RaindexV7SubParserAuthoringMeta.rain.meta) \
                 -m authoring-meta-v2 \
                 -t cbor \
                 -e deflate \
                 -l none \
-                -o meta/RaindexV6SubParser.rain.meta \
+                -o meta/RaindexV7SubParser.rain.meta \
                 ;
             '';
           };

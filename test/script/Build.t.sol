@@ -99,26 +99,82 @@ contract BuildTest is Test {
         }
     }
 
-    /// PROPERTY: `snapshotContractNames()` is every `generatedContracts()`
+    /// PROPERTY: `releaseRecordNames()` is every `generatedContracts()`
     /// entry's `contractName`, positionally.
     ///
-    /// It is the list `cutRelease()` freezes and the list the released-suites
-    /// aggregate is emitted from, and both reach it only through `forge
+    /// It is the list `cutRelease()` freezes, reached only through `forge
     /// script`. A name list shorter than the declaration freezes one contract
-    /// fewer and emits an aggregate that declares that contract's releases as
-    /// nothing at all, while the test above stays green: it reads
+    /// fewer, while the test above stays green: it reads
     /// `generatedContracts()`, which this list does not pass through.
-    ///
-    /// Positional rather than as a set, because the aggregate documents its
-    /// entries as being in declaration order and nothing else pins that.
-    function testSnapshotContractNamesAreTheDeclarationInOrder() external view {
+    function testReleaseRecordNamesAreTheDeclarationInOrder() external view {
         GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        string[] memory names = sBuild.externalSnapshotContractNames();
+        string[] memory names = sBuild.externalReleaseRecordNames();
 
         assertEq(names.length, generated.length, "a different number of names than generated contracts");
 
         for (uint256 i = 0; i < generated.length; i++) {
             assertEq(names[i], generated[i].contractName, "the names are not the declaration in order");
+        }
+    }
+
+    /// PROPERTY: `snapshotContractNames()` is every `renamedRecords()` entry's
+    /// `contractName` followed by every `generatedContracts()` entry's,
+    /// positionally.
+    ///
+    /// It is the list the released-suites aggregate is emitted from. A name
+    /// missing from it is a contract whose releases the aggregate declares as
+    /// nothing at all. Positional because the aggregate documents its entries
+    /// as being in this order and nothing else pins that.
+    function testSnapshotContractNamesAreRenamedThenDeclarationInOrder() external view {
+        GeneratedContract[] memory renamed = sBuild.externalRenamedRecords();
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory names = sBuild.externalSnapshotContractNames();
+
+        assertEq(names.length, renamed.length + generated.length, "a different number of names than released contracts");
+
+        for (uint256 i = 0; i < renamed.length; i++) {
+            assertEq(names[i], renamed[i].contractName, "the renamed records do not lead in order");
+        }
+        for (uint256 i = 0; i < generated.length; i++) {
+            assertEq(names[renamed.length + i], generated[i].contractName, "the declaration does not follow in order");
+        }
+    }
+
+    /// PROPERTY: every renamed record is released under a generated candidate,
+    /// by suite key and creation code, and its name is no released contract's
+    /// other than its own. A renamed record under an undeclared key is a
+    /// release no chain check is handed, and a shared name writes one released
+    /// lib twice.
+    function testRenamedRecordsReleaseUnderAGeneratedCandidate() external view {
+        GeneratedContract[] memory renamed = sBuild.externalRenamedRecords();
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory names = sBuild.externalSnapshotContractNames();
+
+        for (uint256 i = 0; i < renamed.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < generated.length; j++) {
+                if (
+                    keccak256(bytes(renamed[i].candidate.snapshot.suite))
+                        == keccak256(bytes(generated[j].candidate.snapshot.suite))
+                ) {
+                    assertEq(
+                        keccak256(renamed[i].candidate.snapshot.creationCode),
+                        keccak256(generated[j].candidate.snapshot.creationCode),
+                        "renamed record carries another contract's creation code"
+                    );
+                    found = true;
+                    break;
+                }
+            }
+            assertTrue(found, string.concat("renamed record is not a generated candidate: ", renamed[i].contractName));
+
+            uint256 count = 0;
+            for (uint256 k = 0; k < names.length; k++) {
+                if (keccak256(bytes(names[k])) == keccak256(bytes(renamed[i].contractName))) {
+                    count++;
+                }
+            }
+            assertEq(count, 1, string.concat("renamed record name is not unique: ", renamed[i].contractName));
         }
     }
 

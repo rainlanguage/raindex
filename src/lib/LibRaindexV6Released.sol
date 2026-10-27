@@ -49,7 +49,7 @@ library LibRaindexV6Released {
             storedDeployedAddress: RaindexV6_0_1_14_DEPLOYED_ADDRESS,
             storedBytecodeHash: RaindexV6_0_1_14_BYTECODE_HASH,
             storedRuntimeCode: RaindexV6_0_1_14_RUNTIME_CODE,
-            artifactPath: "src/concrete/raindex/RaindexV6.sol:RaindexV6",
+            artifactPath: "src/concrete/raindex/RaindexV7.sol:RaindexV7",
             dependencies: abi.decode(RaindexV6_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -60,7 +60,7 @@ library LibRaindexV6Released {
             storedDeployedAddress: RaindexV6_0_1_15_DEPLOYED_ADDRESS,
             storedBytecodeHash: RaindexV6_0_1_15_BYTECODE_HASH,
             storedRuntimeCode: RaindexV6_0_1_15_RUNTIME_CODE,
-            artifactPath: "src/concrete/raindex/RaindexV6.sol:RaindexV6",
+            artifactPath: "src/concrete/raindex/RaindexV7.sol:RaindexV7",
             dependencies: abi.decode(RaindexV6_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""

@@ -5,9 +5,10 @@ Read and follow @AGENTS.md.
 Deploy repo: a source change regenerates `src/generated/candidate/` and merges
 without deploying. Deploying and publishing happen together at a release
 (below). `LibRaindexDeploy` is the candidate. The start-block, `networks.json`
-and `subgraph.yaml` tests read the released RaindexV6 from the newest entry of
-the generated `LibRaindexV6Released`. Address/codehash churn is routine; don't
-stop to ask about it.
+and `subgraph.yaml` tests read the released RaindexV7 from the newest entry of
+the generated `LibRaindexV7Released`, else `LibRaindexV6Released` (releases cut
+before the rename). Address/codehash churn is routine; don't stop to ask about
+it.
 
 ## Merging a PR
 
@@ -46,8 +47,8 @@ changed artifacts or `git-clean` drifts red. Nothing is deployed.
    `ONCHAIN EXECUTION COMPLETE & SUCCESSFUL` (only `--verify` failed).
 2. One PR: bump `foundry.toml [external.package].version`, run
    `forge script ./script/Build.sol --sig 'cutRelease()'` (freezes `candidate/`
-   as `src/generated/<tag>/`), and if RaindexV6 moved run
-   `script/build-start-blocks.sh` (`LibRaindexV6StartBlock`, `networks.json`,
+   as `src/generated/<tag>/`), and if RaindexV7 moved run
+   `script/build-start-blocks.sh` (`LibRaindexV7StartBlock`, `networks.json`,
    `subgraph.yaml`).
 3. Merge, then push tag `sol-v<version>`. Via rainix `rainix-tag-release.yaml`
    (`package-release.yaml`) it re-runs the fork suite and `release-guard`

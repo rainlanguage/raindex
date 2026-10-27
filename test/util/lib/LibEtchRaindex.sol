@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
-import {RUNTIME_CODE as RAINDEX_RUNTIME_CODE} from "../../../src/generated/candidate/RaindexV6.sol";
-import {RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE} from "../../../src/generated/candidate/RaindexV6SubParser.sol";
+import {RUNTIME_CODE as RAINDEX_RUNTIME_CODE} from "../../../src/generated/candidate/RaindexV7.sol";
+import {RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE} from "../../../src/generated/candidate/RaindexV7SubParser.sol";
 import {RUNTIME_CODE as ROUTE_PROCESSOR_RUNTIME_CODE} from "../../../src/generated/candidate/RouteProcessor4.sol";
 
 /// @title LibEtchRaindex

@@ -49,7 +49,7 @@ library LibRaindexV6SubParserReleased {
             storedDeployedAddress: RaindexV6SubParser_0_1_14_DEPLOYED_ADDRESS,
             storedBytecodeHash: RaindexV6SubParser_0_1_14_BYTECODE_HASH,
             storedRuntimeCode: RaindexV6SubParser_0_1_14_RUNTIME_CODE,
-            artifactPath: "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
+            artifactPath: "src/concrete/parser/RaindexV7SubParser.sol:RaindexV7SubParser",
             dependencies: abi.decode(RaindexV6SubParser_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -60,7 +60,7 @@ library LibRaindexV6SubParserReleased {
             storedDeployedAddress: RaindexV6SubParser_0_1_15_DEPLOYED_ADDRESS,
             storedBytecodeHash: RaindexV6SubParser_0_1_15_BYTECODE_HASH,
             storedRuntimeCode: RaindexV6SubParser_0_1_15_RUNTIME_CODE,
-            artifactPath: "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
+            artifactPath: "src/concrete/parser/RaindexV7SubParser.sol:RaindexV7SubParser",
             dependencies: abi.decode(RaindexV6SubParser_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""

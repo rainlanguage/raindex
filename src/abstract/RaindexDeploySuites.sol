@@ -18,11 +18,11 @@ import {
 import {
     CREATION_CODE as RAINDEX_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as RAINDEX_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/RaindexV6.sol";
+} from "../generated/candidate/RaindexV7.sol";
 import {
     CREATION_CODE as SUB_PARSER_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/RaindexV6SubParser.sol";
+} from "../generated/candidate/RaindexV7SubParser.sol";
 import {
     CREATION_CODE as ROUTE_PROCESSOR_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as ROUTE_PROCESSOR_RUNTIME_CODE_CANDIDATE
@@ -30,15 +30,15 @@ import {
 import {
     CREATION_CODE as GENERIC_POOL_ARB_OT_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as GENERIC_POOL_ARB_OT_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/GenericPoolRaindexV6ArbOrderTaker.sol";
+} from "../generated/candidate/GenericPoolRaindexV7ArbOrderTaker.sol";
 import {
     CREATION_CODE as RP_ARB_OT_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as RP_ARB_OT_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/RouteProcessorRaindexV6ArbOrderTaker.sol";
+} from "../generated/candidate/RouteProcessorRaindexV7ArbOrderTaker.sol";
 import {
     CREATION_CODE as GENERIC_POOL_FB_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as GENERIC_POOL_FB_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/GenericPoolRaindexV6FlashBorrower.sol";
+} from "../generated/candidate/GenericPoolRaindexV7FlashBorrower.sol";
 
 /// @title RaindexDeploySuites
 /// @notice Everything this repo deploys, declared ONCE: the six hand-written
@@ -69,14 +69,14 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         return candidates;
     }
 
-    /// The TOFU decimals reader, which `RaindexV6` and every arb read token
+    /// The TOFU decimals reader, which `RaindexV7` and every arb read token
     /// decimals through.
     /// @return The dependency.
     function tofuDecimalsDependency() internal pure returns (DeployDependency memory) {
         return DeployDependency({deployedAddress: TOFU_DECIMALS_ADDRESS, runtimeCode: TOFU_DECIMALS_RUNTIME_CODE});
     }
 
-    /// The candidate `RaindexV6`, the only raindex every arb accepts.
+    /// The candidate `RaindexV7`, the only raindex every arb accepts.
     /// @return The dependency.
     function raindexDependency() internal pure returns (DeployDependency memory) {
         return DeployDependency({
@@ -109,7 +109,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         return deps;
     }
 
-    /// The code that must already be on a network before `RaindexV6` can be
+    /// The code that must already be on a network before `RaindexV7` can be
     /// broadcast there: the TOFU decimals reader.
     /// @return The dependencies.
     function raindexDependencies() internal pure returns (DeployDependency[] memory) {
@@ -118,7 +118,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         return deps;
     }
 
-    /// This repo's rolling `RaindexV6` candidate. Each candidate is a named
+    /// This repo's rolling `RaindexV7` candidate. Each candidate is a named
     /// function rather than an index into `candidateSuites`, because
     /// `script/Build.sol` emits snapshots from these candidates specifically,
     /// and because six full creation codes built in one frame do not fit the
@@ -132,7 +132,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibRaindexDeploy.RAINDEX_DEPLOYED_CODEHASH,
                 storedRuntimeCode: RAINDEX_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/raindex/RaindexV6.sol:RaindexV6",
+                artifactPath: "src/concrete/raindex/RaindexV7.sol:RaindexV7",
                 dependencies: raindexDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
@@ -141,7 +141,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         });
     }
 
-    /// This repo's rolling `RaindexV6SubParser` candidate.
+    /// This repo's rolling `RaindexV7SubParser` candidate.
     /// @return The candidate.
     function subParserCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
@@ -151,7 +151,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibRaindexDeploy.SUB_PARSER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: SUB_PARSER_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser",
+                artifactPath: "src/concrete/parser/RaindexV7SubParser.sol:RaindexV7SubParser",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
@@ -182,7 +182,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         });
     }
 
-    /// This repo's rolling `GenericPoolRaindexV6ArbOrderTaker` candidate.
+    /// This repo's rolling `GenericPoolRaindexV7ArbOrderTaker` candidate.
     /// @return The candidate.
     function genericPoolArbOrderTakerCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
@@ -192,7 +192,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibRaindexDeploy.GENERIC_POOL_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: GENERIC_POOL_ARB_OT_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker",
+                artifactPath: "src/concrete/arb/GenericPoolRaindexV7ArbOrderTaker.sol:GenericPoolRaindexV7ArbOrderTaker",
                 dependencies: arbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
@@ -201,7 +201,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         });
     }
 
-    /// This repo's rolling `RouteProcessorRaindexV6ArbOrderTaker` candidate.
+    /// This repo's rolling `RouteProcessorRaindexV7ArbOrderTaker` candidate.
     /// @return The candidate.
     function routeProcessorArbOrderTakerCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
@@ -211,7 +211,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibRaindexDeploy.ROUTE_PROCESSOR_ARB_ORDER_TAKER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: RP_ARB_OT_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker",
+                artifactPath: "src/concrete/arb/RouteProcessorRaindexV7ArbOrderTaker.sol:RouteProcessorRaindexV7ArbOrderTaker",
                 dependencies: routeProcessorArbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
@@ -220,7 +220,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
         });
     }
 
-    /// This repo's rolling `GenericPoolRaindexV6FlashBorrower` candidate.
+    /// This repo's rolling `GenericPoolRaindexV7FlashBorrower` candidate.
     /// @return The candidate.
     function genericPoolFlashBorrowerCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
@@ -230,7 +230,7 @@ abstract contract RaindexDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibRaindexDeploy.GENERIC_POOL_FLASH_BORROWER_DEPLOYED_CODEHASH,
                 storedRuntimeCode: GENERIC_POOL_FB_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower",
+                artifactPath: "src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol:GenericPoolRaindexV7FlashBorrower",
                 dependencies: arbDependencies(),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""

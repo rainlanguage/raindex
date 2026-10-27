@@ -31,7 +31,7 @@ nix develop .#subgraph-shell -c bash -c '
 set -euxo pipefail
 
 mkdir -p subgraph/abis
-jq "{abi}" out/RaindexV6.sol/RaindexV6.json > subgraph/abis/Raindex.json
+jq "{abi}" out/RaindexV7.sol/RaindexV7.json > subgraph/abis/Raindex.json
 jq "{abi}" out/ERC20.sol/ERC20.json > subgraph/abis/ERC20.json
 jq "{abi}" out/DecimalFloat.sol/DecimalFloat.json > subgraph/abis/DecimalFloat.json
 
@@ -40,7 +40,7 @@ jq "{abi}" out/DecimalFloat.sol/DecimalFloat.json > subgraph/abis/DecimalFloat.j
 mkdir -p crates/bindings/abis
 # Sources the raindex compiler profile also compiles get per-profile artifacts.
 jq "{abi}" out/IRaindexV7.sol/IRaindexV7.default.json > crates/bindings/abis/IRaindexV7.json
-jq "{abi}" out/RaindexV6.sol/RaindexV6.json > crates/bindings/abis/RaindexV6.json
+jq "{abi}" out/RaindexV7.sol/RaindexV7.json > crates/bindings/abis/RaindexV7.json
 jq "{abi}" out/ERC20.sol/ERC20.json > crates/bindings/abis/ERC20.json
 jq "{abi}" out/IERC20Metadata.sol/IERC20Metadata.default.json > crates/bindings/abis/IERC20Metadata.json
 jq "{abi}" out/IInterpreterStoreV3.sol/IInterpreterStoreV3.default.json > crates/bindings/abis/IInterpreterStoreV3.json
@@ -49,8 +49,8 @@ mkdir -p crates/test_fixtures/abis
 # bytecode.sourceMap embeds a file-ID that depends on solc input ordering and
 # differs across runners — drop it (debug-only; alloy ::deploy() only reads
 # bytecode.object).
-jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6.sol/RaindexV6.json > crates/test_fixtures/abis/RaindexV6.json
-jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV6SubParser.sol/RaindexV6SubParser.json > crates/test_fixtures/abis/RaindexV6SubParser.json
+jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV7.sol/RaindexV7.json > crates/test_fixtures/abis/RaindexV7.json
+jq "{abi, bytecode: (.bytecode | {object, linkReferences})}" out/RaindexV7SubParser.sol/RaindexV7SubParser.json > crates/test_fixtures/abis/RaindexV7SubParser.json
 
 mkdir -p crates/test_fixtures/contracts
 cp dependencies/forge-std-1.17.0/src/interfaces/IMulticall3.sol crates/test_fixtures/contracts/IMulticall3.sol

@@ -49,7 +49,7 @@ library LibGenericPoolRaindexV6FlashBorrowerReleased {
             storedDeployedAddress: GenericPoolRaindexV6FlashBorrower_0_1_14_DEPLOYED_ADDRESS,
             storedBytecodeHash: GenericPoolRaindexV6FlashBorrower_0_1_14_BYTECODE_HASH,
             storedRuntimeCode: GenericPoolRaindexV6FlashBorrower_0_1_14_RUNTIME_CODE,
-            artifactPath: "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower",
+            artifactPath: "src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol:GenericPoolRaindexV7FlashBorrower",
             dependencies: abi.decode(GenericPoolRaindexV6FlashBorrower_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -60,7 +60,7 @@ library LibGenericPoolRaindexV6FlashBorrowerReleased {
             storedDeployedAddress: GenericPoolRaindexV6FlashBorrower_0_1_15_DEPLOYED_ADDRESS,
             storedBytecodeHash: GenericPoolRaindexV6FlashBorrower_0_1_15_BYTECODE_HASH,
             storedRuntimeCode: GenericPoolRaindexV6FlashBorrower_0_1_15_RUNTIME_CODE,
-            artifactPath: "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower",
+            artifactPath: "src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol:GenericPoolRaindexV7FlashBorrower",
             dependencies: abi.decode(GenericPoolRaindexV6FlashBorrower_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""

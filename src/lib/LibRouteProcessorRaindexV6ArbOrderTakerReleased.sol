@@ -49,7 +49,7 @@ library LibRouteProcessorRaindexV6ArbOrderTakerReleased {
             storedDeployedAddress: RouteProcessorRaindexV6ArbOrderTaker_0_1_14_DEPLOYED_ADDRESS,
             storedBytecodeHash: RouteProcessorRaindexV6ArbOrderTaker_0_1_14_BYTECODE_HASH,
             storedRuntimeCode: RouteProcessorRaindexV6ArbOrderTaker_0_1_14_RUNTIME_CODE,
-            artifactPath: "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker",
+            artifactPath: "src/concrete/arb/RouteProcessorRaindexV7ArbOrderTaker.sol:RouteProcessorRaindexV7ArbOrderTaker",
             dependencies: abi.decode(RouteProcessorRaindexV6ArbOrderTaker_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -60,7 +60,7 @@ library LibRouteProcessorRaindexV6ArbOrderTakerReleased {
             storedDeployedAddress: RouteProcessorRaindexV6ArbOrderTaker_0_1_15_DEPLOYED_ADDRESS,
             storedBytecodeHash: RouteProcessorRaindexV6ArbOrderTaker_0_1_15_BYTECODE_HASH,
             storedRuntimeCode: RouteProcessorRaindexV6ArbOrderTaker_0_1_15_RUNTIME_CODE,
-            artifactPath: "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker",
+            artifactPath: "src/concrete/arb/RouteProcessorRaindexV7ArbOrderTaker.sol:RouteProcessorRaindexV7ArbOrderTaker",
             dependencies: abi.decode(RouteProcessorRaindexV6ArbOrderTaker_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
