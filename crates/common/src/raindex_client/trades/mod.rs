@@ -1102,7 +1102,9 @@ mod test_helpers {
         use super::*;
         use crate::{
             local_db::RaindexIdentifier,
-            raindex_client::tests::{get_test_yaml, mock_vaultless_balances, CHAIN_ID_1_RAINDEX_ADDRESS},
+            raindex_client::tests::{
+                get_test_yaml, mock_vaultless_balances, CHAIN_ID_1_RAINDEX_ADDRESS,
+            },
         };
         use alloy::primitives::{b256, Bytes};
         use httpmock::MockServer;

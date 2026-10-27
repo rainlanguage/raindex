@@ -667,7 +667,10 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
         result.orders[1].vaultsList.items[0].balance.format().value,
         "4.5",
       );
-      assert.equal(result.orders[1].vaultsList.items[0].formattedBalance, "4.5");
+      assert.equal(
+        result.orders[1].vaultsList.items[0].formattedBalance,
+        "4.5",
+      );
       assert.equal(result.orders.length, 2);
       assert.equal(result.orders[0].id, order1.id);
       assert.equal(result.orders[1].id, order2.id);

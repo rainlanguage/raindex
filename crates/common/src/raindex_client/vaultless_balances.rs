@@ -120,7 +120,6 @@ impl RaindexClient {
     }
 }
 
-
 #[cfg(all(test, not(target_family = "wasm")))]
 mod tests {
     use super::*;
@@ -136,7 +135,12 @@ mod tests {
     async fn client(rpc1: &str) -> ClientRef {
         ClientRef::new(
             RaindexClient::new(
-                vec![get_test_yaml("http://sg1", "http://sg2", rpc1, "http://rpc2")],
+                vec![get_test_yaml(
+                    "http://sg1",
+                    "http://sg2",
+                    rpc1,
+                    "http://rpc2",
+                )],
                 None,
                 None,
             )
@@ -203,9 +207,7 @@ mod tests {
             .await
             .address();
 
-        for (token, wallet, allowance) in
-            [(wallet_capped, 5, 9), (allowance_capped, 7, 2)]
-        {
+        for (token, wallet, allowance) in [(wallet_capped, 5, 9), (allowance_capped, 7, 2)] {
             let contract = local_evm
                 .tokens
                 .iter()
