@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
-import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
+import {GenericPoolRaindexV7ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV7ArbOrderTaker.sol";
 import {
     IRaindexV7,
     TakeOrdersConfigV6,
@@ -12,9 +12,9 @@ import {
     EvaluableV4,
     SignedContextV2,
     Float
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+} from "raindex-interface-0.1.13/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-0.2.30/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-0.2.30/src/interface/IInterpreterStoreV3.sol";
 import {MockRaindexBase} from "test/util/abstract/MockRaindexBase.sol";
 
 /// @dev Mock Raindex whose takeOrders5 callback re-enters arb6 on the taker.
@@ -33,7 +33,7 @@ contract ReentrantMockRaindex is MockRaindexBase {
         if (!sReentered) {
             sReentered = true;
             // Re-enter arb6 from the Raindex callback.
-            GenericPoolRaindexV6ArbOrderTaker(payable(msg.sender))
+            GenericPoolRaindexV7ArbOrderTaker(payable(msg.sender))
                 .arb6(
                     IRaindexV7(address(this)),
                     config,

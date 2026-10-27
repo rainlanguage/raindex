@@ -10,6 +10,6 @@ import {LibRaindexSubParser} from "../src/lib/LibRaindexSubParser.sol";
 /// wrapped in CBOR and emitted on metaboard.
 contract BuildAuthoringMeta is Script {
     function run() external {
-        vm.writeFileBinary("meta/RaindexV6SubParserAuthoringMeta.rain.meta", LibRaindexSubParser.authoringMetaV2());
+        vm.writeFileBinary("meta/RaindexV7SubParserAuthoringMeta.rain.meta", LibRaindexSubParser.authoringMetaV2());
     }
 }

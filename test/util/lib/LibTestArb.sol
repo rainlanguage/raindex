@@ -13,17 +13,17 @@ import {
     EvaluableV4,
     SignedContextV2,
     TaskV3
-} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
-import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.13/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-0.2.30/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-0.2.30/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
 import {
     TEST_INTERPRETER_ADDRESS,
     TEST_STORE_ADDRESS
-} from "rainlang-0.2.26/test/lib/deploy/LibTestInterpreterDeploy.sol";
+} from "rainlang-0.2.30/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
-import {GenericPoolRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
+import {GenericPoolRaindexV7ArbOrderTaker} from "../../../src/concrete/arb/GenericPoolRaindexV7ArbOrderTaker.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
@@ -31,7 +31,7 @@ import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderT
 
 /// @dev Return value from `setupAndArb`.
 struct ArbResult {
-    GenericPoolRaindexV6ArbOrderTaker arb;
+    GenericPoolRaindexV7ArbOrderTaker arb;
     MockToken inputToken;
     MockToken outputToken;
     RealisticOrderTakerMockRaindex raindex;
@@ -40,7 +40,7 @@ struct ArbResult {
 
 /// @dev Return value from `setup`. Caller keeps their own exchange reference.
 struct OrderTakerSetup {
-    GenericPoolRaindexV6ArbOrderTaker arb;
+    GenericPoolRaindexV7ArbOrderTaker arb;
     MockToken inputToken;
     MockToken outputToken;
     IRaindexV7 raindex;
@@ -100,7 +100,7 @@ library LibTestArb {
         outputToken.mint(address(raindex), raindexOutputAmount);
         inputToken.mint(address(exchange), exchangeInputAmount);
 
-        GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
+        GenericPoolRaindexV7ArbOrderTaker arb = new GenericPoolRaindexV7ArbOrderTaker();
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), swapAmount));
@@ -166,7 +166,7 @@ library LibTestArb {
         outputToken.mint(address(raindex), amount);
         inputToken.mint(exchange, amount);
 
-        GenericPoolRaindexV6ArbOrderTaker arb = new GenericPoolRaindexV6ArbOrderTaker();
+        GenericPoolRaindexV7ArbOrderTaker arb = new GenericPoolRaindexV7ArbOrderTaker();
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), amount));

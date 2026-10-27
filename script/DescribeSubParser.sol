@@ -5,13 +5,13 @@ pragma solidity =0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {IMetaBoardV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaBoardV1_2.sol";
 import {LibDescribedByMeta} from "rain-metadata-0.1.43/src/lib/LibDescribedByMeta.sol";
-import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.3/src/lib/LibMetaBoardDeploy.sol";
-import {RaindexV6SubParser} from "../src/concrete/parser/RaindexV6SubParser.sol";
+import {LibMetaBoardDeploy} from "rain-metadata-deploy-0.1.4/src/lib/LibMetaBoardDeploy.sol";
+import {RaindexV7SubParser} from "../src/concrete/parser/RaindexV7SubParser.sol";
 import {LibRaindexDeploy} from "../src/lib/deploy/LibRaindexDeploy.sol";
 
 /// @title DescribeSubParser
 /// @notice Emits the sub-parser's described-by meta onto the metaboard for the
-/// already-deployed `RaindexV6SubParser`. Split out of `script/Deploy.sol`
+/// already-deployed `RaindexV7SubParser`. Split out of `script/Deploy.sol`
 /// when the deploy moved onto `RainDeployBroadcast`, whose `run()` has no
 /// post-deploy hook.
 ///
@@ -27,13 +27,13 @@ contract DescribeSubParser is Script {
     function run() external {
         string memory network = vm.envString("DEPLOYMENT_NETWORK");
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
-        bytes memory subParserDescribedByMeta = vm.readFileBinary("meta/RaindexV6SubParser.rain.meta");
+        bytes memory subParserDescribedByMeta = vm.readFileBinary("meta/RaindexV7SubParser.rain.meta");
 
         vm.createSelectFork(network);
         IMetaBoardV1_2 metaboard = IMetaBoardV1_2(LibMetaBoardDeploy.META_BOARD_DEPLOYED_ADDRESS);
         vm.startBroadcast(deployerPrivateKey);
         LibDescribedByMeta.emitForDescribedAddress(
-            metaboard, RaindexV6SubParser(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS), subParserDescribedByMeta
+            metaboard, RaindexV7SubParser(LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS), subParserDescribedByMeta
         );
         vm.stopBroadcast();
     }

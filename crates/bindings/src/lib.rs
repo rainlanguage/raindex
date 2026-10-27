@@ -9,7 +9,7 @@ sol!(
 sol!(
     #![sol(all_derives = true)]
     #![sol(extra_derives(serde::Serialize, serde::Deserialize))]
-    Raindex, "./abis/RaindexV6.json"
+    Raindex, "./abis/RaindexV7.json"
 );
 
 // Inline definition avoids non-deterministic artifact collision between

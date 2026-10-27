@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 
-# Refresh the RaindexV6 deploy-block bookkeeping after a release.
+# Refresh the RaindexV7 deploy-block bookkeeping after a release.
 #
-# Finds the exact block at which the newest released RaindexV6 (the last entry
-# of LibRaindexV6Released) was deployed on each mainnet by binary-searching
+# Finds the exact block at which the newest released RaindexV7 (the last entry
+# of LibRaindexV7Released, else of LibRaindexV6Released) was deployed on each mainnet by binary-searching
 # `eth_getCode` over an archive RPC, then rewrites the new per-chain blocks +
 # that address into:
-#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexV6StartBlock.sol
+#   - the RAINDEX_START_BLOCK_* constants in src/lib/deploy/LibRaindexV7StartBlock.sol
 #   - subgraph/networks.json (address + startBlock per network)
 #   - subgraph/subgraph.yaml (data source address)
 #
-# RaindexV6 is CREATE2-deployed, so its address only ever holds the one bytecode
+# RaindexV7 is CREATE2-deployed, so its address only ever holds the one bytecode
 # it was created with: the first block with code at that address IS the deploy
 # block. Per-chain RPCs come from the foundry rpc_endpoints env vars, falling
 # back to public archive endpoints. Set BUILD_START_BLOCKS_INPUT to a file of
@@ -20,14 +20,18 @@
 # tests.
 set -euo pipefail
 
-LIB="src/lib/deploy/LibRaindexV6StartBlock.sol"
-RELEASED="src/lib/LibRaindexV6Released.sol"
+LIB="src/lib/deploy/LibRaindexV7StartBlock.sol"
 NET="subgraph/networks.json"
 YAML="subgraph/subgraph.yaml"
-TAG=$(grep -aoE 'storedDeployedAddress: RaindexV6_[A-Za-z0-9_]+_DEPLOYED_ADDRESS' "$RELEASED" | tail -1 \
-    | sed -E 's/.*RaindexV6_(.+)_DEPLOYED_ADDRESS/\1/' || true)
-PTR="src/generated/${TAG}/RaindexV6.sol"
-[ -n "$TAG" ] && [ -f "$PTR" ] || { echo "could not read the newest released RaindexV6 snapshot from $RELEASED" >&2; exit 1; }
+# Releases cut before the rename are recorded as RaindexV6.
+for NAME in RaindexV7 RaindexV6; do
+  RELEASED="src/lib/Lib${NAME}Released.sol"
+  TAG=$(grep -aoE "storedDeployedAddress: ${NAME}_[A-Za-z0-9_]+_DEPLOYED_ADDRESS" "$RELEASED" | tail -1 \
+      | sed -E "s/.*${NAME}_(.+)_DEPLOYED_ADDRESS/\1/" || true)
+  [ -n "$TAG" ] && break
+done
+PTR="src/generated/${TAG}/${NAME}.sol"
+[ -n "$TAG" ] && [ -f "$PTR" ] || { echo "could not read the newest released RaindexV7 snapshot from $RELEASED" >&2; exit 1; }
 
 ARB_RPC="${ARBITRUM_RPC_URL:-https://arbitrum.drpc.org}"
 BASE_RPC="${BASE_RPC_URL:-https://mainnet.base.org}"
@@ -104,7 +108,7 @@ find_deploy_block() {
 if [ -n "${BUILD_START_BLOCKS_INPUT:-}" ]; then
     OUT=$(cat "$BUILD_START_BLOCKS_INPUT")
 else
-    echo "finding RaindexV6 ($ADDR) deploy block on each chain..." >&2
+    echo "finding RaindexV7 ($ADDR) deploy block on each chain..." >&2
     OUT="STARTBLOCK arbitrum $(find_deploy_block "$ARB_RPC" "$ADDR")
 STARTBLOCK base $(find_deploy_block "$BASE_RPC" "$ADDR")
 STARTBLOCK flare $(find_deploy_block "$FLARE_RPC" "$ADDR")
