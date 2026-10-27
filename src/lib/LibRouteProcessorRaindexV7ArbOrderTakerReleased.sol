@@ -6,6 +6,14 @@ pragma solidity ^0.8.25;
 
 import {DeployDependency, DeployMechanism, DeploySuite} from "rain-deploy-0.1.25/src/abstract/RainDeploySuitesBase.sol";
 
+import {
+    DEPLOYED_ADDRESS as RouteProcessorRaindexV7ArbOrderTaker_0_1_16_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as RouteProcessorRaindexV7ArbOrderTaker_0_1_16_BYTECODE_HASH,
+    CREATION_CODE as RouteProcessorRaindexV7ArbOrderTaker_0_1_16_CREATION_CODE,
+    RUNTIME_CODE as RouteProcessorRaindexV7ArbOrderTaker_0_1_16_RUNTIME_CODE,
+    DEPENDENCIES as RouteProcessorRaindexV7ArbOrderTaker_0_1_16_DEPENDENCIES
+} from "../generated/0_1_16/RouteProcessorRaindexV7ArbOrderTaker.sol";
+
 /// @title LibRouteProcessorRaindexV7ArbOrderTakerReleased
 /// @notice Every frozen release of `RouteProcessorRaindexV7ArbOrderTaker`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -26,7 +34,18 @@ library LibRouteProcessorRaindexV7ArbOrderTakerReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "arb-route-processor-order-taker@0_1_16",
+            creationCode: RouteProcessorRaindexV7ArbOrderTaker_0_1_16_CREATION_CODE,
+            storedDeployedAddress: RouteProcessorRaindexV7ArbOrderTaker_0_1_16_DEPLOYED_ADDRESS,
+            storedBytecodeHash: RouteProcessorRaindexV7ArbOrderTaker_0_1_16_BYTECODE_HASH,
+            storedRuntimeCode: RouteProcessorRaindexV7ArbOrderTaker_0_1_16_RUNTIME_CODE,
+            artifactPath: "src/concrete/arb/RouteProcessorRaindexV7ArbOrderTaker.sol:RouteProcessorRaindexV7ArbOrderTaker",
+            dependencies: abi.decode(RouteProcessorRaindexV7ArbOrderTaker_0_1_16_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
         return suites;
     }
 }

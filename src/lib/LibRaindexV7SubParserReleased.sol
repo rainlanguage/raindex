@@ -6,6 +6,14 @@ pragma solidity ^0.8.25;
 
 import {DeployDependency, DeployMechanism, DeploySuite} from "rain-deploy-0.1.25/src/abstract/RainDeploySuitesBase.sol";
 
+import {
+    DEPLOYED_ADDRESS as RaindexV7SubParser_0_1_16_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as RaindexV7SubParser_0_1_16_BYTECODE_HASH,
+    CREATION_CODE as RaindexV7SubParser_0_1_16_CREATION_CODE,
+    RUNTIME_CODE as RaindexV7SubParser_0_1_16_RUNTIME_CODE,
+    DEPENDENCIES as RaindexV7SubParser_0_1_16_DEPENDENCIES
+} from "../generated/0_1_16/RaindexV7SubParser.sol";
+
 /// @title LibRaindexV7SubParserReleased
 /// @notice Every frozen release of `RaindexV7SubParser`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -26,7 +34,18 @@ library LibRaindexV7SubParserReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "subparser@0_1_16",
+            creationCode: RaindexV7SubParser_0_1_16_CREATION_CODE,
+            storedDeployedAddress: RaindexV7SubParser_0_1_16_DEPLOYED_ADDRESS,
+            storedBytecodeHash: RaindexV7SubParser_0_1_16_BYTECODE_HASH,
+            storedRuntimeCode: RaindexV7SubParser_0_1_16_RUNTIME_CODE,
+            artifactPath: "src/concrete/parser/RaindexV7SubParser.sol:RaindexV7SubParser",
+            dependencies: abi.decode(RaindexV7SubParser_0_1_16_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
         return suites;
     }
 }
