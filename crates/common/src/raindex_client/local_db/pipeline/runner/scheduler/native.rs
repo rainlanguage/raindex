@@ -231,6 +231,7 @@ async fn run_network_loop<R: NativeRunner>(
     tracing::info!(network = %network_key, chain_id, "starting native sync loop");
     status_store.record_network_status(NetworkSyncStatus::syncing(chain_id));
 
+    let mut consecutive_failures: u32 = 0;
     loop {
         if stop_flag.load(Ordering::SeqCst) {
             break;
@@ -240,6 +241,7 @@ async fn run_network_loop<R: NativeRunner>(
             Ok(outcome) => match outcome {
                 RunOutcome::Report(report) => {
                     if report.failures.is_empty() {
+                        consecutive_failures = 0;
                         sync_readiness.mark_ready(chain_id);
                         status_store.record_chain_ready(chain_id);
                         status_store.record_network_status(NetworkSyncStatus::active(
@@ -253,6 +255,7 @@ async fn run_network_loop<R: NativeRunner>(
                             "sync cycle completed"
                         );
                     } else {
+                        consecutive_failures = consecutive_failures.saturating_add(1);
                         for failure in &report.failures {
                             let msg = failure.error.to_readable_msg();
                             status_store.record_raindex_status(RaindexSyncStatus::failure(
@@ -273,6 +276,7 @@ async fn run_network_loop<R: NativeRunner>(
                     }
                 }
                 RunOutcome::NotLeader => {
+                    consecutive_failures = 0;
                     sync_readiness.mark_ready(chain_id);
                     status_store.record_chain_ready(chain_id);
                     status_store.record_network_status(NetworkSyncStatus::active(
@@ -287,6 +291,7 @@ async fn run_network_loop<R: NativeRunner>(
                 }
             },
             Err(err) => {
+                consecutive_failures = consecutive_failures.saturating_add(1);
                 status_store.record_network_status(NetworkSyncStatus::new(
                     chain_id,
                     LocalDbStatus::Failure,
@@ -306,7 +311,17 @@ async fn run_network_loop<R: NativeRunner>(
             break;
         }
 
-        tokio::time::sleep(std::time::Duration::from_millis(interval_ms)).await;
+        let delay_ms = super::next_cycle_delay_ms(interval_ms, consecutive_failures);
+        if consecutive_failures > 0 {
+            tracing::warn!(
+                network = %network_key,
+                chain_id,
+                consecutive_failures,
+                delay_ms,
+                "backing off before the next sync cycle"
+            );
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
 
     tracing::info!(network = %network_key, chain_id, "native sync loop stopped");

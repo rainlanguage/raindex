@@ -210,6 +210,7 @@ mod tests {
             fetch,
             finality: FinalityConfig { depth: 12 },
             window_overrides: WindowOverrides::default(),
+            max_blocks_per_cycle: None,
         };
         let inputs = SyncInputs {
             raindex_id: raindex_id.clone(),

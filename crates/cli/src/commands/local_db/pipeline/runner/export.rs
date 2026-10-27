@@ -133,6 +133,7 @@ mod tests {
             fetch,
             finality: FinalityConfig { depth: 12 },
             window_overrides: WindowOverrides::default(),
+            max_blocks_per_cycle: None,
         };
 
         let raindex_id = RaindexIdentifier {
@@ -221,6 +222,7 @@ mod tests {
             fetch,
             finality: FinalityConfig { depth: 1 },
             window_overrides: WindowOverrides::default(),
+            max_blocks_per_cycle: None,
         };
 
         let raindex_id = RaindexIdentifier {

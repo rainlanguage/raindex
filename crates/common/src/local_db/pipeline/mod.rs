@@ -60,6 +60,11 @@ pub struct SyncConfig {
     pub finality: FinalityConfig,
     /// Optional manual window overrides (typically CLI only).
     pub window_overrides: WindowOverrides,
+    /// Most blocks a single cycle may cover (inclusive span); `None` means no
+    /// cap. Long-running clients set it so a cycle that keeps failing before
+    /// it persists cannot re-read an ever-growing range every time; a
+    /// successful cycle moves the watermark and the next one continues.
+    pub max_blocks_per_cycle: Option<u64>,
 }
 
 /// Coarse execution summary for a single sync cycle.

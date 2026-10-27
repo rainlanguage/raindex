@@ -98,6 +98,7 @@ pub fn build_runner_targets(
                 fetch,
                 finality,
                 window_overrides: WindowOverrides::default(),
+                max_blocks_per_cycle: None,
             },
             dump_str: None,
             defer_analyze: false,

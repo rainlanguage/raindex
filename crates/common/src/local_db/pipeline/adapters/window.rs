@@ -73,7 +73,15 @@ impl WindowPipeline for DefaultWindowPipeline {
 
         // 5) Apply end override then clamp to safe head
         let requested_target = cfg.window_overrides.end_block.unwrap_or(safe_head);
-        let target = requested_target.min(safe_head);
+        let mut target = requested_target.min(safe_head);
+
+        // 6) Cap the span of one cycle; the next cycle resumes from the
+        //    watermark this one persists.
+        if let Some(max_blocks) = cfg.max_blocks_per_cycle.filter(|max| *max > 0) {
+            if target >= start {
+                target = target.min(start.saturating_add(max_blocks - 1));
+            }
+        }
 
         Ok((start, target))
     }
@@ -164,6 +172,7 @@ mod tests {
                 start_block: start,
                 end_block: end,
             },
+            max_blocks_per_cycle: None,
         }
     }
 
@@ -242,6 +251,71 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(target, 980);
+    }
+
+    #[tokio::test]
+    async fn max_blocks_per_cycle_caps_the_target() {
+        let db = MockDb {
+            last_synced: 499,
+            fail: false,
+        };
+        let pipe = DefaultWindowPipeline::new();
+        let mut config = cfg(100, 0, None, None);
+        config.max_blocks_per_cycle = Some(50);
+        // start = 500, safe head = 1000, cap = 50 blocks => target 549
+        let (start, target) = pipe
+            .compute(&db, &sample_raindex_id(), &config, 1000)
+            .await
+            .unwrap();
+        assert_eq!((start, target), (500, 549));
+    }
+
+    #[tokio::test]
+    async fn max_blocks_per_cycle_does_not_extend_a_short_window() {
+        let db = MockDb {
+            last_synced: 990,
+            fail: false,
+        };
+        let pipe = DefaultWindowPipeline::new();
+        let mut config = cfg(100, 0, None, None);
+        config.max_blocks_per_cycle = Some(50);
+        let (start, target) = pipe
+            .compute(&db, &sample_raindex_id(), &config, 1000)
+            .await
+            .unwrap();
+        assert_eq!((start, target), (991, 1000));
+    }
+
+    #[tokio::test]
+    async fn max_blocks_per_cycle_keeps_an_empty_window_empty() {
+        let db = MockDb {
+            last_synced: 1000,
+            fail: false,
+        };
+        let pipe = DefaultWindowPipeline::new();
+        let mut config = cfg(100, 0, None, None);
+        config.max_blocks_per_cycle = Some(50);
+        let (start, target) = pipe
+            .compute(&db, &sample_raindex_id(), &config, 1000)
+            .await
+            .unwrap();
+        assert!(start > target);
+    }
+
+    #[tokio::test]
+    async fn zero_max_blocks_per_cycle_means_no_cap() {
+        let db = MockDb {
+            last_synced: 0,
+            fail: false,
+        };
+        let pipe = DefaultWindowPipeline::new();
+        let mut config = cfg(100, 0, None, None);
+        config.max_blocks_per_cycle = Some(0);
+        let (start, target) = pipe
+            .compute(&db, &sample_raindex_id(), &config, 1000)
+            .await
+            .unwrap();
+        assert_eq!((start, target), (100, 1000));
     }
 
     #[tokio::test]
