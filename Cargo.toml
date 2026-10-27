@@ -6,7 +6,7 @@ resolver = "2"
 edition = "2021"
 license = "LicenseRef-DCL-1.0"
 version = "0.0.0-alpha.0"
-homepage = "https://github.com/rainlanguage/raindex"
+homepage = "https://github.com/rainlanguage/raindex.deploy"
 
 [workspace.dependencies]
 foundry-block-explorers = "0.2.6"
