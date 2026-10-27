@@ -468,6 +468,19 @@ impl RaindexOrder {
     pub(crate) fn output_vaults(&self) -> &[RaindexVault] {
         &self.outputs
     }
+    pub(crate) fn vaults_mut(&mut self) -> impl Iterator<Item = &mut RaindexVault> {
+        self.inputs.iter_mut().chain(self.outputs.iter_mut())
+    }
+}
+
+impl RaindexClient {
+    pub(crate) async fn read_orders_vaultless_balances(
+        &self,
+        orders: &mut [RaindexOrder],
+    ) -> Result<(), RaindexError> {
+        self.read_vaultless_balances(orders.iter_mut().flat_map(RaindexOrder::vaults_mut))
+            .await
+    }
 }
 #[cfg(not(target_family = "wasm"))]
 impl RaindexOrder {
@@ -1206,7 +1219,7 @@ impl RaindexClient {
             }
 
             let dotrain_started_at = Timing::now();
-            let orders = fetch_orders_dotrain_sources(all_orders)
+            let mut orders = fetch_orders_dotrain_sources(all_orders)
                 .instrument(info_span!("orders.fetching_dotrain_sources"))
                 .await
                 .map_err(|err| {
@@ -1227,6 +1240,13 @@ impl RaindexClient {
                 duration_ms = dotrain_started_at.elapsed_ms(),
                 "fetched order dotrain sources"
             );
+
+            self.read_orders_vaultless_balances(&mut orders)
+                .await
+                .map_err(|err| {
+                    error!(error = %err, "failed reading vaultless balances");
+                    err
+                })?;
 
             info!(
                 query_source,
@@ -1601,6 +1621,13 @@ impl RaindexClient {
                 duration_ms = dotrain_started_at.elapsed_ms(),
                 "fetched order dotrain source"
             );
+
+            self.read_orders_vaultless_balances(std::slice::from_mut(&mut order))
+                .await
+                .map_err(|err| {
+                    error!(error = %err, "failed reading vaultless balances");
+                    err
+                })?;
 
             info!(
                 duration_ms = started_at.elapsed_ms(),

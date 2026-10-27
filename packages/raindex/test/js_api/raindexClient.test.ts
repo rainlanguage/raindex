@@ -649,12 +649,25 @@ describe("Rain Raindex JS API Package Bindgen Tests - Raindex Client", async fun
       await mockServer
         .forPost("/sg2")
         .thenReply(200, JSON.stringify({ data: { orders: [order2] } }));
+      const word = (n: number) => n.toString(16).padStart(64, "0");
+      const liveBalance = (Float.parse("4.5").value as Float).asHex().slice(2);
+      const vaultBalance2Multicall = await mockServer
+        .forPost("/rpc2")
+        .thenSendJsonRpcResult(
+          `0x${word(32)}${word(1)}${word(32)}${word(32)}${liveBalance}`,
+        );
 
       const raindexClient = extractWasmEncodedData(
         await RaindexClient.new([YAML]),
       );
 
       let result = extractWasmEncodedData(await raindexClient.getOrders());
+      assert.equal((await vaultBalance2Multicall.getSeenRequests()).length, 1);
+      assert.equal(
+        result.orders[1].vaultsList.items[0].balance.format().value,
+        "4.5",
+      );
+      assert.equal(result.orders[1].vaultsList.items[0].formattedBalance, "4.5");
       assert.equal(result.orders.length, 2);
       assert.equal(result.orders[0].id, order1.id);
       assert.equal(result.orders[1].id, order2.id);

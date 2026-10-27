@@ -62,6 +62,7 @@ pub mod take_orders;
 pub mod trades;
 pub mod transactions;
 pub mod types;
+mod vaultless_balances;
 pub mod vaults;
 pub mod vaults_list;
 
