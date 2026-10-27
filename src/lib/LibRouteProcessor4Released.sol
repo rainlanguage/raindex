@@ -30,6 +30,14 @@ import {
     DEPENDENCIES as RouteProcessor4_0_1_16_DEPENDENCIES
 } from "../generated/0_1_16/RouteProcessor4.sol";
 
+import {
+    DEPLOYED_ADDRESS as RouteProcessor4_0_1_17_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as RouteProcessor4_0_1_17_BYTECODE_HASH,
+    CREATION_CODE as RouteProcessor4_0_1_17_CREATION_CODE,
+    RUNTIME_CODE as RouteProcessor4_0_1_17_RUNTIME_CODE,
+    DEPENDENCIES as RouteProcessor4_0_1_17_DEPENDENCIES
+} from "../generated/0_1_17/RouteProcessor4.sol";
+
 /// @title LibRouteProcessor4Released
 /// @notice Every frozen release of `RouteProcessor4`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -50,7 +58,7 @@ library LibRouteProcessor4Released {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](3);
+        DeploySuite[] memory suites = new DeploySuite[](4);
         suites[0] = DeploySuite({
             suite: "route-processor@0_1_14",
             creationCode: RouteProcessor4_0_1_14_CREATION_CODE,
@@ -81,6 +89,17 @@ library LibRouteProcessor4Released {
             storedRuntimeCode: RouteProcessor4_0_1_16_RUNTIME_CODE,
             artifactPath: "src/lib/deploy/LibRouteProcessor4CreationCode.sol:RouteProcessor4",
             dependencies: abi.decode(RouteProcessor4_0_1_16_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
+        suites[3] = DeploySuite({
+            suite: "route-processor@0_1_17",
+            creationCode: RouteProcessor4_0_1_17_CREATION_CODE,
+            storedDeployedAddress: RouteProcessor4_0_1_17_DEPLOYED_ADDRESS,
+            storedBytecodeHash: RouteProcessor4_0_1_17_BYTECODE_HASH,
+            storedRuntimeCode: RouteProcessor4_0_1_17_RUNTIME_CODE,
+            artifactPath: "src/lib/deploy/LibRouteProcessor4CreationCode.sol:RouteProcessor4",
+            dependencies: abi.decode(RouteProcessor4_0_1_17_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
