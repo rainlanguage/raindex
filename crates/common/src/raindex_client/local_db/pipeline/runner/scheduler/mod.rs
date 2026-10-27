@@ -28,8 +28,11 @@ pub(crate) enum CycleResult {
     /// block because of the per-cycle cap: run the next cycle at once and do
     /// not mark the chain ready yet.
     Behind,
-    /// Nothing on the network made progress (`run_once` errored, or every
-    /// target failed): back off.
+    /// `run_once` errored or any target failed: back off. A failing target
+    /// keeps its watermark, so retrying at the normal pace (or at once while
+    /// another target catches up) would re-read its window again and again;
+    /// backing off the whole network bounds that even when other targets on
+    /// it are healthy.
     Failed,
 }
 
@@ -39,7 +42,7 @@ impl CycleResult {
             Err(_) => Self::Failed,
             Ok(RunOutcome::NotLeader) => Self::CaughtUp,
             Ok(RunOutcome::Report(report)) => {
-                if !report.failures.is_empty() && report.successes.is_empty() {
+                if !report.failures.is_empty() {
                     Self::Failed
                 } else if report.successes.iter().any(|s| !s.outcome.caught_up) {
                     Self::Behind
@@ -53,8 +56,8 @@ impl CycleResult {
 
 /// Paces one network's sync loop. A failed cycle keeps its old watermark,
 /// so retrying at the normal interval re-reads the same blocks over and
-/// over; this backs off while nothing on the network makes progress and
-/// resets as soon as anything does.
+/// over; this backs off while any target keeps failing and resets once a
+/// cycle completes without failures.
 #[derive(Debug, Default)]
 pub(crate) struct CycleBackoff {
     consecutive_failures: u32,
@@ -168,10 +171,15 @@ mod tests {
             CycleResult::of(&report(vec![], vec![failure()])),
             CycleResult::Failed
         );
-        // One healthy raindex keeps the network at the normal pace.
+        // A failing target backs the network off even when another succeeds,
+        // so a partial failure cannot re-read its window every cycle.
         assert_eq!(
             CycleResult::of(&report(vec![success(true)], vec![failure()])),
-            CycleResult::CaughtUp
+            CycleResult::Failed
+        );
+        assert_eq!(
+            CycleResult::of(&report(vec![success(false)], vec![failure()])),
+            CycleResult::Failed
         );
     }
 
