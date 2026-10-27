@@ -695,6 +695,8 @@ impl DotrainOrder {
         }
 
         if let Some(subgraph_key) = subgraph_key {
+            clone_section_entry(&documents, "subgraphs", &subgraph_key)
+                .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
             let mut subgraphs_hash = StrictYamlHash::new();
             subgraphs_hash.insert(
                 StrictYaml::String(subgraph_key.clone()),
@@ -707,6 +709,8 @@ impl DotrainOrder {
         }
 
         if let Some(metaboard_key) = metaboard_key {
+            clone_section_entry(&documents, "metaboards", &metaboard_key)
+                .map_err(|err| DotrainOrderError::CleanUnusedFrontmatterError(err.to_string()))?;
             let mut metaboards_hash = StrictYamlHash::new();
             metaboards_hash.insert(
                 StrictYaml::String(metaboard_key.clone()),
