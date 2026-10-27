@@ -76,31 +76,46 @@ contract Build is BuildScript, RaindexDeploySuites {
     }
 
     /// Frozen records cut under a contract's former name, each released under
-    /// the current candidate it was renamed to.
+    /// the current candidate it was renamed to, keeping the artifact path it
+    /// was cut with.
     /// @return The renamed records.
     function renamedRecords() internal pure returns (GeneratedContract[] memory) {
         GeneratedContract[] memory contracts = new GeneratedContract[](5);
-        contracts[0] =
-            GeneratedContract({contractName: "RaindexV6", candidate: raindexCandidate(), pinnedCreationCode: ""});
-        contracts[1] = GeneratedContract({
-            contractName: "RaindexV6SubParser", candidate: subParserCandidate(), pinnedCreationCode: ""
-        });
-        contracts[2] = GeneratedContract({
-            contractName: "GenericPoolRaindexV6ArbOrderTaker",
-            candidate: genericPoolArbOrderTakerCandidate(),
-            pinnedCreationCode: ""
-        });
-        contracts[3] = GeneratedContract({
-            contractName: "RouteProcessorRaindexV6ArbOrderTaker",
-            candidate: routeProcessorArbOrderTakerCandidate(),
-            pinnedCreationCode: ""
-        });
-        contracts[4] = GeneratedContract({
-            contractName: "GenericPoolRaindexV6FlashBorrower",
-            candidate: genericPoolFlashBorrowerCandidate(),
-            pinnedCreationCode: ""
-        });
+        contracts[0] = renamedRecord("RaindexV6", raindexCandidate(), "src/concrete/raindex/RaindexV6.sol:RaindexV6");
+        contracts[1] = renamedRecord(
+            "RaindexV6SubParser", subParserCandidate(), "src/concrete/parser/RaindexV6SubParser.sol:RaindexV6SubParser"
+        );
+        contracts[2] = renamedRecord(
+            "GenericPoolRaindexV6ArbOrderTaker",
+            genericPoolArbOrderTakerCandidate(),
+            "src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol:GenericPoolRaindexV6ArbOrderTaker"
+        );
+        contracts[3] = renamedRecord(
+            "RouteProcessorRaindexV6ArbOrderTaker",
+            routeProcessorArbOrderTakerCandidate(),
+            "src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol:RouteProcessorRaindexV6ArbOrderTaker"
+        );
+        contracts[4] = renamedRecord(
+            "GenericPoolRaindexV6FlashBorrower",
+            genericPoolFlashBorrowerCandidate(),
+            "src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol:GenericPoolRaindexV6FlashBorrower"
+        );
         return contracts;
+    }
+
+    /// A record cut as `contractName` from `formerArtifactPath`, released under
+    /// `candidate`.
+    /// @param contractName The former contract name.
+    /// @param candidate The current candidate it was renamed to.
+    /// @param formerArtifactPath The artifact path the record was cut with.
+    /// @return The renamed record.
+    function renamedRecord(
+        string memory contractName,
+        DeployCandidate memory candidate,
+        string memory formerArtifactPath
+    ) internal pure returns (GeneratedContract memory) {
+        candidate.snapshot.artifactPath = formerArtifactPath;
+        return GeneratedContract({contractName: contractName, candidate: candidate, pinnedCreationCode: ""});
     }
 
     /// Every contract with a released-suites lib: the renamed records first,

@@ -212,4 +212,17 @@ contract BuildTest is Test {
             );
         }
     }
+
+    /// PROPERTY: a renamed record keeps the artifact path it was cut with, the
+    /// one naming its former contract, so its released-suites lib re-emits the
+    /// frozen record unchanged.
+    function testRenamedRecordArtifactPathNamesTheFormerContract() external view {
+        GeneratedContract[] memory renamed = sBuild.externalRenamedRecords();
+        for (uint256 i = 0; i < renamed.length; i++) {
+            string[] memory components = vm.split(renamed[i].candidate.snapshot.artifactPath, ":");
+            assertEq(
+                components[components.length - 1], renamed[i].contractName, "renamed record's artifact is not its own"
+            );
+        }
+    }
 }
