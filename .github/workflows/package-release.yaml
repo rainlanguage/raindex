@@ -12,5 +12,5 @@ jobs:
   release:
     uses: rainlanguage/rainix/.github/workflows/rainix-tag-release.yaml@main
     with:
-      soldeer-package: raindex
+      soldeer-package: raindex-deploy
     secrets: inherit
