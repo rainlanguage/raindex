@@ -91,10 +91,10 @@ integrity = "56d91b5dc7e097d013009d2dd6a8d07dcd2db481ea745f53910696dcaaa7fd24"
 
 [[dependencies]]
 name = "rain-metadata-deploy"
-version = "0.1.3"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-metadata-deploy/0_1_3_22-10-2026_20:37:05_rain.metadata.zip"
-checksum = "1f0860457cabc5c43857f86c9296807b955f6f24490424c79e4b212e71c11eff"
-integrity = "acf61216c029dda856a78244ea3b96023371852682977b34fdc5536a9b08e66a"
+version = "0.1.4"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-metadata-deploy/0_1_4_26-10-2026_18:05:36_rain.metadata.zip"
+checksum = "fd7c9fa73bb7fb474ba4cd4762c176b11de7593abe2771eab8fd3b20ec5b2414"
+integrity = "0eb7eb2f7ec8be59b9cf4ffae976c4a45ce333777d41f0f5f0c9ec4d686c242d"
 
 [[dependencies]]
 name = "rain-sol-codegen"
@@ -134,8 +134,9 @@ integrity = "e3794ced48708912ee2174c3381162f4eeccaaf5be74e79b03b7c5dd27edd1ce"
 [[dependencies]]
 name = "raindex-interface"
 version = "0.1.13"
-git = "https://github.com/rainlanguage/raindex.interface.git"
-rev = "09614cfb7beafe4a5d1f3e30296d50e3f77e4361"
+url = "https://soldeer-revisions.s3.amazonaws.com/raindex-interface/0_1_13_27-10-2026_00:27:20_raindex.zip"
+checksum = "8b5a0edff4f6a3631403361c95b30957e13c438fe2fdd789dcd3f269c6b19c43"
+integrity = "483f99e0479535447feac0e4c2143994456ff08de08b7693a8d7bdf9b1c89cd5"
 
 [[dependencies]]
 name = "rainlang"
