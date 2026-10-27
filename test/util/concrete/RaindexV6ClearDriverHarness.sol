@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {RaindexV6} from "src/concrete/raindex/RaindexV6.sol";
 import {IRaindexV6ClearDriverHarness} from "test/util/interface/IRaindexV6ClearDriverHarness.sol";
-import {Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {Float} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.sol";
 
 /// @dev RaindexV6 subclass that exposes order-liveness and vault seeding so a
 /// full `clear4` can be driven against fresh-compiled source bytecode.
