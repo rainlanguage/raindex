@@ -1,0 +1,29 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity =0.8.25;
+
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {DeploySuite} from "rain-deploy-0.1.25/src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibBlockSearch} from "rain-deploy-0.1.25/src/lib/LibBlockSearch.sol";
+import {LibRaindexV6StartBlock} from "src/lib/deploy/LibRaindexV6StartBlock.sol";
+import {LibRaindexV6NewestRelease} from "test/util/lib/LibRaindexV6NewestRelease.sol";
+
+/// @title LibRaindexV6StartBlockIsStartBlockBaseTest
+/// @notice The newest released RaindexV6 has code at the Base start block but
+/// not the block before.
+contract LibRaindexV6StartBlockIsStartBlockBaseTest is Test {
+    function testIsStartBlockBase() external {
+        DeploySuite memory released = LibRaindexV6NewestRelease.suite();
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertTrue(
+            LibBlockSearch.isStartBlock(
+                vm,
+                released.storedDeployedAddress,
+                released.storedBytecodeHash,
+                LibRaindexV6StartBlock.RAINDEX_START_BLOCK_BASE
+            ),
+            "not start block: Base"
+        );
+    }
+}

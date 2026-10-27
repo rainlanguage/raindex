@@ -2,48 +2,48 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticOrderTakerMockRaindex} from "test/util/concrete/RealisticOrderTakerMockRaindex.sol";
 
-/// arb5 reads the order's input token from `validInputs[inputIOIndex]` and the
+/// arb6 reads the order's input token from `validInputs[inputIOIndex]` and the
 /// output token from `validOutputs[outputIOIndex]`. A single order with two IOs
 /// per side (index 0 = decoy, index 1 = real) and indices set to 1 must run the
 /// full cycle on the index-1 tokens.
 ///
 /// The scenario leaves BOTH a real-input leftover (raindex pulls less than the
 /// swap produced) and a real-output leftover (the exchange swaps less than the
-/// raindex sent), so finalize must sweep both real tokens. If arb5 read the
+/// raindex sent), so finalize must sweep both real tokens. If arb6 read the
 /// decoy input (index 0) the raindex's pull reverts on a missing allowance; if
-/// arb5 read the decoy output (index 0) finalize sweeps the zero-balance decoy
+/// arb6 read the decoy output (index 0) finalize sweeps the zero-balance decoy
 /// and strands the real-output leftover in the arb.
 contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
     receive() external payable {}
 
-    function noopTask() internal pure returns (TaskV2 memory) {
-        return TaskV2({
+    function noopTask() internal pure returns (TaskV3 memory) {
+        return TaskV3({
             evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
     }
 
@@ -57,7 +57,7 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
         MockToken decoyInput = new MockToken("DecoyIn", "DIN", 18);
         MockToken decoyOutput = new MockToken("DecoyOut", "DOUT", 18);
 
-        // Raindex sends 100e18 output and pulls 80e18 input. arb5 only trusts the
+        // Raindex sends 100e18 output and pulls 80e18 input. arb6 only trusts the
         // canonical raindex deployment, so etch the mock's runtime code
         // (immutables included) at that address.
         vm.etch(LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS, address(new RealisticOrderTakerMockRaindex(80e18)).code);
@@ -87,16 +87,16 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
         // inputIOIndex 1, outputIOIndex 1: the REAL tokens.
-        orders[0] = TakeOrderConfigV4(order, 1, 1, new SignedContextV1[](0));
+        orders[0] = TakeOrderConfigV5(order, 1, 1, new SignedContextV2[](0));
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), 80e18));
 
-        arb.arb5(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb6(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -125,7 +125,7 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
         assertEq(decoyOutput.balanceOf(address(this)), 0, "no decoy output swept");
     }
 
-    /// arb5 reads the input token from `validInputs[inputIOIndex]` and the output
+    /// arb6 reads the input token from `validInputs[inputIOIndex]` and the output
     /// token from `validOutputs[outputIOIndex]` using the side-SPECIFIC index.
     /// The sibling test sets both indices to 1, so reading the input via
     /// `outputIOIndex` (or the output via `inputIOIndex`) selects the same slot
@@ -175,17 +175,17 @@ contract RaindexV6ArbOrderTakerIoIndexSelectionTest is Test {
             nonce: bytes32(0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
         // inputIOIndex 1 (real input at validInputs[1]); outputIOIndex 0 (real
         // output at validOutputs[0]).
-        orders[0] = TakeOrderConfigV4(order, 1, 0, new SignedContextV1[](0));
+        orders[0] = TakeOrderConfigV5(order, 1, 0, new SignedContextV2[](0));
 
         bytes memory exchangeData =
             abi.encodeCall(MockExchange.swap, (IERC20(address(outputToken)), IERC20(address(inputToken)), 80e18));
 
-        arb.arb5(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb6(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(0, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),

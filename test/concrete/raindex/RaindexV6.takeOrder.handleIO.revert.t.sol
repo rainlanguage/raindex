@@ -2,19 +2,19 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.16.1/src/Vm.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {RaindexV6ExternalRealTest, IERC20} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
+    TakeOrderConfigV5,
     IOV2,
     OrderConfigV4,
-    TakeOrdersConfigV5,
+    TakeOrdersConfigV6,
     EvaluableV4,
-    TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 
 /// @title RaindexV6TakeOrderHandleIORevertTest
@@ -63,8 +63,8 @@ contract RaindexV6TakeOrderHandleIORevertTest is RaindexV6ExternalRealTest {
         if (outputVaultId == bytes32(0)) {
             mockVault0Output(outputToken, address(this), uint256(int256(type(int224).max)));
         } else {
-            iRaindex.deposit4(
-                outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, -18), new TaskV2[](0)
+            iRaindex.deposit5(
+                outputToken, vaultId, LibDecimalFloat.packLossless(type(int224).max, -18), new TaskV3[](0)
             );
             assertTrue(
                 iRaindex.vaultBalance2(address(this), outputToken, vaultId)
@@ -75,7 +75,7 @@ contract RaindexV6TakeOrderHandleIORevertTest is RaindexV6ExternalRealTest {
             mockVault0Input(inputToken, address(this), 0);
         }
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](configs.length);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](configs.length);
 
         for (uint256 i = 0; i < configs.length; i++) {
             bytes memory bytecode = iParserV2.parse2(configs[i]);
@@ -83,20 +83,20 @@ contract RaindexV6TakeOrderHandleIORevertTest is RaindexV6ExternalRealTest {
             config = OrderConfigV4(evaluable, validInputs, validOutputs, bytes32(i), bytes32(0), "");
 
             vm.recordLogs();
-            iRaindex.addOrder4(config, new TaskV2[](0));
+            iRaindex.addOrder5(config, new TaskV3[](0));
             Vm.Log[] memory entries = vm.getRecordedLogs();
             assertEq(entries.length, 1);
             OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(entries);
 
             orders[i] = LibTestTakeOrder.wrapSingle(order)[0];
         }
-        TakeOrdersConfigV5 memory takeOrdersConfig = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrdersConfigV6 memory takeOrdersConfig = LibTestTakeOrder.defaultTakeConfig(orders);
         takeOrdersConfig.maximumIO = maxInput;
 
         if (err.length > 0) {
             vm.expectRevert(err);
         }
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(takeOrdersConfig);
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(takeOrdersConfig);
         // We don't really care about the outputs as the tests are basically just
         // trying to show that the IO handler is running or not running by simple
         // reverts.

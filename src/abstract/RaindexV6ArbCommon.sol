@@ -2,15 +2,22 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
 /// @param task The task to run as post for each arb.
 struct RaindexV6ArbConfig {
-    TaskV2 task;
+    TaskV3 task;
 }
 
 /// Thrown when the task does not match the expected hash.
 error WrongTask();
+
+/// Thrown when an arb is called with a `raindex` that is not the trusted
+/// deterministic deployment. The arb grants `raindex` an unlimited token
+/// approval and calls it, so an untrusted address could drain the contract's
+/// balance.
+/// @param badRaindex The untrusted `raindex` passed to the arb.
+error BadRaindex(address badRaindex);
 
 /// @title RaindexV6ArbCommon
 /// @notice Common base for arb contracts that interact with `Raindex`.
@@ -26,5 +33,5 @@ abstract contract RaindexV6ArbCommon {
     /// @dev Hook called at the start of every arb. Base implementation is a
     /// no-op. Overridden by `RaindexV6ArbTaskGated` to validate the task
     /// hash.
-    function _beforeArb(TaskV2 memory task) internal virtual {}
+    function _beforeArb(TaskV3 memory task) internal virtual {}
 }

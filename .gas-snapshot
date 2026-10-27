@@ -158,7 +158,6 @@ RaindexV6EnactTest:testRaindexEvalWriteStateDifferentOwnersNamespaced(address,ad
 RaindexV6EnactTest:testRaindexEvalWriteStateSequential() (gas: 556418)
 RaindexV6EnactTest:testRaindexEvalWriteStateSingle(address) (runs: 100, μ: 189480, ~: 189555)
 RaindexV6FlashBorrowerBadInitiatorTest:testOnFlashLoanBadInitiator(address) (runs: 5096, μ: 11005, ~: 11005)
-RaindexV6FlashBorrowerBadLenderApprovalTest:testBadLenderRevertsWithApproval() (gas: 4383922)
 RaindexV6FlashBorrowerFallbackTest:testFallbackAcceptsCalldata() (gas: 3149)
 RaindexV6FlashBorrowerFallbackTest:testFallbackAcceptsETHWithCalldata() (gas: 12730)
 RaindexV6FlashBorrowerFallbackTest:testFallbackAcceptsEmptyCalldata() (gas: 3113)

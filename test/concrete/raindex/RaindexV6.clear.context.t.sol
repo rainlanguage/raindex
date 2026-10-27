@@ -7,18 +7,18 @@ import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {
     OrderConfigV4,
     OrderV4,
-    TaskV2,
+    TaskV3,
     ClearConfigV2,
-    SignedContextV1,
+    SignedContextV2,
     IOV2,
     EvaluableV4
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {REVERTING_MOCK_BYTECODE} from "test/util/lib/LibTestConstants.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
-import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
-import {LibDecimalFloat, Float} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
+import {LibDecimalFloat, Float} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 
 struct ClearContextVaultIds {
     bytes32 aliceInputVaultId;
@@ -129,7 +129,7 @@ contract RaindexV6ClearOrderContextTest is RaindexV6ExternalRealTest {
                 token, abi.encodeWithSelector(IERC20.transferFrom.selector, owner, address(iRaindex)), abi.encode(true)
             );
             vm.prank(owner);
-            iRaindex.deposit4(token, vaultId, LibDecimalFloat.packLossless(amount, exponent), new TaskV2[](0));
+            iRaindex.deposit5(token, vaultId, LibDecimalFloat.packLossless(amount, exponent), new TaskV3[](0));
         }
     }
 
@@ -228,10 +228,10 @@ contract RaindexV6ClearOrderContextTest is RaindexV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iRaindex.addOrder4(configAlice, new TaskV2[](0));
+        iRaindex.addOrder5(configAlice, new TaskV3[](0));
 
         vm.prank(bob);
-        iRaindex.addOrder4(configBob, new TaskV2[](0));
+        iRaindex.addOrder5(configBob, new TaskV3[](0));
 
         setupOutputVault(address(iToken1), alice, vaultIds.aliceOutputVaultId, 100e6, -6, 6);
         setupOutputVault(address(iToken0), bob, vaultIds.bobOutputVaultId, 100e12, -12, 12);
@@ -243,8 +243,8 @@ contract RaindexV6ClearOrderContextTest is RaindexV6ExternalRealTest {
             mockVault0Input(address(iToken0), alice, 3e12);
         }
 
-        iRaindex.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        iRaindex.clear4(
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 

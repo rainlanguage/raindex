@@ -2,43 +2,39 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IRaindexV6Stub} from "test/util/abstract/IRaindexV6Stub.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
-import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/interface/ITOFUTokenDecimals.sol";
-import {RaindexV6DepositWithdrawHarness} from "test/util/concrete/RaindexV6DepositWithdrawHarness.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
+import {TaskV3, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IRaindexV7Stub} from "test/util/abstract/IRaindexV7Stub.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {TOFUOutcome} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
+import {ITOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/interface/ITOFUTokenDecimals.sol";
 
 /// @title RaindexV6DepositWithdrawHarnessTest
-/// @notice Solvency-critical accounting for the external deposit4/withdraw4
+/// @notice Solvency-critical accounting for the external deposit5/withdraw5
 /// entrypoints, exercised against REAL ERC20 tokens (not always-true mocks) via
 /// a freshly-compiled harness so source mutations are live. Pins:
 /// - withdraw capping at the vault balance (`targetAmount.min(balance)`),
 /// - deposit crediting exactly the pulled amount,
 /// - the deposit/withdraw event amounts (Float and onchain uint256),
 /// - non-18-decimal token scaling end-to-end.
-contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
+contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV7Stub {
     using LibDecimalFloat for Float;
 
-    RaindexV6DepositWithdrawHarness internal harness;
+    IRaindexV7 internal harness;
     bytes32 internal constant VAULT = bytes32(uint256(1));
 
     function setUp() external {
-        // deposit4/withdraw4 read token decimals via the deployed TOFU contract.
+        // deposit5/withdraw5 read token decimals via the deployed TOFU contract.
         LibRainDeploy.etchZoltuFactory(vm);
         LibRainDeploy.deployZoltu(LibTOFUTokenDecimals.TOFU_DECIMALS_EXPECTED_CREATION_CODE);
 
-        // Etch the runtime code so the large RaindexV6-derived harness isn't
-        // subject to the EIP-170 creation size limit.
-        harness =
-            RaindexV6DepositWithdrawHarness(payable(address(uint160(uint256(keccak256("deposit.withdraw.harness"))))));
-        vm.etch(address(harness), type(RaindexV6DepositWithdrawHarness).runtimeCode);
+        harness = IRaindexV7(payable(address(uint160(uint256(keccak256("deposit.withdraw.harness"))))));
+        vm.etch(address(harness), vm.getDeployedCode("RaindexV6.sol:RaindexV6"));
     }
 
     /// Deposits `amount18` (18-decimal token) into VAULT for `alice` and returns
@@ -50,7 +46,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         token.approve(address(harness), amount18);
         Float amount = LibDecimalFloat.fromFixedDecimalLosslessPacked(amount18, 18);
         vm.prank(alice);
-        harness.deposit4(address(token), VAULT, amount, new TaskV2[](0));
+        harness.deposit5(address(token), VAULT, amount, new TaskV3[](0));
         return amount;
     }
 
@@ -81,7 +77,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(sToken), VAULT, targetAmount, depositAmount, depositAmount18);
         vm.prank(alice);
-        harness.withdraw4(address(sToken), VAULT, targetAmount, new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, targetAmount, new TaskV3[](0));
 
         // Exactly the balance (5e18) was returned to alice, never the target.
         assertEq(sToken.balanceOf(alice), depositAmount18, "alice received exactly the balance");
@@ -111,7 +107,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit DepositV2(alice, address(sToken), VAULT, amount6);
         vm.prank(alice);
-        harness.deposit4(address(sToken), VAULT, amount, new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, amount, new TaskV3[](0));
 
         // The vault is credited exactly 7 whole tokens, and 7e6 base units moved.
         assertTrue(harness.vaultBalance2(alice, address(sToken), VAULT).eq(amount), "vault credited exact deposit");
@@ -143,8 +139,8 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         sToken = new MockToken("Token", "TKN", 18);
         address alice = makeAddr("alice");
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroDepositAmount.selector, alice, address(sToken), VAULT));
-        harness.deposit4(address(sToken), VAULT, Float.wrap(0), new TaskV2[](0));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.ZeroDepositAmount.selector, alice, address(sToken), VAULT));
+        harness.deposit5(address(sToken), VAULT, Float.wrap(0), new TaskV3[](0));
     }
 
     /// A withdraw target of exactly zero reverts `ZeroWithdrawTargetAmount`. Pins
@@ -154,9 +150,9 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         address alice = makeAddr("alice");
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IRaindexV6.ZeroWithdrawTargetAmount.selector, alice, address(sToken), VAULT)
+            abi.encodeWithSelector(IRaindexV7.ZeroWithdrawTargetAmount.selector, alice, address(sToken), VAULT)
         );
-        harness.withdraw4(address(sToken), VAULT, Float.wrap(0), new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, Float.wrap(0), new TaskV3[](0));
     }
 
     /// A partial withdraw (target < balance) moves EXACTLY the target out, reduces
@@ -172,7 +168,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(sToken), VAULT, target, target, 4e18);
         vm.prank(alice);
-        harness.withdraw4(address(sToken), VAULT, target, new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, target, new TaskV3[](0));
 
         assertEq(sToken.balanceOf(alice), 4e18, "alice received exact target");
         assertEq(sToken.balanceOf(address(harness)), 6e18, "harness retains remainder");
@@ -202,7 +198,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit DepositV2(alice, address(sToken), VAULT, 2);
         vm.prank(alice);
-        harness.deposit4(address(sToken), VAULT, amount, new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, amount, new TaskV3[](0));
 
         // Exactly 2 base units moved (rounded UP from the 1.5 base-unit target),
         // never the truncated 1.
@@ -229,7 +225,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         sToken.approve(address(harness), 1_000_000);
         Float seed = LibDecimalFloat.packLossless(1, 0);
         vm.prank(alice);
-        harness.deposit4(address(sToken), VAULT, seed, new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, seed, new TaskV3[](0));
 
         // 1.5 base units at 6 decimals: lossy, truncates DOWN to 1 base unit pushed.
         Float target = LibDecimalFloat.packLossless(15, -7);
@@ -238,7 +234,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(sToken), VAULT, target, target, 1);
         vm.prank(alice);
-        harness.withdraw4(address(sToken), VAULT, target, new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, target, new TaskV3[](0));
 
         // Exactly 1 base unit returned (truncated DOWN from 1.5), never the
         // rounded-up 2. Alice held 0 after the seed deposit, so now holds 1.
@@ -264,7 +260,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(sToken), VAULT, target, Float.wrap(0), 0);
         vm.prank(alice);
-        harness.withdraw4(address(sToken), VAULT, target, new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, target, new TaskV3[](0));
 
         assertEq(sToken.balanceOf(alice), 0, "alice received nothing");
         assertTrue(harness.vaultBalance2(alice, address(sToken), VAULT).isZero(), "vault stays empty");
@@ -327,7 +323,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.prank(owner);
         sToken.approve(address(harness), 1);
         vm.prank(owner);
-        harness.deposit4(address(sToken), VAULT, LibDecimalFloat.packLossless(1, -18), new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, LibDecimalFloat.packLossless(1, -18), new TaskV3[](0));
 
         // The token now reports DIFFERENT decimals than were stored.
         vm.mockCall(address(sToken), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(6)));
@@ -353,7 +349,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
         vm.prank(owner);
         sToken.approve(address(harness), 5e18);
         vm.prank(owner);
-        harness.deposit4(address(sToken), VAULT, LibDecimalFloat.packLossless(1, -18), new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, LibDecimalFloat.packLossless(1, -18), new TaskV3[](0));
 
         // Owner still holds 5e18 - 1 after the seed deposit; approval reduced by 1.
         // A subsequent consistent read returns min(balance, approval) without revert.
@@ -378,7 +374,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
 
         // First deposit seeds the TOFU store with 18 decimals.
         vm.prank(owner);
-        harness.deposit4(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV3[](0));
 
         // The token now reports DIFFERENT decimals than were stored.
         vm.mockCall(address(sToken), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(6)));
@@ -389,7 +385,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
             )
         );
         vm.prank(owner);
-        harness.deposit4(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV3[](0));
     }
 
     /// A withdraw MUST revert `TokenDecimalsReadFailure(Inconsistent)` when the
@@ -405,7 +401,7 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
 
         // Seed the TOFU store and a withdrawable internal balance.
         vm.prank(owner);
-        harness.deposit4(address(sToken), VAULT, LibDecimalFloat.packLossless(5, 0), new TaskV2[](0));
+        harness.deposit5(address(sToken), VAULT, LibDecimalFloat.packLossless(5, 0), new TaskV3[](0));
 
         // The token now reports DIFFERENT decimals than were stored.
         vm.mockCall(address(sToken), abi.encodeWithSelector(IERC20Metadata.decimals.selector), abi.encode(uint8(6)));
@@ -416,6 +412,6 @@ contract RaindexV6DepositWithdrawHarnessTest is Test, IRaindexV6Stub {
             )
         );
         vm.prank(owner);
-        harness.withdraw4(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV2[](0));
+        harness.withdraw5(address(sToken), VAULT, LibDecimalFloat.packLossless(1, 0), new TaskV3[](0));
     }
 }

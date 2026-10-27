@@ -5,19 +5,19 @@ pragma solidity =0.8.25;
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {Reenteroor} from "test/util/concrete/Reenteroor.sol";
 import {
-    IRaindexV6,
+    IRaindexV7,
     OrderConfigV4,
     OrderV4,
-    TakeOrdersConfigV5,
+    TakeOrdersConfigV6,
     ClearConfigV2,
-    TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {EvaluableV4, SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterCallerV4.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {EvaluableV4, SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6FlashLenderReentrant
 /// Test that flash borrowers can reenter the raindex, which is necessary for
@@ -53,7 +53,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
             borrower,
-            abi.encodeWithSelector(IRaindexV6.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
+            abi.encodeWithSelector(IRaindexV7.vaultBalance2.selector, address(borrower), address(iToken0), vaultId),
             loanAmount
         );
     }
@@ -64,7 +64,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.orderExists.selector, orderHash), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.orderExists.selector, orderHash), loanAmount
         );
     }
 
@@ -86,7 +86,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.deposit4.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
+                IRaindexV7.deposit5.selector, address(iToken0), vaultId, depositAmount, new EvaluableV4[](0)
             ),
             loanAmount
         );
@@ -110,7 +110,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.withdraw4.selector, address(iToken0), vaultId, withdrawAmount, new TaskV2[](0)
+                IRaindexV7.withdraw5.selector, address(iToken0), vaultId, withdrawAmount, new TaskV3[](0)
             ),
             loanAmount
         );
@@ -125,7 +125,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.addOrder4.selector, config, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.addOrder5.selector, config, new TaskV3[](0)), loanAmount
         );
     }
 
@@ -136,7 +136,7 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         Reenteroor borrower = new Reenteroor();
         order.owner = address(borrower);
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.removeOrder3.selector, order, new TaskV2[](0)), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.removeOrder4.selector, order, new TaskV3[](0)), loanAmount
         );
     }
 
@@ -149,16 +149,16 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         config.evaluable.bytecode = iParserV2.parse2("_ _:max-positive-value() 1;:;");
 
         vm.recordLogs();
-        iRaindex.addOrder4(config, new TaskV2[](0));
+        iRaindex.addOrder5(config, new TaskV3[](0));
         OrderV4 memory order = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
-        TakeOrdersConfigV5 memory takeOrdersConfig =
+        TakeOrdersConfigV6 memory takeOrdersConfig =
             LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         // Create a flash borrower.
         Reenteroor borrower = new Reenteroor();
         checkFlashLoanNotRevert(
-            borrower, abi.encodeWithSelector(IRaindexV6.takeOrders4.selector, takeOrdersConfig), loanAmount
+            borrower, abi.encodeWithSelector(IRaindexV7.takeOrders5.selector, takeOrdersConfig), loanAmount
         );
     }
 
@@ -187,31 +187,31 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
 
         vm.recordLogs();
         vm.prank(alice);
-        iRaindex.addOrder4(aliceConfig, new TaskV2[](0));
+        iRaindex.addOrder5(aliceConfig, new TaskV3[](0));
         OrderV4 memory aliceOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         vm.recordLogs();
         vm.prank(bob);
-        iRaindex.addOrder4(bobConfig, new TaskV2[](0));
+        iRaindex.addOrder5(bobConfig, new TaskV3[](0));
         OrderV4 memory bobOrder = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         ClearConfigV2 memory clearConfig = ClearConfigV2(0, 0, 0, 0, 0, 0);
 
         vm.mockCall(aliceOrder.validOutputs[0].token, bytes(""), abi.encode(true));
         vm.prank(aliceOrder.owner);
-        iRaindex.deposit4(
+        iRaindex.deposit5(
             aliceOrder.validOutputs[0].token,
             aliceOrder.validOutputs[0].vaultId,
             LibDecimalFloat.packLossless(type(int64).max, 0),
-            new TaskV2[](0)
+            new TaskV3[](0)
         );
         vm.mockCall(bobOrder.validOutputs[0].token, bytes(""), abi.encode(true));
         vm.prank(bobOrder.owner);
-        iRaindex.deposit4(
+        iRaindex.deposit5(
             bobOrder.validOutputs[0].token,
             bobOrder.validOutputs[0].vaultId,
             LibDecimalFloat.packLossless(type(int64).max, 0),
-            new TaskV2[](0)
+            new TaskV3[](0)
         );
 
         // Create a flash borrower.
@@ -219,12 +219,12 @@ contract RaindexV6FlashLenderReentrant is RaindexV6ExternalRealTest {
         checkFlashLoanNotRevert(
             borrower,
             abi.encodeWithSelector(
-                IRaindexV6.clear3.selector,
+                IRaindexV7.clear4.selector,
                 aliceOrder,
                 bobOrder,
                 clearConfig,
-                new SignedContextV1[](0),
-                new SignedContextV1[](0)
+                new SignedContextV2[](0),
+                new SignedContextV2[](0)
             ),
             loanAmount
         );

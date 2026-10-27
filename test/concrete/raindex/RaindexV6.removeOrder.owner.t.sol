@@ -3,10 +3,10 @@
 pragma solidity =0.8.25;
 
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
-import {OrderConfigV4, OrderV4, EvaluableV4, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {OrderConfigV4, OrderV4, EvaluableV4, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
-import {NotOrderOwner} from "../../../src/concrete/raindex/RaindexV6.sol";
+import {NotOrderOwner} from "../../../src/error/ErrRaindexV6.sol";
 
 contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
     using LibOrder for OrderV4;
@@ -20,17 +20,17 @@ contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
         vm.startPrank(owner);
 
         for (uint256 i = 0; i < 2; i++) {
-            bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
             assert(stateChange);
             assert(iRaindex.orderExists(order.hash()));
-            stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
             assert(!stateChange);
             assert(iRaindex.orderExists(order.hash()));
 
-            stateChange = iRaindex.removeOrder3(order, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(order, new TaskV3[](0));
             assert(stateChange);
             assert(!iRaindex.orderExists(order.hash()));
-            stateChange = iRaindex.removeOrder3(order, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(order, new TaskV3[](0));
             assert(!stateChange);
             assert(!iRaindex.orderExists(order.hash()));
         }
@@ -51,20 +51,20 @@ contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
 
         {
             vm.prank(alice);
-            bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
 
             assert(stateChange);
             assert(iRaindex.orderExists(orderAlice.hash()));
             assert(!iRaindex.orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iRaindex.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderBob, new TaskV3[](0));
             assert(!stateChange);
             assert(iRaindex.orderExists(orderAlice.hash()));
             assert(!iRaindex.orderExists(orderBob.hash()));
 
             vm.prank(alice);
-            stateChange = iRaindex.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderAlice, new TaskV3[](0));
             assert(stateChange);
             assert(!iRaindex.orderExists(orderAlice.hash()));
             assert(!iRaindex.orderExists(orderBob.hash()));
@@ -72,19 +72,19 @@ contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
 
         {
             vm.prank(bob);
-            bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
             assert(stateChange);
             assert(iRaindex.orderExists(orderBob.hash()));
             assert(!iRaindex.orderExists(orderAlice.hash()));
 
             vm.prank(alice);
-            stateChange = iRaindex.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderAlice, new TaskV3[](0));
             assert(!stateChange);
             assert(iRaindex.orderExists(orderBob.hash()));
             assert(!iRaindex.orderExists(orderAlice.hash()));
 
             vm.prank(bob);
-            stateChange = iRaindex.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderBob, new TaskV3[](0));
             assert(stateChange);
             assert(!iRaindex.orderExists(orderBob.hash()));
             assert(!iRaindex.orderExists(orderAlice.hash()));
@@ -92,25 +92,25 @@ contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
 
         {
             vm.prank(alice);
-            bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
             assert(stateChange);
             assert(iRaindex.orderExists(orderAlice.hash()));
             assert(!iRaindex.orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+            stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
             assert(stateChange);
             assert(iRaindex.orderExists(orderBob.hash()));
             assert(iRaindex.orderExists(orderAlice.hash()));
 
             vm.prank(alice);
-            stateChange = iRaindex.removeOrder3(orderAlice, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderAlice, new TaskV3[](0));
             assert(stateChange);
             assert(!iRaindex.orderExists(orderAlice.hash()));
             assert(iRaindex.orderExists(orderBob.hash()));
 
             vm.prank(bob);
-            stateChange = iRaindex.removeOrder3(orderBob, new TaskV2[](0));
+            stateChange = iRaindex.removeOrder4(orderBob, new TaskV3[](0));
             assert(stateChange);
             assert(!iRaindex.orderExists(orderBob.hash()));
             assert(!iRaindex.orderExists(orderAlice.hash()));
@@ -125,13 +125,13 @@ contract RaindexV6RemoveOrderOwnerTest is RaindexV6ExternalRealTest {
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
 
         vm.prank(alice);
-        bool stateChange = iRaindex.addOrder4(config, new TaskV2[](0));
+        bool stateChange = iRaindex.addOrder5(config, new TaskV3[](0));
         assert(stateChange);
         assert(iRaindex.orderExists(order.hash()));
 
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(NotOrderOwner.selector, alice));
-        stateChange = iRaindex.removeOrder3(order, new TaskV2[](0));
+        stateChange = iRaindex.removeOrder4(order, new TaskV3[](0));
         assert(!stateChange);
         assert(iRaindex.orderExists(order.hash()));
     }

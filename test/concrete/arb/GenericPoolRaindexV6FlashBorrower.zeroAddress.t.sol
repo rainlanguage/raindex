@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibTestFlashBorrowerArb, FlashBorrowerSetup} from "test/util/lib/LibTestFlashBorrowerArb.sol";
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
@@ -18,7 +18,7 @@ contract GenericPoolRaindexV6FlashBorrowerZeroAddressTest is Test {
 
         bytes memory badExchangeData = abi.encode(address(0), address(exchange), bytes(""));
         vm.expectRevert(ZeroExchangeSpender.selector);
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
     }
 
     function testArbZeroPoolReverts() external {
@@ -27,6 +27,6 @@ contract GenericPoolRaindexV6FlashBorrowerZeroAddressTest is Test {
 
         bytes memory badExchangeData = abi.encode(address(exchange), address(0), bytes(""));
         vm.expectRevert(ZeroExchangePool.selector);
-        setup.arb.arb4(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
+        setup.arb.arb5(setup.raindex, setup.takeOrdersConfig, badExchangeData, LibTestArb.noopTask());
     }
 }

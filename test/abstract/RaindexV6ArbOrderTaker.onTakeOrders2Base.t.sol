@@ -2,21 +2,21 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {ChildRaindexV6ArbOrderTaker} from "test/util/concrete/ChildRaindexV6ArbOrderTaker.sol";
 import {GenericPoolRaindexV6ArbOrderTaker} from "../../src/concrete/arb/GenericPoolRaindexV6ArbOrderTaker.sol";
-import {Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 
-/// The abstract `RaindexV6ArbOrderTaker.onTakeOrders2` body is a pure no-op:
+/// Outside an arb the abstract `RaindexV6ArbOrderTaker.onTakeOrders2` body is a no-op:
 /// it neither reverts nor touches state, and it does NOT decode or act on its
 /// `bytes` argument. A non-overriding child (`ChildRaindexV6ArbOrderTaker`)
 /// exercises the base directly.
 contract RaindexV6ArbOrderTakerOnTakeOrders2BaseTest is Test {
-    /// The base no-op does nothing: it succeeds for ANY caller and ANY
+    /// Outside an arb the base no-op does nothing: it succeeds for ANY caller and ANY
     /// arguments (including non-decodable garbage `bytes`), and leaves token
     /// balances untouched. Inserting a `revert` into the base body, or making
     /// it decode/act on the data, breaks this.

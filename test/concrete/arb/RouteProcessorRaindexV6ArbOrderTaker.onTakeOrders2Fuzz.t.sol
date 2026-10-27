@@ -2,20 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {IRouteProcessor} from "src/interface/IRouteProcessor.sol";
 import {RouteProcessorRaindexV6ArbOrderTaker} from "../../../src/concrete/arb/RouteProcessorRaindexV6ArbOrderTaker.sol";
-import {Float} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockRouteProcessor} from "test/util/concrete/MockRouteProcessor.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 
 /// @title RouteProcessorRaindexV6ArbOrderTakerOnTakeOrders2FuzzTest
 /// @notice Audit A07-3 (#2534): `onTakeOrders2` had only concrete coverage
-/// (the arb5 cycle, a zero-amount direct call, and one lossy-rounding case).
+/// (the arb6 cycle, a zero-amount direct call, and one lossy-rounding case).
 /// This fuzzes the callback directly across both tokens' decimals, the Float
 /// amounts, and the route bytes. Whatever amounts come in, the callback must
 /// forward to the RouteProcessor: the input token's fixed-decimal amount

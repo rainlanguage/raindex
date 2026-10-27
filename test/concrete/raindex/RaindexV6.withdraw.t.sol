@@ -2,20 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {Math} from "@openzeppelin-contracts-5.6.1/utils/math/Math.sol";
+import {Math} from "@openzeppelin-contracts-5.7.0/utils/math/Math.sol";
 
 import {RaindexV6ExternalMockTest, REVERTING_MOCK_BYTECODE} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
 import {Reenteroor, IERC20} from "test/util/concrete/Reenteroor.sol";
-import {TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
+import {TaskV3, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
 
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {
     LibDecimalFloatImplementation
-} from "rain-math-float-0.1.1/src/lib/implementation/LibDecimalFloatImplementation.sol";
-import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
+} from "rain-math-float-0.3.10/src/lib/implementation/LibDecimalFloatImplementation.sol";
+import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
 
 /// @title RaindexV6WithdrawTest
 /// Tests withdrawing from the raindex.
@@ -31,8 +31,8 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
     /// Withdrawing vault ID zero is an error.
     function testWithdrawZeroVaultId(address alice, address token) external {
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IRaindexV6.ZeroVaultId.selector, alice, token));
-        iRaindex.withdraw4(token, bytes32(0), Float.wrap(0), new TaskV2[](0));
+        vm.expectRevert(abi.encodeWithSelector(IRaindexV7.ZeroVaultId.selector, alice, token));
+        iRaindex.withdraw5(token, bytes32(0), Float.wrap(0), new TaskV3[](0));
     }
 
     /// Withdrawing a zero target amount should revert.
@@ -41,7 +41,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         vm.assume(vaultId != bytes32(0));
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(ZeroWithdrawTargetAmount.selector, alice, token, vaultId));
-        iRaindex.withdraw4(token, vaultId, Float.wrap(0), new TaskV2[](0));
+        iRaindex.withdraw5(token, vaultId, Float.wrap(0), new TaskV3[](0));
     }
 
     /// Withdrawing a non-zero amount from an empty vault should be a noop.
@@ -54,7 +54,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(iToken0), vaultId, amount, Float.wrap(0), 0);
         vm.record();
-        iRaindex.withdraw4(address(iToken0), vaultId, amount, new TaskV2[](0));
+        iRaindex.withdraw5(address(iToken0), vaultId, amount, new TaskV3[](0));
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iRaindex));
         assertEq(reads.length, 6, "reads");
         assertEq(writes.length, 3, "writes");
@@ -78,7 +78,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
 
-        iRaindex.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, depositAmount, new TaskV3[](0));
         assertTrue(iRaindex.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
 
         vm.prank(alice);
@@ -87,7 +87,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         );
         vm.expectEmit(false, false, false, true);
         emit WithdrawV2(alice, address(iToken0), vaultId, withdrawAmount, depositAmount, depositAmount18);
-        iRaindex.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        iRaindex.withdraw5(address(iToken0), vaultId, withdrawAmount, new TaskV3[](0));
         assertTrue(iRaindex.vaultBalance2(address(alice), address(iToken0), vaultId).isZero(), "vault balance");
     }
 
@@ -109,7 +109,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
 
-        iRaindex.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, depositAmount, new TaskV3[](0));
         assertTrue(iRaindex.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
 
         vm.prank(alice);
@@ -121,7 +121,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         vm.expectEmit(false, false, false, true);
         // The full withdraw amount is possible as it's only a partial withdraw.
         emit WithdrawV2(alice, address(iToken0), vaultId, withdrawAmount, withdrawAmount, withdrawAmount18);
-        iRaindex.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        iRaindex.withdraw5(address(iToken0), vaultId, withdrawAmount, new TaskV3[](0));
         // The vault balance is reduced by the withdraw amount.
         assertTrue(
             iRaindex.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount.sub(withdrawAmount))
@@ -144,13 +144,13 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
         );
         Float depositAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(depositAmount18, 18);
         Float withdrawAmount = LibDecimalFloat.fromFixedDecimalLosslessPacked(withdrawAmount18, 18);
-        iRaindex.deposit4(address(iToken0), vaultId, depositAmount, new TaskV2[](0));
+        iRaindex.deposit5(address(iToken0), vaultId, depositAmount, new TaskV3[](0));
         assertTrue(iRaindex.vaultBalance2(address(alice), address(iToken0), vaultId).eq(depositAmount));
 
         // The token contract always reverts when not mocked.
         vm.prank(alice);
         vm.expectRevert();
-        iRaindex.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        iRaindex.withdraw5(address(iToken0), vaultId, withdrawAmount, new TaskV3[](0));
 
         vm.prank(alice);
         vm.mockCall(
@@ -159,7 +159,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
             abi.encode(false)
         );
         vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(iToken0)));
-        iRaindex.withdraw4(address(iToken0), vaultId, withdrawAmount, new TaskV2[](0));
+        iRaindex.withdraw5(address(iToken0), vaultId, withdrawAmount, new TaskV3[](0));
     }
 
     /// Defines an action that can be taken in withdrawal tests.
@@ -229,7 +229,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
 
                 vm.expectEmit(false, false, false, true);
                 emit DepositV2(action.alice, action.token, action.vaultId, action.amount);
-                iRaindex.deposit4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
+                iRaindex.deposit5(action.token, action.vaultId, action.amountFloat, new TaskV3[](0));
                 assertTrue(
                     iRaindex.vaultBalance2(action.alice, action.token, action.vaultId)
                         .eq(balance.add(action.amountFloat)),
@@ -258,7 +258,7 @@ contract RaindexV6WithdrawTest is RaindexV6ExternalMockTest {
                         expectedActualAmount18
                     );
                 }
-                iRaindex.withdraw4(action.token, action.vaultId, action.amountFloat, new TaskV2[](0));
+                iRaindex.withdraw5(action.token, action.vaultId, action.amountFloat, new TaskV3[](0));
                 assertTrue(
                     iRaindex.vaultBalance2(action.alice, action.token, action.vaultId)
                         .eq(balance.sub(expectedActualAmount)),

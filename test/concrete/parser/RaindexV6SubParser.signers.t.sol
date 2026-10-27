@@ -2,12 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {StackAllocationMismatch} from "rainlang-0.1.5/src/error/ErrIntegrity.sol";
-import {ExpectedOperand, UnexpectedOperandValue} from "rainlang-0.1.5/src/error/ErrParse.sol";
-import {OpTest, StackItem} from "rainlang-0.1.5/src/../test/abstract/OpTest.sol";
-import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
+import {StackAllocationMismatch} from "rainlang-0.2.26/src/error/ErrIntegrity.sol";
+import {ExpectedOperand, UnexpectedOperandValue} from "rainlang-0.2.26/src/error/ErrParse.sol";
+import {ContextGridOverflow} from "rainlang-0.2.26/src/error/ErrSubParse.sol";
+import {OpTest, StackItem} from "rainlang-0.2.26/src/../test/abstract/OpTest.sol";
+import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibRaindexSubParserContextFixture} from "test/util/fixture/LibRaindexSubParserContextFixture.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
+import {CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN} from "../../../src/lib/LibRaindex.sol";
 import {LibEtchRaindex} from "test/util/lib/LibEtchRaindex.sol";
 
 contract RaindexV6SubParserSignersTest is OpTest {
@@ -71,5 +73,18 @@ contract RaindexV6SubParserSignersTest is OpTest {
             bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<0>(0);"));
 
         checkUnhappyParse2(rainlang, abi.encodeWithSelector(StackAllocationMismatch.selector, 2, 1));
+    }
+
+    /// A signer index past the last context row reverts rather than wrapping
+    /// onto another signer.
+    function testSubParserContextSignerUnhappyIndexOverflow() external {
+        address subParserAddress = LibRaindexDeploy.SUB_PARSER_DEPLOYED_ADDRESS;
+
+        bytes memory rainlang =
+            bytes(string.concat("using-words-from ", subParserAddress.toHexString(), " _: signer<256>();"));
+
+        checkUnhappyParse(
+            rainlang, abi.encodeWithSelector(ContextGridOverflow.selector, CONTEXT_SIGNED_CONTEXT_SIGNERS_COLUMN, 256)
+        );
     }
 }

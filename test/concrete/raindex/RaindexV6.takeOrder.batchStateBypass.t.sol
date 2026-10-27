@@ -2,21 +2,21 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// @title RaindexV6TakeOrderBatchStateBypassTest
 /// @notice Audit Protofire H01 (#2617): a stateful per-order cap enforced in an
-/// order's calculate phase holds WITHIN a single `takeOrders4` batch, not only
+/// order's calculate phase holds WITHIN a single `takeOrders5` batch, not only
 /// across transactions. Every order's calculate entrypoint evaluates with an
 /// empty `stateOverlay`, and `handleIO` runs per order inside the loop,
 /// committing that order's calculate-phase `kvs` to the store before the next
@@ -25,7 +25,7 @@ import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFl
 ///
 /// This suite verifies the cap with a "fill once" order: the calculate phase
 /// reads a store flag, marks it via `set`, and offers output only while the flag
-/// is unset. Repeating the order three times in a single `takeOrders4` fills
+/// is unset. Repeating the order three times in a single `takeOrders5` fills
 /// exactly once.
 contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
     using LibDecimalFloat for Float;
@@ -46,8 +46,8 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(owner);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
 
         // calculate: read flag, set flag, offer 1 only while flag is unset (ratio 1).
@@ -63,13 +63,13 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         );
 
         // The taker submits the SAME order three times in one batch.
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](3);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](3);
         for (uint256 i = 0; i < 3; i++) {
-            orders[i] = TakeOrderConfigV4({
-                order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+            orders[i] = TakeOrderConfigV5({
+                order: order, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
             });
         }
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
 
         // Allow the settlement transfers (taker receives token1, pays token0).
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector, bob), abi.encode(true));
@@ -80,7 +80,7 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         );
 
         vm.prank(bob);
-        (Float totalTakerInput,) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput,) = iRaindex.takeOrders5(config);
 
         // The calculate-phase cap fills at most once (total output 1): the first
         // repeat sets the flag, per-order handleIO commits it before the next
@@ -88,7 +88,7 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         // offer 0.
         assertTrue(
             totalTakerInput.eq(LibDecimalFloat.packLossless(1, 0)),
-            "stateful calculate-phase cap must hold within a single takeOrders4 batch"
+            "stateful calculate-phase cap must hold within a single takeOrders5 batch"
         );
     }
 
@@ -104,12 +104,12 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         // Fund both owners' output vaults.
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transferFrom.selector), abi.encode(true));
         vm.prank(ownerA);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
         vm.prank(ownerB);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(10, 0), new TaskV3[](0)
         );
 
         OrderV4 memory orderA = LibTestTakeOrder.addOrderWithExpression(
@@ -131,14 +131,14 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
             bytes32(uint256(0x01))
         );
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](2);
-        orders[0] = TakeOrderConfigV4({
-            order: orderA, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](2);
+        orders[0] = TakeOrderConfigV5({
+            order: orderA, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
         });
-        orders[1] = TakeOrderConfigV4({
-            order: orderB, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        orders[1] = TakeOrderConfigV5({
+            order: orderB, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
         });
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(orders);
 
         vm.mockCall(address(iToken1), abi.encodeWithSelector(IERC20.transfer.selector, bob), abi.encode(true));
         vm.mockCall(
@@ -148,7 +148,7 @@ contract RaindexV6TakeOrderBatchStateBypassTest is RaindexV6ExternalRealTest {
         );
 
         vm.prank(bob);
-        (Float totalTakerInput,) = iRaindex.takeOrders4(config);
+        (Float totalTakerInput,) = iRaindex.takeOrders5(config);
 
         assertTrue(
             totalTakerInput.eq(LibDecimalFloat.packLossless(2, 0)),

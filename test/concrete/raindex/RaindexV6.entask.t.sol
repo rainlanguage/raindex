@@ -6,9 +6,9 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderConfigV4,
     EvaluableV4,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
 contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
     function checkReentrancyRW() internal view {
@@ -29,13 +29,13 @@ contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
         internal
     {
         vm.startPrank(owner);
-        TaskV2[] memory actions = new TaskV2[](evalStrings.length);
+        TaskV3[] memory actions = new TaskV3[](evalStrings.length);
         for (uint256 i = 0; i < evalStrings.length; i++) {
             actions[i] =
-                TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
+                TaskV3(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV2[](0));
         }
         vm.record();
-        iRaindex.entask2(actions);
+        iRaindex.entask3(actions);
         checkReentrancyRW();
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
         assert(reads.length == expectedReads);
@@ -116,5 +116,13 @@ contract RaindexV6EnactTest is RaindexV6ExternalRealTest {
         evals3[0] = bytes(":ensure(equal-to(get(1) 20) \"bob state 1\");");
         evals3[1] = bytes(":ensure(equal-to(get(2) 30) \"bob state 2\");");
         checkEntask(bob, evals3, 4, 2);
+    }
+
+    /// Rainlang's power and sqrt ops call the deployed DecimalFloat.
+    function testRaindexEvalDecimalFloatOps() external {
+        bytes[] memory evals = new bytes[](2);
+        evals[0] = bytes(":ensure(equal-to(power(2 3) 8) \"power\");");
+        evals[1] = bytes(":ensure(equal-to(sqrt(16) 4) \"sqrt\");");
+        checkEntask(address(this), evals, 0, 0);
     }
 }

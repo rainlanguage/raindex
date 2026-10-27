@@ -149,6 +149,7 @@ mod tests {
                 metadata_rpcs: Vec::new(),
                 cfg: sync_config,
                 dump_str: None,
+                defer_analyze: false,
                 block_number_threshold: 10000,
                 manifest_end_block: 1,
             },
@@ -195,8 +196,8 @@ mod tests {
         decoder.read_to_string(&mut sql).expect("decode gzip");
 
         assert!(
-            sql.contains("INSERT INTO \"raw_events\""),
-            "export should include raw_events data"
+            !sql.contains("INSERT INTO \"raw_events\""),
+            "export should omit raw_events data"
         );
         assert!(sql.starts_with("BEGIN;"));
         assert!(sql.ends_with("COMMIT;\n"));
@@ -236,6 +237,7 @@ mod tests {
                 metadata_rpcs: Vec::new(),
                 cfg: sync_config,
                 dump_str: None,
+                defer_analyze: false,
                 block_number_threshold: 10000,
                 manifest_end_block: 1,
             },

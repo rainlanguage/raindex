@@ -2,32 +2,32 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2,
+    SignedContextV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RecordingFlashLendingMockRaindex} from "test/util/concrete/RecordingFlashLendingMockRaindex.sol";
 
-/// arb4 borrows exactly `minimumIO` worth of the order's OUTPUT token, expressed
+/// arb5 borrows exactly `minimumIO` worth of the order's OUTPUT token, expressed
 /// in that token's base units. The full arb cycle closes regardless of small
 /// perturbations to the borrowed amount (the leftover-output accounting absorbs
 /// them), so this pins the exact recorded `flashLoan(token, amount)` arguments
@@ -36,7 +36,7 @@ contract RaindexV6FlashBorrowerFlashLoanAmountValueTest is Test {
     function buildSingleOrder(address inputToken, address outputToken)
         internal
         pure
-        returns (TakeOrderConfigV4[] memory orders)
+        returns (TakeOrderConfigV5[] memory orders)
     {
         IOV2[] memory validInputs = new IOV2[](1);
         validInputs[0] = IOV2(inputToken, bytes32(0));
@@ -51,18 +51,18 @@ contract RaindexV6FlashBorrowerFlashLoanAmountValueTest is Test {
             nonce: bytes32(0)
         });
 
-        orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 0, 0, new SignedContextV1[](0));
+        orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 0, 0, new SignedContextV2[](0));
     }
 
-    function noopTask() internal pure returns (TaskV2 memory) {
-        return TaskV2({
+    function noopTask() internal pure returns (TaskV3 memory) {
+        return TaskV3({
             evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
     }
 
-    /// minimumIO = 100 whole tokens against a 6-decimal output token. arb4 MUST
+    /// minimumIO = 100 whole tokens against a 6-decimal output token. arb5 MUST
     /// request a flash loan of exactly 100e6 base units of the output token. An
     /// off-by-one (or any other) perturbation to the computed amount records a
     /// different value here even though the arb cycle still completes.
@@ -87,9 +87,9 @@ contract RaindexV6FlashBorrowerFlashLoanAmountValueTest is Test {
 
         GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
 
-        arb.arb4(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),

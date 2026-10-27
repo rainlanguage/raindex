@@ -2,19 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {
-    NegativeVaultBalance,
-    NegativeVaultBalanceChange,
-    NegativePull,
-    NegativePush
-} from "src/concrete/raindex/RaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {NegativeVaultBalance, NegativeVaultBalanceChange, NegativePull, NegativePush} from "src/error/ErrRaindexV6.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {RaindexV6VaultBalanceHarness} from "test/util/concrete/RaindexV6VaultBalanceHarness.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
+import {IRaindexV6VaultBalanceHarness} from "test/util/interface/IRaindexV6VaultBalanceHarness.sol";
 
 /// @title RaindexV6VaultBalanceRevertTest
 /// @notice Audit A08-5 / A08-6 (#2535): the vault-balance helpers reject a
@@ -23,7 +18,7 @@ import {RaindexV6VaultBalanceHarness} from "test/util/concrete/RaindexV6VaultBal
 contract RaindexV6VaultBalanceRevertTest is Test {
     using LibDecimalFloat for Float;
 
-    RaindexV6VaultBalanceHarness internal harness;
+    IRaindexV6VaultBalanceHarness internal harness;
     address internal owner = makeAddr("owner");
     address internal token = makeAddr("token");
     // Non-zero vault id so the internal-balance branch (not the vault-0 token
@@ -38,8 +33,8 @@ contract RaindexV6VaultBalanceRevertTest is Test {
 
         // Etch the runtime code so the large RaindexV6-derived harness isn't
         // subject to the EIP-170 creation size limit.
-        harness = RaindexV6VaultBalanceHarness(payable(address(uint160(uint256(keccak256("vault.balance.harness"))))));
-        vm.etch(address(harness), type(RaindexV6VaultBalanceHarness).runtimeCode);
+        harness = IRaindexV6VaultBalanceHarness(payable(address(uint160(uint256(keccak256("vault.balance.harness"))))));
+        vm.etch(address(harness), vm.getDeployedCode("RaindexV6VaultBalanceHarness.sol:RaindexV6VaultBalanceHarness"));
     }
 
     /// A08-6: increase with a negative amount reverts.

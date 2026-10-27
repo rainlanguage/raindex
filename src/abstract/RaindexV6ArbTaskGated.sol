@@ -3,7 +3,7 @@
 pragma solidity ^0.8.19;
 
 import {RaindexV6ArbCommon, RaindexV6ArbConfig, WrongTask} from "./RaindexV6ArbCommon.sol";
-import {TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 
 /// @title RaindexV6ArbTaskGated
 /// @notice Mixin that adds task-hash gating to arb contracts. Stores a task
@@ -26,7 +26,7 @@ abstract contract RaindexV6ArbTaskGated is RaindexV6ArbCommon {
     /// match the hash of the provided task. Passes through if no task was
     /// configured at construction.
     //slither-disable-next-line dead-code
-    function _checkTaskHash(TaskV2 memory task) internal view {
+    function _checkTaskHash(TaskV3 memory task) internal pure {
         if (iTaskHash != bytes32(0) && iTaskHash != keccak256(abi.encode(task))) {
             revert WrongTask();
         }

@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {OrderIOCalculationV4} from "src/concrete/raindex/RaindexV6.sol";
-import {ClearStateChangeV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {OrderV4} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {StateNamespace} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {RaindexV6ClearStateChangeHarness} from "test/util/concrete/RaindexV6ClearStateChangeHarness.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {OrderIOCalculationV4} from "src/struct/OrderIOCalculationV4.sol";
+import {ClearStateChangeV2} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {OrderV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {StateNamespace} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IRaindexV6ClearStateChangeHarness} from "test/util/interface/IRaindexV6ClearStateChangeHarness.sol";
 
 /// @title RaindexV6ClearStateChangeTest
 /// @notice Pure-math coverage of `calculateClearStateChange` /
@@ -17,19 +17,22 @@ import {RaindexV6ClearStateChangeHarness} from "test/util/concrete/RaindexV6Clea
 /// each order's OUTPUT is the smaller of its own max output and the
 /// counterparty-derived cap. The difference (output - counterparty input) is the
 /// bounty; a ratio mismatch that makes inputs exceed available outputs reverts
-/// (NegativeBounty) at the clear3 layer.
+/// (NegativeBounty) at the clear4 layer.
 contract RaindexV6ClearStateChangeTest is Test {
     using LibDecimalFloat for Float;
 
-    RaindexV6ClearStateChangeHarness internal harness;
+    IRaindexV6ClearStateChangeHarness internal harness;
 
     function setUp() external {
         // Etch runtime code so the large RaindexV6-derived harness isn't subject
         // to the EIP-170 creation size limit.
-        harness = RaindexV6ClearStateChangeHarness(
+        harness = IRaindexV6ClearStateChangeHarness(
             payable(address(uint160(uint256(keccak256("clear.state.change.harness")))))
         );
-        vm.etch(address(harness), type(RaindexV6ClearStateChangeHarness).runtimeCode);
+        vm.etch(
+            address(harness),
+            vm.getDeployedCode("RaindexV6ClearStateChangeHarness.sol:RaindexV6ClearStateChangeHarness")
+        );
     }
 
     /// Build a minimal OrderIOCalculationV4 carrying only the fields

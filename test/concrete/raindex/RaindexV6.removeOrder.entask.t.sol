@@ -7,13 +7,13 @@ import {
     OrderConfigV4,
     EvaluableV4,
     OrderV4,
-    TaskV2,
-    SignedContextV1
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+    TaskV3,
+    SignedContextV2
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 
-import {Strings} from "@openzeppelin-contracts-5.6.1/utils/Strings.sol";
+import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 
 contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
     using LibOrder for OrderV4;
@@ -47,19 +47,19 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
     ) internal {
         LibTestAddOrder.conformConfig(config, iInterpreter, iStore);
         vm.startPrank(owner);
-        TaskV2[] memory actions = new TaskV2[](evalStrings.length);
+        TaskV3[] memory actions = new TaskV3[](evalStrings.length);
         for (uint256 i = 0; i < evalStrings.length; i++) {
             actions[i] =
-                TaskV2(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV1[](0));
+                TaskV3(EvaluableV4(iInterpreter, iStore, iParserV2.parse2(evalStrings[i])), new SignedContextV2[](0));
         }
         // Hacky way to give a unique nonce to each order passed in.
         config.nonce = keccak256(abi.encode(evalStrings));
         if (addOrder) {
-            iRaindex.addOrder4(config, new TaskV2[](0));
+            iRaindex.addOrder5(config, new TaskV3[](0));
         }
         OrderV4 memory order = OrderV4(owner, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
         vm.record();
-        bool stateChanged = iRaindex.removeOrder3(order, actions);
+        bool stateChanged = iRaindex.removeOrder4(order, actions);
         assertEq(stateChanged, addOrder);
         checkReentrancyRW(addOrder ? 5 : 4, addOrder ? 3 : 2);
         (bytes32[] memory reads, bytes32[] memory writes) = vm.accesses(address(iStore));
@@ -156,8 +156,8 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
         vm.startPrank(alice);
         bytes[] memory evals0 = new bytes[](1);
         evals0[0] = bytes(":;");
-        TaskV2[] memory actions = evalsToActions(evals0);
-        bool stateChanged = iRaindex.addOrder4(config, actions);
+        TaskV3[] memory actions = evalsToActions(evals0);
+        bool stateChanged = iRaindex.addOrder5(config, actions);
         assert(stateChanged);
 
         OrderV4 memory order = OrderV4(alice, config.evaluable, config.validInputs, config.validOutputs, config.nonce);
@@ -167,10 +167,10 @@ contract RaindexV6RemoveOrderEnactTest is RaindexV6ExternalRealTest {
         bytes[] memory evals1 = new bytes[](1);
         evals1[0] = bytes(":ensure(0 \"always revert\");");
 
-        TaskV2[] memory actions1 = evalsToActions(evals1);
+        TaskV3[] memory actions1 = evalsToActions(evals1);
 
         vm.expectRevert("always revert");
-        bool stateChanged2 = iRaindex.removeOrder3(order, actions1);
+        bool stateChanged2 = iRaindex.removeOrder4(order, actions1);
 
         assert(!stateChanged2);
 

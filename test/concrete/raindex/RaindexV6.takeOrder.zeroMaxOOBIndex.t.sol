@@ -6,14 +6,14 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
 import {
     OrderV4,
-    TakeOrderConfigV4,
-    TakeOrdersConfigV5,
-    IRaindexV6
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+    TakeOrderConfigV5,
+    TakeOrdersConfigV6,
+    IRaindexV7
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
-/// `takeOrders4` guards a zero maximum IO before dereferencing any order IO
+/// `takeOrders5` guards a zero maximum IO before dereferencing any order IO
 /// index, so a zero max with an out-of-range index reverts with the explicit
 /// `ZeroMaximumIO` rather than a generic out-of-bounds bounds-check panic.
 contract RaindexV6TakeOrderZeroMaxOOBIndexTest is RaindexV6ExternalRealTest {
@@ -35,10 +35,10 @@ contract RaindexV6TakeOrderZeroMaxOOBIndexTest is RaindexV6ExternalRealTest {
         // The order has a single input (index 0); index 1 is out of range.
         OrderV4 memory order = _addOrder("_ _:1e0 1e0;:;");
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 1, 0, new SignedContextV1[](0));
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 1, 0, new SignedContextV2[](0));
 
-        TakeOrdersConfigV5 memory config = TakeOrdersConfigV5({
+        TakeOrdersConfigV6 memory config = TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -48,7 +48,7 @@ contract RaindexV6TakeOrderZeroMaxOOBIndexTest is RaindexV6ExternalRealTest {
         });
 
         vm.prank(bob);
-        vm.expectRevert(IRaindexV6.ZeroMaximumIO.selector);
-        iRaindex.takeOrders4(config);
+        vm.expectRevert(IRaindexV7.ZeroMaximumIO.selector);
+        iRaindex.takeOrders5(config);
     }
 }

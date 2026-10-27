@@ -6,12 +6,12 @@ import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRea
 import {
     OrderConfigV4,
     OrderV4,
-    TaskV2,
-    SignedContextV1,
+    TaskV3,
+    SignedContextV2,
     ClearConfigV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
+import {ClearZeroAmount} from "../../../src/error/ErrRaindexV6.sol";
 
 contract RaindexV6ClearZeroAmountTest is RaindexV6ExternalRealTest {
     /// forge-config: default.fuzz.runs = 10
@@ -41,13 +41,13 @@ contract RaindexV6ClearZeroAmountTest is RaindexV6ExternalRealTest {
             OrderV4(bob, configBob.evaluable, configBob.validInputs, configBob.validOutputs, configBob.nonce);
 
         vm.prank(alice);
-        iRaindex.addOrder4(configAlice, new TaskV2[](0));
+        iRaindex.addOrder5(configAlice, new TaskV3[](0));
         vm.prank(bob);
-        iRaindex.addOrder4(configBob, new TaskV2[](0));
+        iRaindex.addOrder5(configBob, new TaskV3[](0));
 
         vm.expectRevert(ClearZeroAmount.selector);
-        iRaindex.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        iRaindex.clear4(
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 }

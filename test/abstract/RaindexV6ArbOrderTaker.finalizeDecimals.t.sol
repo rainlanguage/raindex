@@ -3,21 +3,21 @@
 pragma solidity =0.8.25;
 
 import {ChildRaindexV6ArbOrderTaker} from "../util/concrete/ChildRaindexV6ArbOrderTaker.sol";
-import {TaskV2, SignedContextV1, EvaluableV4} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+import {TaskV3, SignedContextV2, EvaluableV4} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {RaindexV6ExternalRealTest} from "../util/abstract/RaindexV6ExternalRealTest.sol";
 import {
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     IOV2,
     OrderConfigV4,
     OrderV4,
     IInterpreterV4
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin-contracts-5.6.1/token/ERC20/extensions/IERC20Metadata.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin-contracts-5.7.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
-/// @dev Discriminates that `arb5` passes the input token's OWN decimals and the
+/// @dev Discriminates that `arb6` passes the input token's OWN decimals and the
 /// output token's OWN decimals to `finalizeArb` in the correct positions. The
 /// pre-existing `context` test uses equal decimals (12/12) for both tokens, so a
 /// mutation that swaps input-decimals for output-decimals (or vice versa)
@@ -57,13 +57,13 @@ contract RaindexV6ArbOrderTakerFinalizeDecimalsTest is RaindexV6ExternalRealTest
             nonce: aliceOrderConfig.nonce
         });
 
-        TakeOrderConfigV4 memory aliceTakeOrderConfig = TakeOrderConfigV4({
-            order: aliceOrder, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV1[](0)
+        TakeOrderConfigV5 memory aliceTakeOrderConfig = TakeOrderConfigV5({
+            order: aliceOrder, inputIOIndex: 0, outputIOIndex: 0, signedContext: new SignedContextV2[](0)
         });
 
-        TakeOrderConfigV4[] memory orders = new TakeOrderConfigV4[](1);
+        TakeOrderConfigV5[] memory orders = new TakeOrderConfigV5[](1);
         orders[0] = aliceTakeOrderConfig;
-        TakeOrdersConfigV5 memory takeOrdersConfig = TakeOrdersConfigV5({
+        TakeOrdersConfigV6 memory takeOrdersConfig = TakeOrdersConfigV6({
             minimumIO: LibDecimalFloat.packLossless(0, 0),
             maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
             maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),
@@ -74,7 +74,7 @@ contract RaindexV6ArbOrderTakerFinalizeDecimalsTest is RaindexV6ExternalRealTest
 
         // Assert that the post-arb context column scaled each swept token balance
         // by its OWN token decimals: input float == 3, output float == 4, gas == 5.
-        TaskV2 memory task = TaskV2({
+        TaskV3 memory task = TaskV3({
             evaluable: EvaluableV4({
                 interpreter: iInterpreter,
                 store: iStore,
@@ -88,7 +88,7 @@ contract RaindexV6ArbOrderTakerFinalizeDecimalsTest is RaindexV6ExternalRealTest
                     )
                 )
             }),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
 
         vm.mockCall(address(iToken0), abi.encodeWithSelector(IERC20.approve.selector), abi.encode(true));
@@ -109,6 +109,6 @@ contract RaindexV6ArbOrderTakerFinalizeDecimalsTest is RaindexV6ExternalRealTest
         // 5e18 is 5 eth as wei is 18 decimals.
         vm.deal(address(arbOrderTaker), 5e18);
         vm.prank(bob);
-        arbOrderTaker.arb5(iRaindex, takeOrdersConfig, task);
+        arbOrderTaker.arb6(iRaindex, takeOrdersConfig, task);
     }
 }

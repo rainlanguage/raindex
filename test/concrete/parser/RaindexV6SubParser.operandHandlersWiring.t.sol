@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParser.sol";
 
 /// @title RaindexV6SubParserOperandHandlersWiringTest
@@ -11,21 +11,22 @@ import {RaindexV6SubParser} from "../../../src/concrete/parser/RaindexV6SubParse
 /// `[column][row]` matrix of internal operand-handler function pointers into a
 /// flat table of 16-bit pointers (two bytes per slot, column-major then row
 /// order), exactly mirroring the word-parser table. EVERY plain context word
-/// (base / calling / calculations / vault-in / vault-out / deposit / withdraw)
+/// (base / order / calculations / vault-in / vault-out / deposit / withdraw)
 /// is wired to the SAME `LibParseOperand.handleOperandDisallowed` function, so
-/// those slots all share one 16-bit pointer. Only TWO slots are different:
-///   - signers (column 5, row 0) -> `handleOperandSingleFullNoDefault`
-///   - signed-context (column 6, row 0) -> `handleOperandDoublePerByteNoDefault`
+/// those slots all share one 16-bit pointer. Only THREE slots are different:
+///   - signers (column 7, row 0) -> `handleOperandSingleFullNoDefault`
+///   - signer domains (column 8, row 0) -> `handleOperandSingleFullNoDefault`
+///   - signed-context (column 9, row 0) -> `handleOperandDoublePerByteNoDefault`
 /// Because the build function is a freshly compiled `external pure`, this test
 /// runs against a fresh deployment WITHOUT etching or pointer regeneration. The
 /// absolute pointer values are unstable across source edits (solc reorders its
 /// dispatch table), so the assertions are all RELATIONS within a single build
 /// output: table length, which slots equal the shared disallowed pointer, and
-/// which two slots are the distinct signers / signed-context handlers. This
-/// deterministically covers the operand-handler outer length, the column
-/// assignments, and the deposit/withdraw column offsets: any of those mutations
-/// changes the table length and/or relocates the two distinct handler pointers
-/// off slots 17/18.
+/// which slots are the distinct signers / signer-domain / signed-context
+/// handlers. This deterministically covers the operand-handler outer length,
+/// the column assignments, and the deposit/withdraw column offsets: any of
+/// those mutations changes the table length and/or relocates the distinct
+/// handler pointers off slots 31/32/33.
 contract RaindexV6SubParserOperandHandlersWiringTest is Test {
     RaindexV6SubParser internal subParser;
 
@@ -35,60 +36,66 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
 
     // Flat slot indices into the operand-handler pointer table (column-major):
     //   col 0 base            (2 rows) -> 0, 1
-    //   col 1 calling context (3 rows) -> 2, 3, 4
-    //   col 2 calculations    (2 rows) -> 5, 6
-    //   col 3 vault inputs    (5 rows) -> 7..11
-    //   col 4 vault outputs   (5 rows) -> 12..16
-    //   col 5 signers         (1 row)  -> 17
-    //   col 6 signed context  (1 row)  -> 18
-    //   col 7 deposit         (6 rows) -> 19..24
-    //   col 8 withdraw        (7 rows) -> 25..31
-    uint256 internal constant TABLE_SLOTS = 32;
-    uint256 internal constant SLOT_SIGNERS = 17;
-    uint256 internal constant SLOT_SIGNED_CONTEXT = 18;
+    //   col 1 order           (4 rows) -> 2..5
+    //   col 2 calculations    (2 rows) -> 6, 7
+    //   col 3 vault inputs    (5 rows) -> 8..12
+    //   col 4 vault outputs   (5 rows) -> 13..17
+    //   col 5 deposit         (6 rows) -> 18..23
+    //   col 6 withdraw        (7 rows) -> 24..30
+    //   col 7 signers         (1 row)  -> 31
+    //   col 8 signer domains  (1 row)  -> 32
+    //   col 9 signed context  (1 row)  -> 33
+    uint256 internal constant TABLE_SLOTS = 34;
+    uint256 internal constant SLOT_SIGNERS = 31;
+    uint256 internal constant SLOT_SIGNER_DOMAINS = 32;
+    uint256 internal constant SLOT_SIGNED_CONTEXT = 33;
+    uint256 internal constant SLOT_DEPOSIT_FIRST = 18;
 
     /// @dev Read the big-endian 16-bit function pointer at flat `slot` from the
     /// freshly built operand-handler table, asserting the table is the expected
-    /// 64 bytes (32 16-bit slots).
+    /// 68 bytes (34 16-bit slots).
     function pointerAt(uint256 slot) internal view returns (uint16) {
         bytes memory table = subParser.buildOperandHandlerFunctionPointers();
-        assertEq(table.length, TABLE_SLOTS * 2, "operand handler table must hold 32 16-bit pointers");
+        assertEq(table.length, TABLE_SLOTS * 2, "operand handler table must hold 34 16-bit pointers");
         uint256 byteIndex = slot * 2;
         return (uint16(uint8(table[byteIndex])) << 8) | uint16(uint8(table[byteIndex + 1]));
     }
 
-    /// The operand-handler table holds exactly 32 slots (64 bytes), matching the
+    /// The operand-handler table holds exactly 34 slots (68 bytes), matching the
     /// extended context column/row layout. A mutation to the outer matrix length
     /// (`new ...[][](CONTEXT_COLUMNS_EXTENDED)`) or to the deposit/withdraw column
     /// offset (which displaces or drops a whole column) changes this length and
     /// is caught by the guard inside `pointerAt`. Reading slot 0 exercises it.
     function testOperandHandlerTableLength() external view {
-        // pointerAt asserts table.length == 64; any wrong length reverts here.
+        // pointerAt asserts table.length == 68; any wrong length reverts here.
         pointerAt(0);
     }
 
-    /// The signers operand handler (column 5, row 0) is the FIRST distinct
-    /// handler: `handleOperandSingleFullNoDefault`, different from the
-    /// `handleOperandDisallowed` used by every plain context word. Slots 0..16
-    /// (base, calling, calculations, vault-in, vault-out) are all the shared
-    /// disallowed pointer, so the signers slot must differ from each of them. A
-    /// column-assignment mutation that moves the signers column off slot 17, or
-    /// that assigns a disallowed sub-array to the signers column, collapses this
-    /// distinction and is caught.
+    /// Every slot before signers (base through withdraw) is the shared
+    /// disallowed pointer; the signers slot (column 7, row 0) differs.
     function testSignersOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
         // Every plain context slot before signers shares the disallowed pointer.
-        for (uint256 slot = 0; slot <= 16; slot++) {
+        for (uint256 slot = 0; slot < SLOT_SIGNERS; slot++) {
             assertEq(pointerAt(slot), disallowed, "plain context slot uses handleOperandDisallowed");
         }
         assertTrue(pointerAt(SLOT_SIGNERS) != disallowed, "signers handler must differ from handleOperandDisallowed");
     }
 
-    /// The signed-context operand handler (column 6, row 0) is the SECOND
-    /// distinct handler: `handleOperandDoublePerByteNoDefault`, different from
-    /// BOTH the disallowed default AND the signers handler. This pins that the
-    /// signers and signed-context columns are wired to two genuinely different
-    /// handlers at slots 17 and 18 respectively (not swapped, not collapsed).
+    /// The signer-domain handler (column 8, row 0) is the same single-operand
+    /// handler as signers.
+    function testSignerDomainsOperandHandlerMatchesSigners() external view {
+        assertTrue(
+            pointerAt(SLOT_SIGNER_DOMAINS) != pointerAt(0),
+            "signer-domain handler must differ from handleOperandDisallowed"
+        );
+        assertEq(
+            pointerAt(SLOT_SIGNER_DOMAINS), pointerAt(SLOT_SIGNERS), "signer-domain handler must equal signers handler"
+        );
+    }
+
+    /// The signed-context handler (column 9, row 0) differs from both the
+    /// disallowed default and the signers handler.
     function testSignedContextOperandHandlerIsDistinct() external view {
         uint16 disallowed = pointerAt(0);
         assertTrue(
@@ -101,25 +108,12 @@ contract RaindexV6SubParserOperandHandlersWiringTest is Test {
         );
     }
 
-    /// Every deposit (slots 19..24) and withdraw (slots 25..31) operand-handler
-    /// slot is the shared `handleOperandDisallowed` pointer: deposit/withdraw
-    /// words are plain context words whose operand is disallowed. This, combined
-    /// with the two distinct-handler tests above and the length guard, pins that
-    /// the deposit column sits at offset +1 and the withdraw column at offset +2
-    /// of the signed-context start column: a mutation swapping those offsets, or
-    /// dropping a column, either changes the table length (caught by the guard)
-    /// or relocates the two distinct signers/signed-context handlers into the
-    /// deposit/withdraw range (caught because slots 19..31 would no longer all
-    /// equal the disallowed pointer).
+    /// Every deposit (slots 18..23) and withdraw (slots 24..30) slot is the
+    /// shared disallowed pointer.
     function testDepositWithdrawOperandHandlersAllDisallowed() external view {
         uint16 disallowed = pointerAt(0);
-        for (uint256 slot = 19; slot <= 31; slot++) {
+        for (uint256 slot = SLOT_DEPOSIT_FIRST; slot < SLOT_SIGNERS; slot++) {
             assertEq(pointerAt(slot), disallowed, "deposit/withdraw operand slot uses handleOperandDisallowed");
         }
-        // And neither distinct handler leaks into the deposit/withdraw range:
-        // the only two non-disallowed slots are 17 (signers) and 18 (signed
-        // context), strictly before the deposit column at slot 19.
-        assertTrue(pointerAt(SLOT_SIGNERS) != disallowed, "signers slot 17 is the distinct signers handler");
-        assertTrue(pointerAt(SLOT_SIGNED_CONTEXT) != disallowed, "signed-context slot 18 is the distinct handler");
     }
 }

@@ -5,9 +5,9 @@ pragma solidity =0.8.25;
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {SignedContextV1} from "rain-interpreter-interface-0.1.0/src/interface/deprecated/v1/IInterpreterCallerV2.sol";
-import {SameOwner} from "../../../src/concrete/raindex/RaindexV6.sol";
+import {OrderConfigV4, OrderV4, ClearConfigV2, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {SignedContextV2} from "rainlang-interface-0.2.14/src/interface/IInterpreterCallerV5.sol";
+import {SameOwner} from "../../../src/error/ErrRaindexV6.sol";
 
 /// Clearing two orders with the same owner must revert with SameOwner.
 contract RaindexV6ClearSameOwnerTest is RaindexV6ExternalRealTest {
@@ -27,17 +27,17 @@ contract RaindexV6ClearSameOwnerTest is RaindexV6ExternalRealTest {
         // Add both orders as the same owner.
         vm.prank(alice);
         vm.recordLogs();
-        iRaindex.addOrder4(configAlice, new TaskV2[](0));
+        iRaindex.addOrder5(configAlice, new TaskV3[](0));
         OrderV4 memory orderAlice = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         vm.prank(alice);
         vm.recordLogs();
-        iRaindex.addOrder4(configBob, new TaskV2[](0));
+        iRaindex.addOrder5(configBob, new TaskV3[](0));
         OrderV4 memory orderBob = LibTestTakeOrder.extractOrderFromLogs(vm.getRecordedLogs());
 
         vm.expectRevert(abi.encodeWithSelector(SameOwner.selector));
-        iRaindex.clear3(
-            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV1[](0), new SignedContextV1[](0)
+        iRaindex.clear4(
+            orderAlice, orderBob, ClearConfigV2(0, 0, 0, 0, 0, 0), new SignedContextV2[](0), new SignedContextV2[](0)
         );
     }
 }

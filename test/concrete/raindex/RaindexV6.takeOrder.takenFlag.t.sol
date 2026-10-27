@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalRealTest} from "test/util/abstract/RaindexV6ExternalRealTest.sol";
 import {LibTestTakeOrder} from "test/util/lib/LibTestTakeOrder.sol";
-import {OrderV4, TakeOrdersConfigV5, TaskV2, IRaindexV6} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {Float, LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {OrderV4, TakeOrdersConfigV6, TaskV3, IRaindexV7} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {Float, LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 import {LibOrder} from "../../../src/lib/LibOrder.sol";
 import {RecordingOrderTaker} from "test/util/concrete/RecordingOrderTaker.sol";
 
-/// An order in a `takeOrders4` batch is taken only when its calculation yields a
-/// strictly positive output at a strictly positive ratio within the taker's
-/// limit. Non-positive outputs and non-positive ratios are no-op skips
+/// An order in a `takeOrders5` batch is taken only when its calculation yields a
+/// strictly positive output at a non-negative ratio within the taker's
+/// limit. Non-positive outputs and negative ratios are no-op skips
 /// (`OrderZeroAmount`) rather than reverting the whole batch, and the
 /// `onTakeOrders2` callback fires only when something was taken.
 contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
@@ -36,8 +36,13 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
             abi.encode(true)
         );
         vm.prank(alice);
-        iRaindex.deposit4(
-            address(iToken1), bytes32(uint256(0x01)), LibDecimalFloat.packLossless(int256(amount), 0), new TaskV2[](0)
+        iRaindex.deposit5(
+            address(iToken1),
+            bytes32(uint256(0x01)),
+            // amount is a whole-token test quantity, far below int256 max.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            LibDecimalFloat.packLossless(int256(amount), 0),
+            new TaskV3[](0)
         );
     }
 
@@ -46,12 +51,12 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
     function testNegativeOutputMaxSkips() external {
         // outputMax = -1, IORatio = 1.
         OrderV4 memory order = _addOrder("_ _:sub(0 1) 1;:;");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
@@ -63,31 +68,12 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
         _depositOutput(10);
         // outputMax = 1, IORatio = -1.
         OrderV4 memory order = _addOrder("_ _:1 sub(0 1);:;");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
-
-        assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
-        assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
-    }
-
-    /// A zero IORatio (with a fillable output) is a no-op skip, not a
-    /// `DivisionByZero` revert on the market-sell path.
-    function testZeroRatioSkips() external {
-        _depositOutput(10);
-        // outputMax = 1, IORatio = 0.
-        OrderV4 memory order = _addOrder("_ _:1 0;:;");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
-        // Market sell: takerInput = takerOutput / IORatio would divide by zero.
-        config.IOIsInput = false;
-
-        vm.prank(bob);
-        vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
@@ -97,12 +83,12 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
     function testZeroOutputMaxStillSkips() external {
         // outputMax = 0, IORatio = 1.
         OrderV4 memory order = _addOrder("_ _:0 1;:;");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
 
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
-        emit IRaindexV6.OrderZeroAmount(bob, alice, LibOrder.hash(order));
-        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders4(config);
+        emit IRaindexV7.OrderZeroAmount(bob, alice, LibOrder.hash(order));
+        (Float totalTakerInput, Float totalTakerOutput) = iRaindex.takeOrders5(config);
 
         assertTrue(totalTakerInput.isZero(), "totalTakerInput must be zero");
         assertTrue(totalTakerOutput.isZero(), "totalTakerOutput must be zero");
@@ -114,7 +100,7 @@ contract RaindexV6TakeOrderTakenFlagTest is RaindexV6ExternalRealTest {
         RecordingOrderTaker taker = new RecordingOrderTaker(iRaindex);
         // A skipping order (zero outputMax) means nothing is taken.
         OrderV4 memory order = _addOrder("_ _:0 1;:;");
-        TakeOrdersConfigV5 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
+        TakeOrdersConfigV6 memory config = LibTestTakeOrder.defaultTakeConfig(LibTestTakeOrder.wrapSingle(order));
         config.data = hex"01"; // non-empty callback data
         config.minimumIO = LibDecimalFloat.packLossless(0, 0); // no minimum so zero-fill does not revert
 

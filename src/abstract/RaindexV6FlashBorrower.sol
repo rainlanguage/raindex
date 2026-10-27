@@ -2,18 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.19;
 
-import {ERC165, IERC165} from "@openzeppelin-contracts-5.6.1/utils/introspection/ERC165.sol";
-import {SafeERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/utils/SafeERC20.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin-contracts-5.6.1/utils/ReentrancyGuard.sol";
-import {ON_FLASH_LOAN_CALLBACK_SUCCESS} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {IRaindexV6, TakeOrdersConfigV5, TaskV2} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IERC3156FlashBorrower} from "raindex-interface-0.1.1/src/interface/ierc3156/IERC3156FlashBorrower.sol";
-import {RaindexV6ArbCommon} from "./RaindexV6ArbCommon.sol";
+import {ERC165, IERC165} from "@openzeppelin-contracts-5.7.0/utils/introspection/ERC165.sol";
+import {SafeERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin-contracts-5.7.0/utils/ReentrancyGuard.sol";
+import {
+    ON_FLASH_LOAN_CALLBACK_SUCCESS
+} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {IRaindexV7, TakeOrdersConfigV6, TaskV3} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IERC3156FlashBorrower} from "raindex-interface-0.1.10/src/interface/ierc3156/IERC3156FlashBorrower.sol";
+import {RaindexV6ArbCommon, BadRaindex} from "./RaindexV6ArbCommon.sol";
 import {LibRaindexArb} from "../lib/LibRaindexArb.sol";
 import {LibRaindexDeploy} from "../lib/deploy/LibRaindexDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
 /// Thrown when the flash loan initiator is not this contract.
 /// @param badInitiator The untrusted initiator of the flash loan.
@@ -27,7 +29,7 @@ error BadLender(address badLender);
 /// Thrown when the flash loan fails somehow.
 error FlashLoanFailed();
 
-/// Thrown when `arb4` is called with `IOIsInput == false`. The flash-loan amount
+/// Thrown when `arb5` is called with `IOIsInput == false`. The flash-loan amount
 /// is the order output the taker receives, which `minimumIO` expresses only when
 /// it is the taker input (`IOIsInput == true`).
 error ArbRequiresInputIO();
@@ -81,7 +83,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
     /// @param takeOrders As per `arb`.
     /// @param exchangeData As per `arb`.
     //slither-disable-next-line dead-code
-    function _exchange(TakeOrdersConfigV5 memory takeOrders, bytes memory exchangeData) internal virtual {}
+    function _exchange(TakeOrdersConfigV6 memory takeOrders, bytes memory exchangeData) internal virtual {}
 
     /// @inheritdoc IERC3156FlashBorrower
     function onFlashLoan(address initiator, address, uint256, uint256, bytes calldata data) external returns (bytes32) {
@@ -94,8 +96,8 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
             revert BadInitiator(initiator);
         }
 
-        (TakeOrdersConfigV5 memory takeOrders, bytes memory exchangeData) =
-            abi.decode(data, (TakeOrdersConfigV5, bytes));
+        (TakeOrdersConfigV6 memory takeOrders, bytes memory exchangeData) =
+            abi.decode(data, (TakeOrdersConfigV6, bytes));
 
         // Dispatch the `_exchange` hook to ensure we have the correct asset
         // type and amount to fill the orders.
@@ -107,7 +109,7 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
         // the flash loan itself will take back what it needs, and we simply
         // keep anything left over according to active balances.
         //slither-disable-next-line unused-return
-        IRaindexV6(msg.sender).takeOrders4(takeOrders);
+        IRaindexV7(msg.sender).takeOrders5(takeOrders);
 
         return ON_FLASH_LOAN_CALLBACK_SUCCESS;
     }
@@ -123,24 +125,28 @@ abstract contract RaindexV6FlashBorrower is IERC3156FlashBorrower, ReentrancyGua
     /// remaining assets are sent to the sender via `finalizeArb`.
     ///
     /// @param raindex The `Raindex` contract to take orders from and flash
-    /// loan against.
-    /// @param takeOrders As per `IRaindexV6.takeOrders4`.
+    /// loan against. MUST be the deterministic deployment, else reverts
+    /// `BadRaindex`.
+    /// @param takeOrders As per `IRaindexV7.takeOrders5`.
     /// @param exchangeData Arbitrary bytes that will be passed to `_exchange`
     /// after the flash loan is taken. The inheriting contract is responsible
     /// for decoding this data and defining how it controls interactions with
     /// the external liquidity. For example, `GenericPoolRaindexV6FlashBorrower`
     /// uses this data as a literal encoded external call.
     /// @param task The task to evaluate after the arb completes.
-    function arb4(
-        IRaindexV6 raindex,
-        TakeOrdersConfigV5 calldata takeOrders,
+    function arb5(
+        IRaindexV7 raindex,
+        TakeOrdersConfigV6 calldata takeOrders,
         bytes calldata exchangeData,
-        TaskV2 calldata task
+        TaskV3 calldata task
     ) external payable nonReentrant {
         _beforeArb(task);
         // Mimic what Raindex would do anyway if called with zero orders.
         if (takeOrders.orders.length == 0) {
-            revert IRaindexV6.NoOrders();
+            revert IRaindexV7.NoOrders();
+        }
+        if (address(raindex) != LibRaindexDeploy.RAINDEX_DEPLOYED_ADDRESS) {
+            revert BadRaindex(address(raindex));
         }
         // The flash-loan amount below reads `minimumIO` as the order output the
         // taker receives, which only matches when `minimumIO` is the taker

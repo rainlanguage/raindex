@@ -2,41 +2,41 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 
 import {GenericPoolRaindexV6FlashBorrower} from "../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
 import {
-    IRaindexV6,
-    TakeOrdersConfigV5,
-    TakeOrderConfigV4,
+    IRaindexV7,
+    TakeOrdersConfigV6,
+    TakeOrderConfigV5,
     OrderV4,
     IOV2,
     EvaluableV4,
-    SignedContextV1,
-    TaskV2
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
-import {IInterpreterV4} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {IInterpreterStoreV3} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterStoreV3.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
-import {LibRainDeploy} from "rain-deploy-0.1.2/src/lib/LibRainDeploy.sol";
-import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.1/src/lib/LibTOFUTokenDecimals.sol";
+    SignedContextV2,
+    TaskV3
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
+import {IInterpreterV4} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {IInterpreterStoreV3} from "rainlang-interface-0.2.14/src/interface/IInterpreterStoreV3.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
+import {LibRainDeploy} from "rain-deploy-0.1.25/src/lib/LibRainDeploy.sol";
+import {LibTOFUTokenDecimals} from "rain-tofu-erc20-decimals-0.1.4/src/lib/LibTOFUTokenDecimals.sol";
 import {LibRaindexDeploy} from "../../src/lib/deploy/LibRaindexDeploy.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticFlashLendingMockRaindex} from "test/util/concrete/RealisticFlashLendingMockRaindex.sol";
 
-/// arb4 reads `ordersInputToken` from `validInputs[inputIOIndex]` using the
-/// INPUT-side index specifically. The existing arb4 tests all set
+/// arb5 reads `ordersInputToken` from `validInputs[inputIOIndex]` using the
+/// INPUT-side index specifically. The existing arb5 tests all set
 /// `inputIOIndex == outputIOIndex` (0/0), so reading the input token via
 /// `outputIOIndex` instead selects the same slot and is indistinguishable. Here
 /// the indices are DISTINCT (inputIOIndex 1, outputIOIndex 0): the real input
 /// sits at validInputs[1] and the real output at validOutputs[0], with a decoy
 /// input at validInputs[0].
 ///
-/// arb4 grants the raindex a max allowance on `ordersInputToken` before the
-/// flash loan, and the raindex's `takeOrders4` pulls the real input
-/// (validInputs[inputIOIndex]) from the arb. If arb4 read the input token via
+/// arb5 grants the raindex a max allowance on `ordersInputToken` before the
+/// flash loan, and the raindex's `takeOrders5` pulls the real input
+/// (validInputs[inputIOIndex]) from the arb. If arb5 read the input token via
 /// `outputIOIndex` it would approve the decoy input instead, so the raindex's
 /// pull of the real input reverts on a zero allowance and the whole arb reverts.
 contract RaindexV6FlashBorrowerInputIoIndexSelectionTest is Test {
@@ -66,16 +66,16 @@ contract RaindexV6FlashBorrowerInputIoIndexSelectionTest is Test {
         arb = new GenericPoolRaindexV6FlashBorrower();
     }
 
-    function noopTask() internal pure returns (TaskV2 memory) {
-        return TaskV2({
+    function noopTask() internal pure returns (TaskV3 memory) {
+        return TaskV3({
             evaluable: EvaluableV4(IInterpreterV4(address(0)), IInterpreterStoreV3(address(0)), hex""),
-            signedContext: new SignedContextV1[](0)
+            signedContext: new SignedContextV2[](0)
         });
     }
 
     /// Real input at validInputs[1], real output at validOutputs[0]: the two
     /// sides use DIFFERENT indices (inputIOIndex 1, outputIOIndex 0).
-    function buildOrders() internal view returns (TakeOrderConfigV4[] memory orders) {
+    function buildOrders() internal view returns (TakeOrderConfigV5[] memory orders) {
         IOV2[] memory validInputs = new IOV2[](2);
         validInputs[0] = IOV2(address(decoyInput), bytes32(0));
         validInputs[1] = IOV2(address(inputToken), bytes32(0));
@@ -90,8 +90,8 @@ contract RaindexV6FlashBorrowerInputIoIndexSelectionTest is Test {
             nonce: bytes32(0)
         });
 
-        orders = new TakeOrderConfigV4[](1);
-        orders[0] = TakeOrderConfigV4(order, 1, 0, new SignedContextV1[](0));
+        orders = new TakeOrderConfigV5[](1);
+        orders[0] = TakeOrderConfigV5(order, 1, 0, new SignedContextV2[](0));
     }
 
     function exchangeData() internal view returns (bytes memory) {
@@ -103,9 +103,9 @@ contract RaindexV6FlashBorrowerInputIoIndexSelectionTest is Test {
     }
 
     function testArb4SelectsInputTokenByInputIoIndex() external {
-        arb.arb4(
-            IRaindexV6(address(raindex)),
-            TakeOrdersConfigV5({
+        arb.arb5(
+            IRaindexV7(address(raindex)),
+            TakeOrdersConfigV6({
                 minimumIO: LibDecimalFloat.packLossless(100, 0),
                 maximumIO: LibDecimalFloat.packLossless(type(int224).max, 0),
                 maximumIORatio: LibDecimalFloat.packLossless(type(int224).max, 0),

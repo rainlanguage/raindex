@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test, stdError} from "forge-std-1.16.1/src/Test.sol";
+import {Test, stdError} from "forge-std-1.17.0/src/Test.sol";
 
-import {IERC20} from "@openzeppelin-contracts-5.6.1/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-contracts-5.7.0/token/ERC20/IERC20.sol";
 import {RaindexV6ExternalMockTest} from "test/util/abstract/RaindexV6ExternalMockTest.sol";
 import {
     OrderConfigV4,
@@ -12,20 +12,20 @@ import {
     IOV2,
     ClearConfigV2,
     EvaluableV4,
-    SignedContextV1,
+    SignedContextV2,
     IInterpreterV4,
-    TaskV2,
+    TaskV3,
     Float
-} from "raindex-interface-0.1.1/src/interface/IRaindexV6.sol";
+} from "raindex-interface-0.1.10/src/interface/IRaindexV7.sol";
 import {LibTestAddOrder} from "test/util/lib/LibTestAddOrder.sol";
-import {NotOrderOwner, StackItem, NegativeBounty, ClearZeroAmount} from "../../../src/concrete/raindex/RaindexV6.sol";
-import {LibNamespace} from "rain-interpreter-interface-0.1.0/src/lib/ns/LibNamespace.sol";
-import {StateNamespace, SourceIndexV2} from "rain-interpreter-interface-0.1.0/src/interface/IInterpreterV4.sol";
-import {Math} from "@openzeppelin-contracts-5.6.1/utils/math/Math.sol";
-import {LibDecimalFloat} from "rain-math-float-0.1.1/src/lib/LibDecimalFloat.sol";
+import {NotOrderOwner, NegativeBounty, ClearZeroAmount} from "../../../src/error/ErrRaindexV6.sol";
+import {LibNamespace} from "rainlang-interface-0.2.14/src/lib/ns/LibNamespace.sol";
+import {StateNamespace, SourceIndexV2, StackItem} from "rainlang-interface-0.2.14/src/interface/IInterpreterV4.sol";
+import {Math} from "@openzeppelin-contracts-5.7.0/utils/math/Math.sol";
+import {LibDecimalFloat} from "rain-math-float-0.3.10/src/lib/LibDecimalFloat.sol";
 
-import {LibFormatDecimalFloat} from "rain-math-float-0.1.1/src/lib/format/LibFormatDecimalFloat.sol";
-import {console2} from "forge-std-1.16.1/src/console2.sol";
+import {LibFormatDecimalFloat} from "rain-math-float-0.3.10/src/lib/format/LibFormatDecimalFloat.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {MockInterpreter} from "test/util/concrete/MockInterpreter.sol";
 
 /// @title RaindexV6ClearTest
@@ -47,7 +47,7 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
                 abi.encode(true)
             );
             vm.prank(depositor);
-            iRaindex.deposit4(address(token), vaultId, amount, new TaskV2[](0));
+            iRaindex.deposit5(address(token), vaultId, amount, new TaskV3[](0));
             Float balance = iRaindex.vaultBalance2(depositor, token, vaultId);
             assertTrue(balance.eq(amount));
         }
@@ -81,7 +81,7 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
         bobConfig.evaluable.interpreter = iInterpreter;
         bobConfig.evaluable.store = iStore;
 
-        // addOrder4 requires a valid serialized parser output with >= 2 sources.
+        // addOrder5 requires a valid serialized parser output with >= 2 sources.
         // The fuzzed bytecode is replaced with the canonical 2-source serialized
         // blob (the same `_ _:1e18 1e18;:;` output LibTestAddOrder.conformConfig
         // installs). The two orders are differentiated by owner, token layout and
@@ -393,7 +393,7 @@ contract RaindexV6ClearTest is RaindexV6ExternalMockTest {
             if (clear.expectedError.length > 0) {
                 vm.expectRevert(clear.expectedError);
             }
-            iRaindex.clear3(aliceOrder, bobOrder, configClear, new SignedContextV1[](0), new SignedContextV1[](0));
+            iRaindex.clear4(aliceOrder, bobOrder, configClear, new SignedContextV2[](0), new SignedContextV2[](0));
         }
 
         if (clear.expectedError.length == 0) {
