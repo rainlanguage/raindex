@@ -2008,7 +2008,7 @@ mod tests {
     mod non_wasm {
         use super::super::*;
         use crate::raindex_client::tests::{
-            get_test_yaml, new_with_local_db, CHAIN_ID_1_RAINDEX_ADDRESS,
+            get_test_yaml, mock_vaultless_balances, new_with_local_db, CHAIN_ID_1_RAINDEX_ADDRESS,
         };
         use crate::{
             local_db::query::{
@@ -2979,6 +2979,8 @@ mod tests {
                 raindex_addresses: None,
                 has_positive_output_vault_balance: None,
             };
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
+            mock_vaultless_balances(&sg_server, "/rpc2", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1"),
@@ -3162,6 +3164,7 @@ mod tests {
                 }));
             });
 
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1"),
@@ -3333,6 +3336,7 @@ mod tests {
                 }));
             });
 
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1"),
@@ -3731,6 +3735,7 @@ mod tests {
                 }));
             });
 
+            mock_vaultless_balances(&sg_server, "/rpc1", &[F0]);
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1"),

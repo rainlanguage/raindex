@@ -256,7 +256,10 @@ mod tests {
     #[cfg(not(target_family = "wasm"))]
     mod non_wasm_tests {
         use super::*;
-        use crate::raindex_client::{tests::get_test_yaml, RaindexClient};
+        use crate::raindex_client::{
+            tests::{get_test_yaml, mock_vaultless_balances},
+            RaindexClient,
+        };
         use httpmock::MockServer;
         use serde_json::{json, Value};
 
@@ -345,6 +348,14 @@ mod tests {
                 }));
             });
 
+            mock_vaultless_balances(
+                &sg_server,
+                "/rpc2",
+                &[Float::from_hex(
+                    "0x0000000000000000000000000000000000000000000000000000000000000020",
+                )
+                .unwrap()],
+            );
             let raindex_client = RaindexClient::new(
                 vec![get_test_yaml(
                     &sg_server.url("/sg1"),
