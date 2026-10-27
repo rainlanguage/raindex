@@ -17,7 +17,7 @@ import {LibTestSignedContext} from "test/util/lib/LibTestSignedContext.sol";
 import {Strings} from "@openzeppelin-contracts-5.7.0/utils/Strings.sol";
 import {LibTestArb} from "test/util/lib/LibTestArb.sol";
 import {LibRaindexDeploy} from "src/lib/deploy/LibRaindexDeploy.sol";
-import {RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE} from "src/generated/candidate/RaindexV6SubParser.sol";
+import {RUNTIME_CODE as SUB_PARSER_RUNTIME_CODE} from "src/generated/candidate/RaindexV7SubParser.sol";
 
 /// @title LibRaindexArbFinalizeArbTaskSignedContextTest
 /// @notice `signer<i>()`, `signer-domain<i>()` and `signed-context<i j>()` read

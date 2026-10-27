@@ -23,14 +23,14 @@ import {
     TEST_STORE_ADDRESS
 } from "rainlang-0.2.30/test/lib/deploy/LibTestInterpreterDeploy.sol";
 import {LibRaindexDeploy} from "../../../src/lib/deploy/LibRaindexDeploy.sol";
-import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
+import {GenericPoolRaindexV7FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol";
 import {MockToken} from "test/util/concrete/MockToken.sol";
 import {MockExchange} from "test/util/concrete/MockExchange.sol";
 import {RealisticFlashLendingMockRaindex} from "test/util/concrete/RealisticFlashLendingMockRaindex.sol";
 
 /// @dev Return value from `setup`. Caller keeps their own exchange reference.
 struct FlashBorrowerSetup {
-    GenericPoolRaindexV6FlashBorrower arb;
+    GenericPoolRaindexV7FlashBorrower arb;
     MockToken inputToken;
     MockToken outputToken;
     IRaindexV7 raindex;
@@ -62,7 +62,7 @@ library LibTestFlashBorrowerArb {
         outputToken.mint(address(raindex), 10 * amount);
         inputToken.mint(exchange, amount);
 
-        GenericPoolRaindexV6FlashBorrower arb = new GenericPoolRaindexV6FlashBorrower();
+        GenericPoolRaindexV7FlashBorrower arb = new GenericPoolRaindexV7FlashBorrower();
 
         bytes memory exchangeData = abi.encode(
             exchange,

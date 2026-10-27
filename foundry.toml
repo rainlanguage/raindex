@@ -38,12 +38,12 @@ evm_version = "cancun"
 optimizer = true
 optimizer_runs = 800
 
-# RaindexV6 only fits EIP-170 via IR. Changing this profile moves its Zoltu address.
+# RaindexV7 only fits EIP-170 via IR. Changing this profile moves its Zoltu address.
 additional_compiler_profiles = [
   { name = "raindex", via_ir = true, optimizer_runs = 800 },
 ]
 compilation_restrictions = [
-  { paths = "src/concrete/raindex/RaindexV6.sol", via_ir = true, min_optimizer_runs = 800, max_optimizer_runs = 800 },
+  { paths = "src/concrete/raindex/RaindexV7.sol", via_ir = true, min_optimizer_runs = 800, max_optimizer_runs = 800 },
 ]
 
 bytecode_hash = "none"
@@ -53,7 +53,7 @@ cbor_metadata = false
 # than expose ffi to forge.
 fs_permissions = [
   { access = "read", path = "./meta" },
-  { access = "read-write", path = "./meta/RaindexV6SubParserAuthoringMeta.rain.meta" },
+  { access = "read-write", path = "./meta/RaindexV7SubParserAuthoringMeta.rain.meta" },
   # `script/Build.sol` writes the rolling candidate snapshot under
   # `src/generated/` and the generated released-suites libs under `src/lib/`.
   { access = "read-write", path = "./src" },

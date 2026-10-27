@@ -3,14 +3,14 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRaindexV6NewestRelease} from "test/util/lib/LibRaindexV6NewestRelease.sol";
+import {LibRaindexV7NewestRelease} from "test/util/lib/LibRaindexV7NewestRelease.sol";
 
 /// @title NetworksJsonReleasedAddressTest
 /// @notice Every address in subgraph/networks.json is the newest released
-/// RaindexV6.
+/// RaindexV7.
 contract NetworksJsonReleasedAddressTest is Test {
     function testNetworksJsonReleasedAddress() external view {
-        address released = LibRaindexV6NewestRelease.suite().storedDeployedAddress;
+        address released = LibRaindexV7NewestRelease.suite().storedDeployedAddress;
         string memory json = vm.readFile("subgraph/networks.json");
         string[] memory networks = vm.parseJsonKeys(json, "$");
         for (uint256 i = 0; i < networks.length; i++) {

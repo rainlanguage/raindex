@@ -26,6 +26,14 @@ contract BuildHarness is Build {
         return snapshotContractNames();
     }
 
+    function externalReleaseRecordNames() external pure returns (string[] memory) {
+        return releaseRecordNames();
+    }
+
+    function externalRenamedRecords() external pure returns (GeneratedContract[] memory) {
+        return renamedRecords();
+    }
+
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.

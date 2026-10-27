@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {GenericPoolRaindexV6FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV6FlashBorrower.sol";
+import {GenericPoolRaindexV7FlashBorrower} from "../../../src/concrete/arb/GenericPoolRaindexV7FlashBorrower.sol";
 import {
     IRaindexV7,
     TakeOrdersConfigV6,
@@ -19,10 +19,10 @@ import {LibDecimalFloat} from "rain-math-float-0.3.11/src/lib/LibDecimalFloat.so
 
 /// @dev Exchange that re-enters arb5 when called during _exchange.
 contract ReentrantExchange {
-    GenericPoolRaindexV6FlashBorrower internal immutable iArb;
+    GenericPoolRaindexV7FlashBorrower internal immutable iArb;
     IRaindexV7 internal immutable iRaindex;
 
-    constructor(GenericPoolRaindexV6FlashBorrower arb, IRaindexV7 raindex) {
+    constructor(GenericPoolRaindexV7FlashBorrower arb, IRaindexV7 raindex) {
         iArb = arb;
         iRaindex = raindex;
     }

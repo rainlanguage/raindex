@@ -12,13 +12,23 @@ import {LibRaindexV6Released} from "./LibRaindexV6Released.sol";
 
 import {LibRaindexV6SubParserReleased} from "./LibRaindexV6SubParserReleased.sol";
 
-import {LibRouteProcessor4Released} from "./LibRouteProcessor4Released.sol";
-
 import {LibGenericPoolRaindexV6ArbOrderTakerReleased} from "./LibGenericPoolRaindexV6ArbOrderTakerReleased.sol";
 
 import {LibRouteProcessorRaindexV6ArbOrderTakerReleased} from "./LibRouteProcessorRaindexV6ArbOrderTakerReleased.sol";
 
 import {LibGenericPoolRaindexV6FlashBorrowerReleased} from "./LibGenericPoolRaindexV6FlashBorrowerReleased.sol";
+
+import {LibRaindexV7Released} from "./LibRaindexV7Released.sol";
+
+import {LibRaindexV7SubParserReleased} from "./LibRaindexV7SubParserReleased.sol";
+
+import {LibRouteProcessor4Released} from "./LibRouteProcessor4Released.sol";
+
+import {LibGenericPoolRaindexV7ArbOrderTakerReleased} from "./LibGenericPoolRaindexV7ArbOrderTakerReleased.sol";
+
+import {LibRouteProcessorRaindexV7ArbOrderTakerReleased} from "./LibRouteProcessorRaindexV7ArbOrderTakerReleased.sol";
+
+import {LibGenericPoolRaindexV7FlashBorrowerReleased} from "./LibGenericPoolRaindexV7FlashBorrowerReleased.sol";
 
 /// @title LibReleasedSuites
 /// @notice Every frozen release this repo has cut, of every contract it
@@ -37,13 +47,18 @@ library LibReleasedSuites {
     /// Every released suite, in the order the build script lists them.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[][] memory released = new DeploySuite[][](6);
+        DeploySuite[][] memory released = new DeploySuite[][](11);
         released[0] = LibRaindexV6Released.releasedSuites();
         released[1] = LibRaindexV6SubParserReleased.releasedSuites();
-        released[2] = LibRouteProcessor4Released.releasedSuites();
-        released[3] = LibGenericPoolRaindexV6ArbOrderTakerReleased.releasedSuites();
-        released[4] = LibRouteProcessorRaindexV6ArbOrderTakerReleased.releasedSuites();
-        released[5] = LibGenericPoolRaindexV6FlashBorrowerReleased.releasedSuites();
+        released[2] = LibGenericPoolRaindexV6ArbOrderTakerReleased.releasedSuites();
+        released[3] = LibRouteProcessorRaindexV6ArbOrderTakerReleased.releasedSuites();
+        released[4] = LibGenericPoolRaindexV6FlashBorrowerReleased.releasedSuites();
+        released[5] = LibRaindexV7Released.releasedSuites();
+        released[6] = LibRaindexV7SubParserReleased.releasedSuites();
+        released[7] = LibRouteProcessor4Released.releasedSuites();
+        released[8] = LibGenericPoolRaindexV7ArbOrderTakerReleased.releasedSuites();
+        released[9] = LibRouteProcessorRaindexV7ArbOrderTakerReleased.releasedSuites();
+        released[10] = LibGenericPoolRaindexV7FlashBorrowerReleased.releasedSuites();
         return LibDeploySuiteConcat.concat(released);
     }
 }
