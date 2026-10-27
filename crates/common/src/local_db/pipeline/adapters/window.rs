@@ -31,6 +31,18 @@ impl DefaultWindowPipeline {
     }
 }
 
+/// The block a cycle is asked to reach before any per-cycle cap: the
+/// finality-clamped safe head, or the end override when it is lower. The
+/// window uses it as the uncapped target and the engine compares the capped
+/// target against it to report `caught_up`, so both share one rule.
+pub(crate) fn requested_end_block(cfg: &SyncConfig, latest_block: u64) -> u64 {
+    let safe_head =
+        DefaultWindowPipeline::safe_head(latest_block, cfg.deployment_block, &cfg.finality);
+    cfg.window_overrides
+        .end_block
+        .map_or(safe_head, |end| end.min(safe_head))
+}
+
 #[async_trait(?Send)]
 impl WindowPipeline for DefaultWindowPipeline {
     async fn compute<DB>(
@@ -52,9 +64,6 @@ impl WindowPipeline for DefaultWindowPipeline {
             rows.first().map(|r| r.last_block).unwrap_or(0)
         };
 
-        // 2) Compute safe head with finality clamp
-        let safe_head = Self::safe_head(latest_block, cfg.deployment_block, &cfg.finality);
-
         // 3) Determine base start
         let mut start = Self::base_start(last_synced_block, cfg.deployment_block)?;
 
@@ -71,9 +80,8 @@ impl WindowPipeline for DefaultWindowPipeline {
             }
         }
 
-        // 5) Apply end override then clamp to safe head
-        let requested_target = cfg.window_overrides.end_block.unwrap_or(safe_head);
-        let mut target = requested_target.min(safe_head);
+        // 5) Target the safe head, or the end override when it is lower
+        let mut target = requested_end_block(cfg, latest_block);
 
         // 6) Cap the span of one cycle; the next cycle resumes from the
         //    watermark this one persists.
