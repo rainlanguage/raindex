@@ -6,7 +6,7 @@
   "author": "Rain Open Source Software Ltd",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rainlanguage/raindex.git"
+    "url": "https://github.com/rainlanguage/raindex.deploy.git"
   },
   "main": "dist/index.js",
   "module": "dist/index.js",

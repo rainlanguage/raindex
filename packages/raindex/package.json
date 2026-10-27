@@ -6,13 +6,13 @@
   "author": "Rain Open Source Software Ltd",
   "repository": {
     "type": "git",
-    "url": "https://github.com/rainlanguage/raindex.git"
+    "url": "https://github.com/rainlanguage/raindex.deploy.git"
   },
   "keywords": [],
   "bugs": {
-    "url": "https://github.com/rainlanguage/raindex/issues"
+    "url": "https://github.com/rainlanguage/raindex.deploy/issues"
   },
-  "homepage": "https://github.com/rainlanguage/raindex#readme",
+  "homepage": "https://github.com/rainlanguage/raindex.deploy#readme",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "browser": {
