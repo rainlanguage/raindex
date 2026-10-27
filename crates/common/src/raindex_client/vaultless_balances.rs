@@ -234,7 +234,7 @@ mod tests {
         }
 
         let client = client(&local_evm.url()).await;
-        let mut vaults = vec![
+        let mut vaults = [
             vault(&client, raindex, owner, 0, wallet_capped, "0"),
             vault(&client, raindex, owner, 0, allowance_capped, "0"),
         ];
@@ -286,7 +286,7 @@ mod tests {
         });
 
         let client = client(&server.url("/rpc1")).await;
-        let mut vaults = vec![vault(&client, raindex, owner, 0, token, "0")];
+        let mut vaults = [vault(&client, raindex, owner, 0, token, "0")];
         client
             .read_vaultless_balances(vaults.iter_mut())
             .await
@@ -305,7 +305,7 @@ mod tests {
             then.status(500);
         });
         let client = client(&server.url("/rpc1")).await;
-        let mut vaults = vec![vault(
+        let mut vaults = [vault(
             &client,
             Address::repeat_byte(0x11),
             Address::repeat_byte(0x22),
@@ -332,7 +332,7 @@ mod tests {
             then.status(500);
         });
         let client = client(&server.url("/rpc1")).await;
-        let mut vaults = vec![vault(
+        let mut vaults = [vault(
             &client,
             Address::repeat_byte(0x11),
             Address::repeat_byte(0x22),
