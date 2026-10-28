@@ -7,7 +7,7 @@ Every line must help them decide to merge, or know what to watch after the merge
 Hard limits:
 - Budget: about 150 words for low risk, 250 for medium, and 400 for high. Never more than 500 words, not counting links.
 - At most 3 bullets per section. Each bullet is one or two lines.
-- Delete every section that has nothing real to say. A trivial PR is the headline plus the slot line.
+- Delete every section that has nothing real to say, but always keep the Not verified bullet in Proof. A trivial PR is the headline, the slot line, and a Proof section with only the Not verified bullet.
 
 Never include:
 - A What, Why, How, or Implementation section.
@@ -48,10 +48,10 @@ Writing:
 
 ## Proof
 
-<!-- The strongest 1 to 3 pieces of evidence: the test that reproduces the bug, a staging check, the plan summary, a screenshot. Not a list of every test. -->
+<!-- The strongest 1 or 2 pieces of evidence, so that with the Not verified bullet the section stays within 3 bullets: the test that reproduces the bug, a staging check, the plan summary, a screenshot. Not a list of every test. -->
 
 -
-- **Not verified:** <!-- Always keep this bullet. Name what nobody checked, human or agent. -->
+- **Not verified:** <!-- Always keep this bullet, also in a trivial PR. Name what nobody checked, human or agent. -->
 
 ## Rollout
 
