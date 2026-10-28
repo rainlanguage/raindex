@@ -370,6 +370,7 @@ async fn run_network_loop<R>(
         SyncPhase::PreparingLocalDatabase,
     );
 
+    let mut backoff = super::CycleBackoff::default();
     loop {
         if stop_flag.get() {
             break;
@@ -395,13 +396,15 @@ async fn run_network_loop<R>(
             );
         });
 
-        match runner.run_once(&db, on_phase).await {
+        let result = runner.run_once(&db, on_phase).await;
+        let cycle = super::CycleResult::of(&result);
+        match result {
             Ok(outcome) => match outcome {
                 RunOutcome::Report(report) => {
                     was_leader_last_cycle = true;
                     set_scheduler_state(SchedulerState::Leader);
 
-                    if report.failures.is_empty() {
+                    if report.failures.is_empty() && cycle == super::CycleResult::CaughtUp {
                         sync_readiness.mark_ready(chain_id);
                         status_store.record_chain_ready(chain_id);
                         emit_raindex_active_statuses(
@@ -414,6 +417,12 @@ async fn run_network_loop<R>(
                             &status_store,
                             callback.as_deref(),
                             NetworkSyncStatus::active(chain_id, SchedulerState::Leader),
+                        );
+                    } else if report.failures.is_empty() {
+                        emit_network_status(
+                            &status_store,
+                            callback.as_deref(),
+                            NetworkSyncStatus::syncing(chain_id),
                         );
                     } else {
                         let first = &report.failures[0];
@@ -463,11 +472,14 @@ async fn run_network_loop<R>(
             }
         }
 
-        if stop_flag.get() {
-            break;
+        // Sleep in short steps so a stop during a long backoff releases the
+        // runner (and its network Web Lock) promptly.
+        let mut remaining = backoff.next_delay_ms(u64::from(interval_ms), cycle);
+        while remaining > 0 && !stop_flag.get() {
+            let step = remaining.min(super::STOP_POLL_MS);
+            TimeoutFuture::new(step as u32).await;
+            remaining -= step;
         }
-
-        TimeoutFuture::new(interval_ms).await;
     }
 }
 

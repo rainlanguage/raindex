@@ -133,6 +133,7 @@ mod tests {
             fetch,
             finality: FinalityConfig { depth: 12 },
             window_overrides: WindowOverrides::default(),
+            max_blocks_per_cycle: None,
         };
 
         let raindex_id = RaindexIdentifier {
@@ -161,6 +162,7 @@ mod tests {
             target_block: 1000,
             fetched_logs: 1,
             decoded_events: 1,
+            caught_up: true,
         };
 
         let metadata = export_dump(&executor, &target, &outcome, temp_dir.path())
@@ -221,6 +223,7 @@ mod tests {
             fetch,
             finality: FinalityConfig { depth: 1 },
             window_overrides: WindowOverrides::default(),
+            max_blocks_per_cycle: None,
         };
 
         let raindex_id = RaindexIdentifier {
@@ -249,6 +252,7 @@ mod tests {
             target_block: 0,
             fetched_logs: 0,
             decoded_events: 0,
+            caught_up: true,
         };
 
         let result = export_dump(&executor, &target, &outcome, temp_dir.path())

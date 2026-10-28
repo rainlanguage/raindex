@@ -1,5 +1,6 @@
 use super::adapters::apply::{ApplyPipeline, ApplyPipelineTargetInfo};
 use super::adapters::bootstrap::{BootstrapConfig, BootstrapPipeline};
+use super::adapters::window::requested_end_block;
 use super::{
     EventsPipeline, StatusBus, SyncConfig, SyncOutcome, SyncPhase, TokensPipeline, WindowPipeline,
 };
@@ -71,6 +72,7 @@ where
     {
         let latest_block = self.bootstrap_phase(db, input).await?;
         let (start_block, target_block) = self.compute_window(db, input, latest_block).await?;
+        let caught_up = target_block >= requested_end_block(&input.cfg, latest_block);
         if start_block > target_block {
             self.status.send(SyncPhase::Idle).await?;
             return Ok(SyncOutcome {
@@ -78,6 +80,7 @@ where
                 start_block,
                 target_block,
                 fetched_logs: 0,
+                caught_up: true,
                 decoded_events: 0,
             });
         }
@@ -133,6 +136,7 @@ where
             start_block,
             target_block,
             fetched_logs: all_raw_logs.len(),
+            caught_up,
             decoded_events: decoded_events.len(),
         })
     }
@@ -515,6 +519,7 @@ mod tests {
                 fetch: FetchConfig::default(),
                 finality: FinalityConfig { depth: 0 },
                 window_overrides: WindowOverrides::default(),
+                max_blocks_per_cycle: None,
             },
             dump_str: None,
             defer_analyze: false,
@@ -1219,6 +1224,7 @@ mod tests {
         assert_eq!(outcome.start_block, 10);
         assert_eq!(outcome.target_block, 12);
         assert_eq!(outcome.fetched_logs, 3);
+        assert!(outcome.caught_up, "window reached the safe head");
         assert_eq!(outcome.decoded_events, 3);
 
         let phases = harness.status.phases();
@@ -1265,6 +1271,28 @@ mod tests {
         let fetch_calls = harness.tokens.fetch_calls();
         assert_eq!(fetch_calls.len(), 1);
         assert_eq!(fetch_calls[0], vec![token_b]);
+    }
+
+    #[tokio::test]
+    async fn run_reports_not_caught_up_when_window_stops_short() {
+        let harness = EngineHarness::new();
+        harness.events.set_latest_blocks(vec![Ok(100)]);
+        harness.events.push_block_hash(Ok(b256!(
+            "0x0000000000000000000000000000000000000000000000000000000000000001"
+        )));
+        // A capped window: 10..=20 while the safe head is 100.
+        harness.window.set_results(vec![Ok((10, 20))]);
+        harness.events.push_raindex_result(Ok(vec![]));
+        harness.events.push_decode_result(Ok(vec![]));
+        harness.tokens.set_load_existing_results(vec![Ok(vec![])]);
+
+        let mut inputs = base_inputs();
+        inputs.cfg.max_blocks_per_cycle = Some(11);
+
+        let outcome = harness.run(&inputs).await.expect("run succeeds");
+
+        assert_eq!((outcome.start_block, outcome.target_block), (10, 20));
+        assert!(!outcome.caught_up);
     }
 
     #[tokio::test]

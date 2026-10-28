@@ -188,6 +188,7 @@ mod tests {
                     fetch,
                     finality: FinalityConfig { depth: 12 },
                     window_overrides: WindowOverrides::default(),
+                    max_blocks_per_cycle: None,
                 },
                 dump_str: None,
                 defer_analyze: false,
@@ -209,6 +210,7 @@ mod tests {
                     target_block: 1234,
                     fetched_logs: 10,
                     decoded_events: 5,
+                    caught_up: true,
                 },
             },
             ExportMetadata {
